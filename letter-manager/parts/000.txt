@@ -145,6 +145,6 @@ def page(body,user=None,title='Μεγάλη Γραμματεία'):
 def con():
     if USE_PG:
         return _PGConn()
-    c=sqlite3.connect(DB,timeout=30); c.row_factory=sqlite3.Row; c.execute('PRAGMA foreign_keys=ON'); return c
+    c=sqlite3.connect(DB,timeout=30); c.row_factory=sqlite3.Row; c.execute('PRAGMA foreign_keys=ON'); c.create_function('lower',1,lambda x:x.lower() if isinstance(x,str) else x,deterministic=True); return c
 def now(): return datetime.now().isoformat(timespec='seconds')
 def 

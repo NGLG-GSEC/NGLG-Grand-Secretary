@@ -1,5 +1,5 @@
-from io import BytesIO
-import gzip
+from io import BytesIO,StringIO
+import gzip,csv,unicodedata
 from fastapi import UploadFile, File
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font, PatternFill, Alignment
@@ -36,6 +36,9 @@ def _member_init():
         else:
             mcols=[r['name'] for r in c.execute("PRAGMA table_info(member_registry)")]
             if 'registry_no' not in mcols:c.execute("ALTER TABLE member_registry ADD COLUMN registry_no INTEGER")
+        for col in ('surname_variants','first_name_variants'):
+            if USE_PG:c.execute(f"ALTER TABLE member_registry ADD COLUMN IF NOT EXISTS {col} TEXT DEFAULT ''")
+            elif col not in [r['name'] for r in c.execute("PRAGMA table_info(member_registry)")]:c.execute(f"ALTER TABLE member_registry ADD COLUMN {col} TEXT DEFAULT ''")
         try:c.execute("CREATE UNIQUE INDEX IF NOT EXISTS ix_member_registry_regno ON member_registry(registry_no) WHERE registry_no IS NOT NULL")
         except Exception:pass
     _seed_member_registry()
@@ -65,13 +68,14 @@ def _insert_member(c,m,member_id=None):
     rn=m.get('registry_no');rn=int(rn) if rn not in (None,'') else None
     vals=(m.get('source_row'),rn,m.get('surname','').strip(),m.get('first_name','').strip(),m.get('email','').strip(),m.get('other_emails','').strip(),
           m.get('mobile','').strip(),m.get('other_mobiles','').strip(),m.get('degree','').strip(),str(m.get('declared_lodge_count','')).strip(),
-          m.get('deregistered_note','').strip(),m.get('additional_lodges','').strip(),1 if m.get('active',True) else 0,ts,ts)
+          m.get('deregistered_note','').strip(),m.get('additional_lodges','').strip(),1 if m.get('active',True) else 0,
+          (m.get('surname_variants') or '').strip(),(m.get('first_name_variants') or '').strip(),ts,ts)
     if member_id:
-        c.execute("""INSERT INTO member_registry(id,source_row,registry_no,surname,first_name,email,other_emails,mobile,other_mobiles,degree,declared_lodge_count,deregistered_note,additional_lodges,active,created_at,updated_at)
-        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",(int(member_id),)+vals);mid=int(member_id)
+        c.execute("""INSERT INTO member_registry(id,source_row,registry_no,surname,first_name,email,other_emails,mobile,other_mobiles,degree,declared_lodge_count,deregistered_note,additional_lodges,active,surname_variants,first_name_variants,created_at,updated_at)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",(int(member_id),)+vals);mid=int(member_id)
     else:
-        cur=c.execute("""INSERT INTO member_registry(source_row,registry_no,surname,first_name,email,other_emails,mobile,other_mobiles,degree,declared_lodge_count,deregistered_note,additional_lodges,active,created_at,updated_at)
-        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",vals);mid=cur.lastrowid
+        cur=c.execute("""INSERT INTO member_registry(source_row,registry_no,surname,first_name,email,other_emails,mobile,other_mobiles,degree,declared_lodge_count,deregistered_note,additional_lodges,active,surname_variants,first_name_variants,created_at,updated_at)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",vals);mid=cur.lastrowid
     for j,l in enumerate(m.get('lodges') or [],1):
         c.execute("""INSERT INTO member_lodges(member_id,seq,lodge_name,lodge_number,member_status,created_at,updated_at) VALUES(?,?,?,?,?,?,?)""",
                   (mid,int(l.get('seq') or j),l.get('name','').strip(),l.get('number','').strip(),l.get('status','').strip(),ts,ts))
@@ -103,8 +107,8 @@ def _xlsx_bytes():
         ls=[dict(r) for r in c.execute('SELECT * FROM member_lodges ORDER BY member_id,seq,id')]
         os=[dict(r) for r in c.execute('SELECT * FROM member_degrees_offices ORDER BY member_id,id')]
     wb=Workbook();ws=wb.active;ws.title='ΜΗΤΡΩΟ ΜΕΛΩΝ'
-    ws.append(['ID','Αρ. Μητρώου','Επώνυμο','Όνομα','Κύριο Email','Άλλα Email','Κύριο Κινητό','Άλλα Κινητά','Τεκτονικός Βαθμός','Ενεργός','Σημείωση Διαγραφής','Δηλωμένος Αρ. Στοών','Πρόσθετες Στοές','Γραμμή Πηγής','Ενημερώθηκε'])
-    for m in ms:ws.append([m['id'],m.get('registry_no'),m['surname'],m['first_name'],m['email'],m['other_emails'],m['mobile'],m['other_mobiles'],m['degree'],'ΝΑΙ' if m['active'] else 'ΟΧΙ',m['deregistered_note'],m['declared_lodge_count'],m['additional_lodges'],m['source_row'],m['updated_at']])
+    ws.append(['ID','Αρ. Μητρώου','Επώνυμο','Όνομα','Κύριο Email','Άλλα Email','Κύριο Κινητό','Άλλα Κινητά','Τεκτονικός Βαθμός','Ενεργός','Σημείωση Διαγραφής','Δηλωμένος Αρ. Στοών','Πρόσθετες Στοές','Γραμμή Πηγής','Ενημερώθηκε','Παραλλαγές Επωνύμου','Παραλλαγές Ονόματος'])
+    for m in ms:ws.append([m['id'],m.get('registry_no'),m['surname'],m['first_name'],m['email'],m['other_emails'],m['mobile'],m['other_mobiles'],m['degree'],'ΝΑΙ' if m['active'] else 'ΟΧΙ',m['deregistered_note'],m['declared_lodge_count'],m['additional_lodges'],m['source_row'],m['updated_at'],m.get('surname_variants') or '',m.get('first_name_variants') or ''])
     sl=wb.create_sheet('ΣΤΟΕΣ ΜΕΛΩΝ');sl.append(['ID Μέλους','Α/Α Στοάς','Στοά','Αριθμός Στοάς','Κατάσταση'])
     for l in ls:sl.append([l['member_id'],l['seq'],l['lodge_name'],l['lodge_number'],l['member_status']])
     so=wb.create_sheet('ΒΑΘΜΟΙ & ΑΞΙΩΜΑΤΑ');so.append(['ID','ID Μέλους','Τύπος Εγγραφής','Βαθμός','Αξίωμα','ID Διατάγματος','Αρ. Διατάγματος','Έτος','Από','Έως','Ενεργό','Σημειώσεις'])
@@ -147,6 +151,8 @@ def _member_form(m=None,ls=None):
 <div><label>Αρ. Μητρώου</label><input name="registry_no" value="{esc(str(m.get('registry_no') or ''))}"></div>
 <div><label>Επώνυμο</label><input name="surname" value="{esc(m.get('surname',''))}" required></div>
 <div><label>Όνομα</label><input name="first_name" value="{esc(m.get('first_name',''))}" required></div>
+<div><label>Παραλλαγές Επωνύμου</label><input name="surname_variants" value="{esc(m.get('surname_variants') or '')}" placeholder="π.χ. CASTANEDA; ΚΑΣΤΑΝΕΔΑ"></div>
+<div><label>Παραλλαγές Ονόματος</label><input name="first_name_variants" value="{esc(m.get('first_name_variants') or '')}" placeholder="π.χ. CARLOS; ΚΑΡΛΟΣ"></div>
 <div><label>Κύριο Email</label><input type="email" name="email" value="{esc(m.get('email',''))}"></div>
 <div><label>Άλλα Email</label><input name="other_emails" value="{esc(m.get('other_emails',''))}"></div>
 <div><label>Κύριο Κινητό</label><input name="mobile" value="{esc(m.get('mobile',''))}"></div>
@@ -159,21 +165,25 @@ def _member_form(m=None,ls=None):
 </div>"""
 
 def _save_member(c,f,mid=None):
-    m={k:str(f.get(k,'')).strip() for k in ['surname','first_name','email','other_emails','mobile','other_mobiles','degree','deregistered_note','additional_lodges']}
+    m={k:str(f.get(k,'')).strip() for k in ['surname','first_name','email','other_emails','mobile','other_mobiles','degree','deregistered_note','additional_lodges','surname_variants','first_name_variants']}
     m['active']=str(f.get('active','1'))=='1';m['lodges']=_parse_lodges(str(f.get('lodges_text','')));m['declared_lodge_count']=str(len(m['lodges']))
     rn=str(f.get('registry_no','')).strip();m['registry_no']=int(rn) if rn else None
     if not m['surname'] or not m['first_name']:raise HTTPException(400,'Συμπληρώστε επώνυμο και όνομα.')
     if not mid:return _insert_member(c,m)
-    ts=now();c.execute("""UPDATE member_registry SET registry_no=?,surname=?,first_name=?,email=?,other_emails=?,mobile=?,other_mobiles=?,degree=?,declared_lodge_count=?,deregistered_note=?,additional_lodges=?,active=?,updated_at=? WHERE id=?""",
-        (m['registry_no'],m['surname'],m['first_name'],m['email'],m['other_emails'],m['mobile'],m['other_mobiles'],m['degree'],m['declared_lodge_count'],m['deregistered_note'],m['additional_lodges'],1 if m['active'] else 0,ts,mid))
+    ts=now();c.execute("""UPDATE member_registry SET registry_no=?,surname=?,first_name=?,email=?,other_emails=?,mobile=?,other_mobiles=?,degree=?,declared_lodge_count=?,deregistered_note=?,additional_lodges=?,active=?,surname_variants=?,first_name_variants=?,updated_at=? WHERE id=?""",
+        (m['registry_no'],m['surname'],m['first_name'],m['email'],m['other_emails'],m['mobile'],m['other_mobiles'],m['degree'],m['declared_lodge_count'],m['deregistered_note'],m['additional_lodges'],1 if m['active'] else 0,m['surname_variants'],m['first_name_variants'],ts,mid))
     c.execute('DELETE FROM member_lodges WHERE member_id=?',(mid,))
     for l in m['lodges']:c.execute("""INSERT INTO member_lodges(member_id,seq,lodge_name,lodge_number,member_status,created_at,updated_at) VALUES(?,?,?,?,?,?,?)""",(mid,l['seq'],l['name'],l['number'],l['status'],ts,ts))
     return mid
 
 def _headers(ws):return {str(c.value or '').strip():i+1 for i,c in enumerate(ws[1])}
+def _cellstr(v):
+    if v is None:return ''
+    if isinstance(v,float) and v.is_integer():v=int(v)
+    return str(v).strip()
 def _val(row,h,*names):
     for n in names:
-        if n in h:return '' if row[h[n]-1].value is None else str(row[h[n]-1].value).strip()
+        if n in h:return _cellstr(row[h[n]-1].value)
     return ''
 def _yes(v):return str(v or '').strip().upper() in {'ΝΑΙ','YES','TRUE','1','Y'}
 
@@ -183,7 +193,7 @@ def _read_export_xlsx(wb):
         sn=_val(row,h,'Επώνυμο');fn=_val(row,h,'Όνομα')
         if not sn and not fn:continue
         mid=_val(row,h,'ID');src=_val(row,h,'Γραμμή Πηγής')
-        items.append({'id':int(float(mid)) if mid else None,'member':{'surname':sn,'first_name':fn,'email':_val(row,h,'Κύριο Email'),'other_emails':_val(row,h,'Άλλα Email'),'mobile':_val(row,h,'Κύριο Κινητό'),'other_mobiles':_val(row,h,'Άλλα Κινητά'),'degree':_val(row,h,'Τεκτονικός Βαθμός'),'active':_yes(_val(row,h,'Ενεργός')),'deregistered_note':_val(row,h,'Σημείωση Διαγραφής'),'declared_lodge_count':_val(row,h,'Δηλωμένος Αρ. Στοών'),'additional_lodges':_val(row,h,'Πρόσθετες Στοές'),'source_row':int(float(src)) if src else None,'lodges':[]}})
+        items.append({'id':int(float(mid)) if mid else None,'member':{'surname':sn,'first_name':fn,'email':_val(row,h,'Κύριο Email'),'other_emails':_val(row,h,'Άλλα Email'),'mobile':_val(row,h,'Κύριο Κινητό'),'other_mobiles':_val(row,h,'Άλλα Κινητά'),'degree':_val(row,h,'Τεκτονικός Βαθμός'),'active':_yes(_val(row,h,'Ενεργός')),'deregistered_note':_val(row,h,'Σημείωση Διαγραφής'),'declared_lodge_count':_val(row,h,'Δηλωμένος Αρ. Στοών'),'additional_lodges':_val(row,h,'Πρόσθετες Στοές'),'source_row':int(float(src)) if src else None,'registry_no':int(float(_val(row,h,'Αρ. Μητρώου'))) if _val(row,h,'Αρ. Μητρώου') else None,'surname_variants':_val(row,h,'Παραλλαγές Επωνύμου'),'first_name_variants':_val(row,h,'Παραλλαγές Ονόματος'),'lodges':[]}})
     byid={x['id']:x for x in items if x['id']}
     if 'ΣΤΟΕΣ ΜΕΛΩΝ' in wb.sheetnames:
         sh=wb['ΣΤΟΕΣ ΜΕΛΩΝ'];lh=_headers(sh)
@@ -194,17 +204,91 @@ def _read_export_xlsx(wb):
             if mid in byid:byid[mid]['member']['lodges'].append({'seq':int(float(_val(row,lh,'Α/Α Στοάς') or 1)),'name':_val(row,lh,'Στοά'),'number':_val(row,lh,'Αριθμός Στοάς'),'status':_val(row,lh,'Κατάσταση')})
     return items
 
-def _read_source_xlsx(wb):
-    ws=wb[wb.sheetnames[0]];h=_headers(ws);items=[]
-    for rn,row in enumerate(ws.iter_rows(min_row=2),2):
-        sn=_val(row,h,'All_Surname_Variants');fn=_val(row,h,'All_FirstName_Variants')
-        if not sn and not fn:continue
-        m={'source_row':rn,'surname':sn,'first_name':fn,'email':_val(row,h,'Email'),'other_emails':_val(row,h,'Multiple_Emails'),'mobile':_val(row,h,'Mobile'),'other_mobiles':_val(row,h,'Multiple_Mobiles'),'degree':_val(row,h,'Degree'),'declared_lodge_count':_val(row,h,'Number_of_Lodges'),'deregistered_note':_val(row,h,'All_Deregistered   (ΔΙΑΓΡΑΦΕΝ)','All_Deregistered (ΔΙΑΓΡΑΦΕΝ)'),'additional_lodges':_val(row,h,'Additional_Lodges   (beyond 6)','Additional_Lodges (beyond 6)'),'active':_yes(_val(row,h,'active')),'lodges':[]}
-        for j in range(1,7):
-            n=_val(row,h,f'Lodge_{j}');num=_val(row,h,f'Number_{j}');st=_val(row,h,f'Status_{j}')
-            if n or num or st:m['lodges'].append({'seq':j,'name':n,'number':num,'status':st})
-        items.append({'id':None,'member':m})
+# Πηγαίο αρχείο Μητρώου (Member_ID, Surname, First_Name, ..., Lodge_1..6, Additional_Lodges).
+# Διαβάζεται ίδια από .xlsx, .csv/.tsv ή από επικόλληση κελιών του Excel.
+def _hkey(x):return re.sub(r'[^0-9a-z\u0370-\u03ff]','',str(x or '').lower())
+def _is_source_headers(hs):
+    ks={_hkey(x) for x in hs}
+    return 'allsurnamevariants' in ks or {'surname','firstname','lodge1'}<=ks
+def _split_multi(v):return [x for x in (p.strip().strip(',').strip() for p in re.split(r'[;\n]+',v or '')) if x]
+def _plain_upper(v):return ''.join(ch for ch in unicodedata.normalize('NFD',v or '') if unicodedata.category(ch)!='Mn').upper().strip()
+_EXTRA_LODGE_RE=re.compile(r'^(.*?)\s+(\S+)\s*\((.*)\)\s*$')
+def _parse_extra_lodges(v,start):
+    out=[];bad=[]
+    for part in (p.strip() for p in (v or '').split(';')):
+        if not part:continue
+        mm=_EXTRA_LODGE_RE.match(part)
+        if mm:out.append({'seq':start+len(out),'name':mm.group(1).strip(),'number':mm.group(2).strip(),'status':mm.group(3).strip()})
+        else:bad.append(part)
+    return out,'; '.join(bad)
+def _variants(v,name):
+    vs=_split_multi(v)
+    return '; '.join(vs) if any(_plain_upper(x)!=_plain_upper(name) for x in vs) else ''
+def _source_member(d,rn):
+    def g(*ks):
+        for k in ks:
+            v=d.get(_hkey(k),'')
+            if v:return v
+        return ''
+    sv=g('All_Surname_Variants');fv=g('All_FirstName_Variants')
+    sn=g('Surname') or (_split_multi(sv) or [''])[0];fn=g('First_Name') or (_split_multi(fv) or [''])[0]
+    if not sn and not fn:return None
+    emails=_split_multi(g('Email'));mobiles=_split_multi(g('Mobile'))
+    lodges=[]
+    for j in range(1,7):
+        n=g(f'Lodge_{j}');num=g(f'Number_{j}');st=g(f'Status_{j}')
+        if n or num or st:lodges.append({'seq':len(lodges)+1,'name':n,'number':num,'status':st})
+    extra,unparsed=_parse_extra_lodges(g('Additional_Lodges (beyond 6)','Additional_Lodges'),len(lodges)+1)
+    lodges+=extra
+    dereg=_yes(g('All_Deregistered (ΔΙΑΓΡΑΦΕΝ)','All_Deregistered'))
+    sts=[l['status'].upper() for l in lodges if l['status']]
+    deceased=bool(sts) and all('ΜΕΤΕΣΘΕΝ' in x for x in sts)
+    rid=g('Member_ID').replace('.0','')
+    return {'source_row':rn,'registry_no':int(rid) if rid.isdigit() else None,'surname':sn,'first_name':fn,
+            'surname_variants':_variants(sv,sn),'first_name_variants':_variants(fv,fn),
+            'email':emails[0] if emails else '','other_emails':'; '.join(emails[1:]),
+            'mobile':mobiles[0] if mobiles else '','other_mobiles':'; '.join(mobiles[1:]),
+            'degree':g('Degree'),'declared_lodge_count':g('Number_of_Lodges') or str(len(lodges)),
+            'deregistered_note':'ΔΙΑΓΡΑΦΕΝ από όλες τις Στοές' if dereg else ('ΜΕΤΕΣΘΕΝ ΕΙΣ ΑΙ. ΑΝ.' if deceased else ''),
+            'additional_lodges':unparsed,'active':not dereg and not deceased,'lodges':lodges}
+def _source_items(header,rows,first_row=2):
+    keys=[_hkey(x) for x in header];items=[]
+    for i,r in enumerate(rows):
+        d={k:_cellstr(v) for k,v in zip(keys,r) if k}
+        m=_source_member(d,first_row+i)
+        if m:items.append({'id':None,'member':m})
     return items
+def _read_source_xlsx(wb):
+    rows=list(wb[wb.sheetnames[0]].iter_rows(values_only=True))
+    return _source_items(rows[0],rows[1:]) if rows else []
+def _text_table(txt):
+    txt=(txt or '').lstrip('\ufeff').strip('\r\n')
+    if not txt.strip():return []
+    first=txt.splitlines()[0]
+    delim='\t' if '\t' in first else (';' if first.count(';')>first.count(',') else ',')
+    return [r for r in csv.reader(StringIO(txt),delimiter=delim) if any(x.strip() for x in r)]
+
+def _find_member_for_source(c,m):
+    # Ο αριθμός μητρώου είναι το κλειδί: δύο διαφορετικά Member_ID δεν συγχωνεύονται ποτέ,
+    # ακόμη κι αν έχουν ίδιο ονοματεπώνυμο. Email/κινητό/όνομα ταιριάζουν μόνο εγγραφές
+    # χωρίς αριθμό μητρώου (π.χ. όσες δημιούργησαν αυτόματα Διατάγματα/Επετηρίδα).
+    rn=m.get('registry_no')
+    if rn is not None:
+        r=c.execute('SELECT id FROM member_registry WHERE registry_no=?',(rn,)).fetchone()
+        if r:return r['id']
+    free=' AND registry_no IS NULL ORDER BY id LIMIT 1'
+    email=(m.get('email') or '').strip().lower();mobile=(m.get('mobile') or '').strip()
+    if email:
+        r=c.execute('SELECT id FROM member_registry WHERE lower(email)=?'+free,(email,)).fetchone()
+        if r:return r['id']
+    if mobile:
+        r=c.execute('SELECT id FROM member_registry WHERE mobile=?'+free,(mobile,)).fetchone()
+        if r:return r['id']
+    sn=(m.get('surname') or '').strip().lower();fn=(m.get('first_name') or '').strip().lower()
+    if sn and fn:
+        r=c.execute('SELECT id FROM member_registry WHERE lower(surname)=? AND lower(first_name)=?'+free,(sn,fn)).fetchone()
+        if r:return r['id']
+    return None
 
 def _find_member_for_merge(c,m):
     email=(m.get('email') or '').strip().lower();mobile=(m.get('mobile') or '').strip()
@@ -225,8 +309,8 @@ def _update_imported_member(c,mid,m):
     if rn is None:
         r=c.execute('SELECT registry_no FROM member_registry WHERE id=?',(mid,)).fetchone()
         if r:rn=r['registry_no']
-    c.execute("""UPDATE member_registry SET source_row=?,registry_no=?,surname=?,first_name=?,email=?,other_emails=?,mobile=?,other_mobiles=?,degree=?,declared_lodge_count=?,deregistered_note=?,additional_lodges=?,active=?,updated_at=? WHERE id=?""",
-    (m.get('source_row'),rn,m.get('surname',''),m.get('first_name',''),m.get('email',''),m.get('other_emails',''),m.get('mobile',''),m.get('other_mobiles',''),m.get('degree',''),str(m.get('declared_lodge_count','')),m.get('deregistered_note',''),m.get('additional_lodges',''),1 if m.get('active',True) else 0,ts,mid))
+    c.execute("""UPDATE member_registry SET source_row=?,registry_no=?,surname=?,first_name=?,email=?,other_emails=?,mobile=?,other_mobiles=?,degree=?,declared_lodge_count=?,deregistered_note=?,additional_lodges=?,active=?,surname_variants=?,first_name_variants=?,updated_at=? WHERE id=?""",
+    (m.get('source_row'),rn,m.get('surname',''),m.get('first_name',''),m.get('email',''),m.get('other_emails',''),m.get('mobile',''),m.get('other_mobiles',''),m.get('degree',''),str(m.get('declared_lodge_count','')),m.get('deregistered_note',''),m.get('additional_lodges',''),1 if m.get('active',True) else 0,m.get('surname_variants') or '',m.get('first_name_variants') or '',ts,mid))
     c.execute('DELETE FROM member_lodges WHERE member_id=?',(mid,))
     for l in m.get('lodges') or []:
         c.execute("""INSERT INTO member_lodges(member_id,seq,lodge_name,lodge_number,member_status,created_at,updated_at) VALUES(?,?,?,?,?,?,?)""",(mid,l.get('seq',1),l.get('name',''),l.get('number',''),l.get('status',''),ts,ts))
@@ -239,7 +323,7 @@ def _apply_member_import(items,mode):
         for x in items:
             mid=x.get('id');m=x['member']
             if mode=='merge':
-                if not mid or not c.execute('SELECT id FROM member_registry WHERE id=?',(mid,)).fetchone():mid=_find_member_for_merge(c,m)
+                if not mid or not c.execute('SELECT id FROM member_registry WHERE id=?',(mid,)).fetchone():mid=_find_member_for_source(c,m)
                 if mid:
                     _update_imported_member(c,mid,m);updated+=1;continue
             _insert_member(c,m,mid if mode=='replace' and mid else None);added+=1
@@ -275,7 +359,7 @@ def members_page(req:Request,q:str='',page_no:int=1,msg:str=''):
     if not isadmin(u):raise HTTPException(403,'Το Μητρώο Μελών είναι διαθέσιμο μόνο στον administrator.')
     q=q.strip();page_no=max(1,int(page_no or 1));limit=100;offset=(page_no-1)*limit;params=[];where=''
     if q:
-        v='%'+q.lower()+'%';where=""" WHERE lower(surname) LIKE ? OR lower(first_name) LIKE ? OR lower(email) LIKE ? OR lower(mobile) LIKE ? OR lower(degree) LIKE ? OR EXISTS(SELECT 1 FROM member_lodges ml WHERE ml.member_id=member_registry.id AND lower(ml.lodge_name) LIKE ?)""";params=[v,v,v,v,v,v]
+        v='%'+q.lower()+'%';where=""" WHERE lower(surname) LIKE ? OR lower(first_name) LIKE ? OR lower(email) LIKE ? OR lower(mobile) LIKE ? OR lower(degree) LIKE ? OR lower(COALESCE(surname_variants,'')) LIKE ? OR lower(COALESCE(first_name_variants,'')) LIKE ? OR lower(COALESCE(other_emails,'')) LIKE ? OR CAST(registry_no AS TEXT)=? OR EXISTS(SELECT 1 FROM member_lodges ml WHERE ml.member_id=member_registry.id AND lower(ml.lodge_name) LIKE ?)""";params=[v,v,v,v,v,v,v,v,q,v]
     with con() as c:
         total=c.execute('SELECT COUNT(*) n FROM member_registry'+where,params).fetchone()['n']
         xs=[dict(r) for r in c.execute('SELECT * FROM member_registry'+where+' ORDER BY surname,first_name,id LIMIT ? OFFSET ?',params+[limit,offset])]
@@ -288,7 +372,7 @@ def members_page(req:Request,q:str='',page_no:int=1,msg:str=''):
     pages=max(1,(total+limit-1)//limit);nav=' '.join(f"<a class='btn' href='/members?q={quote(q)}&page_no={p}'>{p}</a>" for p in range(max(1,page_no-2),min(pages,page_no+2)+1));notice=f"<div class='card'><b>{esc(msg)}</b></div>" if msg else ''
     return page(f"""<h1>Μητρώο Μελών</h1>{notice}<div class="toolbar"><a class="btn primary" href="/members/new">+ Προσθήκη Μέλους</a><a class="btn" href="/members/export.xlsx">Export Excel</a></div>
 <div class="card"><form class="filters"><input name="q" value="{esc(q)}" placeholder="Επώνυμο, όνομα, email, κινητό, βαθμός ή στοά"><button>Αναζήτηση</button></form><p><b>{total}</b> εγγραφές · Σελίδα {page_no}/{pages}</p>{nav}</div>
-<div class="card"><h3>Προσθήκη / Γενική Αντικατάσταση από Excel</h3><form method="post" action="/members/import" enctype="multipart/form-data"><input type="file" name="file" accept=".xlsx" required><select name="mode"><option value="merge">Προσθήκη / Ενημέρωση</option><option value="replace">Γενική Αντικατάσταση</option></select><button class="primary">Εισαγωγή Excel</button></form><small>Η Γενική Αντικατάσταση στέλνει πρώτα υποχρεωτικό Excel ασφαλείας στο dskiad@gmail.com.</small></div>
+<div class="card"><h3>Προσθήκη / Γενική Αντικατάσταση από Excel</h3><form method="post" action="/members/import" enctype="multipart/form-data"><label>Αρχείο (.xlsx, .csv ή .tsv)</label><input type="file" name="file" accept=".xlsx,.csv,.tsv,.txt"><label>ή Επικόλληση από Excel (μαζί με τη γραμμή επικεφαλίδων Member_ID, Surname, First_Name…)</label><textarea name="pasted" style="min-height:140px" placeholder="Επιλέξτε στο Excel όλες τις στήλες μαζί με τις επικεφαλίδες, αντιγράψτε και επικολλήστε εδώ."></textarea><label>Λειτουργία</label><select name="mode"><option value="merge">Προσθήκη / Ενημέρωση (συνιστάται)</option><option value="replace">Γενική Αντικατάσταση</option></select><button class="primary">Εισαγωγή</button></form><small>Η Γενική Αντικατάσταση στέλνει πρώτα υποχρεωτικό Excel ασφαλείας στο dskiad@gmail.com.</small></div>
 <div class="card" style="overflow:auto"><table><tr><th>ID</th><th>Αρ. Μητρώου</th><th>Επώνυμο</th><th>Όνομα</th><th>Email</th><th>Κινητό</th><th>Βαθμός</th><th>Στοές</th><th>Ενεργός</th><th>Ενέργειες</th></tr>{''.join(rows) or '<tr><td colspan=10>Δεν βρέθηκαν εγγραφές.</td></tr>'}</table></div><div class="toolbar">{nav}</div>
 <div class="card"><b>Πρόβλεψη επόμενου σταδίου:</b> υπάρχει ήδη συνδεδεμένος πίνακας «Βαθμοί & Αξιώματα» με σύνδεση σε μέλος και Διάταγμα, ώστε αργότερα οι απονομές και οι διορισμοί να ενημερώνουν το ιστορικό του Αδελφού χωρίς να αλλοιώνουν το βασικό μητρώο επαφών.</div>""",u,'Μητρώο Μελών')
 
@@ -343,17 +427,30 @@ def members_delete(req:Request,mid:int):
     return RedirectResponse('/members?msg='+quote('Η εγγραφή διαγράφηκε αφού στάλθηκε το υποχρεωτικό Excel ασφαλείας.'),303)
 
 @app.post('/members/import')
-async def members_import(req:Request,file:UploadFile=File(...),mode:str=Form('merge')):
+async def members_import(req:Request,file:UploadFile|None=File(None),pasted:str=Form(''),mode:str=Form('merge')):
     u=need(req)
     if not isadmin(u):raise HTTPException(403)
     if mode not in {'merge','replace'}:raise HTTPException(400,'Μη έγκυρη λειτουργία εισαγωγής.')
-    try:wb=load_workbook(BytesIO(await file.read()),data_only=True)
-    except Exception:raise HTTPException(400,'Το αρχείο πρέπει να είναι έγκυρο Excel .xlsx.')
-    h=_headers(wb[wb.sheetnames[0]]);items=_read_source_xlsx(wb) if 'All_Surname_Variants' in h else _read_export_xlsx(wb)
-    if not items:raise HTTPException(400,'Δεν βρέθηκαν εγγραφές μελών στο Excel.')
+    raw=await file.read() if file is not None and file.filename else b''
+    fname=(file.filename or '').lower() if file is not None else ''
+    items=[]
+    if raw and (fname.endswith('.xlsx') or raw[:2]==b'PK'):
+        try:wb=load_workbook(BytesIO(raw),data_only=True,read_only=False)
+        except Exception:raise HTTPException(400,'Το αρχείο πρέπει να είναι έγκυρο Excel .xlsx.')
+        h=_headers(wb[wb.sheetnames[0]])
+        items=_read_source_xlsx(wb) if _is_source_headers(h) else _read_export_xlsx(wb)
+    else:
+        txt=raw.decode('utf-8-sig',errors='replace') if raw else pasted
+        if raw and '\ufffd' in txt:txt=raw.decode('cp1253',errors='replace')
+        rows=_text_table(txt)
+        if not rows:raise HTTPException(400,'Επιλέξτε αρχείο ή επικολλήστε τα δεδομένα από το Excel.')
+        if not _is_source_headers(rows[0]):raise HTTPException(400,'Δεν αναγνωρίστηκαν οι στήλες. Η πρώτη γραμμή πρέπει να είναι οι επικεφαλίδες (Member_ID, Surname, First_Name, …, Lodge_1, Number_1, Status_1, …).')
+        items=_source_items(rows[0],rows[1:])
+    if not items:raise HTTPException(400,'Δεν βρέθηκαν εγγραφές μελών.')
     if mode=='replace':_send_member_backup(_xlsx_bytes(),'γενική αντικατάσταση του Μητρώου Μελών')
     added,updated=_apply_member_import(items,mode)
-    msg=('Γενική αντικατάσταση' if mode=='replace' else 'Προσθήκη / ενημέρωση')+f' ολοκληρώθηκε: {len(items)} εγγραφές ({added} νέες, {updated} ενημερωμένες).'
+    lodges=sum(len(x['member'].get('lodges') or []) for x in items)
+    msg=('Γενική αντικατάσταση' if mode=='replace' else 'Προσθήκη / ενημέρωση')+f' ολοκληρώθηκε: {len(items)} εγγραφές ({added} νέες, {updated} ενημερωμένες), {lodges} συμμετοχές σε Στοές.'
     return RedirectResponse('/members?msg='+quote(msg),303)
 
 def member_lookup_widget(name_id='recipient_name',email_id='recipient_email',member_id_id='recipient_member_id'):
@@ -376,7 +473,7 @@ def member_search_api(req:Request,q:str=''):
     need(req);q=q.strip()
     if len(q)<2:return {'items':[]}
     v='%'+q.lower()+'%'
-    with con() as c:xs=[dict(r) for r in c.execute("""SELECT id,surname,first_name,email,mobile,degree,active FROM member_registry WHERE lower(surname) LIKE ? OR lower(first_name) LIKE ? OR lower(email) LIKE ? OR lower(mobile) LIKE ? ORDER BY active DESC,surname,first_name,id LIMIT 15""",(v,v,v,v))]
+    with con() as c:xs=[dict(r) for r in c.execute("""SELECT id,surname,first_name,email,mobile,degree,active FROM member_registry WHERE lower(surname) LIKE ? OR lower(first_name) LIKE ? OR lower(email) LIKE ? OR lower(mobile) LIKE ? OR lower(COALESCE(surname_variants,'')) LIKE ? OR lower(COALESCE(first_name_variants,'')) LIKE ? ORDER BY active DESC,surname,first_name,id LIMIT 15""",(v,v,v,v,v,v))]
     return {'items':xs}
 
 _member_init()
