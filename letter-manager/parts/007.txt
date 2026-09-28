@@ -274,8 +274,8 @@ def _decree_info_tables():
 <div class="card" style="margin:0"><h3 style="margin-top:0">3. ΕΥΑΡΕΣΤΟΥΜΕΘΑ ΝΑ ΑΠΟΝΕΙΜΩΜΕΝ</h3><p><b>Αποκλειστικά</b> για την <b>Τάξιν του Μεγάλου Διδασκάλου δι’ Υπηρεσίας προς την Τεκτονικήν</b>, κατά τον Κανόνα 19. Δεν εμφανίζεται επιλογή αξιώματος ή Τεκτονικής Περιόδου.</p></div>
 </div>
 <div id="decree-office-reference"><div class="dec-info-grid" style="display:grid;grid-template-columns:minmax(0,1.25fr) minmax(320px,.75fr);gap:16px;align-items:start">
-<div><h3 style="margin-top:0">Προβάδισμα — Αξίωμα — Κανόνας</h3><div style="overflow:auto"><table><tr><th>Προβάδισμα</th><th>Αξίωμα / Διορισμός</th><th>Κανόνας</th></tr>{_precedence_table()}</table></div></div>
-<div><h3 style="margin-top:0">Ομαδοποιήσεις κατά Κανόνα</h3><div style="overflow:auto"><table><tr><th>Κανόνας</th><th>Ομαδοποίηση</th></tr>{_grouping_table()}</table></div></div>
+<details class="fold" open data-mobile-closed><summary><h3 style="margin-top:0">Προβάδισμα — Αξίωμα — Κανόνας</h3></summary><div style="overflow:auto;margin-top:12px"><table><tr><th>Προβάδισμα</th><th>Αξίωμα / Διορισμός</th><th>Κανόνας</th></tr>{_precedence_table()}</table></div></details>
+<details class="fold" open data-mobile-closed><summary><h3 style="margin-top:0">Ομαδοποιήσεις κατά Κανόνα</h3></summary><div style="overflow:auto;margin-top:12px"><table><tr><th>Κανόνας</th><th>Ομαδοποίηση</th></tr>{_grouping_table()}</table></div></details>
 </div></div><style>@media(max-width:900px){{.dec-info-grid,.decree-categories{{grid-template-columns:1fr!important}}}}</style>"""
 def _dec_js():
     active_opts=json.dumps("<option value=''>— Επιλογή ενεργού αξιώματος —</option>"+_opts(),ensure_ascii=False)

@@ -126,5 +126,5 @@ def new(req:Request,copy_from:int=0,template_id:int=0):
     opts='<option value="">— Επιλογή —</option>'+''.join(f"<option value='{t['id']}' {'selected' if selected==t['id'] else ''}>{esc(t['name'])}</option>" for t in tpls)
     signer_switch=''
     if u['email'].lower() in {SHARED_SECRETARIAT_EMAIL,PRIMARY_ADMIN_EMAIL}:
-        signer_switch=f'''<div class="card noprint"><b>Υπογράφων νέας επιστολής:</b> {esc(profile['name'])} — {esc(profile['title'])} <a class="btn" style="margin-left:10px" href="/identity">Αλλαγή Υπογράφοντος</a></div>'''
+        signer_switch=f'''<div class="card noprint signer-card"><b>Υπογράφων νέας επιστολής:</b> {esc(profile['name'])} — {esc(profile['title'])} <a class="btn" style="margin-left:10px" href="/identity">Αλλαγή Υπογράφοντος</a></div>'''
     return page(f'''<h1>Νέα Επιστολή</h1>{signer_switch}<form class="grid card" method="post" action="/new"><div><label>Πρότυπο / Περίπτωση</label><select name="template_id" onchange="location=
