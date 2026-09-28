@@ -360,14 +360,24 @@ _ACC_FROM='άέήίόύώϊϋΐΰς';_ACC_TO='αεηιουωιυιυσ'
 def _snorm(v):return (v or '').lower().translate(str.maketrans(_ACC_FROM,_ACC_TO))
 def _sql_norm(col):return f"translate(lower(COALESCE({col},'')),'{_ACC_FROM}','{_ACC_TO}')"
 _MEMBER_TEXT_COLS=['surname','first_name','surname_variants','first_name_variants','email','other_emails','degree']
-def _member_search_where(q):
+MEMBER_SEARCH_FIELDS=[('all','Όλα τα στοιχεία'),('surname','Επώνυμο'),('first_name','Όνομα'),('mobile','Κινητό'),('email','Email')]
+def _member_search_where(q,field='all'):
     q=(q or '').strip()
     if not q:return '',[]
+    if field in ('surname','first_name','email'):
+        cols={'surname':['surname','surname_variants'],'first_name':['first_name','first_name_variants'],'email':['email','other_emails']}[field]
+        conds=[];params=[]
+        for w in q.split():
+            conds.append('('+' OR '.join(_sql_norm(c)+' LIKE ?' for c in cols)+')');params+=['%'+_snorm(w)+'%']*len(cols)
+        return ' WHERE '+' AND '.join(conds),params
+    if field=='mobile':
+        d=_phone_digits(q)
+        if not d:return ' WHERE 1=0',[]
+        return f" WHERE ({_sql_digits('mobile')} LIKE ? OR {_sql_digits('other_mobiles')} LIKE ?)",['%'+d+'%']*2
     digits=re.sub(r'\D','',q)
     phone_like=bool(re.fullmatch(r'[\d\s+\-().]+',q)) and len(digits)>=4
     if phone_like:
-        if digits.startswith('0030'):digits=digits[4:]
-        elif digits.startswith('30') and len(digits)>10:digits=digits[2:]
+        digits=_phone_digits(q)
         v='%'+digits+'%'
         rn=q.strip() if q.strip().isdigit() else None
         cond=f"({_sql_digits('mobile')} LIKE ? OR {_sql_digits('other_mobiles')} LIKE ?"+(" OR CAST(registry_no AS TEXT)=?" if rn else '')+')'
@@ -381,17 +391,45 @@ def _member_search_where(q):
         nod='~';params+=[v]*len(_MEMBER_TEXT_COLS)+[('%'+d+'%') if d else nod,('%'+d+'%') if d else nod,w,v,_snorm(w)]  # '~' δεν ταιριάζει ποτέ σε ψηφία
         conds.append('('+' OR '.join(ors)+')')
     return ' WHERE '+' AND '.join(conds),params
+def _phone_digits(q):
+    d=re.sub(r'\D','',q or '')
+    if d.startswith('0030'):d=d[4:]
+    elif d.startswith('30') and len(d)>10:d=d[2:]
+    return d
+def _hl(text,q,field_ok=True):
+    # Επισήμανση (χωρίς τόνους/πεζά-κεφαλαία) των λέξεων της αναζήτησης μέσα στο κείμενο.
+    t=text or ''
+    if not q or not field_ok or not t:return esc(t)
+    n=_snorm(t)
+    if len(n)!=len(t):return esc(t)
+    spans=[]
+    words=[_snorm(w) for w in q.split()]
+    d=_phone_digits(q)
+    if d and re.fullmatch(r'[\d\s+\-().]+',q.strip()):words=[d]
+    for w in words:
+        if not w:continue
+        i=n.find(w)
+        while i!=-1:spans.append((i,i+len(w)));i=n.find(w,i+1)
+    if not spans:return esc(t)
+    spans.sort();merged=[]
+    for a,b in spans:
+        if merged and a<=merged[-1][1]:merged[-1]=(merged[-1][0],max(b,merged[-1][1]))
+        else:merged.append((a,b))
+    out=[];pos=0
+    for a,b in merged:out+=[esc(t[pos:a]),'<mark>',esc(t[a:b]),'</mark>'];pos=b
+    return ''.join(out)+esc(t[pos:])
 def _sql_digits(col):
     e=f"COALESCE({col},'')"
     for ch in (' ','+','-','.','(',')','/'):e=f"replace({e},'{ch}','')"
     return e
 
 @app.get('/members')
-def members_page(req:Request,q:str='',page_no:int=1,msg:str=''):
+def members_page(req:Request,q:str='',field:str='all',page_no:int=1,msg:str=''):
     u=need(req)
     if not isadmin(u):raise HTTPException(403,'Το Μητρώο Μελών είναι διαθέσιμο μόνο στον administrator.')
     q=q.strip();page_no=max(1,int(page_no or 1));limit=100;offset=(page_no-1)*limit;params=[];where=''
-    where,params=_member_search_where(q)
+    field=field if field in dict(MEMBER_SEARCH_FIELDS) else 'all'
+    where,params=_member_search_where(q,field)
     with con() as c:
         total=c.execute('SELECT COUNT(*) n FROM member_registry'+where,params).fetchone()['n']
         xs=[dict(r) for r in c.execute('SELECT * FROM member_registry'+where+' ORDER BY surname,first_name,id LIMIT ? OFFSET ?',params+[limit,offset])]
@@ -400,12 +438,23 @@ def members_page(req:Request,q:str='',page_no:int=1,msg:str=''):
     for x in xs:
         lod='<br>'.join(esc((l['lodge_name']+' '+l['lodge_number']).strip()) for l in lm[x['id']][:3])
         if len(lm[x['id']])>3:lod+=f"<br><small>+{len(lm[x['id']])-3} ακόμη</small>"
-        rows.append(f"""<tr><td><b>{x['id']}</b></td><td>{x.get('registry_no') or ''}</td><td>{esc(x['surname'])}</td><td>{esc(x['first_name'])}</td><td>{esc(x['email'])}</td><td>{esc(x['mobile'])}</td><td>{esc(x['degree'])}</td><td>{lod}</td><td>{'ΝΑΙ' if x['active'] else 'ΟΧΙ'}</td><td><a href="/members/edit/{x['id']}">Edit</a> <form method="post" action="/members/delete/{x['id']}" style="display:inline" onsubmit="return confirm('Πριν από τη διαγραφή θα σταλεί αυτόματα πλήρες Excel ασφαλείας στο dskiad@gmail.com. Συνέχεια;')"><button>Delete</button></form></td></tr>""")
-    pages=max(1,(total+limit-1)//limit);nav=' '.join(f"<a class='btn' href='/members?q={quote(q)}&page_no={p}'>{p}</a>" for p in range(max(1,page_no-2),min(pages,page_no+2)+1));notice=f"<div class='card'><b>{esc(msg)}</b></div>" if msg else ''
+        def H(v,f):return _hl(v,q,field in ('all',f))
+        def extra(col,f):
+            v=x.get(col) or ''
+            if not(q and v and field in ('all',f)):return ''
+            h=_hl(v,q);return f"<br><small class='muted'>{h}</small>" if '<mark>' in h else ''
+        rows.append(f"""<tr><td><b>{x['id']}</b></td><td>{H(str(x.get('registry_no') or ''),'all')}</td><td>{H(x['surname'],'surname')}{extra('surname_variants','surname')}</td><td>{H(x['first_name'],'first_name')}{extra('first_name_variants','first_name')}</td><td>{H(x['email'],'email')}{extra('other_emails','email')}</td><td>{H(x['mobile'],'mobile')}{extra('other_mobiles','mobile')}</td><td>{esc(x['degree'])}</td><td>{lod}</td><td>{'ΝΑΙ' if x['active'] else 'ΟΧΙ'}</td><td><a href="/members/edit/{x['id']}">Edit</a> <form method="post" action="/members/delete/{x['id']}" style="display:inline" onsubmit="return confirm('Πριν από τη διαγραφή θα σταλεί αυτόματα πλήρες Excel ασφαλείας στο dskiad@gmail.com. Συνέχεια;')"><button>Delete</button></form></td></tr>""")
+    pages=max(1,(total+limit-1)//limit);nav=' '.join(f"<a class='btn' href='/members?q={quote(q)}&field={field}&page_no={p}'>{p}</a>" for p in range(max(1,page_no-2),min(pages,page_no+2)+1)) if pages>1 else '';notice=f"<div class='card'><b>{esc(msg)}</b></div>" if msg else ''
+    flabel=dict(MEMBER_SEARCH_FIELDS)[field]
+    ph={'all':'Επώνυμο, όνομα, κινητό ή email (π.χ. Παπαδόπουλος Γιώργος)','surname':'π.χ. Παπαδόπουλος','first_name':'π.χ. Γεώργιος','mobile':'π.χ. 6944 123 456 ή +30 6944123456','email':'π.χ. onoma@gmail.com'}[field]
+    fopts=''.join(f'<option value="{k}"{" selected" if k==field else ""}>{esc(v)}</option>' for k,v in MEMBER_SEARCH_FIELDS)
+    clear='<a class="btn" href="/members">Καθαρισμός</a>' if q else ''
+    summary=((f'Βρέθηκε <b>1</b> μέλος για' if total==1 else f'Βρέθηκαν <b>{total}</b> μέλη για')+f" «<b>{esc(q)}</b>» σε: <b>{esc(flabel)}</b>" if q else f'Σύνολο <b>{total}</b> μελών')+(f' · Σελίδα {page_no}/{pages}' if pages>1 else '')
+    empty=f'Δεν βρέθηκε μέλος για «{esc(q)}» σε: {esc(flabel)}.'+(' Δοκιμάστε «Όλα τα στοιχεία» ή λιγότερες λέξεις.' if field!='all' or len(q.split())>1 else '') if q else 'Δεν υπάρχουν εγγραφές.'
     return page(f"""<h1>Μητρώο Μελών</h1>{notice}<div class="toolbar"><a class="btn primary" href="/members/new">+ Προσθήκη Μέλους</a><a class="btn" href="/members/export.xlsx">Export Excel</a></div>
-<div class="card"><form class="filters"><input name="q" value="{esc(q)}" placeholder="Οτιδήποτε: επώνυμο, όνομα, email, κινητό, αρ. μητρώου ή στοά"><button>Αναζήτηση</button></form><p><b>{total}</b> εγγραφές · Σελίδα {page_no}/{pages}</p>{nav}</div>
-<div class="card"><h3>Προσθήκη / Γενική Αντικατάσταση από Excel</h3><form method="post" action="/members/import" enctype="multipart/form-data"><label>Αρχείο (.xlsx, .csv ή .tsv)</label><input type="file" name="file" accept=".xlsx,.csv,.tsv,.txt"><label>ή Επικόλληση από Excel (μαζί με τη γραμμή επικεφαλίδων Member_ID, Surname, First_Name…)</label><textarea name="pasted" style="min-height:140px" placeholder="Επιλέξτε στο Excel όλες τις στήλες μαζί με τις επικεφαλίδες, αντιγράψτε και επικολλήστε εδώ."></textarea><label>Λειτουργία</label><select name="mode"><option value="merge">Προσθήκη / Ενημέρωση (συνιστάται)</option><option value="replace">Γενική Αντικατάσταση</option></select><button class="primary">Εισαγωγή</button></form><small>Η Γενική Αντικατάσταση στέλνει πρώτα υποχρεωτικό Excel ασφαλείας στο dskiad@gmail.com.</small></div>
-<div class="card" style="overflow:auto"><table><tr><th>ID</th><th>Αρ. Μητρώου</th><th>Επώνυμο</th><th>Όνομα</th><th>Email</th><th>Κινητό</th><th>Βαθμός</th><th>Στοές</th><th>Ενεργός</th><th>Ενέργειες</th></tr>{''.join(rows) or '<tr><td colspan=10>Δεν βρέθηκαν εγγραφές.</td></tr>'}</table></div><div class="toolbar">{nav}</div>
+<div class="card member-search"><h3 style="margin-top:0">Αναζήτηση μέλους</h3><form class="msearch" method="get"><div><label for="msq">Τι ψάχνετε</label><input id="msq" name="q" value="{esc(q)}" autofocus autocomplete="off" placeholder="{esc(ph)}"></div><div><label for="msf">Αναζήτηση σε</label><select id="msf" name="field">{fopts}</select></div><div class="msbtns"><button class="primary">Αναζήτηση</button>{clear}</div></form><p class="msresult">{summary}</p>{nav}</div>
+<div class="card" style="overflow:auto"><table><tr><th>ID</th><th>Αρ. Μητρώου</th><th>Επώνυμο</th><th>Όνομα</th><th>Email</th><th>Κινητό</th><th>Βαθμός</th><th>Στοές</th><th>Ενεργός</th><th>Ενέργειες</th></tr>{''.join(rows) or '<tr><td colspan=10>'+empty+'</td></tr>'}</table></div><div class="toolbar">{nav}</div>
+<details class="card"><summary><b>Εισαγωγή μελών από Excel (Προσθήκη / Γενική Αντικατάσταση)</b></summary><div style="margin-top:10px"><form method="post" action="/members/import" enctype="multipart/form-data"><label>Αρχείο (.xlsx, .csv ή .tsv)</label><input type="file" name="file" accept=".xlsx,.csv,.tsv,.txt"><label>ή Επικόλληση από Excel (μαζί με τη γραμμή επικεφαλίδων Member_ID, Surname, First_Name…)</label><textarea name="pasted" style="min-height:140px" placeholder="Επιλέξτε στο Excel όλες τις στήλες μαζί με τις επικεφαλίδες, αντιγράψτε και επικολλήστε εδώ."></textarea><label>Λειτουργία</label><select name="mode"><option value="merge">Προσθήκη / Ενημέρωση (συνιστάται)</option><option value="replace">Γενική Αντικατάσταση</option></select><button class="primary">Εισαγωγή</button></form><small>Η Γενική Αντικατάσταση στέλνει πρώτα υποχρεωτικό Excel ασφαλείας στο dskiad@gmail.com.</small></div></details>
 <div class="card"><b>Πρόβλεψη επόμενου σταδίου:</b> υπάρχει ήδη συνδεδεμένος πίνακας «Βαθμοί & Αξιώματα» με σύνδεση σε μέλος και Διάταγμα, ώστε αργότερα οι απονομές και οι διορισμοί να ενημερώνουν το ιστορικό του Αδελφού χωρίς να αλλοιώνουν το βασικό μητρώο επαφών.</div>""",u,'Μητρώο Μελών')
 
 @app.get('/members/export.xlsx')
