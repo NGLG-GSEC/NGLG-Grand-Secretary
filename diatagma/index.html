@@ -315,7 +315,7 @@
     const dt=val('doctype');
     if(dt){ ctx.font=`44px ${DISPLAY}`; ctx.fillStyle='#5a3c12'; ctx.fillText(spaced(dt),W/2,y); y+=48; }
     const subj=val('subject');
-    if(subj){ ctx.font=`italic 27px ${SERIF}`; ctx.fillStyle='#3a2a14'; ctx.fillText('Θέμα: '+subj,W/2,y); y+=44; }
+    if(subj){ ctx.font=`italic 27px ${SERIF}`; ctx.fillStyle='#3a2a14'; ctx.fillText(subj,W/2,y); y+=44; }
     y+=16;
 
     // closing block height reservation
