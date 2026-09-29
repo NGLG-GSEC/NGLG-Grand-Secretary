@@ -9,6 +9,7 @@ The way in to the work of the Secretariat. This repository holds the main portal
 | Section | Where it lives | Opens |
 | --- | --- | --- |
 | **NGLG Letter Manager** | `letter-manager/` in this repository | secure letter creation, protocol numbering, templates, archive, OTP access and final Gmail hand-off |
+| **Ψηφιακό Έντυπο Διατάγματος** | `diatagma/` in this repository | decree form with live preview, PNG / A4 PDF export, automatic background removal for emblem and signature |
 | Registration forms | [`dskiad/nglg-registration-forms`](https://github.com/dskiad/nglg-registration-forms) | the register, with the live forms linked from it |
 | Τεκτονικές Ομιλίες | [`dskiad/nglg-tektonikes-omilies`](https://github.com/dskiad/nglg-tektonikes-omilies) | [the library](https://dskiad.github.io/nglg-tektonikes-omilies/) |
 | Bear Bell Ritual | [`dskiad/bear-bell-ritual`](https://github.com/dskiad/bear-bell-ritual) | restricted application |

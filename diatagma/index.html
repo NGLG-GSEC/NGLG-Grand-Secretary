@@ -1,0 +1,525 @@
+<!doctype html>
+<html lang="el">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ΕΜΣΤΕ – Ψηφιακό Έντυπο</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=GFS+Didot&family=Noto+Serif:ital,wght@0,400;0,600;0,700;1,400&display=swap&subset=greek" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+  :root{
+    --ink:#3a2a14; --gold:#b8892f; --gold-dk:#8a6420; --gold-lt:#e7c77a;
+    --paper:#f5ead0; --panel:#fbf4e2; --line:#d9c08a; --wood:#4a2c17; --navy:#1f3a5f;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:linear-gradient(#5a371d,#3a2210);font-family:"Noto Serif",Georgia,serif;color:var(--ink)}
+  .sheet{max-width:1320px;margin:18px auto;padding:22px;background:radial-gradient(circle at 50% 30%,#fbf3de,#ead9b0);
+    border:3px solid var(--gold);outline:6px solid #2b180b;box-shadow:0 10px 40px rgba(0,0,0,.5)}
+  header{text-align:center;border-bottom:1px solid var(--gold);padding-bottom:10px;margin-bottom:18px}
+  header h1{font-family:"GFS Didot",serif;font-weight:400;letter-spacing:.06em;font-size:clamp(18px,2.4vw,28px);margin:6px 0 0}
+  .grid{display:grid;grid-template-columns:minmax(300px,1fr) minmax(320px,1.05fr);gap:22px;align-items:start}
+  .col{display:flex;flex-direction:column;gap:16px}
+  fieldset{border:1px solid var(--line);border-radius:6px;background:var(--panel);padding:18px 14px 14px;margin:0;position:relative}
+  legend{background:linear-gradient(var(--gold-lt),var(--gold));border:1px solid var(--gold-dk);border-radius:4px;
+    padding:4px 16px;font-family:"GFS Didot",serif;font-size:17px;letter-spacing:.05em;color:#2b1a07}
+  label{display:block;font-size:13.5px;font-weight:600;margin:10px 0 4px}
+  input[type=text],input[type=date],textarea,select{width:100%;padding:7px 9px;border:1px solid #cdb67f;border-radius:4px;
+    background:#fff;font:inherit;font-size:14px;color:var(--ink)}
+  textarea{min-height:84px;resize:vertical}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .chk{display:flex;gap:8px;align-items:center;font-weight:400;margin-top:10px}
+  .hint{font-size:12px;opacity:.75;margin-top:3px}
+  .btns{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:18px}
+  button{font:inherit;font-size:15px;padding:10px 22px;border-radius:4px;cursor:pointer;border:1px solid var(--gold-dk)}
+  .b-save{background:var(--navy);color:#fff;border-color:#10223a}
+  .b-gold{background:linear-gradient(var(--gold-lt),var(--gold));color:#2b1a07}
+  .b-pdf{background:linear-gradient(#f3dca0,#d4a94a);color:#5a0f0f;border:2px solid #8b1d1d}
+  .b-clear{background:#fff;color:var(--ink)}
+  button:hover{filter:brightness(1.07)}
+  .imgtool{display:grid;grid-template-columns:130px 1fr;gap:10px;align-items:center;margin-top:8px}
+  .thumb{width:130px;height:84px;border:1px solid #cdb67f;border-radius:4px;
+    background:repeating-conic-gradient(#e2d6bb 0 25%,#f7efdc 0 50%) 0 0/14px 14px;display:block}
+  .imgtool label{margin:0 0 3px;font-weight:400;font-size:12.5px}
+  input[type=range]{width:100%;accent-color:var(--gold-dk)}
+  .preview-wrap{position:sticky;top:12px}
+  canvas{width:100%;height:auto;display:block;border:1px solid var(--gold-dk);box-shadow:0 6px 18px rgba(0,0,0,.35)}
+  .status{text-align:center;font-size:13px;min-height:18px;margin-top:8px}
+  @media (max-width:900px){.grid{grid-template-columns:1fr}.preview-wrap{position:static}}
+  @media (max-width:480px){.sheet{padding:12px 16px;margin:0}.row{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="sheet">
+  <header>
+    <h1>ΕΘΝΙΚΗ ΜΕΓΑΛΗ ΣΤΟΑ ΕΛΛΑΔΟΣ – ΨΗΦΙΑΚΟ ΕΝΤΥΠΟ ΕΠΕΞΕΡΓΑΣΙΑΣ</h1>
+  </header>
+
+  <div class="grid">
+    <!-- ===== FORM ===== -->
+    <div class="col">
+      <fieldset>
+        <legend>ΔΙΑΤΑΓΜΑ – ΠΛΗΡΟΦΟΡΙΕΣ</legend>
+        <div class="row">
+          <div><label for="num">Αριθμός Διατάγματος</label><input type="text" id="num" value="514/2026"></div>
+          <div><label for="date">Ημερομηνία</label><input type="date" id="date"></div>
+        </div>
+        <label for="place">Τόπος</label><input type="text" id="place" value="Εν Αθήναις">
+        <label for="doctype">Τίτλος εγγράφου</label><input type="text" id="doctype" value="ΔΙΑΤΑΓΜΑ">
+        <label for="subject">Θέμα</label><input type="text" id="subject" placeholder="π.χ. Ορισμός Αντιπροσώπου">
+      </fieldset>
+
+      <fieldset>
+        <legend>ΚΥΡΙΟ ΣΩΜΑ ΚΕΙΜΕΝΟΥ</legend>
+        <label for="p0">Κείμενο Διατάγματος</label>
+        <textarea id="p0" placeholder="Κύριο κείμενο…"></textarea>
+        <label for="p1">Παράγραφος 1</label>
+        <textarea id="p1" placeholder="Προαιρετικό"></textarea>
+        <label for="p2">Παράγραφος 2</label>
+        <textarea id="p2" placeholder="Προαιρετικό"></textarea>
+        <div class="hint">Κενή γραμμή μέσα σε πεδίο = νέα παράγραφος. Το μέγεθος γραμμάτων προσαρμόζεται αυτόματα.</div>
+      </fieldset>
+
+      <fieldset>
+        <legend>ΚΛΕΙΣΙΜΟ &amp; ΥΠΟΓΡΑΦΗ</legend>
+        <label for="greet">Τιμητικός Χαιρετισμός</label>
+        <input type="text" id="greet" value="Με εκτίμηση και αδελφική αγάπη">
+        <label for="signer">Όνομα Υπογράφοντος</label>
+        <input type="text" id="signer" value="Σεβ. Αδ. Δημήτριος Σκιαδόπουλος">
+        <label for="sigtitle">Τίτλος / Αξίωμα Υπογράφοντος</label>
+        <input type="text" id="sigtitle" value="Μέγας Καγκελάριος">
+        <label for="admin">Διαχειριστής Εγγράφου (υποσέλιδο)</label>
+        <input type="text" id="admin" placeholder="Προαιρετικό">
+        <label for="sigimg">Ψηφιακή υπογραφή (οποιαδήποτε εικόνα – το φόντο αφαιρείται αυτόματα)</label>
+        <input type="file" id="sigimg" accept="image/*">
+        <div class="imgtool">
+          <canvas class="thumb" id="sigThumb" width="260" height="168"></canvas>
+          <div>
+            <label for="sigMode">Αφαίρεση φόντου</label>
+            <select id="sigMode"><option value="ink" selected>Μόνο το μελάνι (συνιστάται)</option><option value="flood">Από τις άκρες</option><option value="none">Καμία</option></select>
+            <label for="sigTol" style="margin-top:6px">Ένταση καθαρισμού</label>
+            <input type="range" id="sigTol" min="0" max="100" value="55">
+          </div>
+        </div>
+        <label class="chk"><input type="checkbox" id="sigline" checked> Γραμμή υπογραφής «Χ ______» αν δεν υπάρχει εικόνα</label>
+      </fieldset>
+
+      <fieldset>
+        <legend>ΕΜΒΛΗΜΑ &amp; ΕΞΑΓΩΓΗ</legend>
+        <label for="logo">Έμβλημα Μεγάλης Στοάς (εικόνα)</label>
+        <input type="file" id="logo" accept="image/*">
+        <div class="imgtool">
+          <canvas class="thumb" id="logoThumb" width="260" height="168"></canvas>
+          <div>
+            <label for="logoMode">Αφαίρεση φόντου</label>
+            <select id="logoMode"><option value="flood" selected>Από τις άκρες (συνιστάται)</option><option value="ink">Όλα τα ανοιχτά χρώματα</option><option value="none">Καμία</option></select>
+            <label for="logoTol" style="margin-top:6px">Ένταση καθαρισμού</label>
+            <input type="range" id="logoTol" min="0" max="100" value="45">
+          </div>
+        </div>
+        <div class="hint">Χωρίς εικόνα εμφανίζεται απλοποιημένη ασπίδα.</div>
+        <label for="motto">Ρητό κεφαλίδας</label>
+        <input type="text" id="motto" value="ΕΓΩ ΕΙΜΙ Ο ΩΝ">
+        <label class="chk"><input type="checkbox" id="showMotto" checked> Εμφάνιση ρητού (απενεργοποιείται αν το έμβλημα το περιέχει ήδη)</label>
+        <label class="chk"><input type="checkbox" id="seal" checked> Βουλοκέρι (σφραγίδα) κάτω αριστερά</label>
+        <div class="row">
+          <div><label for="ver">Έκδοση</label><input type="text" id="ver" value="v1"></div>
+          <div><label for="fmt">Μέγεθος εξαγωγής</label>
+            <select id="fmt"><option value="1">A4 – 150 dpi</option><option value="2" selected>A4 – 300 dpi</option></select></div>
+        </div>
+      </fieldset>
+    </div>
+
+    <!-- ===== PREVIEW ===== -->
+    <div class="preview-wrap">
+      <fieldset>
+        <legend>ΠΡΟΕΠΙΣΚΟΠΗΣΗ</legend>
+        <canvas id="cv" width="1240" height="1754"></canvas>
+        <div class="status" id="status"></div>
+      </fieldset>
+      <div class="btns">
+        <button class="b-save" id="bSave">Αποθήκευση Πρόχειρου</button>
+        <button class="b-gold" id="bPng">Λήψη Εικόνας (PNG)</button>
+        <button class="b-pdf" id="bPdf">Τελικό PDF</button>
+        <button class="b-clear" id="bClear">Καθαρισμός</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const W = 1240, H = 1754;                      // A4 @150dpi (base units)
+  const $ = id => document.getElementById(id);
+  const cv = $('cv');
+  let ctxRef = cv.getContext('2d');             // real target context (swapped for hi-res export)
+  const ctx = new Proxy({}, {
+    get:(_,p)=>{ const v=ctxRef[p]; return typeof v==='function'?v.bind(ctxRef):v; },
+    set:(_,p,v)=>{ ctxRef[p]=v; return true; }
+  });
+  const FIELDS = ['num','date','place','doctype','subject','p0','p1','p2','greet','signer','sigtitle','admin','motto','ver','fmt','sigMode','sigTol','logoMode','logoTol'];
+  const CHECKS = ['sigline','seal','showMotto'];
+  const imgs = { logo:null, sig:null };   // processed (transparent) canvases
+  const raw  = { logo:null, sig:null };   // original uploads
+  const SERIF = '"Noto Serif", Georgia, serif', DISPLAY = '"GFS Didot", "Noto Serif", serif';
+  const MONTHS = ['Ιανουαρίου','Φεβρουαρίου','Μαρτίου','Απριλίου','Μαΐου','Ιουνίου','Ιουλίου','Αυγούστου','Σεπτεμβρίου','Οκτωβρίου','Νοεμβρίου','Δεκεμβρίου'];
+
+  const val = id => ($(id).value || '').trim();
+  const status = t => { $('status').textContent = t; if (t) setTimeout(() => { if ($('status').textContent === t) $('status').textContent=''; }, 3500); };
+
+  function greekDate(iso){
+    if(!iso) return '';
+    const [y,m,d] = iso.split('-').map(Number);
+    return `${d} ${MONTHS[m-1]} ${y}`;
+  }
+  function stamp(){ const n=new Date(); return String(n.getDate()).padStart(2,'0')+String(n.getMonth()+1).padStart(2,'0')+String(n.getFullYear()).slice(-2); }
+
+  /* ---------- drawing helpers ---------- */
+  function rng(seed){ return () => (seed = (seed*16807) % 2147483647) / 2147483647; }
+
+  function goldGrad(x0,y0,x1,y1){
+    const g = ctx.createLinearGradient(x0,y0,x1,y1);
+    g.addColorStop(0,'#7a5518'); g.addColorStop(.25,'#e9c76f'); g.addColorStop(.5,'#a87a26');
+    g.addColorStop(.75,'#f1d68b'); g.addColorStop(1,'#7a5518'); return g;
+  }
+
+  function background(s){
+    const g = ctx.createRadialGradient(W/2,H*.42,H*.1,W/2,H/2,H*.75);
+    g.addColorStop(0,'#fbf2da'); g.addColorStop(.6,'#f0dfb6'); g.addColorStop(1,'#d9bd84');
+    ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+    const r = rng(7);                              // parchment speckle
+    for(let i=0;i<5500;i++){
+      ctx.fillStyle = `rgba(${110+r()*60|0},${80+r()*40|0},${30+r()*30|0},${r()*.07})`;
+      ctx.fillRect(r()*W, r()*H, 1+r()*2.5, 1+r()*2.5);
+    }
+    // faint columns
+    ctx.save(); ctx.globalAlpha=.07; ctx.fillStyle='#6b4b1c';
+    [[150],[W-150-70]].forEach(([x])=>{
+      ctx.fillRect(x,300,70,H-640);
+      ctx.fillRect(x-12,285,94,18); ctx.fillRect(x-12,H-345,94,18);
+    });
+    ctx.restore();
+  }
+
+  function frame(){
+    const m1=34, m2=58;
+    ctx.lineWidth=10; ctx.strokeStyle=goldGrad(0,0,W,H); ctx.strokeRect(m1,m1,W-2*m1,H-2*m1);
+    ctx.lineWidth=2.5; ctx.strokeStyle='#8a6420'; ctx.strokeRect(m2,m2,W-2*m2,H-2*m2);
+    ctx.lineWidth=1; ctx.strokeRect(m2+8,m2+8,W-2*m2-16,H-2*m2-16);
+    // corner flourishes
+    const corners=[[m2,m2,1,1],[W-m2,m2,-1,1],[m2,H-m2,1,-1],[W-m2,H-m2,-1,-1]];
+    corners.forEach(([x,y,sx,sy])=>{
+      ctx.save(); ctx.translate(x,y); ctx.scale(sx,sy);
+      ctx.strokeStyle=goldGrad(0,0,160,160); ctx.fillStyle=goldGrad(0,0,160,160); ctx.lineWidth=4;
+      ctx.beginPath(); ctx.moveTo(18,150); ctx.bezierCurveTo(18,60,60,18,150,18); ctx.stroke();
+      ctx.lineWidth=2.5;
+      ctx.beginPath(); ctx.moveTo(34,110); ctx.bezierCurveTo(40,60,60,40,110,34); ctx.stroke();
+      ctx.beginPath(); ctx.arc(38,38,11,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(150,18,5,0,Math.PI*2); ctx.arc(18,150,5,0,Math.PI*2); ctx.fill();
+      ctx.restore();
+    });
+  }
+
+  function placeholderEmblem(cx,top,h){
+    const w=h*.72;
+    ctx.save(); ctx.translate(cx,top);
+    ctx.beginPath(); ctx.moveTo(-w/2,0); ctx.lineTo(w/2,0); ctx.lineTo(w/2,h*.55);
+    ctx.quadraticCurveTo(w/2,h*.88,0,h); ctx.quadraticCurveTo(-w/2,h*.88,-w/2,h*.55); ctx.closePath();
+    ctx.fillStyle='#1f3a5f'; ctx.fill(); ctx.lineWidth=7; ctx.strokeStyle=goldGrad(-w/2,0,w/2,h); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0,8); ctx.lineTo(0,h-10); ctx.moveTo(-w/2+6,h*.42); ctx.lineTo(w/2-6,h*.42);
+    ctx.lineWidth=h*.08; ctx.strokeStyle='#f3f0e6'; ctx.stroke();
+    ctx.fillStyle='#e7c77a'; ctx.font=`700 ${h*.14}px ${DISPLAY}`; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('ΕΜΣΤΕ',0,h*1.12);
+    ctx.restore();
+  }
+
+  function wrap(text,maxW){
+    const out=[];
+    text.split('\n').forEach(par=>{
+      if(!par.trim()){ out.push(''); return; }
+      let line='';
+      par.split(/\s+/).forEach(w=>{
+        const t = line ? line+' '+w : w;
+        if(ctx.measureText(t).width>maxW && line){ out.push(line); line=w; } else line=t;
+      });
+      out.push(line);
+    });
+    return out;
+  }
+
+  function drawJustified(line,x,y,maxW,last){
+    const words=line.split(' ');
+    if(last||words.length<2){ ctx.fillText(line,x,y); return; }
+    const total=words.reduce((a,w)=>a+ctx.measureText(w).width,0);
+    const gap=(maxW-total)/(words.length-1);
+    if(gap>ctx.measureText(' ').width*3){ ctx.fillText(line,x,y); return; }
+    let cx=x; words.forEach(w=>{ ctx.fillText(w,cx,y); cx+=ctx.measureText(w).width+gap; });
+  }
+
+  function seal(x,y,r){
+    ctx.save();
+    const g=ctx.createRadialGradient(x-r*.3,y-r*.3,r*.1,x,y,r);
+    g.addColorStop(0,'#c23a2c'); g.addColorStop(.7,'#8e1b14'); g.addColorStop(1,'#5c0e0a');
+    ctx.beginPath();
+    for(let i=0;i<=40;i++){ const a=i/40*Math.PI*2, rr=r*(1+Math.sin(i*2.7)*.05); ctx.lineTo(x+Math.cos(a)*rr,y+Math.sin(a)*rr); }
+    ctx.fillStyle=g; ctx.shadowColor='rgba(0,0,0,.35)'; ctx.shadowBlur=10; ctx.shadowOffsetY=4; ctx.fill();
+    ctx.shadowColor='transparent';
+    ctx.lineWidth=3; ctx.strokeStyle='rgba(255,210,190,.35)'; ctx.beginPath(); ctx.arc(x,y,r*.72,0,Math.PI*2); ctx.stroke();
+    ctx.fillStyle='rgba(255,225,205,.75)'; ctx.font=`700 ${r*.36}px ${DISPLAY}`; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('ΕΜΣΤΕ',x,y+2);
+    ctx.restore();
+  }
+
+  /* ---------- main render ---------- */
+  function render(scale=1){
+    ctx.setTransform(scale,0,0,scale,0,0);
+    background(); frame();
+    ctx.textBaseline='alphabetic'; ctx.textAlign='center';
+
+    let y=118;
+    // motto
+    const motto=val('motto');
+    if(motto && $('showMotto').checked){ ctx.fillStyle='#6b4b1c'; ctx.font=`26px ${DISPLAY}`; ctx.fillText(spaced(motto),W/2,y); }
+    y+=18;
+
+    // emblem
+    const eh=250;
+    if(imgs.logo){
+      const r=imgs.logo.width/imgs.logo.height, h=Math.min(340,560/r), w=h*r;
+      ctx.drawImage(imgs.logo,W/2-w/2,y,w,h); y+=h+14;
+    } else { placeholderEmblem(W/2,y,eh*.78); y+=eh+16; }
+
+    // title
+    ctx.font=`76px ${DISPLAY}`; ctx.fillStyle=goldGrad(W/2-400,y,W/2+400,y+170);
+    ctx.shadowColor='rgba(60,35,5,.45)'; ctx.shadowBlur=3; ctx.shadowOffsetY=2;
+    ctx.fillText('ΕΘΝΙΚΗ ΜΕΓΑΛΗ',W/2,y+70); ctx.fillText('ΣΤΟΑ ΕΛΛΑΔΟΣ',W/2,y+152);
+    ctx.shadowColor='transparent'; y+=190;
+
+    // divider
+    ctx.strokeStyle=goldGrad(200,0,W-200,0); ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(190,y); ctx.lineTo(W/2-18,y); ctx.moveTo(W/2+18,y); ctx.lineTo(W-190,y); ctx.stroke();
+    ctx.fillStyle='#a87a26'; ctx.save(); ctx.translate(W/2,y); ctx.rotate(Math.PI/4); ctx.fillRect(-7,-7,14,14); ctx.restore();
+    y+=52;
+
+    // ref row
+    const L=140, R=W-140, maxW=R-L;
+    ctx.font=`600 25px ${SERIF}`; ctx.fillStyle='#3a2a14';
+    const num=val('num');
+    ctx.textAlign='left'; if(num) ctx.fillText('Αρ. '+num,L,y);
+    ctx.textAlign='right'; const dl=[val('place'),greekDate(val('date'))].filter(Boolean).join(', ');
+    if(dl) ctx.fillText(dl,R,y);
+    y+=62;
+
+    // doc type + subject
+    ctx.textAlign='center';
+    const dt=val('doctype');
+    if(dt){ ctx.font=`44px ${DISPLAY}`; ctx.fillStyle='#5a3c12'; ctx.fillText(spaced(dt),W/2,y); y+=48; }
+    const subj=val('subject');
+    if(subj){ ctx.font=`italic 27px ${SERIF}`; ctx.fillStyle='#3a2a14'; ctx.fillText('Θέμα: '+subj,W/2,y); y+=44; }
+    y+=16;
+
+    // closing block height reservation
+    const footTop=H-440;
+
+    // body with auto-fit
+    const body=['p0','p1','p2'].map(val).filter(Boolean).join('\n\n');
+    ctx.textAlign='left'; ctx.fillStyle='#2e2110';
+    if(body){
+      let fs=30, lines, lh;
+      for(;fs>=17;fs--){
+        ctx.font=`${fs}px ${SERIF}`; lh=fs*1.5;
+        lines=wrap(body,maxW);
+        if(y+lines.length*lh<=footTop) break;
+      }
+      ctx.font=`${fs}px ${SERIF}`;
+      lines.forEach((ln,i)=>{
+        if(ln){ const next=lines[i+1]; drawJustified(ln,L,y,maxW,next===undefined||next===''); }
+        y+= ln ? lh : lh*.6;
+      });
+    } else {
+      ctx.font=`italic 26px ${SERIF}`; ctx.fillStyle='rgba(58,42,20,.4)'; ctx.textAlign='center';
+      ctx.fillText('[ Το κείμενο του εγγράφου θα εμφανιστεί εδώ ]',W/2,y+40);
+    }
+
+    // closing
+    let cy=footTop+50; const sx=W*.66;
+    ctx.textAlign='center'; ctx.fillStyle='#3a2a14';
+    const greet=val('greet');
+    if(greet){ ctx.font=`italic 29px ${SERIF}`; ctx.fillText(greet,sx,cy); }
+    cy+=24;
+    if(imgs.sig){
+      const r=imgs.sig.width/imgs.sig.height, h=Math.min(135,360/r), w=h*r;
+      ctx.drawImage(imgs.sig,sx-w/2,cy,w,h); cy+=h+46;
+    } else if($('sigline').checked){
+      cy+=90; ctx.font=`30px ${SERIF}`; ctx.fillStyle='#6b4b1c'; ctx.textAlign='left';
+      ctx.fillText('Χ',sx-190,cy-6); ctx.strokeStyle='#6b4b1c'; ctx.lineWidth=1.5;
+      ctx.beginPath(); ctx.moveTo(sx-160,cy); ctx.lineTo(sx+190,cy); ctx.stroke(); ctx.textAlign='center'; cy+=42;
+    } else cy+=110;
+    ctx.fillStyle='#2e2110';
+    const signer=val('signer'); if(signer){ ctx.font=`600 29px ${SERIF}`; ctx.fillText(signer,sx,cy); cy+=38; }
+    const st=val('sigtitle'); if(st){ ctx.font=`25px ${SERIF}`; ctx.fillStyle='#5a3c12'; ctx.fillText(st,sx,cy); }
+
+    if($('seal').checked) seal(250,H-270,92);
+
+    const admin=val('admin');
+    if(admin){ ctx.font=`18px ${SERIF}`; ctx.fillStyle='rgba(58,42,20,.7)'; ctx.textAlign='center'; ctx.fillText(admin,W/2,H-92); }
+  }
+  function spaced(s){ return s.toUpperCase().split('').join(' '); }
+
+  /* ---------- export ---------- */
+  function renderHiRes(){
+    const scale=Number($('fmt').value)||1;
+    const off=document.createElement('canvas'); off.width=W*scale; off.height=H*scale;
+    const saved=ctxRef;
+    const octx=off.getContext('2d');
+    ctxRef=octx; render(scale); ctxRef=saved;
+    return off;
+  }
+
+  function fileBase(){
+    const n=(val('num')||'xxx').replace(/[\/\\\s]+/g,'-');
+    return `Diatagma_${n}_${stamp()}_${val('ver')||'v1'}`;
+  }
+  $('bPng').onclick=()=>{
+    const c=renderHiRes(); const a=document.createElement('a');
+    a.download=fileBase()+'.png'; a.href=c.toDataURL('image/png'); a.click(); status('Η εικόνα δημιουργήθηκε.');
+  };
+  $('bPdf').onclick=()=>{
+    if(!window.jspdf){ status('Η βιβλιοθήκη PDF δεν φορτώθηκε – ελέγξτε τη σύνδεση.'); return; }
+    const c=renderHiRes(); const pdf=new window.jspdf.jsPDF({unit:'mm',format:'a4'});
+    pdf.addImage(c.toDataURL('image/jpeg',.95),'JPEG',0,0,210,297); pdf.save(fileBase()+'.pdf'); status('Το PDF δημιουργήθηκε.');
+  };
+
+  /* ---------- drafts ---------- */
+  const KEY='nglg-diatagma-draft';
+  $('bSave').onclick=()=>{
+    const d={}; FIELDS.forEach(f=>d[f]=$(f).value); CHECKS.forEach(c=>d[c]=$(c).checked);
+    try{ if(raw.logo) d.logo=raw.logo.src; if(raw.sig) d.sig=raw.sig.src; localStorage.setItem(KEY,JSON.stringify(d)); status('Το πρόχειρο αποθηκεύτηκε σε αυτόν τον browser.'); }
+    catch(e){ try{ delete d.logo; delete d.sig; localStorage.setItem(KEY,JSON.stringify(d)); status('Αποθηκεύτηκε (χωρίς εικόνες – πολύ μεγάλες).'); }catch(_){ status('Η αποθήκευση δεν είναι διαθέσιμη.'); } }
+  };
+  $('bClear').onclick=()=>{
+    ['subject','p0','p1','p2','admin'].forEach(f=>$(f).value='');
+    imgs.sig=null; raw.sig=null; thumb('sig'); $('sigimg').value=''; render(); status('Τα πεδία κειμένου καθαρίστηκαν.');
+  };
+  function loadImg(src,key){ return new Promise(res=>{ const i=new Image(); i.onload=()=>{raw[key]=i;processImage(key);res();}; i.onerror=res; i.src=src; }); }
+
+  /* ---------- background removal ---------- */
+  function processImage(key){
+    const src=raw[key]; if(!src){ imgs[key]=null; thumb(key); return; }
+    const k=Math.min(1,1800/Math.max(src.naturalWidth,src.naturalHeight));
+    const c=document.createElement('canvas');
+    c.width=Math.round(src.naturalWidth*k); c.height=Math.round(src.naturalHeight*k);
+    const x=c.getContext('2d'); x.drawImage(src,0,0,c.width,c.height);
+    const mode=$(key+'Mode').value, tol=Number($(key+'Tol').value);
+    if(mode!=='none'){
+      const d=x.getImageData(0,0,c.width,c.height);
+      if(mode==='flood') floodKey(d,tol); else inkKey(d,tol);
+      x.putImageData(d,0,0);
+    }
+    imgs[key]=trim(c); thumb(key);
+  }
+
+  // Background colour = average of the border pixels
+  function borderColour(d){
+    const {data,width:w,height:h}=d; let r=0,g=0,b=0,n=0;
+    const add=i=>{ r+=data[i];g+=data[i+1];b+=data[i+2];n++; };
+    for(let x=0;x<w;x++){ add(x*4); add(((h-1)*w+x)*4); }
+    for(let y=0;y<h;y++){ add(y*w*4); add((y*w+w-1)*4); }
+    return [r/n,g/n,b/n];
+  }
+
+  // Removes only the background connected to the edges (keeps white areas inside the emblem)
+  function floodKey(d,strength){
+    const {data,width:w,height:h}=d, bg=borderColour(d);
+    const tol=6+strength*0.9, soft=tol*1.9;
+    const dist=p=>{ const i=p*4; return Math.max(Math.abs(data[i]-bg[0]),Math.abs(data[i+1]-bg[1]),Math.abs(data[i+2]-bg[2])); };
+    const seen=new Uint8Array(w*h), stack=[];
+    const push=p=>{ if(!seen[p]){ seen[p]=1; stack.push(p); } };
+    for(let x=0;x<w;x++){ push(x); push((h-1)*w+x); }
+    for(let y=0;y<h;y++){ push(y*w); push(y*w+w-1); }
+    while(stack.length){
+      const p=stack.pop(), dd=dist(p), i=p*4;
+      if(dd>=soft) continue;                       // solid pixel: stop here
+      if(dd<tol){ data[i+3]=0; }
+      else{                                        // soft edge: partial alpha + remove background tint
+        const a=(dd-tol)/(soft-tol);
+        for(let c=0;c<3;c++) data[i+c]=Math.max(0,Math.min(255,(data[i+c]-bg[c]*(1-a))/a));
+        data[i+3]=Math.min(data[i+3],Math.round(a*255));
+        continue;                                  // don't spread through edges
+      }
+      const x=p%w;
+      if(x>0) push(p-1); if(x<w-1) push(p+1); if(p>=w) push(p-w); if(p<w*(h-1)) push(p+w);
+    }
+  }
+
+  // Keeps only the dark "ink" (ideal for signatures on white or fake-checkerboard backgrounds)
+  function inkKey(d,strength){
+    const {data}=d, n=data.length/4, L=new Float32Array(n);
+    for(let p=0,i=0;p<n;p++,i+=4) L[p]=.299*data[i]+.587*data[i+1]+.114*data[i+2];
+    // ink colour = average of the darkest pixels
+    const sorted=Float32Array.from(L).sort(), lo=sorted[Math.floor(n*0.02)];
+    let r=0,g=0,b=0,m=0;
+    for(let p=0,i=0;p<n;p++,i+=4) if(L[p]<=lo+25){ r+=data[i];g+=data[i+1];b+=data[i+2];m++; }
+    const ink=[r/m,g/m,b/m], inkL=lo+10;
+    const hi=Math.max(inkL+30,250-strength*1.3);   // anything lighter than this becomes fully transparent
+    for(let p=0,i=0;p<n;p++,i+=4){
+      let a=(hi-L[p])/(hi-inkL); a=a<0?0:a>1?1:a;
+      data[i]=ink[0]; data[i+1]=ink[1]; data[i+2]=ink[2]; data[i+3]=Math.round(a*a*(3-2*a)*255);
+    }
+  }
+
+  // Crop away fully transparent margins so sizing is based on the real content
+  function trim(c){
+    const x=c.getContext('2d'), {data,width:w,height:h}=x.getImageData(0,0,c.width,c.height);
+    let t=h,l=w,b=-1,r=-1;
+    for(let y=0;y<h;y++) for(let xx=0;xx<w;xx++) if(data[(y*w+xx)*4+3]>12){ if(y<t)t=y; if(y>b)b=y; if(xx<l)l=xx; if(xx>r)r=xx; }
+    if(b<0) return c;
+    const pad=4; l=Math.max(0,l-pad); t=Math.max(0,t-pad); r=Math.min(w-1,r+pad); b=Math.min(h-1,b+pad);
+    const o=document.createElement('canvas'); o.width=r-l+1; o.height=b-t+1;
+    o.getContext('2d').drawImage(c,l,t,o.width,o.height,0,0,o.width,o.height); return o;
+  }
+
+  function thumb(key){
+    const t=$(key+'Thumb'), x=t.getContext('2d'); x.clearRect(0,0,t.width,t.height);
+    const im=imgs[key]; if(!im) return;
+    const s=Math.min((t.width-12)/im.width,(t.height-12)/im.height), w=im.width*s, h=im.height*s;
+    x.drawImage(im,(t.width-w)/2,(t.height-h)/2,w,h);
+  }
+  async function restore(){
+    let d=null; try{ d=JSON.parse(localStorage.getItem(KEY)||'null'); }catch(_){}
+    if(!d) return;
+    FIELDS.forEach(f=>{ if(d[f]!=null) $(f).value=d[f]; });
+    CHECKS.forEach(c=>{ if(d[c]!=null) $(c).checked=d[c]; });
+    if(d.logo) await loadImg(d.logo,'logo');
+    if(d.sig) await loadImg(d.sig,'sig');
+  }
+
+  /* ---------- wiring ---------- */
+  function onFile(inputId,key){
+    $(inputId).addEventListener('change',e=>{
+      const f=e.target.files[0]; if(!f) return;
+      const r=new FileReader(); r.onload=()=>loadImg(r.result,key).then(()=>{ if(key==='logo') $('showMotto').checked=false; render(); }); r.readAsDataURL(f);
+    });
+  }
+  onFile('logo','logo'); onFile('sigimg','sig');
+  ['logo','sig'].forEach(k=>{
+    $(k+'Mode').addEventListener('change',()=>{ processImage(k); render(); });
+    let t; $(k+'Tol').addEventListener('input',()=>{ clearTimeout(t); t=setTimeout(()=>{ processImage(k); render(); },120); });
+  });
+  document.querySelectorAll('input,textarea,select').forEach(el=>el.addEventListener('input',()=>render()));
+  document.querySelectorAll('input[type=checkbox]').forEach(el=>el.addEventListener('change',()=>render()));
+
+  (async()=>{
+    { const n=new Date(); $('date').value=`${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`; }
+    await restore();
+    render();
+    try{
+      await Promise.all([`76px ${DISPLAY}`,`30px ${SERIF}`,`italic 30px ${SERIF}`,`600 30px ${SERIF}`].map(f=>document.fonts.load(f,'ΑΒΓαβγ')));
+      await document.fonts.ready;
+    }catch(_){}
+    render();
+  })();
+})();
+</script>
+</body>
+</html>
