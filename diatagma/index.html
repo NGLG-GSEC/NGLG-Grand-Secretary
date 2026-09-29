@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ΕΜΣΤΕ – Ψηφιακό Έντυπο</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=GFS+Didot&family=Noto+Serif:ital,wght@0,400;0,600;0,700;1,400&display=swap&subset=greek" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=GFS+Didot&family=Noto+Serif:ital,wght@0,400;0,600;0,700;1,400;1,700&display=swap&subset=greek" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
   :root{
@@ -79,7 +79,7 @@
         <label for="p2">Παράγραφος 2</label>
         <textarea id="p2" placeholder="Προαιρετικό"></textarea>
         <div style="margin-top:10px"><button type="button" class="b-clear" id="bLink" style="padding:6px 14px;font-size:14px">🔗 Εισαγωγή συνδέσμου</button></div>
-        <div class="hint">Όλο το κείμενο στοιχίζεται πλήρως (αριστερά–δεξιά)· το Κείμενο Διατάγματος είναι έντονο. Σύνδεσμος: επιλέξτε λέξεις και πατήστε «Εισαγωγή συνδέσμου», ή γράψτε <code>[κείμενο](https://διεύθυνση)</code>. Διευθύνσεις που αρχίζουν με https:// ή www. γίνονται σύνδεσμος αυτόματα. Οι σύνδεσμοι είναι ενεργοί στο PDF. Κενή γραμμή = νέα παράγραφος.</div>
+        <div class="hint">Κείμενο Διατάγματος: κεντραρισμένο, έντονο. Παράγραφος 1: πλήρης στοίχιση. Παράγραφος 2: έντονα πλάγια, πλήρης στοίχιση. Σύνδεσμος: επιλέξτε λέξεις και πατήστε «Εισαγωγή συνδέσμου», ή γράψτε <code>[κείμενο](https://διεύθυνση)</code>. Διευθύνσεις που αρχίζουν με https:// ή www. γίνονται σύνδεσμος αυτόματα. Οι σύνδεσμοι είναι ενεργοί στο PDF. Κενή γραμμή = νέα παράγραφος.</div>
       </fieldset>
 
       <fieldset>
@@ -433,9 +433,9 @@
 
     // body with auto-fit: Κείμενο Διατάγματος centred & bold, paragraphs 1–2 justified
     const blocks=[
-      {text:val('p0'),bold:true, align:'justify'},
-      {text:val('p1'),bold:false,align:'justify'},
-      {text:val('p2'),bold:false,align:'justify'}
+      {text:val('p0'),style:'700 ',       align:'center'},    // Κείμενο Διατάγματος: centred, bold
+      {text:val('p1'),style:'',           align:'justify'},   // Παράγραφος 1: regular, justified
+      {text:val('p2'),style:'italic 700 ',align:'justify'}    // Παράγραφος 2: bold italic, justified
     ].filter(b=>b.text).map(b=>({...b,paras:tokenize(b.text)}));
     ctx.textAlign='left'; ctx.fillStyle=INK;
     if(blocks.length){
@@ -443,7 +443,7 @@
       const measure=fs=>{
         const lh=fs*1.5; let h=0;
         blocks.forEach((b,bi)=>{
-          ctx.font=`${b.bold?'700 ':''}${fs}px ${SERIF}`;
+          ctx.font=`${b.style}${fs}px ${SERIF}`;
           b.rows=layoutRows(b.paras,maxW);
           b.rows.forEach(r=>h+= r ? lh : lh*.6);
           if(bi<blocks.length-1) h+=lh*.6;
@@ -456,7 +456,7 @@
       bodyOverflow=!fits;
       const lh=fs*1.5;
       blocks.forEach((b,bi)=>{
-        ctx.font=`${b.bold?'700 ':''}${fs}px ${SERIF}`;
+        ctx.font=`${b.style}${fs}px ${SERIF}`;
         b.rows.forEach(r=>{ if(r) drawRow(r,L,y,maxW,b.align,fs); y+= r ? lh : lh*.6; });
         if(bi<blocks.length-1) y+=lh*.6;
       });
@@ -684,7 +684,7 @@
     await restore();
     render();
     try{
-      await Promise.all([`76px ${DISPLAY}`,`30px ${SERIF}`,`italic 30px ${SERIF}`,`600 30px ${SERIF}`,`700 30px ${SERIF}`].map(f=>document.fonts.load(f,'ΑΒΓαβγ')));
+      await Promise.all([`76px ${DISPLAY}`,`30px ${SERIF}`,`italic 30px ${SERIF}`,`600 30px ${SERIF}`,`700 30px ${SERIF}`,`italic 700 30px ${SERIF}`].map(f=>document.fonts.load(f,'ΑΒΓαβγ')));
       await document.fonts.ready;
     }catch(_){}
     render();
