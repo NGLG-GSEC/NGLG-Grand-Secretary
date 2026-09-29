@@ -1,6 +1,6 @@
  init():
     with con() as c:
-        c.executescript('''CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY,value TEXT NOT NULL);CREATE TABLE IF NOT EXISTS users(email TEXT PRIMARY KEY,active INTEGER NOT NULL DEFAULT 1,role TEXT NOT NULL DEFAULT 'editor',allowed_templates TEXT NOT NULL DEFAULT '[]',created_at TEXT,updated_at TEXT);CREATE TABLE IF NOT EXISTS otps(email TEXT PRIMARY KEY,code_hash TEXT,expires_at TEXT,attempts INTEGER DEFAULT 0,created_at TEXT);CREATE TABLE IF NOT EXISTS letter_templates(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT UNIQUE,body TEXT DEFAULT '',active INTEGER DEFAULT 1,created_at TEXT,updated_at TEXT);CREATE TABLE IF NOT EXISTS letters(id INTEGER PRIMARY KEY AUTOINCREMENT,protocol_seq INTEGER,protocol_year INTEGER,protocol_no TEXT UNIQUE,letter_date TEXT,subject TEXT,body TEXT,template_id INTEGER,recipient_name TEXT DEFAULT '',recipient_email TEXT DEFAULT '',status TEXT DEFAULT 'draft',created_by TEXT,signer TEXT DEFAULT 'dimitrios',source_letter_id INTEGER,created_at TEXT,updated_at TEXT);CREATE INDEX IF NOT EXISTS ixp ON letters(protocol_no);CREATE INDEX IF NOT EXISTS ixs ON letters(subject);''')
+        c.executescript('''CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY,value TEXT NOT NULL);CREATE TABLE IF NOT EXISTS users(email TEXT PRIMARY KEY,active INTEGER NOT NULL DEFAULT 1,role TEXT NOT NULL DEFAULT 'editor',allowed_templates TEXT NOT NULL DEFAULT '[]',created_at TEXT,updated_at TEXT);CREATE TABLE IF NOT EXISTS otps(email TEXT PRIMARY KEY,code_hash TEXT,expires_at TEXT,attempts INTEGER DEFAULT 0,created_at TEXT);CREATE TABLE IF NOT EXISTS login_guard(email TEXT PRIMARY KEY,fails INTEGER DEFAULT 0,locked_until TEXT);CREATE TABLE IF NOT EXISTS letter_templates(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT UNIQUE,body TEXT DEFAULT '',active INTEGER DEFAULT 1,created_at TEXT,updated_at TEXT);CREATE TABLE IF NOT EXISTS letters(id INTEGER PRIMARY KEY AUTOINCREMENT,protocol_seq INTEGER,protocol_year INTEGER,protocol_no TEXT UNIQUE,letter_date TEXT,subject TEXT,body TEXT,template_id INTEGER,recipient_name TEXT DEFAULT '',recipient_email TEXT DEFAULT '',status TEXT DEFAULT 'draft',created_by TEXT,signer TEXT DEFAULT 'dimitrios',source_letter_id INTEGER,created_at TEXT,updated_at TEXT);CREATE INDEX IF NOT EXISTS ixp ON letters(protocol_no);CREATE INDEX IF NOT EXISTS ixs ON letters(subject);''')
         if USE_PG:
             c.execute("ALTER TABLE letters ADD COLUMN IF NOT EXISTS signer TEXT DEFAULT 'dimitrios'")
             c.execute("ALTER TABLE letters ADD COLUMN IF NOT EXISTS edit_session TEXT")
@@ -90,12 +90,42 @@ def templates_for(u):
         q=','.join('?'*len(ids));return [dict(r) for r in c.execute(f'SELECT * FROM letter_templates WHERE active=1 AND id IN ({q}) ORDER BY name',ids)]
 def can_tpl(u,i):return isadmin(u) if not i else any(int(t['id'])==int(i) for t in templates_for(u))
 def hcode(e,code):return hashlib.sha256(f'{SECRET}|{e}|{code}'.encode()).hexdigest()
+OTP_MAX_ATTEMPTS=5          # wrong OTP codes allowed before the code is cancelled
+PWD_MAX_FAILS=5             # wrong passwords allowed before a temporary lock
+PWD_LOCK_MINUTES=15
+def smtp_ready():
+    return bool(os.getenv('SMTP_HOST') and os.getenv('SMTP_USERNAME') and os.getenv('SMTP_PASSWORD'))
 def sendotp(e,code):
-    host=os.getenv('SMTP_HOST');usr=os.getenv('SMTP_USERNAME');pwd=os.getenv('SMTP_PASSWORD');port=int(os.getenv('SMTP_PORT','587'))
-    if not(host and usr and pwd):return False
-    m=EmailMessage();m['Subject']='Κωδικός πρόσβασης – Μεγάλη Γραμματεία';m['From']=os.getenv('OTP_FROM_EMAIL',usr);m['To']=e;m.set_content(f'Ο κωδικός OTP είναι: {code}\nΙσχύει για 10 λεπτά.')
-    with smtplib.SMTP(host,port,timeout=20) as s:s.starttls(context=ssl.create_default_context());s.login(usr,pwd);s.send_message(m)
+    host=os.getenv('SMTP_HOST');usr=os.getenv('SMTP_USERNAME');pwd=(os.getenv('SMTP_PASSWORD') or '').replace(' ','');port=int(os.getenv('SMTP_PORT','587'))
+    if not(host and usr and pwd):
+        print('[otp] SMTP not configured (SMTP_HOST / SMTP_USERNAME / SMTP_PASSWORD) - OTP not sent')
+        return False
+    m=EmailMessage();m['Subject']='Κωδικός πρόσβασης – Μεγάλη Γραμματεία';m['From']=os.getenv('OTP_FROM_EMAIL',usr);m['To']=e
+    m.set_content(f'Ο κωδικός OTP είναι: {code}\nΙσχύει για 10 λεπτά.\n\nΑν δεν ζητήσατε κωδικό, αγνοήστε αυτό το μήνυμα.')
+    ctx=ssl.create_default_context()
+    if port==465:
+        with smtplib.SMTP_SSL(host,port,timeout=20,context=ctx) as s:s.login(usr,pwd);s.send_message(m)
+    else:
+        with smtplib.SMTP(host,port,timeout=20) as s:s.ehlo();s.starttls(context=ctx);s.ehlo();s.login(usr,pwd);s.send_message(m)
     return True
+print('[otp] SMTP configured:', 'yes' if smtp_ready() else 'NO - set SMTP_PASSWORD on the server')
+
+def guard_state(e):
+    with con() as c:r=c.execute('SELECT * FROM login_guard WHERE email=?',(e,)).fetchone()
+    if not r:return 0,None
+    lu=datetime.fromisoformat(r['locked_until']) if r['locked_until'] else None
+    return int(r['fails'] or 0),lu
+def guard_fail(e):
+    fails,_=guard_state(e);fails+=1
+    lock=(datetime.now()+timedelta(minutes=PWD_LOCK_MINUTES)).isoformat(timespec='seconds') if fails>=PWD_MAX_FAILS else None
+    with con() as c:
+        if c.execute('SELECT 1 FROM login_guard WHERE email=?',(e,)).fetchone():
+            c.execute('UPDATE login_guard SET fails=?,locked_until=? WHERE email=?',(0 if lock else fails,lock,e))
+        else:
+            c.execute('INSERT INTO login_guard(email,fails,locked_until) VALUES(?,?,?)',(e,0 if lock else fails,lock))
+    return lock
+def guard_ok(e):
+    with con() as c:c.execute('DELETE FROM login_guard WHERE email=?',(e,))
 
 def nextprot(c):
     today=date.today();y=today.year

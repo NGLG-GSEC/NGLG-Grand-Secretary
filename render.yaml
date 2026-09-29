@@ -28,6 +28,10 @@ services:
         value: grand.secretary@nglgreece.gr
       - key: SMTP_PASSWORD
         sync: false
+      - key: PRIMARY_ADMIN_EMAIL
+        sync: false
+      - key: PRIMARY_ADMIN_PASSWORD_HASH
+        sync: false
     disk:
       name: nglg-letter-manager-data
       mountPath: /var/data

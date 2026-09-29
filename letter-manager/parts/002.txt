@@ -20,37 +20,60 @@ def login():
 def otp(email:str=Form(...),admin_password:str=Form('')):
     e=email.strip().lower()
     with con() as c:r=c.execute('SELECT 1 FROM users WHERE email=? AND active=1',(e,)).fetchone()
-    if r and AUTHORIZED_USER_EMAIL and e==AUTHORIZED_USER_EMAIL and AUTHORIZED_USER_PASSWORD_HASH:
+    pw_hash={AUTHORIZED_USER_EMAIL:AUTHORIZED_USER_PASSWORD_HASH,PRIMARY_ADMIN_EMAIL:PRIMARY_ADMIN_PASSWORD_HASH}.get(e,'') if e else ''
+    # --- personal password login (primary admin / authorised user) ---
+    if r and pw_hash and (admin_password or e==AUTHORIZED_USER_EMAIL):
+        _,locked=guard_state(e)
+        if locked and locked>datetime.now():
+            mins=max(1,int((locked-datetime.now()).total_seconds()//60)+1)
+            return page(f'''<div class="card auth"><h2>Προσωρινό κλείδωμα</h2><p>Πολλές λανθασμένες προσπάθειες. Δοκιμάστε ξανά σε {mins} λεπτά ή συνδεθείτε με OTP αφήνοντας τον κωδικό κενό.</p><a class="btn" href="/login">Επιστροφή</a></div>''')
         entered=hashlib.sha256(admin_password.encode()).hexdigest()
-        if hmac.compare_digest(entered,AUTHORIZED_USER_PASSWORD_HASH):
-            tok=secrets.token_urlsafe(32)
-            with con() as c:c.execute('UPDATE users SET edit_session=?,updated_at=? WHERE email=?',(tok,now(),e))
+        if hmac.compare_digest(entered,pw_hash):
+            guard_ok(e)
             resp=RedirectResponse('/',303)
             resp.set_cookie('nglg_session',ser.dumps(e),httponly=True,secure=COOKIE_SECURE,samesite='lax',max_age=43200)
-            resp.set_cookie('nglg_edit_session',tok,httponly=True,secure=COOKIE_SECURE,samesite='lax',max_age=43200)
+            if e==AUTHORIZED_USER_EMAIL:
+                tok=secrets.token_urlsafe(32)
+                with con() as c:c.execute('UPDATE users SET edit_session=?,updated_at=? WHERE email=?',(tok,now(),e))
+                resp.set_cookie('nglg_edit_session',tok,httponly=True,secure=COOKIE_SECURE,samesite='lax',max_age=43200)
             return resp
-        raise HTTPException(401,'Λανθασμένος κωδικός πρόσβασης')
-    if r and PRIMARY_ADMIN_EMAIL and e==PRIMARY_ADMIN_EMAIL and PRIMARY_ADMIN_PASSWORD_HASH:
-        entered=hashlib.sha256(admin_password.encode()).hexdigest()
-        if hmac.compare_digest(entered,PRIMARY_ADMIN_PASSWORD_HASH):
-            resp=RedirectResponse('/',303)
-            resp.set_cookie('nglg_session',ser.dumps(e),httponly=True,secure=COOKIE_SECURE,samesite='lax',max_age=43200)
-            return resp
+        lock=guard_fail(e)
+        msg=f'Λανθασμένος κωδικός. Ο λογαριασμός κλειδώθηκε για {PWD_LOCK_MINUTES} λεπτά.' if lock else 'Λανθασμένος κωδικός πρόσβασης.'
+        return page(f'''<div class="card auth"><h2>Είσοδος</h2><p>{msg}</p><a class="btn" href="/login">Επιστροφή</a></div>''')
+    # --- one-time code by email ---
     code=f'{secrets.randbelow(1000000):06d}'
-    sent=False
+    sent=False;err=''
     if r:
         with con() as c:c.execute('REPLACE INTO otps VALUES(?,?,?,?,?)',(e,hcode(e,code),(datetime.now()+timedelta(minutes=10)).isoformat(timespec='seconds'),0,now()))
         try:sent=sendotp(e,code)
-        except Exception:sent=False
+        except Exception as ex:
+            print('[otp] send failed:',type(ex).__name__,str(ex)[:300]);err=type(ex).__name__
+        if not sent and not DEV:
+            why='Η αποστολή email δεν έχει ρυθμιστεί στον διακομιστή (SMTP_PASSWORD).' if not smtp_ready() else 'Ο διακομιστής email απέρριψε την αποστολή (έλεγχος SMTP_PASSWORD / App Password).'
+            return page(f'''<div class="card auth"><h2>Δεν στάλθηκε OTP</h2><p>{why}</p><p class="muted">Ενημερώστε τον διαχειριστή. Ο κύριος διαχειριστής μπορεί να εισέλθει με τον προσωπικό κωδικό του.</p><a class="btn" href="/login">Επιστροφή</a></div>''')
     extra=f'<p><b>DEV OTP: {code}</b></p>' if r and DEV and not sent else ''
-    return page(f'''<div class="card auth"><h2>Επαλήθευση</h2><p>Αν το email έχει άδεια, στάλθηκε OTP.</p>{extra}<form method="post" action="/verify"><input type="hidden" name="email" value="{esc(e)}"><input name="code" inputmode="numeric" maxlength="6" required><br><br><button class="primary">Είσοδος</button></form></div>''')
+    return page(f'''<div class="card auth"><h2>Επαλήθευση</h2><p>Αν το email έχει άδεια, στάλθηκε OTP (ελέγξτε και τα Ανεπιθύμητα). Ισχύει 10 λεπτά.</p>{extra}<form method="post" action="/verify"><input type="hidden" name="email" value="{esc(e)}"><input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required><br><br><button class="primary">Είσοδος</button></form></div>''')
 @app.post('/verify')
 def verify(email:str=Form(...),code:str=Form(...)):
     e=email.strip().lower();code=re.sub(r'\D','',code)
+    fail=None
     with con() as c:
         r=c.execute('SELECT * FROM otps WHERE email=?',(e,)).fetchone()
-        if not r or datetime.fromisoformat(r['expires_at'])<datetime.now() or r['code_hash']!=hcode(e,code):raise HTTPException(400,'Λανθασμένος ή ληγμένος OTP')
-        c.execute('DELETE FROM otps WHERE email=?',(e,))
+        if not r or datetime.fromisoformat(r['expires_at'])<datetime.now():
+            fail='Ο OTP έληξε ή δεν υπάρχει. Ζητήστε νέο κωδικό.'
+        elif not hmac.compare_digest(r['code_hash'],hcode(e,code)):
+            att=int(r['attempts'] or 0)+1
+            if att>=OTP_MAX_ATTEMPTS:
+                c.execute('DELETE FROM otps WHERE email=?',(e,))
+                fail='Πολλές λανθασμένες προσπάθειες. Ζητήστε νέο κωδικό OTP.'
+            else:
+                c.execute('UPDATE otps SET attempts=? WHERE email=?',(att,e))
+                fail=f'Λανθασμένος OTP ({OTP_MAX_ATTEMPTS-att} προσπάθειες απομένουν).'
+        else:
+            c.execute('DELETE FROM otps WHERE email=?',(e,))
+    if fail:
+        return page(f'''<div class="card auth"><h2>Επαλήθευση</h2><p>{esc(fail)}</p><form method="post" action="/verify"><input type="hidden" name="email" value="{esc(e)}"><input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required><br><br><button class="primary">Είσοδος</button></form><p><a href="/login">Νέος κωδικός</a></p></div>''')
+    guard_ok(e)
     target='/identity' if e==SHARED_SECRETARIAT_EMAIL else '/'
     resp=RedirectResponse(target,303);resp.set_cookie('nglg_session',ser.dumps(e),httponly=True,secure=COOKIE_SECURE,samesite='lax',max_age=43200)
     resp.delete_cookie('nglg_actor')
