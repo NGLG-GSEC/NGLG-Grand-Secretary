@@ -513,14 +513,31 @@
     const extra=subj || clean(val('num')).replace(/ /g,'-');
     return (extra ? `${title} - ${extra}` : title).slice(0,150);
   }
+  // Reliable download with our file name on desktop and on phones (Android Chrome / Samsung Internet):
+  // save through a Blob link (data: links and jsPDF.save() lose the name on many mobile browsers);
+  // if the browser can't download that way, fall back to the share sheet, which keeps the name.
+  async function saveFile(blob,name){
+    const file=new File([blob],name,{type:blob.type});
+    const a=document.createElement('a'), url=URL.createObjectURL(blob);
+    if('download' in a){
+      a.href=url; a.download=name; a.rel='noopener'; a.style.display='none';
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(()=>URL.revokeObjectURL(url),60000);
+      return;
+    }
+    if(navigator.canShare && navigator.canShare({files:[file]})){ try{ await navigator.share({files:[file],title:name}); return; }catch(_){} }
+    window.open(url,'_blank');
+  }
   $('bPng').onclick=()=>{
-    const c=renderHiRes(); const a=document.createElement('a');
-    a.download=fileBase()+'.png'; a.href=c.toDataURL('image/png'); a.click(); status('Η εικόνα δημιουργήθηκε.');
+    const c=renderHiRes(), name=fileBase()+'.png';
+    c.toBlob(b=>{ saveFile(b,name); status('Λήψη: '+name); },'image/png');
   };
   $('bPdf').onclick=()=>{
     if(!window.jspdf){ status('Η βιβλιοθήκη PDF δεν φορτώθηκε – ελέγξτε τη σύνδεση.'); return; }
-    const c=renderHiRes(); const pdf=new window.jspdf.jsPDF({unit:'mm',format:'a4'});
-    pdf.addImage(c.toDataURL('image/jpeg',.95),'JPEG',0,0,210,297); const k=210/W; linkRects.forEach(r=>pdf.link(r.x*k,r.y*k,r.w*k,r.h*k,{url:r.url})); pdf.save(fileBase()+'.pdf'); status('Το PDF δημιουργήθηκε.');
+    const c=renderHiRes(), name=fileBase()+'.pdf'; const pdf=new window.jspdf.jsPDF({unit:'mm',format:'a4'});
+    pdf.setProperties({title:fileBase(),author:val('signer')||'ΕΜΣΤΕ',subject:val('subject')});
+    pdf.addImage(c.toDataURL('image/jpeg',.95),'JPEG',0,0,210,297); const k=210/W; linkRects.forEach(r=>pdf.link(r.x*k,r.y*k,r.w*k,r.h*k,{url:r.url}));
+    saveFile(pdf.output('blob'),name); status('Λήψη: '+name);
   };
 
   /* ---------- drafts ---------- */
