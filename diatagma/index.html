@@ -506,9 +506,12 @@
     return off;
   }
 
+  // File name = «Τίτλος εγγράφου - Θέμα» (e.g. "ΔΙΑΤΑΓΜΑ - Ορισμός Αντιπροσώπου.pdf")
   function fileBase(){
-    const n=(val('num')||'xxx').replace(/[\/\\\s]+/g,'-');
-    return `Diatagma_${n}_${stamp()}_${val('ver')||'v1'}`;
+    const clean=t=>t.replace(/[\/\\:*?"<>|\r\n\t]+/g,' ').replace(/\s+/g,' ').trim();
+    const title=clean(val('doctype')||'ΔΙΑΤΑΓΜΑ'), subj=clean(val('subject'));
+    const extra=subj || clean(val('num')).replace(/ /g,'-');
+    return (extra ? `${title} - ${extra}` : title).slice(0,150);
   }
   $('bPng').onclick=()=>{
     const c=renderHiRes(); const a=document.createElement('a');
