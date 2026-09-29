@@ -325,7 +325,7 @@
     const body=['p0','p1','p2'].map(val).filter(Boolean).join('\n\n');
     ctx.textAlign='left'; ctx.fillStyle='#2e2110';
     if(body){
-      let fs=30, lines, lh;
+      let fs=33, lines, lh;   // 33px @150dpi = 16pt
       for(;fs>=17;fs--){
         ctx.font=`${fs}px ${SERIF}`; lh=fs*1.5;
         lines=wrap(body,maxW);
