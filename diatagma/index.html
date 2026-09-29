@@ -79,7 +79,7 @@
         <label for="p2">Παράγραφος 2</label>
         <textarea id="p2" placeholder="Προαιρετικό"></textarea>
         <div style="margin-top:10px"><button type="button" class="b-clear" id="bLink" style="padding:6px 14px;font-size:14px">🔗 Εισαγωγή συνδέσμου</button></div>
-        <div class="hint">Το Κείμενο Διατάγματος εμφανίζεται κεντραρισμένο και έντονο. Σύνδεσμος: επιλέξτε λέξεις και πατήστε «Εισαγωγή συνδέσμου», ή γράψτε <code>[κείμενο](https://διεύθυνση)</code>. Διευθύνσεις που αρχίζουν με https:// ή www. γίνονται σύνδεσμος αυτόματα. Οι σύνδεσμοι είναι ενεργοί στο PDF. Κενή γραμμή = νέα παράγραφος.</div>
+        <div class="hint">Όλο το κείμενο στοιχίζεται πλήρως (αριστερά–δεξιά)· το Κείμενο Διατάγματος είναι έντονο. Σύνδεσμος: επιλέξτε λέξεις και πατήστε «Εισαγωγή συνδέσμου», ή γράψτε <code>[κείμενο](https://διεύθυνση)</code>. Διευθύνσεις που αρχίζουν με https:// ή www. γίνονται σύνδεσμος αυτόματα. Οι σύνδεσμοι είναι ενεργοί στο PDF. Κενή γραμμή = νέα παράγραφος.</div>
       </fieldset>
 
       <fieldset>
@@ -326,7 +326,7 @@
     const nGaps=it.filter((t,i)=>i>0&&!t.glue).length;
     let gap=sp, x=L;
     if(align==='center') x=L+(maxW-(total+sp*nGaps))/2;
-    else if(!row.last && nGaps>0){ const g=(maxW-total)/nGaps; if(g<=sp*3) gap=g; }
+    else if(!row.last && nGaps>0){ const g=(maxW-total)/nGaps; gap=g; }
     const uh=Math.max(1.5,fs*.06), uy=y+fs*.14;
     it.forEach((t,i)=>{
       if(t.url){
@@ -429,11 +429,11 @@
     y+=16;
 
     // closing block height reservation
-    const footTop=H-440;
+    const footTop=H-381;   // closing block starts 1 cm (59px @150dpi) lower than before
 
     // body with auto-fit: Κείμενο Διατάγματος centred & bold, paragraphs 1–2 justified
     const blocks=[
-      {text:val('p0'),bold:true, align:'center'},
+      {text:val('p0'),bold:true, align:'justify'},
       {text:val('p1'),bold:false,align:'justify'},
       {text:val('p2'),bold:false,align:'justify'}
     ].filter(b=>b.text).map(b=>({...b,paras:tokenize(b.text)}));
@@ -487,12 +487,14 @@
     if($('seal').checked){
       if(sealImg){
         const d=250; ctx.save(); ctx.shadowColor='rgba(40,25,5,.35)'; ctx.shadowBlur=12; ctx.shadowOffsetY=5;
-        ctx.drawImage(sealImg,255-d/2,H-275-d/2,d,d); ctx.restore();
-      } else seal(250,H-270,92);
+        ctx.drawImage(sealImg,255-d/2,H-245-d/2,d,d); ctx.restore();
+      } else seal(250,H-245,92);
     }
 
     const admin=val('admin');
-    if(admin){ ctx.font=`18px ${SERIF}`; ctx.fillStyle='rgba(58,42,20,.7)'; ctx.textAlign='center'; ctx.fillText(admin,W/2,H-92); }
+    if(admin){ let af=18; ctx.font=`${af}px ${SERIF}`; const room=W*.66-230-140;   // bottom-left, clear of the signature block
+      while(af>12 && ctx.measureText(admin).width>room){ af--; ctx.font=`${af}px ${SERIF}`; }
+      ctx.fillStyle='rgba(58,42,20,.7)'; ctx.textAlign='left'; ctx.fillText(admin,140,H-86); }
   }
   function spaced(s){ return s.toUpperCase().split('').join(' '); }
 
