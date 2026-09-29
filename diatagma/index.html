@@ -234,6 +234,43 @@
     });
   }
 
+  // Real-gold 3D lettering: soft cast shadow, extruded depth, dark rim,
+  // polished metallic face with specular sheen and a bright top bevel
+  function goldText(txt,cx,by,fs,S){
+    ctx.font=`${fs}px ${DISPLAY}`;
+    const tw=ctx.measureText(txt).width, pad=fs*.45, w=tw+pad*2, h=fs*1.75;
+    const mk=()=>{ const c=document.createElement('canvas'); c.width=Math.ceil(w*S); c.height=Math.ceil(h*S);
+      const x=c.getContext('2d'); x.scale(S,S); x.font=`${fs}px ${DISPLAY}`; x.textAlign='center'; x.textBaseline='alphabetic'; return [c,x]; };
+    const X=w/2, Y=pad+fs*.8, top=Y-fs*.74, bot=Y+fs*.04, depth=Math.max(3,fs*.075);
+    // 1. polished face
+    const [fc,f]=mk();
+    let g=f.createLinearGradient(0,top,0,bot);
+    [[0,'#fff9d6'],[.14,'#ffe68f'],[.3,'#f2c14e'],[.46,'#b87c1d'],[.52,'#7a4b0c'],[.6,'#a8701a'],
+     [.74,'#f0c860'],[.86,'#fff0b0'],[.94,'#e7b84a'],[1,'#9a6514']].forEach(([o,c])=>g.addColorStop(o,c));
+    f.fillStyle=g; f.fillText(txt,X,Y);
+    f.globalCompositeOperation='source-atop';
+    let sh=f.createLinearGradient(X-tw*.5,top,X+tw*.5,bot);           // diagonal specular sweep
+    [[0,'rgba(255,255,255,0)'],[.28,'rgba(255,255,255,0)'],[.36,'rgba(255,253,230,.6)'],[.42,'rgba(255,255,255,0)'],
+     [.66,'rgba(255,255,255,0)'],[.72,'rgba(255,250,215,.35)'],[.77,'rgba(255,255,255,0)'],[1,'rgba(255,255,255,0)']].forEach(([o,c])=>sh.addColorStop(o,c));
+    f.fillStyle=sh; f.fillRect(0,0,w,h);
+    const r=rng(11);                                                   // fine brushed-metal grain
+    for(let i=0;i<tw*1.2;i++){ f.fillStyle=r()<.5?'rgba(255,245,200,.18)':'rgba(90,55,10,.14)'; f.fillRect(pad+r()*tw,top+r()*(bot-top),r()*fs*.35,.6); }
+    // 2. assemble
+    const [oc,o]=mk();
+    o.save(); o.shadowColor='rgba(35,18,0,.55)'; o.shadowBlur=fs*.16; o.shadowOffsetX=fs*.03; o.shadowOffsetY=fs*.09;
+    o.fillStyle='#4a2c06'; o.fillText(txt,X+depth*.35,Y+depth); o.restore();
+    for(let i=depth;i>0;i-=.5){                                         // extruded gold depth
+      const k=i/depth; o.fillStyle=`rgb(${Math.round(150-70*k)},${Math.round(98-50*k)},${Math.round(22-12*k)})`;
+      o.fillText(txt,X+i*.35,Y+i);
+    }
+    o.lineJoin='round'; o.lineWidth=fs*.035; o.strokeStyle='#5e3b08'; o.strokeText(txt,X,Y);   // dark rim
+    o.drawImage(fc,0,0,w,h);
+    let hl=o.createLinearGradient(0,top,0,bot);                         // bright top bevel
+    hl.addColorStop(0,'rgba(255,252,225,.95)'); hl.addColorStop(.45,'rgba(255,240,190,.35)'); hl.addColorStop(.55,'rgba(255,240,190,0)');
+    o.lineWidth=Math.max(.8,fs*.012); o.strokeStyle=hl; o.strokeText(txt,X-fs*.006,Y-fs*.01);
+    ctx.drawImage(oc,cx-w/2,by-Y,w,h);
+  }
+
   function placeholderEmblem(cx,top,h){
     const w=h*.72;
     ctx.save(); ctx.translate(cx,top);
@@ -360,10 +397,12 @@
     } else { placeholderEmblem(W/2,y,eh*.78); y+=eh+16; }
 
     // title
-    ctx.font=`76px ${DISPLAY}`; ctx.fillStyle=goldGrad(W/2-400,y,W/2+400,y+170);
-    ctx.shadowColor='rgba(60,35,5,.45)'; ctx.shadowBlur=3; ctx.shadowOffsetY=2;
-    ctx.fillText('ΕΘΝΙΚΗ ΜΕΓΑΛΗ',W/2,y+70); ctx.fillText('ΣΤΟΑ ΕΛΛΑΔΟΣ',W/2,y+152);
-    ctx.shadowColor='transparent'; y+=190;
+    { const t1='ΕΘΝΙΚΗ ΜΕΓΑΛΗ', t2='ΣΤΟΑ ΤΗΣ ΕΛΛΑΔΟΣ';
+      let fs=84; ctx.font=`${fs}px ${DISPLAY}`;
+      const widest=Math.max(ctx.measureText(t1).width,ctx.measureText(t2).width);
+      if(widest>940) fs=Math.floor(fs*940/widest);
+      goldText(t1,W/2,y+fs*.86,fs,scale); goldText(t2,W/2,y+fs*1.92,fs,scale);
+      y+=fs*2.45; }
 
     // divider
     ctx.strokeStyle=goldGrad(200,0,W-200,0); ctx.lineWidth=2;
