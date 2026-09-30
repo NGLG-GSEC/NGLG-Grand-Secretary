@@ -46,6 +46,26 @@
   canvas#cv{width:50%;min-width:260px;height:auto;display:block;margin:0 auto;}
   canvas{height:auto;display:block;border:1px solid var(--gold-dk);box-shadow:0 6px 18px rgba(0,0,0,.35)}
   .status{text-align:center;font-size:13px;min-height:18px;margin-top:8px}
+  .archive{margin-top:22px}
+  .arch-tools{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px}
+  .arch-tools input[type=search]{flex:1 1 220px}
+  .arch-tools button{font-size:13.5px;padding:7px 12px}
+  table.arch{width:100%;border-collapse:collapse;font-size:14px;background:#fff}
+  table.arch th{background:linear-gradient(var(--gold-lt),var(--gold));color:#2b1a07;text-align:left;padding:8px;font-family:"GFS Didot",serif;font-weight:400;letter-spacing:.03em}
+  table.arch td{padding:8px;border-bottom:1px solid var(--line);vertical-align:middle}
+  table.arch tr.cur td{background:#fff6d8}
+  table.arch .acts{display:flex;flex-wrap:wrap;gap:6px}
+  table.arch .acts button{font-size:13px;padding:6px 10px}
+  .b-del{background:#fff;color:#8b1d1d;border-color:#8b1d1d}
+  .arch-empty{text-align:center;padding:18px;opacity:.7}
+  @media (max-width:700px){
+    table.arch thead{display:none}
+    table.arch,table.arch tbody,table.arch tr,table.arch td{display:block;width:100%}
+    table.arch tr{border:1px solid var(--line);border-radius:6px;margin-bottom:10px;background:#fff}
+    table.arch td{border:0;padding:6px 10px}
+    table.arch td[data-l]::before{content:attr(data-l)': ';font-weight:600}
+    table.arch .acts button{flex:1 1 45%;min-height:40px}
+  }
   @media (max-width:900px){.grid{grid-template-columns:1fr}.preview-wrap{position:static}}
   @media (max-width:480px){.sheet{padding:12px 16px;margin:0}.row{grid-template-columns:1fr}}
 </style>
@@ -148,6 +168,22 @@
       </div>
     </div>
   </div>
+
+  <fieldset class="archive">
+    <legend>ΑΡΧΕΙΟ ΕΓΓΡΑΦΩΝ</legend>
+    <div class="arch-tools">
+      <input type="search" id="archQ" placeholder="Αναζήτηση: αριθμός, τίτλος, θέμα, κείμενο…">
+      <button type="button" class="b-clear" id="bNew">+ Νέο έγγραφο</button>
+      <button type="button" class="b-clear" id="bExport">Αντίγραφο ασφαλείας</button>
+      <button type="button" class="b-clear" id="bImport">Επαναφορά αντιγράφου</button>
+      <input type="file" id="importFile" accept=".json,application/json" hidden>
+    </div>
+    <table class="arch">
+      <thead><tr><th>Ημερομηνία</th><th>Αρ.</th><th>Έγγραφο</th><th>Ενέργειες</th></tr></thead>
+      <tbody id="archBody"></tbody>
+    </table>
+    <div class="hint">Κάθε «Τελικό PDF» καταχωρείται εδώ αυτόματα με όλα τα στοιχεία της φόρμας. Με «Στη φόρμα» τα στοιχεία ξαναγεμίζουν τη φόρμα για αλλαγές, και το νέο PDF καταχωρείται ως νέα έκδοση. Το αρχείο φυλάσσεται σε αυτή τη συσκευή και σε αυτόν τον browser· για μεταφορά σε άλλη συσκευή χρησιμοποιήστε «Αντίγραφο ασφαλείας».</div>
+  </fieldset>
 </div>
 
 <script>
@@ -539,7 +575,8 @@
     const c=renderHiRes(), name=fileBase()+'.pdf'; const pdf=new window.jspdf.jsPDF({unit:'mm',format:'a4'});
     pdf.setProperties({title:fileBase(),author:val('signer')||'ΕΜΣΤΕ',subject:val('subject')});
     pdf.addImage(c.toDataURL('image/jpeg',.95),'JPEG',0,0,210,297); const k=210/W; linkRects.forEach(r=>pdf.link(r.x*k,r.y*k,r.w*k,r.h*k,{url:r.url}));
-    saveFile(pdf.output('blob'),name); status('Λήψη: '+name);
+    const blob=pdf.output('blob'); saveFile(blob,name);
+    archiveAdd(blob,name).then(()=>status('Λήψη & καταχώρηση στο αρχείο: '+name)).catch(()=>status('Λήψη: '+name+' (το αρχείο εγγράφων δεν είναι διαθέσιμο σε αυτόν τον browser)'));
   };
 
   /* ---------- drafts ---------- */
@@ -646,6 +683,92 @@
     if(d.sig) await loadImg(d.sig,'sig');
   }
 
+  /* ---------- document archive (IndexedDB on this device) ---------- */
+  let dbp=null, currentId=null;
+  function db(){
+    if(dbp) return dbp;
+    dbp=new Promise((res,rej)=>{
+      if(!window.indexedDB) return rej(new Error('no idb'));
+      const r=indexedDB.open('nglg-diatagma-archive',1);
+      r.onupgradeneeded=()=>r.result.createObjectStore('docs',{keyPath:'id',autoIncrement:true});
+      r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error);
+    });
+    return dbp;
+  }
+  async function tx(mode,fn){
+    const d=await db();
+    return new Promise((res,rej)=>{ const t=d.transaction('docs',mode), st=t.objectStore('docs'); let out; const q=fn(st); if(q) q.onsuccess=()=>out=q.result; t.oncomplete=()=>res(out); t.onerror=()=>rej(t.error); });
+  }
+  const archAll=()=>tx('readonly',st=>st.getAll());
+  const archGet=id=>tx('readonly',st=>st.get(id));
+  const archDel=id=>tx('readwrite',st=>st.delete(id));
+  const archPut=rec=>tx('readwrite',st=>st.put(rec));
+  function formState(){
+    const d={}; FIELDS.forEach(f=>d[f]=$(f).value); CHECKS.forEach(c=>d[c]=$(c).checked);
+    d.logo=raw.logo?raw.logo.src:null; d.sig=raw.sig?raw.sig.src:null; return d;
+  }
+  async function archiveAdd(blob,name){
+    const rec={created:new Date().toISOString(),name,num:val('num'),title:val('doctype'),subject:val('subject'),
+               docDate:val('date'),fields:formState(),pdf:blob,from:currentId||null};
+    currentId=await archPut(rec); await renderArchive();
+  }
+  async function applyState(d){
+    FIELDS.forEach(f=>{ if(d[f]!=null) $(f).value=d[f]; });
+    CHECKS.forEach(c=>{ if(d[c]!=null) $(c).checked=d[c]; });
+    raw.logo=null; raw.sig=null; $('logo').value=''; $('sigimg').value='';
+    if(d.logo) await loadImg(d.logo,'logo'); else processImage('logo');
+    if(d.sig) await loadImg(d.sig,'sig'); else processImage('sig');
+    render();
+  }
+  const fmtDT=iso=>{ const d=new Date(iso); return d.toLocaleDateString('el-GR')+' '+d.toLocaleTimeString('el-GR',{hour:'2-digit',minute:'2-digit'}); };
+  const esc=t=>String(t||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  async function renderArchive(){
+    const body=$('archBody'); let rows=[];
+    try{ rows=(await archAll()).sort((a,b)=>b.created.localeCompare(a.created)); }
+    catch(_){ body.innerHTML='<tr><td colspan="4" class="arch-empty">Το αρχείο εγγράφων δεν είναι διαθέσιμο σε αυτόν τον browser.</td></tr>'; return; }
+    const q=($('archQ').value||'').trim().toLowerCase();
+    if(q) rows=rows.filter(r=>[r.num,r.title,r.subject,r.name,r.fields&&r.fields.p0,r.fields&&r.fields.p1,r.fields&&r.fields.p2].join(' ').toLowerCase().includes(q));
+    if(!rows.length){ body.innerHTML=`<tr><td colspan="4" class="arch-empty">${q?'Δεν βρέθηκαν έγγραφα.':'Δεν υπάρχουν ακόμη έγγραφα. Πατήστε «Τελικό PDF» για την πρώτη καταχώρηση.'}</td></tr>`; return; }
+    body.innerHTML=rows.map(r=>`<tr class="${r.id===currentId?'cur':''}">
+      <td data-l="Ημερομηνία">${esc(fmtDT(r.created))}</td>
+      <td data-l="Αρ.">${esc(r.num)}</td>
+      <td data-l="Έγγραφο"><b>${esc(r.title)}</b>${r.subject?' – '+esc(r.subject):''}${r.from?' <span style="opacity:.6">(αναθεώρηση)</span>':''}</td>
+      <td><div class="acts">
+        <button type="button" class="b-gold" data-a="load" data-id="${r.id}">✎ Στη φόρμα</button>
+        <button type="button" class="b-clear" data-a="open" data-id="${r.id}">Άνοιγμα PDF</button>
+        <button type="button" class="b-clear" data-a="dl" data-id="${r.id}">Λήψη</button>
+        <button type="button" class="b-del" data-a="del" data-id="${r.id}">Διαγραφή</button>
+      </div></td></tr>`).join('');
+  }
+  $('archBody').addEventListener('click',async e=>{
+    const b=e.target.closest('button[data-a]'); if(!b) return;
+    const id=Number(b.dataset.id), r=await archGet(id); if(!r) return;
+    if(b.dataset.a==='load'){ await applyState(r.fields); currentId=id; renderArchive(); window.scrollTo({top:0,behavior:'smooth'}); status('Φορτώθηκε: '+r.name+' – κάντε τις αλλαγές και πατήστε «Τελικό PDF».'); }
+    if(b.dataset.a==='open'){ const u=URL.createObjectURL(r.pdf); window.open(u,'_blank'); setTimeout(()=>URL.revokeObjectURL(u),120000); }
+    if(b.dataset.a==='dl') saveFile(r.pdf,r.name);
+    if(b.dataset.a==='del' && confirm('Διαγραφή του «'+r.name+'» από το αρχείο;')){ await archDel(id); if(currentId===id) currentId=null; renderArchive(); }
+  });
+  $('archQ').addEventListener('input',()=>renderArchive());
+  $('bNew').onclick=()=>{ currentId=null; ['subject','p0','p1','p2','admin'].forEach(f=>$(f).value=''); render(); renderArchive(); window.scrollTo({top:0,behavior:'smooth'}); status('Νέο έγγραφο.'); };
+  const b2d=b=>new Promise(res=>{ const fr=new FileReader(); fr.onload=()=>res(fr.result); fr.readAsDataURL(b); });
+  $('bExport').onclick=async()=>{
+    const all=await archAll(); const out=[];
+    for(const r of all) out.push({...r,pdf:await b2d(r.pdf)});
+    saveFile(new Blob([JSON.stringify({app:'nglg-diatagma',version:1,exported:new Date().toISOString(),docs:out})],{type:'application/json'}),`Αρχείο Διαταγμάτων ${stamp()}.json`);
+    status(`Αντίγραφο ασφαλείας: ${out.length} έγγραφα.`);
+  };
+  $('bImport').onclick=()=>$('importFile').click();
+  $('importFile').addEventListener('change',async e=>{
+    const f=e.target.files[0]; if(!f) return;
+    try{
+      const data=JSON.parse(await f.text()); const have=new Set((await archAll()).map(r=>r.created+'|'+r.name)); let n=0;
+      for(const r of data.docs||[]){ if(have.has(r.created+'|'+r.name)) continue;
+        const pdf=await (await fetch(r.pdf)).blob(); const {id,...rest}=r; await archPut({...rest,pdf,from:null}); n++; }
+      renderArchive(); status(`Επαναφέρθηκαν ${n} έγγραφα.`);
+    }catch(_){ status('Το αρχείο αντιγράφου δεν αναγνωρίστηκε.'); }
+    e.target.value='';
+  });
+
   /* ---------- wiring ---------- */
   function onFile(inputId,key){
     $(inputId).addEventListener('change',e=>{
@@ -682,6 +805,7 @@
     await sealReady;
     await defaultSigReady; imgs.sig=defaultSig; thumb('sig');
     await restore();
+    renderArchive();
     render();
     try{
       await Promise.all([`76px ${DISPLAY}`,`30px ${SERIF}`,`italic 30px ${SERIF}`,`600 30px ${SERIF}`,`700 30px ${SERIF}`,`italic 700 30px ${SERIF}`].map(f=>document.fonts.load(f,'ΑΒΓαβγ')));
