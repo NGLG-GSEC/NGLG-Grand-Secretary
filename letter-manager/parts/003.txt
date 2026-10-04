@@ -18,8 +18,8 @@ def makenew(req:Request,subject:str=Form(...),body:str=Form(...),template_id:str
     u=need(req);tid=int(template_id) if template_id.strip() else None
     if tid and not can_tpl(u,tid):raise HTTPException(403)
     with con() as c:
-        n,y,p=nextprot(c);ts=now();edit_session=current_edit_session(req,u) if isauthorised(u) else None;member_id=int(recipient_member_id) if recipient_member_id.strip().isdigit() else None;cur=c.execute('INSERT INTO letters(protocol_seq,protocol_year,protocol_no,letter_date,subject,body,template_id,recipient_name,recipient_email,recipient_member_id,status,created_by,signer,edit_session,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',(n,y,p,date.today().isoformat(),subject.strip(),body.strip(),tid,recipient_name.strip(),recipient_email.strip(),member_id,status,u['email'],u.get('_actor','dimitrios'),edit_session,ts,ts));lid=cur.lastrowid;c.commit()
-    return RedirectResponse(f'/letter/{lid}',303)
+        n,y,p=nextprot(c,'Επιστολή',subject);ts=now();edit_session=current_edit_session(req,u) if isauthorised(u) else None;member_id=int(recipient_member_id) if recipient_member_id.strip().isdigit() else None;cur=c.execute('INSERT INTO letters(protocol_seq,protocol_year,protocol_no,letter_date,subject,body,template_id,recipient_name,recipient_email,recipient_member_id,status,created_by,signer,edit_session,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',(n,y,p,date.today().isoformat(),subject.strip(),body.strip(),tid,recipient_name.strip(),recipient_email.strip(),member_id,status,u['email'],u.get('_actor','dimitrios'),edit_session,ts,ts));lid=cur.lastrowid;c.commit()
+    return drive_on_ready(RedirectResponse(f'/letter/{lid}',303),'letter',lid,req,status)
 
 @app.get('/letter/{lid}')
 def view(req:Request,lid:int):
@@ -34,7 +34,7 @@ def view(req:Request,lid:int):
     editable=can_edit_letter(req,u,x)
     readiness='' if (x['status']=='ready' or not editable) else '<form method="post" action="/ready/'+str(lid)+'"><button>Σήμανση ως έτοιμη</button></form>'
     edit_link=f'<a class="btn" href="/edit/{lid}">Επεξεργασία</a>' if editable else ''
-    tools=f'''<section class="card send-panel noprint"><h3>Αποστολή & Αποθήκευση</h3><div class="toolbar"><a class="btn primary" href="/pdf/{lid}">⬇ Λήψη PDF στα Downloads</a><a class="btn" target="_blank" rel="noopener" href="{gmail}">✉ Αποστολή με Email</a><a class="btn" target="_blank" rel="noopener" href="{whatsapp}">WhatsApp μήνυμα</a>{readiness}</div><p class="send-help">Για email ή WhatsApp με συνημμένο PDF: πρώτα πάτησε «Λήψη PDF στα Downloads» και μετά επισύναψέ το από τον φάκελο Downloads.</p></section><div class="toolbar noprint">{edit_link}<a class="btn" href="/new?copy_from={lid}">Νέα πάνω σε αυτή</a><button onclick="print()">Εκτύπωση</button></div>'''
+    tools=f'''<section class="card send-panel noprint"><h3>Αποστολή & Αποθήκευση</h3><div class="toolbar"><a class="btn primary" href="/pdf/{lid}">⬇ Λήψη PDF στα Downloads</a><a class="btn" target="_blank" rel="noopener" href="{gmail}">✉ Αποστολή με Email</a><a class="btn" target="_blank" rel="noopener" href="{whatsapp}">WhatsApp μήνυμα</a>{readiness}</div><p class="send-help">Για email ή WhatsApp με συνημμένο PDF: πρώτα πάτησε «Λήψη PDF στα Downloads» και μετά επισύναψέ το από τον φάκελο Downloads.</p>{drive_status_html('letter',lid,u)}</section><div class="toolbar noprint">{edit_link}<a class="btn" href="/new?copy_from={lid}">Νέα πάνω σε αυτή</a><button onclick="print()">Εκτύπωση</button></div>'''
     js=''
     body=f'''{tools}<article class="paper"><div class="head"><img src="/asset/header_emblem.png"><h1>{esc(s['organization_name'])}</h1><div class="gold">Έτος Ιδρύσεως {esc(s['founded_year'])}</div><div>{esc(s['grand_master_title'])}</div><div>{esc(s['grand_master_name'])}</div><div class="rule"></div></div><div class="meta"><div>Αρ. Πρωτ.: <b class="official-number">{esc(x['protocol_no'])}</b></div><div>Ημερομηνία: <b class="official-number">{datetime.fromisoformat(x['letter_date']).strftime('%d/%m/%Y')}</b></div></div>{'<p><b>Προς:</b> '+esc(x['recipient_name'])+'</p>' if x['recipient_name'] else ''}<p><b>Θέμα:</b> {esc(x['subject'])}</p><div class="body">{linkify(x['body'])}</div><p style="margin-top:10mm">{esc(s['closing'])}</p><div class="sigrow"><div class="sign">{sig_visual}<div class="signature-line"></div><div><b>{esc(profile['name'])}</b><br><div class="gs-title">{esc(profile['title'])}</div>{esc(s['organization_name'])}</div></div><div class="seal"><img class="seal-img" src="/clean/seal_original.png"></div></div></article>{js}'''
     return page(body,u,x['subject'])
@@ -47,5 +47,5 @@ def ready(req:Request,lid:int):
         x=dict(r)
         if not can_edit_letter(req,u,x):raise HTTPException(403,'Το αρχειοθετημένο έγγραφο είναι μόνο για προβολή.')
         c.execute("UPDATE letters SET status='ready',updated_at=? WHERE id=?",(now(),lid))
-    return RedirectResponse(f'/letter/{lid}',303)
+    return drive_on_ready(RedirectResponse(f'/letter/{lid}',303),'letter',lid,req,'ready')
 @app.get('/edit/{lid}

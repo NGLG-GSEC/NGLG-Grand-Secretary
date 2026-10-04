@@ -144,6 +144,7 @@ async def decree2_create(req:Request):
     if action=='appoint' and active_office not in DEC_MAP:raise HTTPException(400,'Επιλέξτε ενεργό Αξίωμα.')
     if action=='appoint' and not period:raise HTTPException(400,'Συμπληρώστε την Τεκτονική Περίοδο.')
     with con() as c:
+        pseq,_py,pno=nextprot(c,'Διάταγμα',matter)
         apps=_apps_from_form(f,c,action,active_office)
         dn=_d2_next(c);dy=date.today().year;dd=date.today().isoformat();body,rules=_body(matter,apps,None,action,award_office,period)
         sub=_d2_subject(dn,dy,matter);tos=_d2_email_list(apps);ts=now();edit_session=current_edit_session(req,u) if isauthorised(u) else None
@@ -152,6 +153,7 @@ async def decree2_create(req:Request):
         VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         (dn,dy,dd,sub,body,matter,json.dumps(meta,ensure_ascii=False),json.dumps(apps,ensure_ascii=False),', '.join(a['full_name'] for a in apps),', '.join(tos),'draft',u['email'],edit_session,ts,ts))
         did=cur.lastrowid
+        c.execute('UPDATE decree_documents SET protocol_seq=?,protocol_no=? WHERE id=?',(pseq,pno,did))
         if action!='service_award':_sync_decree_offices(c,did,dn,dy,meta,apps)
         c.commit()
     return RedirectResponse(f'/decrees/{did}',303)
@@ -248,7 +250,7 @@ def decree2_ready(req:Request,did:int):
     if not d:raise HTTPException(404)
     if not can_edit_letter(req,u,d):raise HTTPException(403)
     with con() as c:c.execute("UPDATE decree_documents SET status='ready',updated_at=? WHERE id=?",(now(),did))
-    return RedirectResponse(f'/decrees/{did}',303)
+    return drive_on_ready(RedirectResponse(f'/decrees/{did}',303),'decree',did,req,'ready')
 
 @app.post('/decrees/{did}/delete')
 def decree2_delete(req:Request,did:int):
@@ -303,7 +305,7 @@ def decree2_view(req:Request,did:int):
     editable=can_edit_letter(req,u,d)
     ready='' if (d['status']=='ready' or not editable) else f'<form method="post" action="/decrees/{did}/ready"><button>Σήμανση ως έτοιμο</button></form>'
     edit_link=f'<a class="btn" href="/decrees/{did}/edit">Επεξεργασία Διατάγματος</a>' if editable else ''
-    tools=f"""<section class="card send-panel noprint"><h3>Διάταγμα — Αποστολή & Αποθήκευση</h3><div class="toolbar"><a class="btn primary" href="/decrees/{did}/pdf">⬇ Λήψη PDF Διατάγματος</a><a class="btn" target="_blank" href="{gmail}">✉ Αποστολή με Email</a><a class="btn" target="_blank" href="{wa}">WhatsApp μήνυμα</a>{ready}</div><p class="send-help">Αυτό είναι ξεχωριστό PDF Διατάγματος και δεν αποτελεί PDF επιστολής.</p></section><div class="toolbar noprint">{edit_link}<a class="btn" href="/decrees/new?copy_from={did}">Νέο Διάταγμα πάνω σε αυτό</a><a class="btn" href="/decrees/archive">Αρχείο Διαταγμάτων</a><button onclick="print()">Εκτύπωση</button></div>"""
+    tools=f"""<section class="card send-panel noprint"><h3>Διάταγμα — Αποστολή & Αποθήκευση</h3><div class="toolbar"><a class="btn primary" href="/decrees/{did}/pdf">⬇ Λήψη PDF Διατάγματος</a><a class="btn" target="_blank" href="{gmail}">✉ Αποστολή με Email</a><a class="btn" target="_blank" href="{wa}">WhatsApp μήνυμα</a>{ready}</div><p class="send-help">Αυτό είναι ξεχωριστό PDF Διατάγματος και δεν αποτελεί PDF επιστολής.</p>{drive_status_html('decree',did,u)}</section><div class="toolbar noprint">{edit_link}<a class="btn" href="/decrees/new?copy_from={did}">Νέο Διάταγμα πάνω σε αυτό</a><a class="btn" href="/decrees/archive">Αρχείο Διαταγμάτων</a><button onclick="print()">Εκτύπωση</button></div>"""
     paper=f"""<article class="paper"><div class="head"><img src="/asset/header_emblem.png"><h1>{esc(s['organization_name'])}</h1><div class="gold">Έτος Ιδρύσεως {esc(s['founded_year'])}</div><div>{esc(s['grand_master_title'])}</div><div>{esc(s['grand_master_name'])}</div><div class="rule"></div></div>
     <div class="dec-title">ΔΙΑΤΑΓΜΑ</div><div class="dec-no official-number">{'υπ’ αριθ. ' if _d2_meta(d).get('action')=='service_award' else 'υπ’ αριθμ. '}{d['decree_no']}/{d['decree_year']}</div>
     <div class="dec-date official-number">{datetime.fromisoformat(d['decree_date']).strftime('%d/%m/%Y')}</div>

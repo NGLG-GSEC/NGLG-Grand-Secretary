@@ -37,7 +37,7 @@ def saveedit(req:Request,lid:int,subject:str=Form(...),body:str=Form(...),templa
             member_id=int(recipient_member_id) if recipient_member_id.strip().isdigit() else None;c.execute('UPDATE letters SET subject=?,body=?,template_id=?,recipient_name=?,recipient_email=?,recipient_member_id=?,status=?,signer=?,updated_at=? WHERE id=?',(subject.strip(),body.strip(),tid,recipient_name.strip(),recipient_email.strip(),member_id,status,signer,now(),lid))
         else:
             member_id=int(recipient_member_id) if recipient_member_id.strip().isdigit() else None;c.execute('UPDATE letters SET subject=?,body=?,template_id=?,recipient_name=?,recipient_email=?,recipient_member_id=?,status=?,updated_at=? WHERE id=?',(subject.strip(),body.strip(),tid,recipient_name.strip(),recipient_email.strip(),member_id,status,now(),lid))
-    return RedirectResponse(f'/letter/{lid}',303)
+    return drive_on_ready(RedirectResponse(f'/letter/{lid}',303),'letter',lid,req,status)
 
 @app.post('/delete/{lid}')
 def delete_letter(req:Request,lid:int):

@@ -1,0 +1,301 @@
+
+# ============================================================================
+# 1) Ενιαίο πρωτόκολλο Επιστολών & Διαταγμάτων: 20.542_26_Κατηγορία_Θέμα
+# 2) Αντίγραφο κάθε τελικού PDF στον φάκελο Google Drive της Μεγάλης Γραμματείας
+# 3) Ειδοποιήσεις μέσα στην εφαρμογή (π.χ. «το PDF μεταφορτώθηκε στο Drive»)
+# ============================================================================
+import urllib.request,urllib.error,urllib.parse,threading
+from starlette.background import BackgroundTask
+
+PROTOCOL_START_DEFAULT=20542
+DRIVE_FOLDER_DEFAULT='1kKR7v86jjs5QJE9-K5uUebvS6nZd9J03'
+DRIVE_SCOPE='https://www.googleapis.com/auth/drive'
+GOOGLE_AUTH_URL=os.getenv('GOOGLE_AUTH_URL','https://accounts.google.com/o/oauth2/v2/auth')
+GOOGLE_TOKEN_URL=os.getenv('GOOGLE_TOKEN_URL','https://oauth2.googleapis.com/token')
+DRIVE_API=os.getenv('DRIVE_API_BASE','https://www.googleapis.com').rstrip('/')
+DOC_KINDS={'letter':'Επιστολή','decree':'Διάταγμα'}
+
+def protocol_topic(t):
+    t=re.sub(r'[\\/:*?"<>|\r\n\t]+',' ',str(t or ''))
+    t=re.sub(r'\s+',' ',t).strip(' ._-')
+    return t[:60].rstrip() or 'Χωρίς θέμα'
+
+def nextprot(c,category='Επιστολή',topic=''):
+    # Συνεχής αρίθμηση (δεν μηδενίζει ανά έτος), κοινή για Επιστολές και Διατάγματα,
+    # από τη ρύθμιση «protocol_start» και μετά. Π.χ. 20.542_26_Επιστολή_Εκπροσώπηση ΜΔ
+    today=date.today();y=today.year
+    c.execute('BEGIN IMMEDIATE')
+    r=c.execute("SELECT value FROM settings WHERE key='protocol_start'").fetchone()
+    try:start=int(re.sub(r'\D','',str(r['value']))) if r else PROTOCOL_START_DEFAULT
+    except Exception:start=PROTOCOL_START_DEFAULT
+    n=max(start-1,int(c.execute('SELECT COALESCE(MAX(protocol_seq),0) n FROM letters').fetchone()['n'] or 0),
+          int(c.execute('SELECT COALESCE(MAX(protocol_seq),0) n FROM decree_documents').fetchone()['n'] or 0))+1
+    return n,y,f"{n:,}".replace(',','.')+f"_{y%100:02d}_{category}_{protocol_topic(topic)}"
+
+def _drive_init():
+    with con() as c:
+        c.executescript("""CREATE TABLE IF NOT EXISTS app_secrets(key TEXT PRIMARY KEY,value TEXT NOT NULL DEFAULT '');
+        CREATE TABLE IF NOT EXISTS drive_uploads(id INTEGER PRIMARY KEY AUTOINCREMENT,doc_type TEXT NOT NULL,doc_id BIGINT NOT NULL,
+        file_name TEXT DEFAULT '',drive_file_id TEXT DEFAULT '',web_link TEXT DEFAULT '',status TEXT DEFAULT '',error TEXT DEFAULT '',
+        created_at TEXT,updated_at TEXT);
+        CREATE INDEX IF NOT EXISTS ix_drive_uploads_doc ON drive_uploads(doc_type,doc_id);
+        CREATE TABLE IF NOT EXISTS notifications(id INTEGER PRIMARY KEY AUTOINCREMENT,kind TEXT DEFAULT 'info',message TEXT NOT NULL,
+        link TEXT DEFAULT '',link_label TEXT DEFAULT '',created_at TEXT);
+        CREATE TABLE IF NOT EXISTS notification_seen(email TEXT NOT NULL,nid BIGINT NOT NULL,PRIMARY KEY(email,nid));""")
+        if USE_PG:
+            c.execute("ALTER TABLE decree_documents ADD COLUMN IF NOT EXISTS protocol_seq INTEGER")
+            c.execute("ALTER TABLE decree_documents ADD COLUMN IF NOT EXISTS protocol_no TEXT DEFAULT ''")
+        else:
+            cols=[r['name'] for r in c.execute("PRAGMA table_info(decree_documents)")]
+            if 'protocol_seq' not in cols:c.execute("ALTER TABLE decree_documents ADD COLUMN protocol_seq INTEGER")
+            if 'protocol_no' not in cols:c.execute("ALTER TABLE decree_documents ADD COLUMN protocol_no TEXT DEFAULT ''")
+        c.execute('INSERT OR IGNORE INTO settings VALUES(?,?)',('protocol_start',str(PROTOCOL_START_DEFAULT)))
+        c.execute('INSERT OR IGNORE INTO settings VALUES(?,?)',('drive_folder_id',DRIVE_FOLDER_DEFAULT))
+
+def _secret(k):
+    with con() as c:r=c.execute('SELECT value FROM app_secrets WHERE key=?',(k,)).fetchone()
+    return r['value'] if r else ''
+def _set_secret(k,v):
+    with con() as c:c.execute('INSERT INTO app_secrets(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',(k,v))
+def _del_secret(k):
+    with con() as c:c.execute('DELETE FROM app_secrets WHERE key=?',(k,))
+
+def drive_folder_id():
+    v=(settings().get('drive_folder_id') or DRIVE_FOLDER_DEFAULT).strip()
+    m=re.search(r'/folders/([A-Za-z0-9_-]+)',v) or re.search(r'[?&]id=([A-Za-z0-9_-]+)',v)
+    return m.group(1) if m else v
+def drive_client():return os.getenv('GOOGLE_OAUTH_CLIENT_ID','').strip(),os.getenv('GOOGLE_OAUTH_CLIENT_SECRET','').strip()
+def drive_connected():return bool(_secret('drive_refresh_token')) and all(drive_client())
+
+# ---------------------------------------------------------------- notifications
+def notify(message,kind='info',link='',link_label=''):
+    with con() as c:c.execute('INSERT INTO notifications(kind,message,link,link_label,created_at) VALUES(?,?,?,?,?)',(kind,message,link,link_label,now()))
+def _unseen(email,after=0,limit=8):
+    since=(datetime.now()-timedelta(days=14)).isoformat(timespec='seconds')
+    with con() as c:
+        return [dict(r) for r in c.execute("""SELECT * FROM notifications n WHERE n.id>? AND n.created_at>=? AND NOT EXISTS(
+        SELECT 1 FROM notification_seen s WHERE s.email=? AND s.nid=n.id) ORDER BY n.id DESC LIMIT ?""",(after,since,email.lower(),limit))]
+def _notif_item(n):
+    icon={'ok':'✔','error':'⚠'}.get(n['kind'],'ℹ')
+    link=f' <a href="{esc(n["link"])}" target="{"_blank" if n["link"].startswith("http") else "_self"}" rel="noopener">{esc(n["link_label"] or "Άνοιγμα")}</a>' if n.get('link') else ''
+    return f'<li class="notif-{esc(n["kind"])}"><span>{icon}</span> {esc(n["message"])}{link} <small class="muted">{esc((n["created_at"] or "")[11:16])}</small></li>'
+def notifications_banner(u):
+    if not u:return ''
+    xs=_unseen(u['email'])
+    mx=max([x['id'] for x in xs],default=0)
+    with con() as c:last=c.execute('SELECT COALESCE(MAX(id),0) n FROM notifications').fetchone()['n']
+    box=(f'<div class="card notif-box noprint" id="notifBox"><b>Ειδοποιήσεις</b><ul>{"".join(_notif_item(x) for x in xs)}</ul>'
+         f'<form method="post" action="/notifications/seen"><input type="hidden" name="upto" value="{mx}"><button>OK, τις είδα</button></form></div>') if xs else ''
+    return box+f"""<div id="notifToast" class="notif-toast noprint" hidden></div><script>(function(){{var last={last},t=document.getElementById('notifToast');
+function poll(){{fetch('/api/notifications?after='+last).then(function(r){{return r.ok?r.json():null}}).then(function(d){{if(!d||!d.items||!d.items.length)return;
+d.items.forEach(function(n){{last=Math.max(last,n.id)}});t.innerHTML=d.html+'<button type="button" aria-label="Κλείσιμο">✕</button>';t.hidden=false;
+t.querySelector('button').onclick=function(){{t.hidden=true}};}}).catch(function(){{}});}}
+setTimeout(poll,4000);setInterval(poll,15000);}})();</script>"""
+
+@app.post('/notifications/seen')
+async def notifications_seen(req:Request):
+    u=need(req);f=await req.form()
+    try:upto=int(f.get('upto') or 0)
+    except Exception:upto=0
+    with con() as c:
+        for n in [r['id'] for r in c.execute('SELECT id FROM notifications WHERE id<=?',(upto,))]:
+            c.execute('INSERT INTO notification_seen(email,nid) VALUES(?,?) ON CONFLICT DO NOTHING',(u['email'].lower(),n))
+    back=req.headers.get('referer') or '/'
+    return RedirectResponse(back if back.startswith(('/','http')) else '/',303)
+
+@app.get('/api/notifications')
+def notifications_api(req:Request,after:int=0):
+    u=need(req);xs=list(reversed(_unseen(u['email'],after,5)))
+    return {'items':[{'id':x['id'],'kind':x['kind']} for x in xs],'html':'<ul>'+''.join(_notif_item(x) for x in xs)+'</ul>' if xs else ''}
+
+# ---------------------------------------------------------------- Google Drive
+def _http_json(method,url,data=None,headers=None,timeout=60):
+    rq=urllib.request.Request(url,data=data,method=method,headers=headers or {})
+    try:
+        with urllib.request.urlopen(rq,timeout=timeout) as r:
+            raw=r.read().decode('utf-8') or '{}'
+            return json.loads(raw)
+    except urllib.error.HTTPError as e:
+        body=e.read().decode('utf-8',errors='replace')
+        try:msg=json.loads(body).get('error');msg=msg.get('message') if isinstance(msg,dict) else (msg or body)
+        except Exception:msg=body
+        raise RuntimeError(f'Google {e.code}: {str(msg)[:300]}')
+    except urllib.error.URLError as e:
+        raise RuntimeError(f'Σφάλμα δικτύου προς Google: {e.reason}')
+
+def _drive_token():
+    cid,sec=drive_client();rt=_secret('drive_refresh_token')
+    if not(cid and sec and rt):raise RuntimeError('Το Google Drive δεν έχει συνδεθεί.')
+    d=_http_json('POST',GOOGLE_TOKEN_URL,urllib.parse.urlencode({'client_id':cid,'client_secret':sec,'refresh_token':rt,'grant_type':'refresh_token'}).encode(),
+                 {'Content-Type':'application/x-www-form-urlencoded'})
+    if not d.get('access_token'):raise RuntimeError('Η Google δεν έδωσε κλειδί πρόσβασης· συνδέστε ξανά το Drive.')
+    return d['access_token']
+
+def _drive_send(token,name,pdf,file_id=None):
+    b='nglg'+secrets.token_hex(12)
+    meta={'name':name,'mimeType':'application/pdf'}
+    if not file_id:meta['parents']=[drive_folder_id()]
+    body=(f'--{b}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n'+json.dumps(meta,ensure_ascii=False)+f'\r\n--{b}\r\nContent-Type: application/pdf\r\n\r\n').encode('utf-8')+pdf+f'\r\n--{b}--\r\n'.encode()
+    q='uploadType=multipart&supportsAllDrives=true&fields=id,name,webViewLink'
+    url=f'{DRIVE_API}/upload/drive/v3/files'+(f'/{file_id}' if file_id else '')+'?'+q
+    return _http_json('PATCH' if file_id else 'POST',url,body,{'Authorization':'Bearer '+token,'Content-Type':f'multipart/related; boundary={b}'},timeout=120)
+
+def _doc_info(kind,doc_id):
+    with con() as c:
+        if kind=='letter':r=c.execute('SELECT id,protocol_no,subject,status FROM letters WHERE id=?',(doc_id,)).fetchone()
+        else:r=c.execute('SELECT id,protocol_no,decree_no,decree_year,matter,subject,status FROM decree_documents WHERE id=?',(doc_id,)).fetchone()
+    return dict(r) if r else None
+
+def _drive_file_name(kind,d):
+    p=(d.get('protocol_no') or '').strip()
+    topic=d.get('subject') if kind=='letter' else (d.get('matter') or d.get('subject'))
+    if not p or '_' not in p:
+        base=p or (f"{d.get('decree_no')}-{d.get('decree_year')}" if kind=='decree' else str(d['id']))
+        p=f"{base}_{DOC_KINDS[kind]}_{protocol_topic(topic)}"
+    return re.sub(r'[\\/:*?"<>|]+',' ',p).strip()+'.pdf'
+
+def _upload_row(kind,doc_id):
+    with con() as c:r=c.execute('SELECT * FROM drive_uploads WHERE doc_type=? AND doc_id=? ORDER BY id DESC LIMIT 1',(kind,doc_id)).fetchone()
+    return dict(r) if r else None
+
+def _save_upload(kind,doc_id,**kv):
+    row=_upload_row(kind,doc_id);ts=now()
+    with con() as c:
+        if row:
+            c.execute('UPDATE drive_uploads SET '+','.join(k+'=?' for k in kv)+',updated_at=? WHERE id=?',tuple(kv.values())+(ts,row['id']))
+        else:
+            c.execute('INSERT INTO drive_uploads(doc_type,doc_id,'+','.join(kv)+',created_at,updated_at) VALUES(?,?,'+','.join('?'*len(kv))+',?,?)',(kind,doc_id)+tuple(kv.values())+(ts,ts))
+
+_drive_lock=threading.Lock()
+def drive_upload_doc(kind,doc_id,req):
+    d=_doc_info(kind,doc_id)
+    if not d:return
+    name=_drive_file_name(kind,d);page_link=f'/letter/{doc_id}' if kind=='letter' else f'/decrees/{doc_id}'
+    if not drive_connected():
+        _save_upload(kind,doc_id,file_name=name,status='not_connected',error='Το Google Drive δεν έχει συνδεθεί.')
+        notify(f'Το PDF «{name}» ΔΕΝ ανέβηκε στο Google Drive: η σύνδεση με το Drive δεν έχει γίνει ακόμη.','error','/drive','Σύνδεση Google Drive')
+        return
+    with _drive_lock:
+        try:
+            resp=download_pdf(req,doc_id) if kind=='letter' else decree2_pdf(req,doc_id)
+            pdf=bytes(resp.body)
+            token=_drive_token();prev=_upload_row(kind,doc_id)
+            fid=(prev or {}).get('drive_file_id') or None
+            try:res=_drive_send(token,name,pdf,fid)
+            except RuntimeError as e:
+                if fid and 'Google 404' in str(e):res=_drive_send(token,name,pdf,None)
+                else:raise
+            _save_upload(kind,doc_id,file_name=name,drive_file_id=res.get('id',''),web_link=res.get('webViewLink',''),status='ok',error='')
+            notify(f'Το PDF «{name}» μεταφορτώθηκε στο Google Drive.'+(' (ενημερώθηκε το υπάρχον αρχείο)' if fid else ''),'ok',res.get('webViewLink') or page_link,'Άνοιγμα στο Drive' if res.get('webViewLink') else 'Άνοιγμα')
+        except Exception as e:
+            _save_upload(kind,doc_id,file_name=name,status='error',error=str(e)[:500])
+            notify(f'Αποτυχία μεταφόρτωσης του «{name}» στο Google Drive: {str(e)[:200]}','error',page_link,'Δοκιμάστε ξανά')
+
+def drive_on_ready(resp,kind,doc_id,req,status):
+    # Όταν ένα έγγραφο γίνεται (ή αποθηκεύεται ως) «Έτοιμο», το τελικό PDF ανεβαίνει στο Drive
+    # στο παρασκήνιο· η ειδοποίηση εμφανίζεται στην εφαρμογή μόλις ολοκληρωθεί.
+    if str(status)=='ready':resp.background=BackgroundTask(drive_upload_doc,kind,doc_id,req)
+    return resp
+
+def drive_status_html(kind,doc_id,u=None):
+    d=_doc_info(kind,doc_id) or {}
+    row=_upload_row(kind,doc_id)
+    prot=f'<p style="margin:10px 0 4px"><b>Αρ. Πρωτ.:</b> <span class="official-number">{esc(d.get("protocol_no") or "—")}</span></p>' if kind=='decree' else ''
+    if row and row['status']=='ok':
+        st=f'✔ Αντίγραφο στο Google Drive ({esc((row["updated_at"] or "")[:16].replace("T"," "))})'+(f' · <a target="_blank" rel="noopener" href="{esc(row["web_link"])}">Άνοιγμα στο Drive</a>' if row.get('web_link') else '')
+    elif row and row['status']=='error':st=f'⚠ Η τελευταία μεταφόρτωση απέτυχε: {esc(row["error"] or "")}'
+    elif row and row['status']=='not_connected':st='⚠ Δεν ανέβηκε: το Google Drive δεν έχει συνδεθεί.'
+    else:st='Το PDF ανεβαίνει αυτόματα στο Google Drive όταν το έγγραφο σημανθεί «Έτοιμο».'
+    btn=f'<form method="post" action="/drive/upload/{kind}/{doc_id}" style="display:inline"><button>⬆ {"Ξανά " if row and row["status"]=="ok" else ""}Ανέβασμα στο Google Drive</button></form>' if drive_connected() else (' <a class="btn" href="/drive">Σύνδεση Google Drive</a>' if isadmin(u) else '')
+    return f'{prot}<div class="drive-status"><b>Google Drive:</b> {st} {btn}</div>'
+
+@app.post('/drive/upload/{kind}/{doc_id}')
+def drive_upload_now(req:Request,kind:str,doc_id:int):
+    u=need(req)
+    if kind not in DOC_KINDS or not _doc_info(kind,doc_id):raise HTTPException(404)
+    resp=RedirectResponse(f'/letter/{doc_id}' if kind=='letter' else f'/decrees/{doc_id}',303)
+    resp.background=BackgroundTask(drive_upload_doc,kind,doc_id,req)
+    return resp
+
+def _public_base(req):
+    b=os.getenv('PUBLIC_BASE_URL','').strip().rstrip('/')
+    if b:return b
+    proto=req.headers.get('x-forwarded-proto') or req.url.scheme
+    host=req.headers.get('x-forwarded-host') or req.headers.get('host') or req.url.netloc
+    return f'{proto}://{host}'
+
+def _upload_tr(x):
+    st={'ok':'✔ OK','error':'⚠ Σφάλμα','not_connected':'⚠ Χωρίς σύνδεση'}.get(x['status'],esc(x['status'] or ''))
+    last=f'<a target="_blank" rel="noopener" href="{esc(x["web_link"])}">Drive</a>' if x.get('web_link') else esc(x.get('error') or '')
+    return f"<tr><td>{esc(DOC_KINDS.get(x['doc_type'],''))}</td><td>{esc(x['file_name'])}</td><td>{st}</td><td>{esc((x['updated_at'] or '')[:16].replace('T',' '))}</td><td>{last}</td></tr>"
+
+@app.get('/drive')
+def drive_page(req:Request,msg:str=''):
+    u=need(req)
+    if not isadmin(u):raise HTTPException(403)
+    cid,sec=drive_client();acct=_secret('drive_account');fid=drive_folder_id();redirect=_public_base(req)+'/drive/callback'
+    with con() as c:ups=[dict(r) for r in c.execute('SELECT * FROM drive_uploads ORDER BY updated_at DESC LIMIT 30')]
+    rows=''.join(_upload_tr(x) for x in ups)
+    if not(cid and sec):
+        state=f"""<p>⚠ <b>Λείπουν τα στοιχεία OAuth της Google.</b> Ορίστε στο Render (Environment) τις μεταβλητές <code>GOOGLE_OAUTH_CLIENT_ID</code> και <code>GOOGLE_OAUTH_CLIENT_SECRET</code> από ένα OAuth Client τύπου «Web application» στο Google Cloud Console, με Authorized redirect URI:<br><code>{esc(redirect)}</code><br>και ενεργοποιημένο το «Google Drive API».</p>"""
+    elif drive_connected():
+        state=f"""<p>✔ <b>Συνδεδεμένο</b>{(' ως <b>'+esc(acct)+'</b>') if acct else ''}. Τα τελικά PDF ανεβαίνουν στον φάκελο <a target="_blank" rel="noopener" href="https://drive.google.com/drive/folders/{esc(fid)}">{esc(fid)}</a>.</p>
+<div class="toolbar"><a class="btn" href="/drive/connect">Επανασύνδεση</a><form method="post" action="/drive/disconnect" style="display:inline" onsubmit="return confirm('Αποσύνδεση του Google Drive;')"><button>Αποσύνδεση</button></form><form method="post" action="/drive/test" style="display:inline"><button>Δοκιμή σύνδεσης</button></form></div>"""
+    else:
+        state=f"""<p>Το Google Drive <b>δεν έχει συνδεθεί</b>. Πατήστε το κουμπί και συνδεθείτε με τον λογαριασμό Google που έχει δικαίωμα επεξεργασίας στον φάκελο.</p><a class="btn primary" href="/drive/connect">Σύνδεση με Google Drive</a>"""
+    notice=f"<div class='card'><b>{esc(msg)}</b></div>" if msg else ''
+    return page(f"""<h1>Google Drive</h1>{notice}<div class="card">{state}<p class="muted">Φάκελος προορισμού (ρύθμιση <code>drive_folder_id</code> στις Ρυθμίσεις): <code>{esc(fid)}</code><br>Όνομα αρχείου: <code>Αρ. Πρωτοκόλλου.pdf</code>, π.χ. <code>20.542_26_Επιστολή_Εκπροσώπηση ΜΔ.pdf</code></p></div>
+<div class="card" style="overflow:auto"><h3>Πρόσφατες μεταφορτώσεις</h3><table><tr><th>Είδος</th><th>Αρχείο</th><th>Κατάσταση</th><th>Ώρα</th><th>Σύνδεσμος / Σφάλμα</th></tr>{rows or '<tr><td colspan=5>Καμία ακόμη.</td></tr>'}</table></div>""",u,'Google Drive')
+
+@app.get('/drive/connect')
+def drive_connect(req:Request):
+    u=need(req)
+    if not isadmin(u):raise HTTPException(403)
+    cid,sec=drive_client()
+    if not(cid and sec):return RedirectResponse('/drive',303)
+    st=secrets.token_urlsafe(24);_set_secret('drive_oauth_state',st)
+    q=urllib.parse.urlencode({'client_id':cid,'redirect_uri':_public_base(req)+'/drive/callback','response_type':'code','scope':DRIVE_SCOPE,
+                              'access_type':'offline','prompt':'consent','include_granted_scopes':'true','state':st})
+    return RedirectResponse(GOOGLE_AUTH_URL+'?'+q,303)
+
+@app.get('/drive/callback')
+def drive_callback(req:Request,code:str='',state:str='',error:str=''):
+    u=need(req)
+    if not isadmin(u):raise HTTPException(403)
+    if error:return RedirectResponse('/drive?msg='+quote('Η σύνδεση ακυρώθηκε: '+error),303)
+    exp=_secret('drive_oauth_state')
+    if not code or not exp or not hmac.compare_digest(state,exp):raise HTTPException(400,'Μη έγκυρη απάντηση της Google.')
+    cid,sec=drive_client()
+    try:
+        d=_http_json('POST',GOOGLE_TOKEN_URL,urllib.parse.urlencode({'code':code,'client_id':cid,'client_secret':sec,'redirect_uri':_public_base(req)+'/drive/callback','grant_type':'authorization_code'}).encode(),{'Content-Type':'application/x-www-form-urlencoded'})
+        if not d.get('refresh_token'):raise RuntimeError('Η Google δεν έδωσε refresh token· αφαιρέστε την πρόσβαση της εφαρμογής από τον λογαριασμό Google και ξαναδοκιμάστε.')
+        _set_secret('drive_refresh_token',d['refresh_token']);_del_secret('drive_oauth_state')
+        try:
+            me=_http_json('GET',f'{DRIVE_API}/drive/v3/about?fields=user(emailAddress)',None,{'Authorization':'Bearer '+d.get('access_token','')})
+            _set_secret('drive_account',(me.get('user') or {}).get('emailAddress',''))
+        except Exception:pass
+    except Exception as e:
+        return RedirectResponse('/drive?msg='+quote('Αποτυχία σύνδεσης: '+str(e)[:250]),303)
+    notify('Το Google Drive συνδέθηκε'+(f' ({_secret("drive_account")})' if _secret('drive_account') else '')+'. Τα τελικά PDF θα ανεβαίνουν αυτόματα.','ok','/drive','Google Drive')
+    return RedirectResponse('/drive?msg='+quote('Το Google Drive συνδέθηκε.'),303)
+
+@app.post('/drive/disconnect')
+def drive_disconnect(req:Request):
+    u=need(req)
+    if not isadmin(u):raise HTTPException(403)
+    for k in ('drive_refresh_token','drive_account'):_del_secret(k)
+    return RedirectResponse('/drive?msg='+quote('Το Google Drive αποσυνδέθηκε.'),303)
+
+@app.post('/drive/test')
+def drive_test(req:Request):
+    u=need(req)
+    if not isadmin(u):raise HTTPException(403)
+    try:
+        t=_drive_token()
+        f=_http_json('GET',f'{DRIVE_API}/drive/v3/files/{drive_folder_id()}?supportsAllDrives=true&fields=id,name,capabilities(canAddChildren)',None,{'Authorization':'Bearer '+t})
+        ok=(f.get('capabilities') or {}).get('canAddChildren')
+        msg=f"Σύνδεση OK. Φάκελος: «{f.get('name','')}»"+('' if ok else ' — ΠΡΟΣΟΧΗ: ο λογαριασμός δεν έχει δικαίωμα προσθήκης αρχείων στον φάκελο.')
+    except Exception as e:msg='Αποτυχία: '+str(e)[:250]
+    return RedirectResponse('/drive?msg='+quote(msg),303)
+
+_drive_init()

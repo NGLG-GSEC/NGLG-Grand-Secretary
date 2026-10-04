@@ -28,6 +28,12 @@ services:
         value: grand.secretary@nglgreece.gr
       - key: SMTP_PASSWORD
         sync: false
+      - key: GOOGLE_OAUTH_CLIENT_ID
+        sync: false
+      - key: GOOGLE_OAUTH_CLIENT_SECRET
+        sync: false
+      - key: PUBLIC_BASE_URL
+        value: https://nglg-letter-manager.onrender.com
       - key: PRIMARY_ADMIN_EMAIL
         sync: false
       - key: PRIMARY_ADMIN_PASSWORD_HASH

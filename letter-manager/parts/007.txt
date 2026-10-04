@@ -483,7 +483,7 @@ async def decree_create(req:Request):
     if action=='appoint' and not period:raise HTTPException(400,'Συμπληρώστε την Τεκτονική Περίοδο.')
     with con() as c:
         apps=_apps_from_form(f,c,action,active_office)
-        seq,yr,prot=nextprot(c);dn=_dno(c);dy=date.today().year;body,rules=_body(matter,apps,None,action,award_office,period);sub=f"ΔΙΑΤΑΓΜΑ υπ’ αριθμ. {dn}/{dy} – {matter}";tos=[]
+        seq,yr,prot=nextprot(c,'Διάταγμα',matter);dn=_dno(c);dy=date.today().year;body,rules=_body(matter,apps,None,action,award_office,period);sub=f"ΔΙΑΤΑΓΜΑ υπ’ αριθμ. {dn}/{dy} – {matter}";tos=[]
         for a in apps:
             if a['email'] and a['email'].lower() not in [x.lower() for x in tos]:tos.append(a['email'])
         tr=c.execute("SELECT id FROM letter_templates WHERE name='ΔΙΑΤΑΓΜΑΤΑ'").fetchone();tid=tr['id'] if tr else None;ts=now();edit_session=current_edit_session(req,u) if isauthorised(u) else None
