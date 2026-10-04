@@ -32,3 +32,25 @@ def test_export_import(admin):
     r = admin.post('/lodges/import', data={'pasted': 'Αριθμός\tΌνομα\tEmail\n95\tLA PAIX\tlapaix@example.com'})
     assert r.status_code in (200, 302, 303)
     assert 'lapaix@example.com' in admin.get('/lodges').text
+
+
+def test_ritual_and_meeting_place(admin, app_module):
+    r = admin.post('/lodges/new', data={'number': '996', 'name': 'ΤΥΠΙΚΟΥ', 'ritual': 'Emulation',
+                                        'meeting_place': 'Τεκτονικόν Μέγαρον, Ερεσού 38', 'status': 'Ενεργή'})
+    assert r.status_code in (302, 303)
+    x = [l for l in app_module._lodges_all() if l['number'] == '996'][0]
+    assert x['ritual'] == 'Emulation' and x['meeting_place'].startswith('Τεκτονικόν')
+    assert 'Emulation' in admin.get('/lodges', params={'q': 'Emulation'}).text
+    assert '<option value="Emulation">' in admin.get('/lodges/new').text  # προτάσεις Τυπικού
+    r = admin.post('/lodges/import', data={'pasted': 'Αριθμός\tΌνομα\tΤυπικό\tΤόπος συνεδριάσεων\n996\tΤΥΠΙΚΟΥ\tΣκωτικό\tΠειραιάς'})
+    assert r.status_code in (302, 303)
+    x = [l for l in app_module._lodges_all() if l['number'] == '996'][0]
+    assert x['ritual'] == 'Σκωτικό' and x['meeting_place'] == 'Πειραιάς'
+
+
+def test_export_has_new_columns(admin):
+    from io import BytesIO
+    from openpyxl import load_workbook
+    ws = load_workbook(BytesIO(admin.get('/lodges/export.xlsx').content)).active
+    head = [c.value for c in ws[1]]
+    assert 'Τυπικό' in head and 'Τόπος συνεδριάσεων' in head

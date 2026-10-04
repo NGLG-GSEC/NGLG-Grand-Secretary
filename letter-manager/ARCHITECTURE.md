@@ -6,6 +6,7 @@
 
 ## Πού βρίσκεται τι
 
+<!-- map:begin -->
 | Θέμα | Αρχείο | Σελίδες (διαδρομές) |
 | --- | --- | --- |
 | Ρυθμίσεις περιβάλλοντος (μεταβλητές Render), κοινές εισαγωγές βιβλιοθηκών και το αντικείμενο της εφαρμογής. | `core/config.py` | — |
@@ -30,6 +31,9 @@
 | Διατάγματα — αυτοτελή έγγραφα: νέο, αρχείο, επεξεργασία, «Έτοιμο», PDF, διαγραφή. | `modules/decrees/documents.py` | GET `/decrees/new`, POST `/decrees/new`, GET `/decrees/archive`, GET `/decrees/{did}/edit`, POST `/decrees/{did}/edit`, POST `/decrees/{did}/ready`, POST `/decrees/{did}/delete`, GET `/decrees/{did}/pdf`, GET `/decrees/{did}` |
 | Επετηρίδα — σελίδα και PDF. | `modules/epeteirida/routes.py` | GET `/epeteirida`, GET `/epeteirida/pdf` |
 | Επετηρίδα — τροφοδότηση από τα Διατάγματα και εφάπαξ φόρτωση ιστορικού. | `modules/epeteirida/sync.py` | POST `/internal/epeteirida-bootstrap` |
+| Επαρχιακές / Περιφερειακή Μεγάλη Στοά και ΕΜΣτΕ — πίνακας της βάσης (όχι σταθερή λίστα στον κώδικα). | `modules/provinces/data.py` | — |
+| Επαρχιακές Μεγάλες Στοές — σελίδες: λίστα, νέα, επεξεργασία. | `modules/provinces/routes.py` | GET `/provinces`, GET `/provinces/new`, POST `/provinces/new`, GET `/provinces/edit/{pid}`, POST `/provinces/edit/{pid}` |
+| Επαρχιακές Μεγάλες Στοές — εκκίνηση (πίνακας, αρχικά δεδομένα). | `modules/provinces/startup.py` | — |
 | Συμβολικές Στοές — η κεντρική βάση Στοών (πίνακας, αρχικά δεδομένα, τίτλοι, email). | `modules/lodges/data.py` | — |
 | Συμβολικές Στοές — σελίδες, εισαγωγή/εξαγωγή Excel. | `modules/lodges/routes.py` | GET `/lodges`, GET `/lodges/new`, POST `/lodges/new`, GET `/lodges/edit/{lid}`, POST `/lodges/edit/{lid}`, GET `/lodges/export.xlsx`, POST `/lodges/import` |
 | Συμβολικές Στοές — εκκίνηση (πίνακας, αρχικά δεδομένα). | `modules/lodges/startup.py` | — |
@@ -39,6 +43,7 @@
 | Google Drive — σύνδεση OAuth, αποθήκευση κλειδιών, κλήσεις στο Drive API. | `modules/drive/client.py` | — |
 | Google Drive — ανέβασμα PDF εγγράφων και κατάσταση ανεβάσματος. | `modules/drive/upload.py` | — |
 | Google Drive — σελίδα ρύθμισης, σύνδεση/αποσύνδεση, δοκιμή, χειροκίνητο ανέβασμα. | `modules/drive/routes.py` | POST `/drive/upload/{kind}/{doc_id}`, GET `/drive`, GET `/drive/connect`, GET `/drive/callback`, POST `/drive/disconnect`, POST `/drive/test` |
+<!-- map:end -->
 
 ## Πώς φορτώνεται
 
@@ -54,11 +59,21 @@
 ## Κανόνες
 
 1. Νέο θέμα → νέος φάκελος στο `modules/` και εγγραφή στη λίστα `MODULES` του `app.py`.
-2. Κάθε αρχείο ξεκινά με σχόλιο μίας γραμμής που λέει τι περιέχει (ο χάρτης παραπάνω φτιάχνεται από αυτό).
+2. Κάθε αρχείο ξεκινά με σχόλιο μίας γραμμής που λέει τι περιέχει· ο χάρτης παραπάνω φτιάχνεται από αυτό με `python tools/gen_architecture.py` (ο έλεγχος `tests/test_structure.py` αποτυγχάνει αν μείνει παλιός).
 3. Ένα όνομα συνάρτησης ορίζεται **μία** φορά — το `tests/test_structure.py` αποτυγχάνει αν κάποιο ορίζεται ξανά κατά λάθος.
 4. Πριν από κάθε ανέβασμα: `python -m pytest -q tests` (τρέχει και αυτόματα στο GitHub).
 
-## Επόμενα βήματα (Φάση 2)
+## Βάση δεδομένων ανά ενότητα
 
-- Οι πίνακες των ειδοποιήσεων και η ρύθμιση `protocol_start` δημιουργούνται ακόμη μέσα στο `_drive_init` (`modules/drive/client.py`)· θα μεταφερθούν στις ενότητες `core/notifications.py` και `modules/protocol/`.
-- Οι Επαρχιακές Μεγάλες Στοές (`GRAND_LODGE_RECIPIENTS`, `modules/recipients/widgets.py`) γίνονται πίνακας της βάσης με σελίδα επεξεργασίας.
+Κάθε ενότητα δημιουργεί/αναβαθμίζει τους δικούς της πίνακες στην εκκίνηση:
+
+| Ενότητα | Πίνακες |
+| --- | --- |
+| `core/database.py` | `users`, `settings`, `letters`, `letter_templates`, `otps`, `login_guard` |
+| `core/notifications.py` | `notifications`, `notification_seen` |
+| `modules/decrees/*` | `decree_documents` (νέα Διατάγματα)· `decrees`, `members` (παλιά διαδρομή /decree) |
+| `modules/protocol/numbering.py` | στήλες πρωτοκόλλου των Διαταγμάτων, ρύθμιση `protocol_start` |
+| `modules/members/*` | `member_registry`, `member_lodges`, `member_degrees_offices` |
+| `modules/provinces/*` | `grand_lodges` (Επαρχιακές / Περιφερειακή Μεγάλη Στοά, ΕΜΣτΕ) |
+| `modules/lodges/*` | `lodges` |
+| `modules/drive/*` | `app_secrets`, `drive_uploads`, ρύθμιση `drive_folder_id` |

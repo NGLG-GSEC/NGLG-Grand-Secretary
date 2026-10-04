@@ -2,6 +2,12 @@
 # Φορτώνεται από το app.py (βλ. MODULES) στον κοινό χώρο ονομάτων της εφαρμογής.
 
 # ---------------------------------------------------------------- notifications
+def _notifications_init():
+    with con() as c:
+        c.executescript("""CREATE TABLE IF NOT EXISTS notifications(id INTEGER PRIMARY KEY AUTOINCREMENT,kind TEXT DEFAULT 'info',message TEXT NOT NULL,
+        link TEXT DEFAULT '',link_label TEXT DEFAULT '',created_at TEXT);
+        CREATE TABLE IF NOT EXISTS notification_seen(email TEXT NOT NULL,nid BIGINT NOT NULL,PRIMARY KEY(email,nid));""")
+
 def notify(message,kind='info',link='',link_label=''):
     with con() as c:c.execute('INSERT INTO notifications(kind,message,link,link_label,created_at) VALUES(?,?,?,?,?)',(kind,message,link,link_label,now()))
 
@@ -44,3 +50,5 @@ async def notifications_seen(req:Request):
 def notifications_api(req:Request,after:int=0):
     u=need(req);xs=list(reversed(_unseen(u['email'],after,5)))
     return {'items':[{'id':x['id'],'kind':x['kind']} for x in xs],'html':'<ul>'+''.join(_notif_item(x) for x in xs)+'</ul>' if xs else ''}
+
+_notifications_init()

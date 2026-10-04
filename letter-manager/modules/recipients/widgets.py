@@ -1,24 +1,15 @@
 # Παραλήπτες — λίστες για Επιστολές: Επαρχιακές Μεγάλες Στοές, Συμβολικές Στοές, μέλη.
 # Φορτώνεται από το app.py (βλ. MODULES) στον κοινό χώρο ονομάτων της εφαρμογής.
 
-# Παραλήπτες Επιστολών: Επαρχιακές / Περιφερειακή Μεγάλη Στοά και ΕΜΣτΕ.
-# (τίτλος, πλήρης τίτλος, email, «Προς» όπως τυπώνεται στην επιστολή)
-GRAND_LODGE_RECIPIENTS=[
- ('ΕπΜΣτ. Αθηνών','Επαρχιακή Μεγάλη Στοά Αθηνών','athens.secretary@nglgreece.gr','ΕπΜΓρ. Επαρχιακής Μεγάλης Στοάς Αθηνών'),
- ('ΕπΜΣτ. Πειραιώς & Νήσων Αρχ. Αιγαίου','Επαρχιακή Μεγάλη Στοά Πειραιώς και Νήσων Αρχιπελάγους Αιγαίου','piraeus.secretary@nglgreece.gr','ΕπΜΓρ. Επαρχιακής Μεγάλης Στοάς Πειραιώς και Νήσων Αρχιπελάγους Αιγαίου'),
- ('ΕπΜΣτ. Ιονίων Νήσων','Επαρχιακή Μεγάλη Στοά Ιονίων Νήσων','ionian.secretary@nglgreece.gr','ΕπΜΓρ. Επαρχιακής Μεγάλης Στοάς Ιονίων Νήσων'),
- ('ΕπΜΣτ. Κεντρικής & Βορείου Ελλάδος','Επαρχιακή Μεγάλη Στοά Κεντρικής και Βορείου Ελλάδος','nglgr.prov.cent.north@gmail.com','ΕπΜΓρ. Επαρχιακής Μεγάλης Στοάς Κεντρικής και Βορείου Ελλάδος'),
- ('ΕπΜΣτ. Πελοποννήσου & Δυτικής Ελλάδας','Επαρχιακή Μεγάλη Στοά Πελοποννήσου και Δυτικής Ελλάδας','secretary.pr.pwg.nglgreece@gmail.com','ΕπΜΓρ. Επαρχιακής Μεγάλης Στοάς Πελοποννήσου και Δυτικής Ελλάδας'),
- ('ΠΜΣτ. Κύπρου','Περιφερειακή Μεγάλη Στοά Κύπρου','dglcyprus@nglgreece.gr','ΠερΜΓρ. Περιφερειακής Μεγάλης Στοάς Κύπρου'),
- ('ΕΜΣτΕ Α.Ε. & Α.Τ.','Εθνική Μεγάλη Στοά της Ελλάδος των Αρχαίων, Ελευθέρων και Αποδεκτών Τεκτόνων','grand.secretary@nglgreece.gr','ΜΓρ. Εθνικής Μεγάλης Στοάς της Ελλάδος των Αρχαίων, Ελευθέρων και Αποδεκτών Τεκτόνων'),
-]
-
 def grand_lodge_recipient_widget(name_id='recipient_name',email_id='recipient_email',member_id_id='recipient_member_id'):
-    regional=[r for r in GRAND_LODGE_RECIPIENTS if not r[0].startswith('ΕΜΣτΕ')]
-    opts=''.join(f'<option value="{i}" data-name="{esc(r[3])}" data-email="{esc(r[2])}">{esc(r[0])} — {esc(r[1])} ({esc(r[2])})</option>' for i,r in enumerate(GRAND_LODGE_RECIPIENTS))
-    allname='ΕπΜΓρ. των Επαρχιακών Μεγάλων Στοών και ΠερΜΓρ. της Περιφερειακής Μεγάλης Στοάς Κύπρου'
-    opts+=f'<option value="all" data-name="{esc(allname)}" data-email="{esc(", ".join(r[2] for r in regional))}">Όλες οι Επαρχιακές Μεγάλες Στοές και η ΠΜΣτ. Κύπρου ({len(regional)})</option>'
-    return f"""<div class="full"><label for="gl_recipient">Παραλήπτης: Επαρχιακή / Περιφερειακή Μεγάλη Στοά</label><select id="gl_recipient"><option value="">— Επιλογή Μεγάλης Στοάς —</option>{opts}</select><small>Η επιλογή συμπληρώνει αυτόματα τον Παραλήπτη («Προς») και το Email· μπορείτε να τα διορθώσετε πριν την αποθήκευση.</small></div>
+    # Από τον πίνακα grand_lodges (σελίδα «Επαρχιακές Μεγάλες Στοές»).
+    xs=[p for p in provinces_all(active_only=True) if (p.get('email') or '').strip()]
+    regional=[p for p in xs if p.get('kind')!='Εθνική']
+    opts=''.join(f'<option value="{p["id"]}" data-name="{esc(p.get("addressee") or p.get("full_title") or p["short"])}" data-email="{esc(p["email"])}">{esc(p["short"])} — {esc(p.get("full_title") or "")} ({esc(p["email"])})</option>' for p in xs)
+    has_reg=any(p.get('kind')=='Περιφερειακή' for p in regional)
+    allname='ΕπΜΓρ. των Επαρχιακών Μεγάλων Στοών'+(' και ΠερΜΓρ. της Περιφερειακής Μεγάλης Στοάς Κύπρου' if has_reg else '')
+    if regional:opts+=f'<option value="all" data-name="{esc(allname)}" data-email="{esc(", ".join(p["email"] for p in regional))}">Όλες οι Επαρχιακές Μεγάλες Στοές{" και η ΠΜΣτ. Κύπρου" if has_reg else ""} ({len(regional)})</option>'
+    return f"""<div class="full"><label for="gl_recipient">Παραλήπτης: Επαρχιακή / Περιφερειακή Μεγάλη Στοά</label><select id="gl_recipient"><option value="">— Επιλογή Μεγάλης Στοάς —</option>{opts}</select><small>Από τις <a href="/provinces">Επαρχιακές Μεγάλες Στοές</a>· η επιλογή συμπληρώνει αυτόματα τον Παραλήπτη («Προς») και το Email· μπορείτε να τα διορθώσετε πριν την αποθήκευση.</small></div>
 <script>
 (function(){{
  const s=document.getElementById('gl_recipient');if(!s)return;

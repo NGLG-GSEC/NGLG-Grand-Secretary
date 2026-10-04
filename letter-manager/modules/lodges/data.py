@@ -30,11 +30,9 @@ LODGE_SEED=[
  ('113','ΔΗΜΗΤΗΡ'),('114','ΓΕΩΡΓΙΟΣ ΣΟΥΡΗΣ'),('115','ΟΡΦΕΥΣ'),('Φ','ΦΟΙΝΙΞ ΚΕΡΚΥΡΑΣ'),
 ]
 
-LODGE_COLS=['number','name','orient','provincial','email','master','secretary','secretary_email','status','notes']
+LODGE_COLS=['number','name','orient','provincial','email','master','secretary','secretary_email','status','ritual','meeting_place','notes']
 
-LODGE_HEADERS=['Αριθμός','Όνομα','Ανατολή','Επαρχιακή Μεγάλη Στοά','Email Στοάς','Σεβάσμιος','Γραμματέας','Email Γραμματέα','Κατάσταση','Σημειώσεις']
-
-def _provincial_choices():return [r[0] for r in GRAND_LODGE_RECIPIENTS if not r[0].startswith('ΕΜΣτΕ')]
+LODGE_HEADERS=['Αριθμός','Όνομα','Ανατολή','Επαρχιακή Μεγάλη Στοά','Email Στοάς','Σεβάσμιος','Γραμματέας','Email Γραμματέα','Κατάσταση','Τυπικό','Τόπος συνεδριάσεων','Σημειώσεις']
 
 def _lodge_no_key(n):
     n=re.sub(r'\s+','',str(n or '')).upper()
@@ -57,6 +55,13 @@ def _lodges_init():
         provincial TEXT DEFAULT '',email TEXT DEFAULT '',master TEXT DEFAULT '',secretary TEXT DEFAULT '',secretary_email TEXT DEFAULT '',
         status TEXT DEFAULT 'Ενεργή',notes TEXT DEFAULT '',source TEXT DEFAULT '',created_at TEXT,updated_at TEXT);
         CREATE INDEX IF NOT EXISTS ix_lodges_number ON lodges(number);""")
+        # Νεότερα πεδία (Φάση 2): Τυπικό, Τόπος συνεδριάσεων
+        if USE_PG:
+            for col in ('ritual','meeting_place'):c.execute(f"ALTER TABLE lodges ADD COLUMN IF NOT EXISTS {col} TEXT DEFAULT ''")
+        else:
+            have=[r['name'] for r in c.execute('PRAGMA table_info(lodges)')]
+            for col in ('ritual','meeting_place'):
+                if col not in have:c.execute(f"ALTER TABLE lodges ADD COLUMN {col} TEXT DEFAULT ''")
         if not c.execute('SELECT COUNT(*) n FROM lodges').fetchone()['n']:
             ts=now()
             for n,nm in LODGE_SEED:
@@ -97,6 +102,9 @@ def lodge_title(x):
     if (x.get('orient') or '').strip():t+=f", Αν. {x['orient'].strip()}"
     return t
 
+def _lodge_rituals():
+    return sorted({(x.get('ritual') or '').strip() for x in _lodges_all()}-{''})
+
 def lodge_email(x):return (x.get('email') or '').strip() or (x.get('secretary_email') or '').strip()
 
 def _lodge_form(x=None):
@@ -114,6 +122,8 @@ def _lodge_form(x=None):
 <div><label>Σεβάσμιος</label><input name="master" value="{v('master')}"></div>
 <div><label>Γραμματέας</label><input name="secretary" value="{v('secretary')}"></div>
 <div><label>Email Γραμματέα</label><input type="email" name="secretary_email" value="{v('secretary_email')}"></div>
+<div><label>Τυπικό</label><input name="ritual" value="{v('ritual')}" list="lodge_rituals" placeholder="π.χ. Emulation, Σκωτικό"><datalist id="lodge_rituals">{''.join(f'<option value="{esc(r)}">' for r in _lodge_rituals())}</datalist></div>
+<div class="full"><label>Τόπος συνεδριάσεων</label><input name="meeting_place" value="{v('meeting_place')}" placeholder="π.χ. Τεκτονικόν Μέγαρον, Ερεσού 38, Αθήνα"></div>
 <div class="full"><label>Σημειώσεις</label><textarea name="notes" style="min-height:90px">{v('notes')}</textarea></div>
 </div>"""
 

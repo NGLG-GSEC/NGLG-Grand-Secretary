@@ -28,18 +28,7 @@ def _drive_init():
         CREATE TABLE IF NOT EXISTS drive_uploads(id INTEGER PRIMARY KEY AUTOINCREMENT,doc_type TEXT NOT NULL,doc_id BIGINT NOT NULL,
         file_name TEXT DEFAULT '',drive_file_id TEXT DEFAULT '',web_link TEXT DEFAULT '',status TEXT DEFAULT '',error TEXT DEFAULT '',
         created_at TEXT,updated_at TEXT);
-        CREATE INDEX IF NOT EXISTS ix_drive_uploads_doc ON drive_uploads(doc_type,doc_id);
-        CREATE TABLE IF NOT EXISTS notifications(id INTEGER PRIMARY KEY AUTOINCREMENT,kind TEXT DEFAULT 'info',message TEXT NOT NULL,
-        link TEXT DEFAULT '',link_label TEXT DEFAULT '',created_at TEXT);
-        CREATE TABLE IF NOT EXISTS notification_seen(email TEXT NOT NULL,nid BIGINT NOT NULL,PRIMARY KEY(email,nid));""")
-        if USE_PG:
-            c.execute("ALTER TABLE decree_documents ADD COLUMN IF NOT EXISTS protocol_seq INTEGER")
-            c.execute("ALTER TABLE decree_documents ADD COLUMN IF NOT EXISTS protocol_no TEXT DEFAULT ''")
-        else:
-            cols=[r['name'] for r in c.execute("PRAGMA table_info(decree_documents)")]
-            if 'protocol_seq' not in cols:c.execute("ALTER TABLE decree_documents ADD COLUMN protocol_seq INTEGER")
-            if 'protocol_no' not in cols:c.execute("ALTER TABLE decree_documents ADD COLUMN protocol_no TEXT DEFAULT ''")
-        c.execute('INSERT OR IGNORE INTO settings VALUES(?,?)',('protocol_start',str(PROTOCOL_START_DEFAULT)))
+        CREATE INDEX IF NOT EXISTS ix_drive_uploads_doc ON drive_uploads(doc_type,doc_id);""")
         c.execute('INSERT OR IGNORE INTO settings VALUES(?,?)',('drive_folder_id',DRIVE_FOLDER_DEFAULT))
 
 def _secret(k):

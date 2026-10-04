@@ -19,3 +19,17 @@ def nextprot(c,category='Επιστολή',topic=''):
     n=max(start-1,int(c.execute('SELECT COALESCE(MAX(protocol_seq),0) n FROM letters').fetchone()['n'] or 0),
           int(c.execute('SELECT COALESCE(MAX(protocol_seq),0) n FROM decree_documents').fetchone()['n'] or 0))+1
     return n,y,f"{n:,}".replace(',','.')+f"_{y%100:02d}_{category}_{protocol_topic(topic)}"
+
+def _protocol_init():
+    # Στήλες πρωτοκόλλου των Διαταγμάτων και η αρχή αρίθμησης (ρύθμιση «protocol_start»).
+    with con() as c:
+        if USE_PG:
+            c.execute("ALTER TABLE decree_documents ADD COLUMN IF NOT EXISTS protocol_seq INTEGER")
+            c.execute("ALTER TABLE decree_documents ADD COLUMN IF NOT EXISTS protocol_no TEXT DEFAULT ''")
+        else:
+            cols=[r['name'] for r in c.execute("PRAGMA table_info(decree_documents)")]
+            if 'protocol_seq' not in cols:c.execute("ALTER TABLE decree_documents ADD COLUMN protocol_seq INTEGER")
+            if 'protocol_no' not in cols:c.execute("ALTER TABLE decree_documents ADD COLUMN protocol_no TEXT DEFAULT ''")
+        c.execute('INSERT OR IGNORE INTO settings VALUES(?,?)',('protocol_start',str(PROTOCOL_START_DEFAULT)))
+
+_protocol_init()

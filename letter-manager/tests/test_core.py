@@ -43,7 +43,7 @@ def test_admin_pages_render(admin, path):
 
 def test_nav_has_all_sections(admin):
     t = admin.get('/').text
-    for label in ['Επιστολές', 'Διατάγματα', 'Μητρώο Μελών', 'Συμβολικές Στοές', 'Επετηρίδα',
+    for label in ['Επιστολές', 'Διατάγματα', 'Μητρώα', 'Μητρώο Μελών', 'Επαρχιακές Μεγάλες Στοές', 'Συμβολικές Στοές', 'Επετηρίδα',
                   'Πρόσβαση', 'Google Drive', 'Επιστολές Γραμματείας', 'Ρυθμίσεις', 'Έξοδος']:
         assert label in t, label
     assert 'class="navtoggle"' in t and 'max-width:1180px' in t

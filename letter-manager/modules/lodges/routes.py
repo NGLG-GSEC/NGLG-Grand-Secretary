@@ -17,7 +17,7 @@ def lodges_page(req:Request,q:str='',prov:str='',msg:str=''):
     notice=f"<div class='card'><b>{esc(msg)}</b></div>" if msg else ''
     missing=sum(1 for x in _lodges_all() if not lodge_email(x));noprov=sum(1 for x in _lodges_all() if not x.get('provincial'))
     return page(f"""<h1>Συμβολικές Στοές</h1>{notice}<div class="toolbar"><a class="btn primary" href="/lodges/new">+ Νέα Στοά</a><a class="btn" href="/lodges/export.xlsx">Export Excel</a></div>
-<div class="card"><p style="margin-top:0">Η κεντρική βάση Στοών της ΕΜΣτΕ — από εδώ τροφοδοτούνται οι παραλήπτες των Επιστολών και η αναζήτηση «Στοά» στο Μητρώο Μελών.
+<div class="card"><p style="margin-top:0">Η κεντρική βάση Στοών της ΕΜΣτΕ (οι Επαρχίες ορίζονται στις <a href="/provinces">Επαρχιακές Μεγάλες Στοές</a>) — από εδώ τροφοδοτούνται οι παραλήπτες των Επιστολών και η αναζήτηση «Στοά» στο Μητρώο Μελών.
 {f'<br><b>Προς συμπλήρωση:</b> {missing} Στοές χωρίς email, {noprov} χωρίς ορισμένη ΕπΜΣτ.' if missing or noprov else ''}</p>
 <form class="filters" method="get"><input name="q" value="{esc(q)}" placeholder="Αριθμός, όνομα, Ανατολή, email, Σεβάσμιος…"><select name="prov"><option value="">Όλες οι ΕπΜΣτ.</option>{popts}<option value="-"{" selected" if prov=="-" else ""}>Χωρίς ορισμό</option></select><button>Αναζήτηση</button></form><p><b>{len(xs)}</b> Στοές</p></div>
 <div class="card" style="overflow:auto"><table><tr><th>Αρ.</th><th>Όνομα</th><th>Ανατολή</th><th>ΕπΜΣτ.</th><th>Email</th><th>Σεβάσμιος</th><th>Κατάσταση</th><th>Ενεργά μέλη</th><th>Ενέργειες</th></tr>{rows or '<tr><td colspan=9>Δεν βρέθηκαν Στοές.</td></tr>'}</table></div>
@@ -64,7 +64,7 @@ def lodges_export(req:Request):
     for x in _lodges_all():ws.append([int(x['number']) if str(x['number']).isdigit() else x['number']]+[x.get(k) or '' for k in LODGE_COLS[1:]])
     ws.freeze_panes='A2'
     for cell in ws[1]:cell.font=Font(bold=True,color='FFFFFF');cell.fill=PatternFill('solid',fgColor='1F4E78')
-    for col,wd in zip('ABCDEFGHIJ',[9,32,16,34,32,26,26,32,12,30]):ws.column_dimensions[col].width=wd
+    for col,wd in zip('ABCDEFGHIJKL',[9,32,16,34,32,26,26,32,12,18,40,30]):ws.column_dimensions[col].width=wd
     b=BytesIO();wb.save(b)
     return Response(b.getvalue(),media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',headers={'Content-Disposition':'attachment; filename="EMSTE_SYMBOLIKES_STOES.xlsx"'})
 
@@ -82,7 +82,8 @@ async def lodges_import(req:Request,file:UploadFile|None=File(None),pasted:str=F
     if not rows:raise HTTPException(400,'Επιλέξτε αρχείο ή επικολλήστε τα δεδομένα.')
     alias={'number':['Αριθμός','Αρ.','Αρ','Number','No'],'name':['Όνομα','Στοά','Name','Lodge'],'orient':['Ανατολή','Πόλη','Orient','City'],
            'provincial':['Επαρχιακή Μεγάλη Στοά','ΕπΜΣτ.','ΕπΜΣτ','Provincial'],'email':['Email Στοάς','Email'],'master':['Σεβάσμιος','Master'],
-           'secretary':['Γραμματέας','Secretary'],'secretary_email':['Email Γραμματέα','Secretary Email'],'status':['Κατάσταση','Status'],'notes':['Σημειώσεις','Notes']}
+           'secretary':['Γραμματέας','Secretary'],'secretary_email':['Email Γραμματέα','Secretary Email'],'status':['Κατάσταση','Status'],'ritual':['Τυπικό','Ritual'],
+           'meeting_place':['Τόπος συνεδριάσεων','Τόπος','Meeting place','Venue'],'notes':['Σημειώσεις','Notes']}
     hk=[_hkey(h) for h in rows[0]];idx={}
     for k,names in alias.items():
         for n in names:

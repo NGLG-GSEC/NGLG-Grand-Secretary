@@ -45,3 +45,12 @@ def test_every_module_describes_itself():
     for rel in manifest():
         first = (ROOT / rel).read_text(encoding='utf-8').splitlines()[0]
         assert first.startswith('# ') and len(first) > 10, rel
+
+
+def test_architecture_map_is_current():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location('gen_architecture', ROOT / 'tools' / 'gen_architecture.py')
+    gen = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(gen)
+    doc = (ROOT / 'ARCHITECTURE.md').read_text(encoding='utf-8')
+    assert gen.render(doc) == doc, 'τρέξτε: python tools/gen_architecture.py'
