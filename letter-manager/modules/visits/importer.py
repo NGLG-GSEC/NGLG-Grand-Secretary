@@ -1,7 +1,8 @@
 # Επισκέψεις Στοών — εισαγωγή των δεδομένων της σελίδας «Επιστολές Γραμματείας» (claude.ai) από αρχείο JSON.
 # Φορτώνεται από το app.py (βλ. MODULES) στον κοινό χώρο ονομάτων της εφαρμογής.
 #
-# Μορφή: {"format":"nglg-lodge-visits/1","provinces":[…],"lodges":[…],"reps":[…],"visits":[…]}
+# Μορφή: {"format":"nglg-lodge-visits/1","provinces":[…],"lodges":[…],"reps":[…],"visits":[…]} — κάθε ενότητα προαιρετική.
+# Επαρχίες: short, full, email, gmName, gmEmail, secretaryName, secretaryEmail, notes.
 # Ασφαλής επανάληψη: ταύτιση με τα αναγνωριστικά της σελίδας (ext_id), τον αριθμό Στοάς και τη συντομογραφία
 # Επαρχίας· συμπληρώνονται μόνο κενά πεδία — ό,τι έχει ήδη καταχωριστεί στην εφαρμογή δεν αλλάζει.
 
@@ -26,7 +27,11 @@ def import_visits_payload(data):
             if not short:continue
             ex=c.execute('SELECT * FROM grand_lodges WHERE short=?',(short,)).fetchone()
             if ex:
-                ch={k:v for k,v in {'full_title':s(p.get('full')),'email':s(p.get('email')),'master_name':s(p.get('gmName'))}.items() if v and not (ex[k] or '').strip()}
+                vals={'full_title':s(p.get('full')),'email':s(p.get('email')),'master_name':s(p.get('gmName')),'master_email':s(p.get('gmEmail')),
+                      'secretary_name':s(p.get('secretaryName')),'secretary_email':s(p.get('secretaryEmail')),'notes':s(p.get('notes'))}
+                for k in ('email','master_email','secretary_email'):
+                    if vals[k] and not EMAIL_RE.match(vals[k]):vals[k]=''
+                ch={k:v for k,v in vals.items() if v and not (ex[k] or '').strip()}
                 if ch:c.execute('UPDATE grand_lodges SET '+','.join(k+'=?' for k in ch)+',updated_at=? WHERE id=?',tuple(ch.values())+(ts,ex['id']));n['prov_upd']+=1
             else:
                 kind='Εθνική' if short.startswith('ΕΜΣτΕ') else 'Περιφερειακή' if short.startswith('ΠΜΣτ') else 'Επαρχιακή'
@@ -87,7 +92,7 @@ def import_visits_payload(data):
 def visits_import_data_page(req:Request):
     u=_visits_admin(req)
     return page('''<h1>Εισαγωγή από «Επιστολές Γραμματείας»</h1><div class="card">Ανεβάστε το αρχείο εξαγωγής (.json) της σελίδας «Επιστολές Γραμματείας» του claude.ai.
-Εισάγονται: Επαρχίες (συμπλήρωση κενών), Συμβολικές Στοές (Επαρχία, Τυπικό, τόπος), Εκπρόσωποι (με email/κινητό) και Επισκέψεις.
+Εισάγονται: Επαρχίες (συμπλήρωση κενών — Γραμματεία, ΕπΜΔ, ΕπΜΓρ.), Συμβολικές Στοές (Επαρχία, Τυπικό, τόπος), Εκπρόσωποι (με email/κινητό) και Επισκέψεις.
 Η εισαγωγή μπορεί να επαναληφθεί χωρίς διπλοεγγραφές και δεν αλλάζει ό,τι έχει ήδη συμπληρωθεί στην εφαρμογή.</div>
 <form method="post" enctype="multipart/form-data" class="card"><input type="file" name="file" accept=".json,application/json" required><button class="primary" style="margin-top:10px">Εισαγωγή</button> <a class="btn" href="/visits">Άκυρο</a></form>''',u,'Εισαγωγή δεδομένων')
 

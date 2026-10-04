@@ -188,3 +188,15 @@ def test_reps_from_epeteirida(admin, app_module):
 def test_wrong_import_file(admin):
     r = admin.post('/visits/import-data', files={'file': ('e.json', io.BytesIO(b'{"format":"other"}'), 'application/json')})
     assert r.status_code == 400
+
+
+def test_import_province_secretaries(admin, app_module):
+    data = {'format': 'nglg-lodge-visits/1', 'provinces': [
+        {'short': 'ΕπΜΣτ. Κεντρικής & Βορείου Ελλάδος', 'secretaryName': 'Σεβ. Αδ. Πλασματικός Γραμματεύς', 'secretaryEmail': 'όχι-email',
+         'notes': 'Σημείωση'}]}
+    r = admin.post('/visits/import-data', files={'file': ('p.json', io.BytesIO(json.dumps(data).encode()), 'application/json')})
+    assert r.status_code == 303
+    p = app_module.province_by_short('ΕπΜΣτ. Κεντρικής & Βορείου Ελλάδος')
+    assert p['secretary_name'] == 'Σεβ. Αδ. Πλασματικός Γραμματεύς' and p['secretary_email'] == '' and p['notes'] == 'Σημείωση'
+    gs = app_module.province_roles(p)[1]
+    assert gs['email'] == p['email'] and gs['addressee'].endswith('Σεβ. Αδ. Πλασματικός Γραμματεύς')
