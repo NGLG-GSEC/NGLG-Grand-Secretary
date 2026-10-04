@@ -29,7 +29,7 @@ def setpage(req:Request,msg:str=''):
     smtp_note=(f'<p class="muted">Ο διακομιστής συνδέεται για αποστολή ως <b>{esc(smtp_user)}</b>.'
                +(f' Για να εμφανίζονται τα «Γενικά εξερχόμενα» ως <b>{esc(sender_for("general"))}</b>, ο λογαριασμός αυτός πρέπει να έχει οριστεί ως «Αποστολή ως» στο {esc(smtp_user)} (Gmail → Ρυθμίσεις → Λογαριασμοί), διαφορετικά το Gmail εμφανίζει ως αποστολέα το {esc(smtp_user)}.' if smtp_login_differs() else '')+'</p>'
                if smtp_user else '<p class="muted">Η αποστολή από τον διακομιστή (SMTP) δεν έχει ρυθμιστεί.</p>')
-    fields=''.join(f'<div><label>{esc(k)}</label><input name="{esc(k)}" value="{esc(v)}"></div>' for k,v in s.items() if k not in mail_keys)
+    fields=''.join(f'<div><label>{esc(k)}</label><input name="{esc(k)}" value="{esc(v)}"></div>' for k,v in s.items() if k not in mail_keys and not k.startswith('_'))
     notice=f"<div class='card'><b>{esc(msg)}</b></div>" if msg else ''
     return page(f'''<h1>Ρυθμίσεις</h1>{notice}<form method="post"><section class="card"><h2 style="margin-top:0">✉ Λογαριασμοί αποστολής</h2>
 <p>Από ποιο email φεύγει κάθε κατηγορία. Ο αποστολέας εμφανίζεται και σε κάθε οθόνη πριν την αποστολή.</p><div class="grid">{senders}</div>{smtp_note}</section>

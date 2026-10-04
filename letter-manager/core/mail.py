@@ -1,7 +1,7 @@
 # Αποστολή email και λογαριασμοί αποστολής ανά κατηγορία (Ρυθμίσεις → «Λογαριασμοί αποστολής»).
 # Φορτώνεται από το app.py (βλ. MODULES) στον κοινό χώρο ονομάτων της εφαρμογής.
 #
-#   official → Επιστολές & Διατάγματα       (προεπιλογή grand.chancellor@nglgreece.gr — ανοίγει το Gmail)
+#   official → Επιστολές & Διατάγματα       (προεπιλογή grand.secretary@nglgreece.gr — ανοίγει το Gmail)
 #   general  → όλα τα υπόλοιπα εξερχόμενα    (προεπιλογή info@nglgreece.gr — αποστολή από τον διακομιστή, SMTP)
 #
 # MAIL_OUTBOX_DIR (μόνο για δοκιμές/τοπικά): αντί να σταλεί, το μήνυμα γράφεται ως .eml στον φάκελο.
@@ -9,7 +9,7 @@
 EMAIL_RE=re.compile(r'^[^@\s,;]+@[^@\s,;]+\.[^@\s,;]+$')
 
 MAIL_SENDERS={
- 'official':{'key':'mail_from_official','default':'grand.chancellor@nglgreece.gr','label':'Επιστολές & Διατάγματα',
+ 'official':{'key':'mail_from_official','default':'grand.secretary@nglgreece.gr','label':'Επιστολές & Διατάγματα',
              'uses':'Αποστολή Επιστολών και Διαταγμάτων — ανοίγει το Gmail με αυτόν τον λογαριασμό.'},
  'general':{'key':'mail_from_general','default':'info@nglgreece.gr','label':'Γενικά εξερχόμενα',
             'uses':'Επισκέψεις Στοών (εκπρόσωποι, Επαρχίες), κωδικοί εισόδου, αντίγραφα ασφαλείας του Μητρώου — αποστολή από τον διακομιστή.'},
@@ -19,6 +19,10 @@ def _mail_init():
     with con() as c:
         for v in MAIL_SENDERS.values():c.execute('INSERT OR IGNORE INTO settings VALUES(?,?)',(v['key'],v['default']))
         c.execute('DELETE FROM settings WHERE key=?',('sender_email',))  # παλιά ενιαία ρύθμιση· αντικαταστάθηκε από τις δύο παραπάνω
+        # Εφάπαξ διόρθωση: η πρώτη έκδοση είχε κατά λάθος προεπιλογή grand.chancellor@ για τις Επιστολές & τα Διατάγματα.
+        if not c.execute('SELECT 1 FROM settings WHERE key=?',('_mail_senders_fix1',)).fetchone():
+            c.execute('UPDATE settings SET value=? WHERE key=? AND value=?',('grand.secretary@nglgreece.gr','mail_from_official','grand.chancellor@nglgreece.gr'))
+            c.execute('INSERT OR IGNORE INTO settings VALUES(?,?)',('_mail_senders_fix1','1'))
 
 def sender_for(kind):
     v=MAIL_SENDERS[kind];x=(settings().get(v['key']) or '').strip()
