@@ -1,4 +1,73 @@
- init():
+# Βάση δεδομένων: SQLite τοπικά / Postgres στο Render, σύνδεση con(), βασικοί πίνακες και ρυθμίσεις.
+# Φορτώνεται από το app.py (βλ. MODULES) στον κοινό χώρο ονομάτων της εφαρμογής.
+
+class _PGCursor:
+    def __init__(self, cur, lastrowid=None):
+        self.cur=cur
+        self.lastrowid=lastrowid
+    def fetchone(self):
+        return self.cur.fetchone()
+    def fetchall(self):
+        return self.cur.fetchall()
+    def __iter__(self):
+        return iter(self.cur)
+
+class _PGConn:
+    def __init__(self):
+        self.raw=psycopg.connect(DATABASE_URL,row_factory=dict_row)
+    def __enter__(self):
+        return self
+    def __exit__(self,exc_type,exc,tb):
+        try:
+            self.raw.rollback() if exc_type else self.raw.commit()
+        finally:
+            self.raw.close()
+    def commit(self):
+        self.raw.commit()
+    def rollback(self):
+        self.raw.rollback()
+    def _adapt(self,sql):
+        s=sql.strip()
+        if s.upper()=='BEGIN IMMEDIATE':
+            return 'SELECT pg_advisory_xact_lock(EXTRACT(YEAR FROM CURRENT_DATE)::bigint)'
+        s=s.replace('INTEGER PRIMARY KEY AUTOINCREMENT','BIGSERIAL PRIMARY KEY')
+        if s.startswith('INSERT OR IGNORE INTO settings VALUES'):
+            return 'INSERT INTO settings(key,value) VALUES(%s,%s) ON CONFLICT(key) DO NOTHING'
+        if s.startswith('INSERT OR IGNORE INTO letter_templates'):
+            s=s.replace('INSERT OR IGNORE INTO','INSERT INTO',1).replace('?','%s')
+            return s + ' ON CONFLICT(name) DO NOTHING'
+        if s.startswith('INSERT OR IGNORE INTO users'):
+            s=s.replace('INSERT OR IGNORE INTO','INSERT INTO',1).replace('?','%s')
+            return s + ' ON CONFLICT(email) DO NOTHING'
+        if s.startswith('REPLACE INTO otps VALUES'):
+            return "INSERT INTO otps(email,code_hash,expires_at,attempts,created_at) VALUES(%s,%s,%s,%s,%s) ON CONFLICT(email) DO UPDATE SET code_hash=EXCLUDED.code_hash,expires_at=EXCLUDED.expires_at,attempts=EXCLUDED.attempts,created_at=EXCLUDED.created_at"
+        if s.startswith('REPLACE INTO settings VALUES'):
+            return "INSERT INTO settings(key,value) VALUES(%s,%s) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value"
+        return s.replace('?','%s')
+    def execute(self,sql,params=()):
+        q=self._adapt(sql)
+        cur=self.raw.cursor()
+        if (q.lstrip().upper().startswith('INSERT INTO LETTERS(') or q.lstrip().upper().startswith('INSERT INTO MEMBER_REGISTRY(') or q.lstrip().upper().startswith('INSERT INTO DECREE_DOCUMENTS(')) and 'RETURNING' not in q.upper():
+            cur.execute(q+' RETURNING id',params)
+            row=cur.fetchone()
+            return _PGCursor(cur,row['id'] if row else None)
+        cur.execute(q,params)
+        return _PGCursor(cur)
+    def executescript(self,script):
+        cur=self.raw.cursor()
+        for stmt in script.split(';'):
+            if stmt.strip():
+                cur.execute(self._adapt(stmt))
+        return _PGCursor(cur)
+
+def con():
+    if USE_PG:
+        return _PGConn()
+    c=sqlite3.connect(DB,timeout=30); c.row_factory=sqlite3.Row; c.execute('PRAGMA foreign_keys=ON'); c.create_function('lower',1,lambda x:x.lower() if isinstance(x,str) else x,deterministic=True); c.create_function('translate',3,lambda x,a,b:x.translate(str.maketrans(a,b)) if isinstance(x,str) else x,deterministic=True); return c
+
+def now(): return datetime.now().isoformat(timespec='seconds')
+
+def  init():
     with con() as c:
         c.executescript('''CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY,value TEXT NOT NULL);CREATE TABLE IF NOT EXISTS users(email TEXT PRIMARY KEY,active INTEGER NOT NULL DEFAULT 1,role TEXT NOT NULL DEFAULT 'editor',allowed_templates TEXT NOT NULL DEFAULT '[]',created_at TEXT,updated_at TEXT);CREATE TABLE IF NOT EXISTS otps(email TEXT PRIMARY KEY,code_hash TEXT,expires_at TEXT,attempts INTEGER DEFAULT 0,created_at TEXT);CREATE TABLE IF NOT EXISTS login_guard(email TEXT PRIMARY KEY,fails INTEGER DEFAULT 0,locked_until TEXT);CREATE TABLE IF NOT EXISTS letter_templates(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT UNIQUE,body TEXT DEFAULT '',active INTEGER DEFAULT 1,created_at TEXT,updated_at TEXT);CREATE TABLE IF NOT EXISTS letters(id INTEGER PRIMARY KEY AUTOINCREMENT,protocol_seq INTEGER,protocol_year INTEGER,protocol_no TEXT UNIQUE,letter_date TEXT,subject TEXT,body TEXT,template_id INTEGER,recipient_name TEXT DEFAULT '',recipient_email TEXT DEFAULT '',status TEXT DEFAULT 'draft',created_by TEXT,signer TEXT DEFAULT 'dimitrios',source_letter_id INTEGER,created_at TEXT,updated_at TEXT);CREATE INDEX IF NOT EXISTS ixp ON letters(protocol_no);CREATE INDEX IF NOT EXISTS ixs ON letters(subject);''')
         if USE_PG:
@@ -29,105 +98,8 @@
         if AUTHORIZED_USER_EMAIL:
             c.execute("INSERT OR IGNORE INTO users(email,active,role,allowed_templates,created_at,updated_at) VALUES(?,1,'authorised','[]',?,?)",(AUTHORIZED_USER_EMAIL,ts,ts))
             c.execute("UPDATE users SET active=1,role='authorised',allowed_templates='[]',updated_at=? WHERE email=?",(ts,AUTHORIZED_USER_EMAIL))
+
 init()
 
 def settings():
     with con() as c:return {r['key']:r['value'] for r in c.execute('SELECT * FROM settings')}
-def user(req):
-    t=req.cookies.get('nglg_session');
-    if not t:return None
-    try:e=ser.loads(t,max_age=43200)
-    except (BadSignature,SignatureExpired):return None
-    with con() as c:
-        r=c.execute('SELECT * FROM users WHERE email=? AND active=1',(e.lower(),)).fetchone();return dict(r) if r else None
-def actor_key(req,u=None):
-    u=u or user(req)
-    if not u:return None
-    e=u['email'].lower()
-    selectable=e in {SHARED_SECRETARIAT_EMAIL,PRIMARY_ADMIN_EMAIL}
-    if not selectable:return 'dimitrios'
-    t=req.cookies.get('nglg_actor')
-    if not t:return None if e==SHARED_SECRETARIAT_EMAIL else 'dimitrios'
-    try:a=actor_ser.loads(t,max_age=43200)
-    except (BadSignature,SignatureExpired):return None if e==SHARED_SECRETARIAT_EMAIL else 'dimitrios'
-    return a if a in ACTOR_LABELS else ('dimitrios' if e==PRIMARY_ADMIN_EMAIL else None)
-
-def signer_profile(key,s=None):
-    s=s or settings()
-    if key=='nikolaos':
-        return {'key':'nikolaos','name':'Λίαν Σεβάσμιος Αδ. Νικόλαος Χατζηδημητρίου','title':'Αν. Μέγας Γραμματέας','asset':'signature_nikolaos.png'}
-    return {'key':'dimitrios','name':s['grand_secretary_name'],'title':s['grand_secretary_title'],'asset':'signature_original.png'}
-
-def asset_available(name):
-    return bool(list((BASE/'static').glob(name+'.b64.*')))
-
-def need(req):
-    u=user(req)
-    if not u:raise HTTPException(401)
-    a=actor_key(req,u)
-    if u['email'].lower()==SHARED_SECRETARIAT_EMAIL and not a:
-        raise HTTPException(status_code=303,headers={'Location':'/identity'})
-    u['_actor']=a or 'dimitrios'
-    return u
-def isadmin(u):return u and u['role']=='admin'
-def isauthorised(u):return u and u.get('role')=='authorised'
-def current_edit_session(req,u=None):
-    u=u or user(req)
-    if not isauthorised(u):return None
-    tok=req.cookies.get('nglg_edit_session') or ''
-    saved=(u.get('edit_session') or '')
-    return tok if tok and saved and hmac.compare_digest(tok,saved) else None
-def can_edit_letter(req,u,x):
-    if isadmin(u) or (u and u.get('role')=='editor'):return True
-    if not isauthorised(u):return False
-    tok=current_edit_session(req,u)
-    return bool(tok and (x.get('created_by') or '').lower()==u['email'].lower() and (x.get('edit_session') or '')==tok)
-def templates_for(u):
-    with con() as c:
-        if isadmin(u) or isauthorised(u):return [dict(r) for r in c.execute('SELECT * FROM letter_templates WHERE active=1 ORDER BY name')]
-        ids=json.loads(u.get('allowed_templates') or '[]')
-        if not ids:return []
-        q=','.join('?'*len(ids));return [dict(r) for r in c.execute(f'SELECT * FROM letter_templates WHERE active=1 AND id IN ({q}) ORDER BY name',ids)]
-def can_tpl(u,i):return isadmin(u) if not i else any(int(t['id'])==int(i) for t in templates_for(u))
-def hcode(e,code):return hashlib.sha256(f'{SECRET}|{e}|{code}'.encode()).hexdigest()
-OTP_MAX_ATTEMPTS=5          # wrong OTP codes allowed before the code is cancelled
-PWD_MAX_FAILS=5             # wrong passwords allowed before a temporary lock
-PWD_LOCK_MINUTES=15
-def smtp_ready():
-    return bool(os.getenv('SMTP_HOST') and os.getenv('SMTP_USERNAME') and os.getenv('SMTP_PASSWORD'))
-def sendotp(e,code):
-    host=os.getenv('SMTP_HOST');usr=os.getenv('SMTP_USERNAME');pwd=(os.getenv('SMTP_PASSWORD') or '').replace(' ','');port=int(os.getenv('SMTP_PORT','587'))
-    if not(host and usr and pwd):
-        print('[otp] SMTP not configured (SMTP_HOST / SMTP_USERNAME / SMTP_PASSWORD) - OTP not sent')
-        return False
-    m=EmailMessage();m['Subject']='Κωδικός πρόσβασης – Μεγάλη Γραμματεία';m['From']=os.getenv('OTP_FROM_EMAIL',usr);m['To']=e
-    m.set_content(f'Ο κωδικός OTP είναι: {code}\nΙσχύει για 10 λεπτά.\n\nΑν δεν ζητήσατε κωδικό, αγνοήστε αυτό το μήνυμα.')
-    ctx=ssl.create_default_context()
-    if port==465:
-        with smtplib.SMTP_SSL(host,port,timeout=20,context=ctx) as s:s.login(usr,pwd);s.send_message(m)
-    else:
-        with smtplib.SMTP(host,port,timeout=20) as s:s.ehlo();s.starttls(context=ctx);s.ehlo();s.login(usr,pwd);s.send_message(m)
-    return True
-print('[otp] SMTP configured:', 'yes' if smtp_ready() else 'NO - set SMTP_PASSWORD on the server')
-
-def guard_state(e):
-    with con() as c:r=c.execute('SELECT * FROM login_guard WHERE email=?',(e,)).fetchone()
-    if not r:return 0,None
-    lu=datetime.fromisoformat(r['locked_until']) if r['locked_until'] else None
-    return int(r['fails'] or 0),lu
-def guard_fail(e):
-    fails,_=guard_state(e);fails+=1
-    lock=(datetime.now()+timedelta(minutes=PWD_LOCK_MINUTES)).isoformat(timespec='seconds') if fails>=PWD_MAX_FAILS else None
-    with con() as c:
-        if c.execute('SELECT 1 FROM login_guard WHERE email=?',(e,)).fetchone():
-            c.execute('UPDATE login_guard SET fails=?,locked_until=? WHERE email=?',(0 if lock else fails,lock,e))
-        else:
-            c.execute('INSERT INTO login_guard(email,fails,locked_until) VALUES(?,?,?)',(e,0 if lock else fails,lock))
-    return lock
-def guard_ok(e):
-    with con() as c:c.execute('DELETE FROM login_guard WHERE email=?',(e,))
-
-def nextprot(c):
-    today=date.today();y=today.year
-    c.execute('BEGIN IMMEDIATE')
-    n=c.execute('SELECT COALESCE(MAX(protocol_seq),0)+1 n FROM l

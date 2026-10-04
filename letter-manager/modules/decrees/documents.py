@@ -1,3 +1,6 @@
+# Διατάγματα — αυτοτελή έγγραφα: νέο, αρχείο, επεξεργασία, «Έτοιμο», PDF, διαγραφή.
+# Φορτώνεται από το app.py (βλ. MODULES) στον κοινό χώρο ονομάτων της εφαρμογής.
+
 # Standalone Decree Documents — separate from letter workflow
 
 def _decree_docs_init():
@@ -49,6 +52,7 @@ _decree_docs_init()
 
 # Always keep decrees out of the normal letter template picker.
 _templates_with_legacy_decree=templates_for
+
 def templates_for(u):
     return [x for x in _templates_with_legacy_decree(u) if x.get('name')!='ΔΙΑΤΑΓΜΑΤΑ']
 

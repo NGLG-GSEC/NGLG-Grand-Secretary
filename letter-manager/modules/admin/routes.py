@@ -1,10 +1,5 @@
-,body:str=Form(''),active:str=Form('1')):
-    u=need(req)
-    if not isadmin(u):raise HTTPException(403)
-    with con() as c:
-        if template_id:c.execute('UPDATE letter_templates SET name=?,body=?,active=?,updated_at=? WHERE id=?',(name.strip(),body,1 if active=='1' else 0,now(),int(template_id)))
-        else:c.execute('INSERT INTO letter_templates(name,body,active,created_at,updated_at) VALUES(?,?,?,?,?)',(name.strip(),body,1,now(),now()))
-    return RedirectResponse('/templates',303)
+# Διαχείριση — πρόσβαση χρηστών και ρυθμίσεις.
+# Φορτώνεται από το app.py (βλ. MODULES) στον κοινό χώρο ονομάτων της εφαρμογής.
 
 @app.get('/users')
 def users(req:Request):
@@ -14,6 +9,7 @@ def users(req:Request):
     rows=''.join(f"<tr><td>{esc(x['email'])}</td><td>{esc(x['role'])}</td><td>{'Ναι' if x['active'] else 'Όχι'}</td></tr>" for x in xs)
     checks=''.join(f"<label><input style='width:auto' type='checkbox' name='allowed_templates' value='{t['id']}'> {esc(t['name'])}</label>" for t in ts)
     return page(f'''<h1>Πρόσβαση</h1><div class="card"><table><tr><th>Email</th><th>Ρόλος</th><th>Ενεργό</th></tr>{rows}</table></div><form class="card" method="post"><h3>Προσθήκη / αλλαγή χρήστη</h3><label>Email</label><input type="email" name="email" required><label>Ρόλος</label><select name="role"><option value="editor">Editor</option><option value="authorised">Authorised</option><option value="admin">Admin</option></select><label>Ενεργό</label><select name="active"><option value="1">Ναι</option><option value="0">Όχι</option></select><fieldset>{checks}</fieldset><button>Αποθήκευση</button></form>''',u)
+
 @app.post('/users')
 def saveuser(req:Request,email:str=Form(...),role:str=Form('editor'),active:str=Form('1'),allowed_templates:list[str]=Form(default=[])):
     u=need(req)
@@ -28,6 +24,7 @@ def setpage(req:Request):
     if not isadmin(u):raise HTTPException(403)
     s=settings();fields=''.join(f'<div><label>{esc(k)}</label><input name="{esc(k)}" value="{esc(v)}"></div>' for k,v in s.items())
     return page(f'<h1>Ρυθμίσεις</h1><form class="grid card" method="post">{fields}<button class="primary">Αποθήκευση</button></form>',u)
+
 @app.post('/settings')
 async def setsave(req:Request):
     u=need(req)

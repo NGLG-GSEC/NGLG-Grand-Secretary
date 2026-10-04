@@ -1,16 +1,90 @@
-etters WHERE protocol_year=?',(y,)).fetchone()['n']
-    fmt=c.execute("SELECT value FROM settings WHERE key='protocol_format'").fetchone()['value']
-    return n,y,fmt.format(seq=n,year=y,month=today.month,yy=y%100)
+# Είσοδος με κωδικό μίας χρήσης (OTP), χρήστες/ρόλοι, Υπογράφων, προστασία από επαναλαμβανόμενες αποτυχίες.
+# Φορτώνεται από το app.py (βλ. MODULES) στον κοινό χώρο ονομάτων της εφαρμογής.
 
-def asset(name):
-    files=sorted((BASE/'static').glob(name+'.b64.*'))
-    if not files:raise HTTPException(404)
-    payload=''.join(p.read_text(encoding='ascii') for p in files)
-    return Response(base64.b64decode(payload),media_type='image/webp')
-@app.get('/asset/{name}')
-def getasset(name:str):
-    if name not in {'header_emblem.png','signature_original.png','signature_nikolaos.png','seal_original.png'}:raise HTTPException(404)
-    return asset(name)
+def user(req):
+    t=req.cookies.get('nglg_session');
+    if not t:return None
+    try:e=ser.loads(t,max_age=43200)
+    except (BadSignature,SignatureExpired):return None
+    with con() as c:
+        r=c.execute('SELECT * FROM users WHERE email=? AND active=1',(e.lower(),)).fetchone();return dict(r) if r else None
+
+def actor_key(req,u=None):
+    u=u or user(req)
+    if not u:return None
+    e=u['email'].lower()
+    selectable=e in {SHARED_SECRETARIAT_EMAIL,PRIMARY_ADMIN_EMAIL}
+    if not selectable:return 'dimitrios'
+    t=req.cookies.get('nglg_actor')
+    if not t:return None if e==SHARED_SECRETARIAT_EMAIL else 'dimitrios'
+    try:a=actor_ser.loads(t,max_age=43200)
+    except (BadSignature,SignatureExpired):return None if e==SHARED_SECRETARIAT_EMAIL else 'dimitrios'
+    return a if a in ACTOR_LABELS else ('dimitrios' if e==PRIMARY_ADMIN_EMAIL else None)
+
+def signer_profile(key,s=None):
+    s=s or settings()
+    if key=='nikolaos':
+        return {'key':'nikolaos','name':'Λίαν Σεβάσμιος Αδ. Νικόλαος Χατζηδημητρίου','title':'Αν. Μέγας Γραμματέας','asset':'signature_nikolaos.png'}
+    return {'key':'dimitrios','name':s['grand_secretary_name'],'title':s['grand_secretary_title'],'asset':'signature_original.png'}
+
+def need(req):
+    u=user(req)
+    if not u:raise HTTPException(401)
+    a=actor_key(req,u)
+    if u['email'].lower()==SHARED_SECRETARIAT_EMAIL and not a:
+        raise HTTPException(status_code=303,headers={'Location':'/identity'})
+    u['_actor']=a or 'dimitrios'
+    return u
+
+def isadmin(u):return u and u['role']=='admin'
+
+def isauthorised(u):return u and u.get('role')=='authorised'
+
+def hcode(e,code):return hashlib.sha256(f'{SECRET}|{e}|{code}'.encode()).hexdigest()
+
+OTP_MAX_ATTEMPTS=5          # wrong OTP codes allowed before the code is cancelled
+
+PWD_MAX_FAILS=5             # wrong passwords allowed before a temporary lock
+
+PWD_LOCK_MINUTES=15
+
+def smtp_ready():
+    return bool(os.getenv('SMTP_HOST') and os.getenv('SMTP_USERNAME') and os.getenv('SMTP_PASSWORD'))
+
+def sendotp(e,code):
+    host=os.getenv('SMTP_HOST');usr=os.getenv('SMTP_USERNAME');pwd=(os.getenv('SMTP_PASSWORD') or '').replace(' ','');port=int(os.getenv('SMTP_PORT','587'))
+    if not(host and usr and pwd):
+        print('[otp] SMTP not configured (SMTP_HOST / SMTP_USERNAME / SMTP_PASSWORD) - OTP not sent')
+        return False
+    m=EmailMessage();m['Subject']='Κωδικός πρόσβασης – Μεγάλη Γραμματεία';m['From']=os.getenv('OTP_FROM_EMAIL',usr);m['To']=e
+    m.set_content(f'Ο κωδικός OTP είναι: {code}\nΙσχύει για 10 λεπτά.\n\nΑν δεν ζητήσατε κωδικό, αγνοήστε αυτό το μήνυμα.')
+    ctx=ssl.create_default_context()
+    if port==465:
+        with smtplib.SMTP_SSL(host,port,timeout=20,context=ctx) as s:s.login(usr,pwd);s.send_message(m)
+    else:
+        with smtplib.SMTP(host,port,timeout=20) as s:s.ehlo();s.starttls(context=ctx);s.ehlo();s.login(usr,pwd);s.send_message(m)
+    return True
+
+print('[otp] SMTP configured:', 'yes' if smtp_ready() else 'NO - set SMTP_PASSWORD on the server')
+
+def guard_state(e):
+    with con() as c:r=c.execute('SELECT * FROM login_guard WHERE email=?',(e,)).fetchone()
+    if not r:return 0,None
+    lu=datetime.fromisoformat(r['locked_until']) if r['locked_until'] else None
+    return int(r['fails'] or 0),lu
+
+def guard_fail(e):
+    fails,_=guard_state(e);fails+=1
+    lock=(datetime.now()+timedelta(minutes=PWD_LOCK_MINUTES)).isoformat(timespec='seconds') if fails>=PWD_MAX_FAILS else None
+    with con() as c:
+        if c.execute('SELECT 1 FROM login_guard WHERE email=?',(e,)).fetchone():
+            c.execute('UPDATE login_guard SET fails=?,locked_until=? WHERE email=?',(0 if lock else fails,lock,e))
+        else:
+            c.execute('INSERT INTO login_guard(email,fails,locked_until) VALUES(?,?,?)',(e,0 if lock else fails,lock))
+    return lock
+
+def guard_ok(e):
+    with con() as c:c.execute('DELETE FROM login_guard WHERE email=?',(e,))
 
 @app.get('/login')
 def login():
@@ -53,6 +127,7 @@ def otp(email:str=Form(...),admin_password:str=Form('')):
             return page(f'''<div class="card auth"><h2>Δεν στάλθηκε OTP</h2><p>{why}</p><p class="muted">Ενημερώστε τον διαχειριστή. Ο κύριος διαχειριστής μπορεί να εισέλθει με τον προσωπικό κωδικό του.</p><a class="btn" href="/login">Επιστροφή</a></div>''')
     extra=f'<p><b>DEV OTP: {code}</b></p>' if r and DEV and not sent else ''
     return page(f'''<div class="card auth"><h2>Επαλήθευση</h2><p>Αν το email έχει άδεια, στάλθηκε OTP (ελέγξτε και τα Ανεπιθύμητα). Ισχύει 10 λεπτά.</p>{extra}<form method="post" action="/verify"><input type="hidden" name="email" value="{esc(e)}"><input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required><br><br><button class="primary">Είσοδος</button></form></div>''')
+
 @app.post('/verify')
 def verify(email:str=Form(...),code:str=Form(...)):
     e=email.strip().lower();code=re.sub(r'\D','',code)
@@ -113,41 +188,3 @@ def logout(req:Request):
     r.delete_cookie('nglg_actor')
     r.delete_cookie('nglg_edit_session')
     return r
-
-@app.get('/')
-def home(req:Request):
-    u=user(req)
-    if not u:return RedirectResponse('/login',303)
-    a=actor_key(req,u)
-    if u['email'].lower()==SHARED_SECRETARIAT_EMAIL and not a:return RedirectResponse('/identity',303)
-    u['_actor']=a or 'dimitrios'
-    with con() as c:
-        recent=[dict(x) for x in c.execute('SELECT * FROM letters WHERE id NOT IN (SELECT letter_id FROM decrees WHERE letter_id IS NOT NULL) ORDER BY id DESC LIMIT 12')]
-        decree_ids={int(r['letter_id']) for r in c.execute('SELECT letter_id FROM decrees')} if recent else set()
-    row_parts=[]
-    for x in recent:
-        lid=int(x['id'])
-        edit_href=f"/decree/edit/{lid}" if lid in decree_ids else f"/edit/{lid}"
-        edit_link=(f" · <a href='{edit_href}'>Edit</a>" if can_edit_letter(req,u,x) else '')
-        delete_btn=(f"<form method='post' action='/delete/{lid}' style='display:inline' onsubmit=\"return confirm('Οριστική διαγραφή του εγγράφου; Η ενέργεια δεν αναιρείται.');\"><button type='submit' class='btn' style='margin-left:6px'>Delete</button></form>" if isadmin(u) else '')
-        actions=f"<a href='/letter/{lid}'>Άνοιγμα</a>{edit_link}{delete_btn}"
-        row_parts.append(f"<tr><td class='official-number'>{esc(x['protocol_no'])}</td><td class='official-number'>{esc(x['letter_date'])}</td><td>{esc(x['subject'])}</td><td>{esc(x['status'])}</td><td>{actions}</td></tr>")
-    rows=''.join(row_parts) or '<tr><td colspan=5>Δεν υπάρχουν επιστολές.</td></tr>'
-    return page(f'''<div class="hero"><div><h1>Μεγάλη Γραμματεία</h1><p>Οι επιστολές και τα Διατάγματα τηρούνται πλέον ως δύο διακριτές κατηγορίες εγγράφων.</p></div><div class="toolbar"><a class="btn primary" href="/new">+ Νέα Επιστολή</a><a class="btn" href="/decrees/new">+ Νέο Διάταγμα</a></div></div><div class="card"><table><tr><th>Αρ. Πρωτ.</th><th>Ημερομηνία</th><th>Θέμα</th><th>Κατάσταση</th><th>Ενέργειες</th></tr>{rows}</table></div>''',u)
-
-@app.get('/new')
-def new(req:Request,copy_from:int=0,template_id:int=0):
-    u=need(req);s=settings();profile=signer_profile(u.get('_actor','dimitrios'),s);tpls=templates_for(u);sub=body=rn=re='';rmid='';selected=0
-    preview_sig=(f'<img class="signature-img" src="/asset/{profile["asset"]}">' if profile['key']=='nikolaos' else f'<img class="signature-img" src="/clean/{profile["asset"]}">') if asset_available(profile['asset']) else '<div style="height:22mm"></div>'
-    preview_seal='<img class="seal-img" src="/clean/seal_original.png">'
-    if copy_from:
-        with con() as c:r=c.execute('SELECT * FROM letters WHERE id=?',(copy_from,)).fetchone()
-        if r:selected=r['template_id'] or 0;sub=r['subject'];body=r['body'];rn=r['recipient_name'] or '';re=r['recipient_email'] or '';rmid=str(r['recipient_member_id'] or '')
-    elif template_id and can_tpl(u,template_id):
-        with con() as c:r=c.execute('SELECT * FROM letter_templates WHERE id=?',(template_id,)).fetchone()
-        if r:selected=r['id'];body=r['body']
-    opts='<option value="">— Επιλογή —</option>'+''.join(f"<option value='{t['id']}' {'selected' if selected==t['id'] else ''}>{esc(t['name'])}</option>" for t in tpls)
-    signer_switch=''
-    if u['email'].lower() in {SHARED_SECRETARIAT_EMAIL,PRIMARY_ADMIN_EMAIL}:
-        signer_switch=f'''<div class="card noprint signer-card"><b>Υπογράφων νέας επιστολής:</b> {esc(profile['name'])} — {esc(profile['title'])} <a class="btn" style="margin-left:10px" href="/identity">Αλλαγή Υπογράφοντος</a></div>'''
-    return page(f'''<h1>Νέα Επιστολή</h1>{signer_switch}<form class="grid card" method="post" action="/new"><div><label>Πρότυπο / Περίπτωση</label><select name="template_id" onchange="location=

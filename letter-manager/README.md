@@ -50,27 +50,38 @@
 
 ## Δομή εφαρμογής
 
+Ο κώδικας είναι χωρισμένος σε ενότητες, **ένας φάκελος ανά θέμα** — πλήρης χάρτης «ποιο αρχείο αφορά τι»
+στο [ARCHITECTURE.md](ARCHITECTURE.md).
+
 ```
 letter-manager/
-├── app.py
-├── parts/
-│   ├── 000.txt
-│   ├── 001.txt
-│   ├── 002.txt
-│   ├── 003.txt
-│   ├── 004.txt
-│   ├── 005.txt
-│   └── 006.txt
-├── static/
-│   ├── header_emblem.png.b64.*
-│   ├── signature_original.png.b64.*
-│   └── seal_original.png.b64.*
-├── requirements.txt
-├── Dockerfile
-├── .dockerignore
-├── .env.example
-└── README.md
+├── app.py              ← φορτώνει τις ενότητες με τη σειρά της λίστας MODULES
+├── core/               ← κοινά: ρυθμίσεις, βάση, είσοδος, εμφάνιση/μενού, PDF, ειδοποιήσεις
+├── modules/
+│   ├── letters/        ← Επιστολές, πρότυπα, PDF επιστολής
+│   ├── decrees/        ← Διατάγματα
+│   ├── protocol/       ← Αριθμός Πρωτοκόλλου
+│   ├── members/        ← Μητρώο Μελών
+│   ├── lodges/         ← Συμβολικές Στοές
+│   ├── recipients/     ← λίστες παραληπτών
+│   ├── epeteirida/     ← Επετηρίδα
+│   ├── drive/          ← Google Drive
+│   └── admin/          ← Πρόσβαση, Ρυθμίσεις
+├── tests/              ← αυτόματοι έλεγχοι (pytest)
+├── static/             ← θυρεός, σφραγίδα, υπογραφές (base64)
+├── requirements.txt / requirements-dev.txt
+└── Dockerfile
 ```
+
+## Αυτόματοι έλεγχοι
+
+```bash
+cd letter-manager
+pip install -r requirements-dev.txt
+python -m pytest -q tests
+```
+
+Τρέχουν αυτόματα στο GitHub σε κάθε αλλαγή (καρτέλα **Actions → Tests**), σε SQLite και σε Postgres.
 
 Τα γραφικά αποθηκεύονται σε base64 text chunks και ανασυντίθενται δυναμικά από την εφαρμογή.
 
