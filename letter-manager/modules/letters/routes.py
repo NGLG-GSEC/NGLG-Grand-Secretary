@@ -20,7 +20,7 @@ def home(req:Request):
         actions=f"<a href='/letter/{lid}'>Άνοιγμα</a>{edit_link}{delete_btn}"
         row_parts.append(f"<tr><td class='official-number'>{esc(x['protocol_no'])}</td><td class='official-number'>{esc(x['letter_date'])}</td><td>{esc(x['subject'])}</td><td>{esc(x['status'])}</td><td>{actions}</td></tr>")
     rows=''.join(row_parts) or '<tr><td colspan=5>Δεν υπάρχουν επιστολές.</td></tr>'
-    return page(f'''<div class="hero"><div><h1>Μεγάλη Γραμματεία</h1><p>Οι επιστολές και τα Διατάγματα τηρούνται πλέον ως δύο διακριτές κατηγορίες εγγράφων.</p></div><div class="toolbar"><a class="btn primary" href="/new">+ Νέα Επιστολή</a><a class="btn" href="/decrees/new">+ Νέο Διάταγμα</a></div></div>{globals().get('namedays_banner_html',lambda u:'')(u)}<div class="card"><table><tr><th>Αρ. Πρωτ.</th><th>Ημερομηνία</th><th>Θέμα</th><th>Κατάσταση</th><th>Ενέργειες</th></tr>{rows}</table></div>''',u)
+    return page(f'''<div class="hero"><div><h1>Μεγάλη Γραμματεία</h1><p>Όλη η δουλειά της Γραμματείας σε ένα σημείο — τι εκκρεμεί σε κάθε ενότητα και οι συχνές ενέργειες.</p></div><div class="toolbar"><a class="btn primary" href="/new">+ Νέα Επιστολή</a><a class="btn" href="/decrees/new">+ Νέο Διάταγμα</a></div></div>{globals().get('namedays_banner_html',lambda u:'')(u)}{globals().get('dashboard_html',lambda u:'')(u)}<div class="card"><table><tr><th>Αρ. Πρωτ.</th><th>Ημερομηνία</th><th>Θέμα</th><th>Κατάσταση</th><th>Ενέργειες</th></tr>{rows}</table></div>''',u)
 
 @app.get('/new')
 def new(req:Request,copy_from:int=0,template_id:int=0,to_name:str='',to_email:str=''):

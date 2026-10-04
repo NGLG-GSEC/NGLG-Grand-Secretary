@@ -63,6 +63,7 @@ MODULES = [
     'modules/drive/client.py',
     'modules/drive/upload.py',
     'modules/drive/routes.py',
+    'modules/dashboard/tiles.py',
 ]
 
 _ROOT = Path(__file__).resolve().parent

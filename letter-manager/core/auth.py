@@ -86,12 +86,39 @@ def guard_fail(e):
 def guard_ok(e):
     with con() as c:c.execute('DELETE FROM login_guard WHERE email=?',(e,))
 
+# ---------------------------------------------------------------- επιστροφή στη σελίδα που ζητήθηκε μετά την είσοδο
+NEXT_COOKIE='nglg_next'
+
+def _safe_next(v):
+    v=str(v or '')
+    return v if v.startswith('/') and not v.startswith('//') and '\\' not in v and len(v)<600 and not v.startswith(('/login','/logout','/otp','/verify')) else ''
+
+def after_login(req,resp,default='/'):
+    # Ανακατευθύνει στη σελίδα που είχε ζητηθεί πριν την είσοδο (π.χ. από σύνδεσμο του portal).
+    nxt=_safe_next(req.cookies.get(NEXT_COOKIE)) if req is not None else ''
+    if nxt and default=='/':resp.headers['location']=nxt
+    if nxt and default=='/':resp.delete_cookie(NEXT_COOKIE)
+    return resp
+
+from fastapi.exception_handlers import http_exception_handler as _default_http_exception_handler
+from starlette.exceptions import HTTPException as _StarletteHTTPException
+
+@app.exception_handler(_StarletteHTTPException)
+async def _login_redirect_handler(request,exc):
+    # Μη συνδεδεμένος χρήστης που ανοίγει σελίδα (GET) → σελίδα εισόδου, και μετά πίσω σε αυτήν.
+    if exc.status_code==401 and request.method=='GET' and not request.url.path.startswith('/api/'):
+        nxt=_safe_next(request.url.path+('?'+request.url.query if request.url.query else ''))
+        resp=RedirectResponse('/login',303)
+        if nxt:resp.set_cookie(NEXT_COOKIE,nxt,httponly=True,secure=COOKIE_SECURE,samesite='lax',max_age=1800)
+        return resp
+    return await _default_http_exception_handler(request,exc)
+
 @app.get('/login')
 def login():
     return page('''<div class="card auth"><img class="logo" src="/asset/header_emblem.png"><h1>Ψηφιακή Μεγάλη Γραμματεία</h1><p>Εισαγάγετε το εγκεκριμένο email σας. Όπου έχει οριστεί προσωπικός κωδικός πρόσβασης, χρησιμοποιήστε τον στο δεύτερο πεδίο.</p><form method="post" action="/otp"><input type="email" name="email" placeholder="Email" required autofocus><br><br><input type="password" name="admin_password" placeholder="Κωδικός πρόσβασης" autocomplete="current-password"><br><br><button class="primary">Συνέχεια</button></form></div>''')
 
 @app.post('/otp')
-def otp(email:str=Form(...),admin_password:str=Form('')):
+def otp(req:Request,email:str=Form(...),admin_password:str=Form('')):
     e=email.strip().lower()
     with con() as c:r=c.execute('SELECT 1 FROM users WHERE email=? AND active=1',(e,)).fetchone()
     pw_hash={AUTHORIZED_USER_EMAIL:AUTHORIZED_USER_PASSWORD_HASH,PRIMARY_ADMIN_EMAIL:PRIMARY_ADMIN_PASSWORD_HASH}.get(e,'') if e else ''
@@ -110,7 +137,7 @@ def otp(email:str=Form(...),admin_password:str=Form('')):
                 tok=secrets.token_urlsafe(32)
                 with con() as c:c.execute('UPDATE users SET edit_session=?,updated_at=? WHERE email=?',(tok,now(),e))
                 resp.set_cookie('nglg_edit_session',tok,httponly=True,secure=COOKIE_SECURE,samesite='lax',max_age=43200)
-            return resp
+            return after_login(req,resp)
         lock=guard_fail(e)
         msg=f'Λανθασμένος κωδικός. Ο λογαριασμός κλειδώθηκε για {PWD_LOCK_MINUTES} λεπτά.' if lock else 'Λανθασμένος κωδικός πρόσβασης.'
         return page(f'''<div class="card auth"><h2>Είσοδος</h2><p>{msg}</p><a class="btn" href="/login">Επιστροφή</a></div>''')
@@ -129,7 +156,7 @@ def otp(email:str=Form(...),admin_password:str=Form('')):
     return page(f'''<div class="card auth"><h2>Επαλήθευση</h2><p>Αν το email έχει άδεια, στάλθηκε OTP (ελέγξτε και τα Ανεπιθύμητα). Ισχύει 10 λεπτά.</p>{extra}<form method="post" action="/verify"><input type="hidden" name="email" value="{esc(e)}"><input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required><br><br><button class="primary">Είσοδος</button></form></div>''')
 
 @app.post('/verify')
-def verify(email:str=Form(...),code:str=Form(...)):
+def verify(req:Request,email:str=Form(...),code:str=Form(...)):
     e=email.strip().lower();code=re.sub(r'\D','',code)
     fail=None
     with con() as c:
@@ -153,7 +180,7 @@ def verify(email:str=Form(...),code:str=Form(...)):
     resp=RedirectResponse(target,303);resp.set_cookie('nglg_session',ser.dumps(e),httponly=True,secure=COOKIE_SECURE,samesite='lax',max_age=43200)
     resp.delete_cookie('nglg_actor')
     resp.delete_cookie('nglg_edit_session')
-    return resp
+    return after_login(req,resp,target)
 
 @app.get('/identity')
 def identity(req:Request):
@@ -174,7 +201,7 @@ def set_identity(req:Request,actor:str=Form(...)):
     if actor not in ACTOR_LABELS:raise HTTPException(400,'Μη έγκυρη επιλογή')
     resp=RedirectResponse('/',303)
     resp.set_cookie('nglg_actor',actor_ser.dumps(actor),httponly=True,secure=COOKIE_SECURE,samesite='lax',max_age=43200)
-    return resp
+    return after_login(req,resp)
 
 @app.get('/logout')
 def logout(req:Request):

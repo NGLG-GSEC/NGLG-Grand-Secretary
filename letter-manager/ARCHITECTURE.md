@@ -58,6 +58,7 @@
 | Google Drive — σύνδεση OAuth, αποθήκευση κλειδιών, κλήσεις στο Drive API. | `modules/drive/client.py` | — |
 | Google Drive — ανέβασμα PDF εγγράφων και κατάσταση ανεβάσματος. | `modules/drive/upload.py` | — |
 | Google Drive — σελίδα ρύθμισης, σύνδεση/αποσύνδεση, δοκιμή, χειροκίνητο ανέβασμα. | `modules/drive/routes.py` | POST `/drive/upload/{kind}/{doc_id}`, GET `/drive`, GET `/drive/connect`, GET `/drive/callback`, POST `/drive/disconnect`, POST `/drive/test` |
+| Αρχική σελίδα — πίνακας ελέγχου: μία κάρτα ανά ενότητα με ό,τι εκκρεμεί και τις συχνές ενέργειες. | `modules/dashboard/tiles.py` | — |
 <!-- map:end -->
 
 ## Πώς φορτώνεται

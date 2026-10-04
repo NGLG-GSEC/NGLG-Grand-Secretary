@@ -13,7 +13,16 @@ The way in to the work of the Secretariat. This repository holds the main portal
 1. Πατήστε τον σύνδεσμο (ή αποθηκεύστε τον στα Αγαπημένα / στην αρχική οθόνη του κινητού).
 2. Γράψτε το εγκεκριμένο email σας (και τον προσωπικό κωδικό, όπου έχει οριστεί).
 3. Αν ζητηθεί, πληκτρολογήστε τον 6ψήφιο κωδικό (OTP) που έρχεται στο email σας.
-4. Επιλέξτε ποιος υπογράφει και εργαστείτε: Επιστολές, Διατάγματα, Μητρώο Μελών, Συμβολικές Στοές, Επετηρίδα.
+4. Επιλέξτε ποιος υπογράφει. Η αρχική σελίδα δείχνει ανά ενότητα τι εκκρεμεί: Επιστολές, Διατάγματα, Επισκέψεις Στοών &
+   Εκπρόσωποι ΜΔ, Εορτολόγιο & ευχές, Πρότζεκτ ΜΔ, 📇 Κατάλογος Επαρχιών & Στοών, Μητρώο Μελών, Επετηρίδα, Google Drive.
+
+Απευθείας σύνδεσμοι (αν δεν έχετε εισέλθει, μετά την είσοδο ανοίγει η σελίδα που ζητήσατε):
+[Νέα Επιστολή](https://nglg-letter-manager.onrender.com/new) ·
+[Επισκέψεις Στοών](https://nglg-letter-manager.onrender.com/visits) ·
+[Εορτολόγιο](https://nglg-letter-manager.onrender.com/namedays) ·
+[Πρότζεκτ ΜΔ](https://nglg-letter-manager.onrender.com/projects) ·
+[Κατάλογος](https://nglg-letter-manager.onrender.com/directory) ·
+[Μητρώο Μελών](https://nglg-letter-manager.onrender.com/members)
 
 > Αν η σελίδα αργήσει να ανοίξει την πρώτη φορά, περιμένετε λίγο και ανανεώστε· η εφαρμογή «ξυπνά» σε λίγα δευτερόλεπτα.
 
@@ -23,7 +32,7 @@ The way in to the work of the Secretariat. This repository holds the main portal
 
 | Section | Where it lives | Opens |
 | --- | --- | --- |
-| **NGLG Letter Manager** | `letter-manager/` in this repository | secure letter creation, protocol numbering, templates, archive, OTP access and final Gmail hand-off |
+| **Ψηφιακή Μεγάλη Γραμματεία** (NGLG Letter Manager) | `letter-manager/` in this repository — map of the code in [`letter-manager/ARCHITECTURE.md`](letter-manager/ARCHITECTURE.md) | one app for the whole Secretariat: letters & decrees with protocol numbers, lodge visits & Grand Master's representatives, name days & greetings, Grand Master's projects, directory of provinces & lodges, member registry, Epeteirida |
 | **Ψηφιακό Έντυπο Διατάγματος** | `diatagma/` in this repository | decree form with live preview, PNG / A4 PDF export, automatic background removal for emblem and signature |
 | Registration forms | [`dskiad/nglg-registration-forms`](https://github.com/dskiad/nglg-registration-forms) | the register, with the live forms linked from it |
 | Τεκτονικές Ομιλίες | [`dskiad/nglg-tektonikes-omilies`](https://github.com/dskiad/nglg-tektonikes-omilies) | [the library](https://dskiad.github.io/nglg-tektonikes-omilies/) |

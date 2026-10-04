@@ -159,3 +159,17 @@ a{color:inherit;}
   .app-entry{padding:14px; gap:12px;}
   .app-entry-text strong{font-size:17px;}
 }
+
+/* ---------- quick links into the app (home page) ------------------------- */
+
+.app-links{
+  display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:8px;
+  margin:-16px 0 30px;
+}
+.app-links a{
+  display:flex; align-items:center; gap:8px; padding:10px 12px;
+  background:var(--surface); border:1px solid var(--stitch); border-radius:6px;
+  color:var(--bone); text-decoration:none; font-size:15px;
+}
+.app-links a:hover, .app-links a:focus-visible{border-color:var(--gold); color:var(--gold-bright);}
+@media (max-width:520px){ .app-links{grid-template-columns:1fr 1fr;} .app-links a{font-size:14px; padding:9px 10px;} }
