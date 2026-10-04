@@ -137,7 +137,7 @@ def _xlsx_bytes():
 def _send_member_backup(data,reason='διαγραφή'):
     host=os.getenv('SMTP_HOST');usr=os.getenv('SMTP_USERNAME');pwd=os.getenv('SMTP_PASSWORD');port=int(os.getenv('SMTP_PORT','587'))
     if not(host and usr and pwd):raise HTTPException(503,'Η διαγραφή δεν εκτελέστηκε: δεν είναι διαθέσιμη η υποχρεωτική αποστολή Excel ασφαλείας.')
-    m=EmailMessage();m['Subject']=MEMBER_BACKUP_SUBJECT;m['From']=os.getenv('OTP_FROM_EMAIL',usr);m['To']=MEMBER_BACKUP_EMAIL
+    m=EmailMessage();m['Subject']=MEMBER_BACKUP_SUBJECT;m['From']=sender_for('general');m['To']=MEMBER_BACKUP_EMAIL
     m.set_content('Αυτόματο πλήρες αντίγραφο του Μητρώου Μελών πριν από '+reason+'.\nΗ ενέργεια δημιουργήθηκε από την Ψηφιακή Μεγάλη Γραμματεία.')
     fn='EMSTE_MEMBER_REGISTRY_PRE_DELETE_'+datetime.now().strftime('%Y%m%d_%H%M%S')+'.xlsx'
     m.add_attachment(data,maintype='application',subtype='vnd.openxmlformats-officedocument.spreadsheetml.sheet',filename=fn)

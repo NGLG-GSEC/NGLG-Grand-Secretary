@@ -24,8 +24,6 @@ services:
         value: "587"
       - key: SMTP_USERNAME
         value: grand.secretary@nglgreece.gr
-      - key: OTP_FROM_EMAIL
-        value: grand.secretary@nglgreece.gr
       - key: SMTP_PASSWORD
         sync: false
       - key: GOOGLE_OAUTH_CLIENT_ID

@@ -13,6 +13,7 @@
 | Εμφάνιση: CSS, μενού (☰ σε κινητά/tablet), πίνακες για κινητά και η συνάρτηση page() που «ντύνει» κάθε σελίδα. | `core/layout.py` | — |
 | Βάση δεδομένων: SQLite τοπικά / Postgres στο Render, σύνδεση con(), βασικοί πίνακες και ρυθμίσεις. | `core/database.py` | — |
 | Είσοδος με κωδικό μίας χρήσης (OTP), χρήστες/ρόλοι, Υπογράφων, προστασία από επαναλαμβανόμενες αποτυχίες. | `core/auth.py` | GET `/login`, POST `/otp`, POST `/verify`, GET `/identity`, POST `/identity`, GET `/logout` |
+| Αποστολή email και λογαριασμοί αποστολής ανά κατηγορία (Ρυθμίσεις → «Λογαριασμοί αποστολής»). | `core/mail.py` | — |
 | Εικόνες της εφαρμογής (θυρεός, σφραγίδα, υπογραφές) από τον φάκελο static/. | `core/assets.py` | GET `/asset/{name}` |
 | Επιστολές — ποιος μπορεί να επεξεργαστεί ποια επιστολή και ποια πρότυπα βλέπει. | `modules/letters/permissions.py` | — |
 | Επιστολές — αρχική σελίδα, νέα επιστολή, προβολή, «Έτοιμη», επεξεργασία, διαγραφή, αρχείο. | `modules/letters/routes.py` | GET `/`, GET `/new`, POST `/new`, GET `/letter/{lid}`, POST `/ready/{lid}`, GET `/edit/{lid}`, POST `/edit/{lid}`, POST `/delete/{lid}`, GET `/archive` |
@@ -38,7 +39,6 @@
 | Συμβολικές Στοές — σελίδες, εισαγωγή/εξαγωγή Excel. | `modules/lodges/routes.py` | GET `/lodges`, GET `/lodges/new`, POST `/lodges/new`, GET `/lodges/edit/{lid}`, POST `/lodges/edit/{lid}`, GET `/lodges/export.xlsx`, POST `/lodges/import` |
 | Συμβολικές Στοές — εκκίνηση (πίνακας, αρχικά δεδομένα). | `modules/lodges/startup.py` | — |
 | Παραλήπτες — λίστες για Επιστολές: Επαρχιακές Μεγάλες Στοές, Συμβολικές Στοές, μέλη. | `modules/recipients/widgets.py` | — |
-| Αποστολή email από τον λογαριασμό της Γραμματείας (ίδιες ρυθμίσεις SMTP με τον κωδικό OTP). | `core/mail.py` | — |
 | Επισκέψεις Στοών & Εκπρόσωποι — πίνακες, βαθμοί εκπροσώπων, βοηθητικά κειμένων και ημερολογίου. | `modules/visits/data.py` | — |
 | Επισκέψεις Στοών — κείμενα email: ενημέρωση εκπροσώπου (με πρόσκληση ημερολογίου) και ενημέρωση Επαρχίας. | `modules/visits/mails.py` | — |
 | Επισκέψεις Στοών — ημερολόγιο, νέα/επεξεργασία, επικόλληση λίστας, ενημέρωση εκπροσώπου και Επαρχίας. | `modules/visits/routes.py` | GET `/visits`, GET `/visits/new`, POST `/visits/new`, GET `/visits/edit/{vid}`, POST `/visits/edit/{vid}`, POST `/visits/delete/{vid}`, GET `/visits/import`, POST `/visits/import`, GET `/visits/brief`, POST `/visits/brief`, GET `/visits/publish`, GET `/visits/publish/compose`, POST `/visits/publish/send`, POST `/visits/publish/bulk` |

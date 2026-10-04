@@ -304,12 +304,12 @@ def decree2_view(req:Request,did:int):
     try:apps=json.loads(d['appointments'] or '[]')
     except:apps=[]
     to=','.join(a.get('email','') for a in apps if a.get('email'));cc=','.join(DEGREE_CC)
-    gmail='https://mail.google.com/mail/u/?authuser='+quote(s['sender_email'])+'&view=cm&fs=1&to='+quote(to)+'&cc='+quote(cc)+'&su='+quote(d['subject'])+'&body='+quote(d['body'])
+    gmail=gmail_compose_url(to,d['subject'],d['body'],cc)
     wa='https://wa.me/?text='+quote(f"Παρακαλώ να ελέγξετε το email σας και στα spam.\n\nΔΙΑΤΑΓΜΑ υπ’ αριθμ. {d['decree_no']}/{d['decree_year']}\n{d['matter']}")
     editable=can_edit_letter(req,u,d)
     ready='' if (d['status']=='ready' or not editable) else f'<form method="post" action="/decrees/{did}/ready"><button>Σήμανση ως έτοιμο</button></form>'
     edit_link=f'<a class="btn" href="/decrees/{did}/edit">Επεξεργασία Διατάγματος</a>' if editable else ''
-    tools=f"""<section class="card send-panel noprint"><h3>Διάταγμα — Αποστολή & Αποθήκευση</h3><div class="toolbar"><a class="btn primary" href="/decrees/{did}/pdf">⬇ Λήψη PDF Διατάγματος</a><a class="btn" target="_blank" href="{gmail}">✉ Αποστολή με Email</a><a class="btn" target="_blank" href="{wa}">WhatsApp μήνυμα</a>{ready}</div><p class="send-help">Αυτό είναι ξεχωριστό PDF Διατάγματος και δεν αποτελεί PDF επιστολής.</p>{drive_status_html('decree',did,u)}</section><div class="toolbar noprint">{edit_link}<a class="btn" href="/decrees/new?copy_from={did}">Νέο Διάταγμα πάνω σε αυτό</a><a class="btn" href="/decrees/archive">Αρχείο Διαταγμάτων</a><button onclick="print()">Εκτύπωση</button></div>"""
+    tools=f"""<section class="card send-panel noprint"><h3>Διάταγμα — Αποστολή & Αποθήκευση</h3>{sender_banner('official')}<div class="toolbar"><a class="btn primary" href="/decrees/{did}/pdf">⬇ Λήψη PDF Διατάγματος</a><a class="btn" target="_blank" href="{gmail}">✉ Αποστολή με Email</a><a class="btn" target="_blank" href="{wa}">WhatsApp μήνυμα</a>{ready}</div><p class="send-help">Αυτό είναι ξεχωριστό PDF Διατάγματος και δεν αποτελεί PDF επιστολής.</p>{drive_status_html('decree',did,u)}</section><div class="toolbar noprint">{edit_link}<a class="btn" href="/decrees/new?copy_from={did}">Νέο Διάταγμα πάνω σε αυτό</a><a class="btn" href="/decrees/archive">Αρχείο Διαταγμάτων</a><button onclick="print()">Εκτύπωση</button></div>"""
     paper=f"""<article class="paper"><div class="head"><img src="/asset/header_emblem.png"><h1>{esc(s['organization_name'])}</h1><div class="gold">Έτος Ιδρύσεως {esc(s['founded_year'])}</div><div>{esc(s['grand_master_title'])}</div><div>{esc(s['grand_master_name'])}</div><div class="rule"></div></div>
     <div class="dec-title">ΔΙΑΤΑΓΜΑ</div><div class="dec-no official-number">{'υπ’ αριθ. ' if _d2_meta(d).get('action')=='service_award' else 'υπ’ αριθμ. '}{d['decree_no']}/{d['decree_year']}</div>
     <div class="dec-date official-number">{datetime.fromisoformat(d['decree_date']).strftime('%d/%m/%Y')}</div>

@@ -83,7 +83,7 @@ def  init():
             ucols=[r['name'] for r in c.execute("PRAGMA table_info(users)")]
             if 'edit_session' not in ucols:c.execute("ALTER TABLE users ADD COLUMN edit_session TEXT")
         c.execute("UPDATE letters SET signer='dimitrios' WHERE signer IS NULL OR signer=''")
-        d={'organization_name':'Εθνική Μεγάλη Στοά της Ελλάδος','founded_year':'1986','grand_master_title':'Μέγας Διδάσκαλος','grand_master_name':'Σεβτ. Αδ. Ιωάννης Μπενετάτος','grand_secretary_name':'Πανσεβ. Αδ. Δημήτριος Σκιαδόπουλος','grand_secretary_title':'Μέγας Γραμματέας','sender_email':'grand.secretary@nglgreece.gr','protocol_format':'{seq:03d}{month:02d}{yy:02d}','closing':'Με αδελφικούς χαιρετισμούς,'}
+        d={'organization_name':'Εθνική Μεγάλη Στοά της Ελλάδος','founded_year':'1986','grand_master_title':'Μέγας Διδάσκαλος','grand_master_name':'Σεβτ. Αδ. Ιωάννης Μπενετάτος','grand_secretary_name':'Πανσεβ. Αδ. Δημήτριος Σκιαδόπουλος','grand_secretary_title':'Μέγας Γραμματέας','protocol_format':'{seq:03d}{month:02d}{yy:02d}','closing':'Με αδελφικούς χαιρετισμούς,'}
         for k,v in d.items(): c.execute('INSERT OR IGNORE INTO settings VALUES(?,?)',(k,v))
         c.execute("UPDATE settings SET value='Μέγας Γραμματέας' WHERE key='grand_secretary_title' AND value IN ('Μεγάλος Γραμματέας','Μέγας Γραμματέας','Ο Μεγάλος Γραμματέας','Ο Μέγας Γραμματέας')")
         c.execute("UPDATE settings SET value='{seq:03d}{month:02d}{yy:02d}' WHERE key='protocol_format'")

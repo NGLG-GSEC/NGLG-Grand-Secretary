@@ -19,18 +19,31 @@ def saveuser(req:Request,email:str=Form(...),role:str=Form('editor'),active:str=
     return RedirectResponse('/users',303)
 
 @app.get('/settings')
-def setpage(req:Request):
+def setpage(req:Request,msg:str=''):
     u=need(req)
     if not isadmin(u):raise HTTPException(403)
-    s=settings();fields=''.join(f'<div><label>{esc(k)}</label><input name="{esc(k)}" value="{esc(v)}"></div>' for k,v in s.items())
-    return page(f'<h1>Ρυθμίσεις</h1><form class="grid card" method="post">{fields}<button class="primary">Αποθήκευση</button></form>',u)
+    s=settings();mail_keys={v['key'] for v in MAIL_SENDERS.values()}
+    senders=''.join(f"""<div class="full"><label for="{v['key']}">{esc(v['label'])}</label><input type="email" id="{v['key']}" name="{v['key']}" value="{esc(sender_for(k))}" required>
+<small class="muted">{esc(v['uses'])}</small></div>""" for k,v in MAIL_SENDERS.items())
+    smtp_user=(os.getenv('SMTP_USERNAME') or '').strip()
+    smtp_note=(f'<p class="muted">Ο διακομιστής συνδέεται για αποστολή ως <b>{esc(smtp_user)}</b>.'
+               +(f' Για να εμφανίζονται τα «Γενικά εξερχόμενα» ως <b>{esc(sender_for("general"))}</b>, ο λογαριασμός αυτός πρέπει να έχει οριστεί ως «Αποστολή ως» στο {esc(smtp_user)} (Gmail → Ρυθμίσεις → Λογαριασμοί), διαφορετικά το Gmail εμφανίζει ως αποστολέα το {esc(smtp_user)}.' if smtp_login_differs() else '')+'</p>'
+               if smtp_user else '<p class="muted">Η αποστολή από τον διακομιστή (SMTP) δεν έχει ρυθμιστεί.</p>')
+    fields=''.join(f'<div><label>{esc(k)}</label><input name="{esc(k)}" value="{esc(v)}"></div>' for k,v in s.items() if k not in mail_keys)
+    notice=f"<div class='card'><b>{esc(msg)}</b></div>" if msg else ''
+    return page(f'''<h1>Ρυθμίσεις</h1>{notice}<form method="post"><section class="card"><h2 style="margin-top:0">✉ Λογαριασμοί αποστολής</h2>
+<p>Από ποιο email φεύγει κάθε κατηγορία. Ο αποστολέας εμφανίζεται και σε κάθε οθόνη πριν την αποστολή.</p><div class="grid">{senders}</div>{smtp_note}</section>
+<section class="card"><h2 style="margin-top:0">Λοιπές ρυθμίσεις</h2><div class="grid">{fields}</div></section><button class="primary">Αποθήκευση</button></form>''',u)
 
 @app.post('/settings')
 async def setsave(req:Request):
     u=need(req)
     if not isadmin(u):raise HTTPException(403)
     form=await req.form();allowed=set(settings())
+    for v in MAIL_SENDERS.values():
+        x=str(form.get(v['key'],'')).strip()
+        if v['key'] in form and not EMAIL_RE.match(x):raise HTTPException(400,f"Μη έγκυρο email για «{v['label']}»: {x}")
     with con() as c:
         for k,v in form.items():
-            if k in allowed:c.execute('REPLACE INTO settings VALUES(?,?)',(k,str(v)))
-    return RedirectResponse('/settings',303)
+            if k in allowed:c.execute('REPLACE INTO settings VALUES(?,?)',(k,str(v).strip() if k.startswith('mail_from_') else str(v)))
+    return RedirectResponse('/settings?msg='+quote('Οι ρυθμίσεις αποθηκεύτηκαν.'),303)

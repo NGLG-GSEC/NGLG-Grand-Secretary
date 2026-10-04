@@ -182,7 +182,7 @@ def _compose(u,title,action,to,subject,body,hidden,hint='',attach='',bcc=''):
     hid=''.join(f'<input type="hidden" name="{esc(k)}" value="{esc(str(v))}">' for k,v in hidden.items())
     mailto='mailto:'+quote(to)+'?'+('bcc='+quote(bcc)+'&' if bcc else '')+'subject='+quote(subject)+'&body='+quote(body)
     ready='' if mail_ready() else '<div class="card" style="border-color:#e3b17a"><b>Η αποστολή από τον διακομιστή δεν είναι ρυθμισμένη (SMTP).</b> Χρησιμοποιήστε «Άνοιγμα στο πρόγραμμα email» και μετά «Σημείωση ως σταλμένο».</div>'
-    return page(f"""<h1>{esc(title)}</h1>{ready}{f'<div class="card">{esc(hint)}</div>' if hint else ''}
+    return page(f"""<h1>{esc(title)}</h1>{sender_banner('general')}{ready}{f'<div class="card">{esc(hint)}</div>' if hint else ''}
 <form method="post" action="{action}" class="card">{hid}
 <label>Προς</label><input name="to" value="{esc(to)}" required>
 <label style="margin-top:10px">Κρυφή κοινοποίηση (Bcc)</label><input name="bcc" value="{esc(bcc)}" placeholder="προαιρετικό">
@@ -242,7 +242,7 @@ def visits_publish(req:Request,prov:str='',frm:str='',to:str='',missing:str='',m
 <p>{len(rows)} {'Εγκατάσταση' if len(rows)==1 else 'Εγκαταστάσεις'}{f' · {unas} χωρίς εκπρόσωπο' if unas else ''} · {len(miss)} Στοές χωρίς ημερομηνία</p>
 <div style="overflow:auto"><table><tr><th>Ημερομηνία</th><th>Στοά</th><th>Τόπος</th><th>Εκπρόσωπος ΜΔ</th></tr>{trs or '<tr><td colspan=4>Δεν υπάρχουν Εγκαταστάσεις σε αυτό το διάστημα.</td></tr>'}</table></div>
 <div class="toolbar" style="margin-top:10px"><a class="btn primary" href="/visits/publish/compose?prov={quote(prov)}&frm={quote(frm)}&to={quote(to)}&missing={'1' if missing else ''}">Email προς Επαρχιακό Γραμματέα</a></div></div>
-<form class="card" method="post" action="/visits/publish/bulk"><h3 style="margin-top:0">Ενημέρωση εκπροσώπων</h3>
+<form class="card" method="post" action="/visits/publish/bulk"><h3 style="margin-top:0">Ενημέρωση εκπροσώπων</h3>{sender_banner('general')}
 <input type="hidden" name="prov" value="{esc(prov)}"><input type="hidden" name="frm" value="{esc(frm)}"><input type="hidden" name="to" value="{esc(to)}">
 {bulk}</form>""",u,'Ενημέρωση Επαρχίας')
 
