@@ -538,8 +538,35 @@ async def members_import(req:Request,file:UploadFile|None=File(None),pasted:str=
     msg=('Γενική αντικατάσταση' if mode=='replace' else 'Προσθήκη / ενημέρωση')+f' ολοκληρώθηκε: {len(items)} εγγραφές ({added} νέες, {updated} ενημερωμένες), {lodges} συμμετοχές σε Στοές.'
     return RedirectResponse('/members?msg='+quote(msg),303)
 
+# Παραλήπτες Επιστολών: Επαρχιακές / Περιφερειακή Μεγάλη Στοά και ΕΜΣτΕ.
+# (τίτλος, πλήρης τίτλος, email, «Προς» όπως τυπώνεται στην επιστολή)
+GRAND_LODGE_RECIPIENTS=[
+ ('ΕπΜΣτ. Αθηνών','Επαρχιακή Μεγάλη Στοά Αθηνών','athens.secretary@nglgreece.gr','ΕπΜΓρ. Επαρχιακής Μεγάλης Στοάς Αθηνών'),
+ ('ΕπΜΣτ. Πειραιώς & Νήσων Αρχ. Αιγαίου','Επαρχιακή Μεγάλη Στοά Πειραιώς και Νήσων Αρχιπελάγους Αιγαίου','piraeus.secretary@nglgreece.gr','ΕπΜΓρ. Επαρχιακής Μεγάλης Στοάς Πειραιώς και Νήσων Αρχιπελάγους Αιγαίου'),
+ ('ΕπΜΣτ. Ιονίων Νήσων','Επαρχιακή Μεγάλη Στοά Ιονίων Νήσων','ionian.secretary@nglgreece.gr','ΕπΜΓρ. Επαρχιακής Μεγάλης Στοάς Ιονίων Νήσων'),
+ ('ΕπΜΣτ. Κεντρικής & Βορείου Ελλάδος','Επαρχιακή Μεγάλη Στοά Κεντρικής και Βορείου Ελλάδος','nglgr.prov.cent.north@gmail.com','ΕπΜΓρ. Επαρχιακής Μεγάλης Στοάς Κεντρικής και Βορείου Ελλάδος'),
+ ('ΕπΜΣτ. Πελοποννήσου & Δυτικής Ελλάδας','Επαρχιακή Μεγάλη Στοά Πελοποννήσου και Δυτικής Ελλάδας','secretary.pr.pwg.nglgreece@gmail.com','ΕπΜΓρ. Επαρχιακής Μεγάλης Στοάς Πελοποννήσου και Δυτικής Ελλάδας'),
+ ('ΠΜΣτ. Κύπρου','Περιφερειακή Μεγάλη Στοά Κύπρου','dglcyprus@nglgreece.gr','ΠερΜΓρ. Περιφερειακής Μεγάλης Στοάς Κύπρου'),
+ ('ΕΜΣτΕ Α.Ε. & Α.Τ.','Εθνική Μεγάλη Στοά της Ελλάδος των Αρχαίων, Ελευθέρων και Αποδεκτών Τεκτόνων','grand.secretary@nglgreece.gr','ΜΓρ. Εθνικής Μεγάλης Στοάς της Ελλάδος των Αρχαίων, Ελευθέρων και Αποδεκτών Τεκτόνων'),
+]
+def grand_lodge_recipient_widget(name_id='recipient_name',email_id='recipient_email',member_id_id='recipient_member_id'):
+    regional=[r for r in GRAND_LODGE_RECIPIENTS if not r[0].startswith('ΕΜΣτΕ')]
+    opts=''.join(f'<option value="{i}" data-name="{esc(r[3])}" data-email="{esc(r[2])}">{esc(r[0])} — {esc(r[1])} ({esc(r[2])})</option>' for i,r in enumerate(GRAND_LODGE_RECIPIENTS))
+    allname='ΕπΜΓρ. των Επαρχιακών Μεγάλων Στοών και ΠερΜΓρ. της Περιφερειακής Μεγάλης Στοάς Κύπρου'
+    opts+=f'<option value="all" data-name="{esc(allname)}" data-email="{esc(", ".join(r[2] for r in regional))}">Όλες οι Επαρχιακές Μεγάλες Στοές και η ΠΜΣτ. Κύπρου ({len(regional)})</option>'
+    return f"""<div class="full"><label for="gl_recipient">Παραλήπτης: Επαρχιακή / Περιφερειακή Μεγάλη Στοά</label><select id="gl_recipient"><option value="">— Επιλογή Μεγάλης Στοάς —</option>{opts}</select><small>Η επιλογή συμπληρώνει αυτόματα τον Παραλήπτη («Προς») και το Email· μπορείτε να τα διορθώσετε πριν την αποθήκευση.</small></div>
+<script>
+(function(){{
+ const s=document.getElementById('gl_recipient');if(!s)return;
+ s.addEventListener('change',()=>{{const o=s.options[s.selectedIndex];if(!o||!o.value)return;
+  const n=document.getElementById('{name_id}'),e=document.getElementById('{email_id}'),mid=document.getElementById('{member_id_id}');
+  if(n)n.value=o.dataset.name||'';if(e){{e.multiple=true;e.value=o.dataset.email||'';}}if(mid)mid.value='';
+  if(n)n.dispatchEvent(new Event('input',{{bubbles:true}}));}});
+}})();
+</script>"""
+
 def member_lookup_widget(name_id='recipient_name',email_id='recipient_email',member_id_id='recipient_member_id'):
-    return f"""<div class="full"><label>Αναζήτηση Αδελφού στο Μητρώο Μελών</label><input type="text" id="doc_member_lookup" placeholder="Επώνυμο, όνομα, email ή κινητό"><div id="doc_member_results"></div><small>Η επιλογή συμπληρώνει αυτόματα τον παραλήπτη και το email από το κεντρικό Μητρώο Μελών.</small></div>
+    return grand_lodge_recipient_widget(name_id,email_id,member_id_id)+f"""<div class="full"><label>Αναζήτηση Αδελφού στο Μητρώο Μελών</label><input type="text" id="doc_member_lookup" placeholder="Επώνυμο, όνομα, email ή κινητό"><div id="doc_member_results"></div><small>Η επιλογή συμπληρώνει αυτόματα τον παραλήπτη και το email από το κεντρικό Μητρώο Μελών.</small></div>
 <script>
 (function(){{
  const q=document.getElementById('doc_member_lookup'),box=document.getElementById('doc_member_results');
