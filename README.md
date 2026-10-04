@@ -4,6 +4,21 @@ The way in to the work of the Secretariat. This repository holds the main portal
 
 **Portal:** https://dskiad.github.io/NGLG-GRAND-SECRETARY/
 
+## 🔑 Είσοδος ως Γραμματέας
+
+### 👉 [Άνοιγμα της Ψηφιακής Μεγάλης Γραμματείας](https://nglg-letter-manager.onrender.com/)
+
+`https://nglg-letter-manager.onrender.com/`
+
+1. Πατήστε τον σύνδεσμο (ή αποθηκεύστε τον στα Αγαπημένα / στην αρχική οθόνη του κινητού).
+2. Γράψτε το εγκεκριμένο email σας (και τον προσωπικό κωδικό, όπου έχει οριστεί).
+3. Αν ζητηθεί, πληκτρολογήστε τον 6ψήφιο κωδικό (OTP) που έρχεται στο email σας.
+4. Επιλέξτε ποιος υπογράφει και εργαστείτε: Επιστολές, Διατάγματα, Μητρώο Μελών, Συμβολικές Στοές, Επετηρίδα.
+
+> Αν η σελίδα αργήσει να ανοίξει την πρώτη φορά, περιμένετε λίγο και ανανεώστε· η εφαρμογή «ξυπνά» σε λίγα δευτερόλεπτα.
+
+**Εκκρεμεί:** σύνδεση με το Google Drive για αυτόματο αντίγραφο των PDF — βλ. [οδηγίες ρύθμισης Google Drive](letter-manager/GOOGLE_DRIVE_SETUP.md).
+
 ## Main sections
 
 | Section | Where it lives | Opens |
