@@ -38,6 +38,14 @@
 | Συμβολικές Στοές — σελίδες, εισαγωγή/εξαγωγή Excel. | `modules/lodges/routes.py` | GET `/lodges`, GET `/lodges/new`, POST `/lodges/new`, GET `/lodges/edit/{lid}`, POST `/lodges/edit/{lid}`, GET `/lodges/export.xlsx`, POST `/lodges/import` |
 | Συμβολικές Στοές — εκκίνηση (πίνακας, αρχικά δεδομένα). | `modules/lodges/startup.py` | — |
 | Παραλήπτες — λίστες για Επιστολές: Επαρχιακές Μεγάλες Στοές, Συμβολικές Στοές, μέλη. | `modules/recipients/widgets.py` | — |
+| Αποστολή email από τον λογαριασμό της Γραμματείας (ίδιες ρυθμίσεις SMTP με τον κωδικό OTP). | `core/mail.py` | — |
+| Επισκέψεις Στοών & Εκπρόσωποι — πίνακες, βαθμοί εκπροσώπων, βοηθητικά κειμένων και ημερολογίου. | `modules/visits/data.py` | — |
+| Επισκέψεις Στοών — κείμενα email: ενημέρωση εκπροσώπου (με πρόσκληση ημερολογίου) και ενημέρωση Επαρχίας. | `modules/visits/mails.py` | — |
+| Επισκέψεις Στοών — ημερολόγιο, νέα/επεξεργασία, επικόλληση λίστας, ενημέρωση εκπροσώπου και Επαρχίας. | `modules/visits/routes.py` | GET `/visits`, GET `/visits/new`, POST `/visits/new`, GET `/visits/edit/{vid}`, POST `/visits/edit/{vid}`, POST `/visits/delete/{vid}`, GET `/visits/import`, POST `/visits/import`, GET `/visits/brief`, POST `/visits/brief`, GET `/visits/publish`, GET `/visits/publish/compose`, POST `/visits/publish/send`, POST `/visits/publish/bulk` |
+| Εκπρόσωποι ΜΔ — λίστα, νέος/επεξεργασία, επικόλληση πίνακα, βαθμοί ανά αξίωμα, συμπλήρωση από την Επετηρίδα. | `modules/visits/reps.py` | GET `/reps`, GET `/reps/new`, POST `/reps/new`, GET `/reps/edit/{rid}`, POST `/reps/edit/{rid}`, POST `/reps/delete/{rid}`, GET `/reps/import`, POST `/reps/import`, GET `/reps/ranks`, POST `/reps/ranks`, POST `/reps/from-epeteirida` |
+| Επισκέψεις Στοών — αναφορά (προεπισκόπηση και PDF A4) ανά διάστημα και Επαρχία. | `modules/visits/report.py` | GET `/visits/report`, GET `/visits/report.pdf` |
+| Επισκέψεις Στοών — εισαγωγή των δεδομένων της σελίδας «Επιστολές Γραμματείας» (claude.ai) από αρχείο JSON. | `modules/visits/importer.py` | GET `/visits/import-data`, POST `/visits/import-data` |
+| Επισκέψεις Στοών — εκκίνηση (πίνακες, ρυθμίσεις υπογραφής). | `modules/visits/startup.py` | — |
 | Αριθμός Πρωτοκόλλου — ενιαία συνεχής αρίθμηση Επιστολών & Διαταγμάτων (20.542_26_Κατηγορία_Θέμα). | `modules/protocol/numbering.py` | — |
 | Ειδοποιήσεις μέσα στην εφαρμογή. | `core/notifications.py` | POST `/notifications/seen`, GET `/api/notifications` |
 | Google Drive — σύνδεση OAuth, αποθήκευση κλειδιών, κλήσεις στο Drive API. | `modules/drive/client.py` | — |
@@ -76,4 +84,5 @@
 | `modules/members/*` | `member_registry`, `member_lodges`, `member_degrees_offices` |
 | `modules/provinces/*` | `grand_lodges` (Επαρχιακές / Περιφερειακή Μεγάλη Στοά, ΕΜΣτΕ) |
 | `modules/lodges/*` | `lodges` |
+| `modules/visits/*` | `reps` (Εκπρόσωποι ΜΔ), `visits` (Επισκέψεις Στοών), ρυθμίσεις `visits_signer_name`, `visits_signer_title`, `visits_rankmap` |
 | `modules/drive/*` | `app_secrets`, `drive_uploads`, ρύθμιση `drive_folder_id` |

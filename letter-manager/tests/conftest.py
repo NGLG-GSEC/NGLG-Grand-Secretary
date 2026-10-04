@@ -20,6 +20,7 @@ os.environ.update({
     'APP_SECRET': 'test-secret',
     'ADMIN_EMAILS': ADMIN,
     'COOKIE_SECURE': '0',
+    'MAIL_OUTBOX_DIR': os.path.join(_tmp, 'outbox'),  # τα email γράφονται εδώ αντί να σταλούν
 })
 # TEST_DATABASE_URL=postgresql://... → οι ίδιοι έλεγχοι σε Postgres (όπως στο Render), σε κενή βάση.
 if os.environ.get('TEST_DATABASE_URL'):
@@ -71,3 +72,9 @@ def admin():
 def location_id(r):
     assert r.status_code in (302, 303), (r.status_code, r.text[:300])
     return int(r.headers['location'].rstrip('/').rsplit('/', 1)[1])
+
+
+def outbox():
+    import email
+    d = Path(os.environ['MAIL_OUTBOX_DIR'])
+    return [email.message_from_bytes(p.read_bytes()) for p in sorted(d.glob('*.eml'))] if d.exists() else []
