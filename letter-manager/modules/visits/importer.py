@@ -3,6 +3,8 @@
 #
 # Μορφή: {"format":"nglg-lodge-visits/1","provinces":[…],"lodges":[…],"reps":[…],"visits":[…]} — κάθε ενότητα προαιρετική.
 # Επαρχίες: short, full, email, gmName, gmEmail, secretaryName, secretaryEmail, notes.
+# Επίσης: lodgeMasters [{number,name,surname}], repMembers {ext_id: αρ. μητρώου}, greetings [{registryNo,date,feast,name,email,subject,bcc,sentOn,at}],
+# settings {greet_bcc_self}.
 # Ασφαλής επανάληψη: ταύτιση με τα αναγνωριστικά της σελίδας (ext_id), τον αριθμό Στοάς και τη συντομογραφία
 # Επαρχίας· συμπληρώνονται μόνο κενά πεδία — ό,τι έχει ήδη καταχωριστεί στην εφαρμογή δεν αλλάζει.
 
@@ -72,6 +74,30 @@ def import_visits_payload(data):
                 cur=c.execute('INSERT INTO reps(name,surname,rep_rank,office,year,email,mobile,member_id,notes,ext_id,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',
                               (name,sur,vals['rep_rank'],vals['office'],vals['year'],email,mobile,_member_id_for_contact(c,email,mobile),'',ext,ts,ts))
                 rep_ids[ext]=cur.lastrowid;n['rep_new']+=1
+        # Φάση 4: Σεβάσμιοι Στοών, σύνδεση εκπροσώπων με μέλη (αρ. μητρώου), ιστορικό ευχών, ρυθμίσεις ευχών
+        by_reg={r['registry_no']:r['id'] for r in c.execute('SELECT id,registry_no FROM member_registry WHERE registry_no IS NOT NULL')}
+        for x in data.get('lodgeMasters') or []:
+            no=_lodge_no_key(s(x.get('number')));nm=' '.join(t for t in [s(x.get('name')),s(x.get('surname'))] if t)
+            ex=c.execute('SELECT id,master FROM lodges WHERE number=?',(no,)).fetchone() if no else None
+            if ex and nm and not (ex['master'] or '').strip():c.execute('UPDATE lodges SET master=?,updated_at=? WHERE id=?',(nm,ts,ex['id']));n['lodge_upd']+=1
+        for ext,reg in (data.get('repMembers') or {}).items():
+            mid=by_reg.get(int(reg)) if str(reg).isdigit() else None
+            if mid:
+                cur=c.execute('UPDATE reps SET member_id=? WHERE ext_id=? AND member_id IS NULL',(mid,s(ext)))
+                n['rep_upd']+=max(0,getattr(cur,'rowcount',0) or 0)
+        n['greet_new']=n['greet_skip']=0
+        for g in data.get('greetings') or []:
+            mid=by_reg.get(int(g.get('registryNo'))) if str(g.get('registryNo','')).isdigit() else None;fd=s(g.get('date'))
+            if not mid or not _vdate(fd):n['greet_skip']+=1;continue
+            if c.execute('SELECT id FROM greetings_log WHERE member_id=? AND feast_date=?',(mid,fd)).fetchone():n['greet_skip']+=1;continue
+            c.execute('INSERT INTO greetings_log(member_id,registry_no,feast_date,feast,name,email,subject,bcc,sent_on,sent_at,source) VALUES(?,?,?,?,?,?,?,?,?,?,?)',
+                      (mid,int(g['registryNo']),fd,s(g.get('feast')),s(g.get('name')),s(g.get('email')),s(g.get('subject')),', '.join(g.get('bcc') or []),
+                       s(g.get('sentOn')) or fd,s(g.get('at')),'Επιστολές Γραμματείας'))
+            n['greet_new']+=1
+        for k,v in (data.get('settings') or {}).items():
+            if k=='greet_bcc_self' and all(EMAIL_RE.match(e) for e in split_emails(v)):
+                cur=c.execute('SELECT value FROM settings WHERE key=?',(k,)).fetchone()
+                if not cur or not (cur['value'] or '').strip():c.execute('REPLACE INTO settings VALUES(?,?)',(k,s(v)))
         for v in data.get('visits') or []:
             ext=s(v.get('ext_id'));d=s(v.get('date'))
             if not _vdate(d) or not s(v.get('lodge')):continue
@@ -103,5 +129,6 @@ async def visits_import_data(req:Request,file:UploadFile=File(...)):
     except Exception:raise HTTPException(400,'Το αρχείο δεν είναι έγκυρο JSON.')
     n=import_visits_payload(data)
     msg=(f"Εισαγωγή ολοκληρώθηκε — Επισκέψεις: {n['visit_new']} νέες ({n['visit_skip']} υπήρχαν ήδη) · Εκπρόσωποι: {n['rep_new']} νέοι, {n['rep_upd']} συμπληρώθηκαν · "
-         f"Στοές: {n['lodge_new']} νέες, {n['lodge_upd']} συμπληρώθηκαν · Επαρχίες: {n['prov_new']} νέες, {n['prov_upd']} συμπληρώθηκαν.")
+         f"Στοές: {n['lodge_new']} νέες, {n['lodge_upd']} συμπληρώθηκαν · Επαρχίες: {n['prov_new']} νέες, {n['prov_upd']} συμπληρώθηκαν"
+         +(f" · Ευχές (ιστορικό): {n['greet_new']} νέες" if n.get('greet_new') else '')+'.')
     return RedirectResponse('/visits?past=1&msg='+quote(msg),303)

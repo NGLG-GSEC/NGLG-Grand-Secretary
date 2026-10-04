@@ -1,6 +1,10 @@
 # Βάση δεδομένων: SQLite τοπικά / Postgres στο Render, σύνδεση con(), βασικοί πίνακες και ρυθμίσεις.
 # Φορτώνεται από το app.py (βλ. MODULES) στον κοινό χώρο ονομάτων της εφαρμογής.
 
+# Πίνακες με αυτόματο id: στο Postgres το INSERT παίρνει «RETURNING id» ώστε να λειτουργεί το lastrowid.
+_PG_RETURNING_ID=tuple('INSERT INTO '+t.upper()+'(' for t in ('letters','member_registry','decree_documents','reps','visits','lodges','grand_lodges',
+                                                          'namedays','greetings_log','projects','project_units','project_files','project_contacts','project_log'))
+
 class _PGCursor:
     def __init__(self, cur, lastrowid=None):
         self.cur=cur
@@ -47,7 +51,7 @@ class _PGConn:
     def execute(self,sql,params=()):
         q=self._adapt(sql)
         cur=self.raw.cursor()
-        if (q.lstrip().upper().startswith('INSERT INTO LETTERS(') or q.lstrip().upper().startswith('INSERT INTO MEMBER_REGISTRY(') or q.lstrip().upper().startswith('INSERT INTO DECREE_DOCUMENTS(')) and 'RETURNING' not in q.upper():
+        if q.lstrip().upper().startswith(_PG_RETURNING_ID) and 'RETURNING' not in q.upper():
             cur.execute(q+' RETURNING id',params)
             row=cur.fetchone()
             return _PGCursor(cur,row['id'] if row else None)

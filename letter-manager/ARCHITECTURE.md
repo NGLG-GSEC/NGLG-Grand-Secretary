@@ -47,6 +47,12 @@
 | Επισκέψεις Στοών — αναφορά (προεπισκόπηση και PDF A4) ανά διάστημα και Επαρχία. | `modules/visits/report.py` | GET `/visits/report`, GET `/visits/report.pdf` |
 | Επισκέψεις Στοών — εισαγωγή των δεδομένων της σελίδας «Επιστολές Γραμματείας» (claude.ai) από αρχείο JSON. | `modules/visits/importer.py` | GET `/visits/import-data`, POST `/visits/import-data` |
 | Επισκέψεις Στοών — εκκίνηση (πίνακες, ρυθμίσεις υπογραφής). | `modules/visits/startup.py` | — |
+| Εορτολόγιο — ονομαστικές εορτές (σταθερές και κινητές από το Πάσχα), εορτάζοντες μέλη, ιστορικό ευχών. | `modules/namedays/data.py` | — |
+| Εορτολόγιο — εορτάζοντες, αποστολή ευχών (ανά πρόσωπο, με προσφώνηση), αναφορά στον ΜΔ, εορτολόγιο ονομάτων. | `modules/namedays/routes.py` | GET `/namedays`, POST `/namedays/compose`, POST `/namedays/send`, GET `/namedays/report`, POST `/namedays/report/send`, GET `/namedays/export.xlsx`, GET `/namedays/calendar`, GET `/namedays/calendar/new`, POST `/namedays/calendar/new`, GET `/namedays/calendar/edit/{nid}`, POST `/namedays/calendar/edit/{nid}`, POST `/namedays/calendar/delete/{nid}` |
+| Εορτολόγιο — εκκίνηση (πίνακες, αρχικό εορτολόγιο ονομάτων, πρότυπο ευχών). | `modules/namedays/startup.py` | — |
+| Πρότζεκτ ΜΔ — πίνακες (πρότζεκτ, Στοές/ομάδες, μέλη, επαφές, αρχεία, ημερολόγιο) και αποθήκευση αρχείων. | `modules/projects/data.py` | — |
+| Πρότζεκτ ΜΔ — λίστα, νέο πρότζεκτ, σελίδα πρότζεκτ (στοιχεία, Στοές/ομάδες, μέλη, επαφές, αρχεία, ημερολόγιο), αναφορά PDF. | `modules/projects/routes.py` | GET `/projects`, GET `/projects/new`, POST `/projects/new`, GET `/projects/{pid}`, POST `/projects/{pid}/save`, POST `/projects/{pid}/units`, POST `/projects/{pid}/units/add`, POST `/projects/{pid}/units/delete/{uid}`, POST `/projects/{pid}/members/add`, POST `/projects/{pid}/members/delete/{mid}`, POST `/projects/{pid}/contacts`, POST `/projects/{pid}/contacts/add`, POST `/projects/{pid}/contacts/delete/{cid}`, POST `/projects/{pid}/files`, POST `/projects/{pid}/links`, POST `/projects/{pid}/files/delete/{fid}`, POST `/projects/{pid}/cover`, POST `/projects/{pid}/cover/delete`, GET `/projects/file/{fid}`, POST `/projects/{pid}/log`, POST `/projects/{pid}/log/delete/{lid}`, POST `/projects/{pid}/delete`, GET `/projects/{pid}/report.pdf` |
+| Πρότζεκτ ΜΔ — εκκίνηση (πίνακες). | `modules/projects/startup.py` | — |
 | Αριθμός Πρωτοκόλλου — ενιαία συνεχής αρίθμηση Επιστολών & Διαταγμάτων (20.542_26_Κατηγορία_Θέμα). | `modules/protocol/numbering.py` | — |
 | Ειδοποιήσεις μέσα στην εφαρμογή. | `core/notifications.py` | POST `/notifications/seen`, GET `/api/notifications` |
 | Google Drive — σύνδεση OAuth, αποθήκευση κλειδιών, κλήσεις στο Drive API. | `modules/drive/client.py` | — |
@@ -86,4 +92,6 @@
 | `modules/provinces/*` | `grand_lodges` (Επαρχιακές / Περιφερειακή Μεγάλη Στοά, ΕΜΣτΕ) |
 | `modules/lodges/*` | `lodges` |
 | `modules/visits/*` | `reps` (Εκπρόσωποι ΜΔ), `visits` (Επισκέψεις Στοών), ρυθμίσεις `visits_signer_name`, `visits_signer_title`, `visits_rankmap` |
+| `modules/namedays/*` | `namedays` (εορτολόγιο ονομάτων), `greetings_log` (ιστορικό ευχών), ρυθμίσεις `greet_subject`, `greet_body`, `greet_bcc_self` |
+| `modules/projects/*` | `projects`, `project_units`, `project_members`, `project_contacts`, `project_files` (αρχεία στο `DATA_DIR/project_files/`), `project_log` |
 | `modules/drive/*` | `app_secrets`, `drive_uploads`, ρύθμιση `drive_folder_id` |

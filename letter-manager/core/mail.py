@@ -51,7 +51,7 @@ def split_emails(s):
 def mail_ready():
     return bool(os.getenv('MAIL_OUTBOX_DIR')) or smtp_ready()
 
-def send_mail(to,subject,body,bcc=(),attachments=(),kind='general'):
+def send_mail(to,subject,body,bcc=(),attachments=(),kind='general',html=None):
     # attachments: [(όνομα αρχείου, bytes ή str, 'type/subtype'), ...]
     to=[x for x in to if x];bcc=[x for x in bcc if x]
     bad=[x for x in to+bcc if not EMAIL_RE.match(x)]
@@ -61,6 +61,7 @@ def send_mail(to,subject,body,bcc=(),attachments=(),kind='general'):
     sender=sender_for(kind);m['Subject']=subject;m['From']=sender;m['Reply-To']=sender;m['To']=', '.join(to)
     if bcc:m['Bcc']=', '.join(bcc)
     m.set_content(body)
+    if html:m.add_alternative(html,subtype='html')
     for fn,data,mime in attachments:
         mt,st=mime.split('/',1)
         if isinstance(data,str):data=data.encode('utf-8')
