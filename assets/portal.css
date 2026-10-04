@@ -139,3 +139,23 @@ a{color:inherit;}
   font-family:'Oswald',sans-serif; font-size:10.5px; letter-spacing:.13em;
   text-transform:uppercase; color:var(--bone-dim);
 }
+
+/* ---------- entry to the Letter Manager app (home page) ------------------ */
+
+.app-entry{
+  display:flex; align-items:center; gap:16px;
+  margin:0 0 28px; padding:16px 20px;
+  background:var(--surface-2); border:1px solid var(--gold); border-radius:6px;
+  text-decoration:none; color:var(--bone);
+  transition:background .15s, border-color .15s;
+}
+.app-entry:hover, .app-entry:focus-visible{background:#24211b; border-color:var(--gold-bright);}
+.app-entry-key{font-size:28px; line-height:1;}
+.app-entry-text{display:flex; flex-direction:column; gap:2px; min-width:0; flex:1;}
+.app-entry-text strong{font-family:'Cinzel',serif; font-size:19px; color:var(--gold-bright); letter-spacing:.03em;}
+.app-entry-text span{font-size:15px; color:var(--bone-dim); line-height:1.4;}
+.app-entry-go{font-size:24px; color:var(--gold-bright);}
+@media (max-width:520px){
+  .app-entry{padding:14px; gap:12px;}
+  .app-entry-text strong{font-size:17px;}
+}
