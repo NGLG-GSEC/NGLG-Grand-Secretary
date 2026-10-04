@@ -11,7 +11,8 @@ D1 = (date.today() + timedelta(days=20)).isoformat()
 D2 = (date.today() + timedelta(days=40)).isoformat()
 PAYLOAD = {
     'format': 'nglg-lodge-visits/1',
-    'provinces': [{'short': 'ΕπΜΣτ. Αθηνών', 'full': 'Επαρχιακή Μεγάλη Στοά Αθηνών', 'email': 'x@example.com', 'gmName': 'Πλασματικός ΕπΜΔ', 'order': 1}],
+    'provinces': [{'short': 'ΕπΜΣτ. Πελοποννήσου & Δυτικής Ελλάδας', 'full': 'Επαρχιακή Μεγάλη Στοά Πελοποννήσου και Δυτικής Ελλάδας',
+                   'email': 'x@example.com', 'gmName': 'Πλασματικός ΕπΜΔ', 'order': 5}],
     'lodges': [{'number': '95', 'name': 'LA PAIX', 'province': 'ΕπΜΣτ. Αθηνών', 'ritual': 'Emulation', 'location': 'Τεκτονικόν Μέγαρον Δοκιμής'},
                {'number': '990', 'name': 'ΠΛΑΣΜΑΤΙΚΗ', 'province': 'ΕπΜΣτ. Αθηνών', 'ritual': 'Σκωτικό', 'inactive': True}],
     'reps': [{'ext_id': 'r-t1', 'name': 'Πέτρος', 'surname': 'Δοκιμαστής', 'rank': '', 'office': 'Μέγας Καγκελάριος', 'year': '2026',
@@ -46,9 +47,9 @@ def test_import_is_idempotent_and_fills_only_blanks(admin, app_module):
     assert lodge['meeting_place'] == 'Τεκτονικόν Μέγαρον Δοκιμής'  # κενό → συμπληρώθηκε
     new = [l for l in app_module._lodges_all() if l['number'] == '990'][0]
     assert new['status'] == 'Ανενεργή' and new['ritual'] == 'Σκωτικό'
-    athens = app_module.province_by_short('ΕπΜΣτ. Αθηνών')
-    assert athens['email'] != 'x@example.com'  # δεν αντικαθίσταται υπάρχον email
-    assert athens['master_name'] == 'Πλασματικός ΕπΜΔ'
+    pel = app_module.province_by_short('ΕπΜΣτ. Πελοποννήσου & Δυτικής Ελλάδας')
+    assert pel['email'] != 'x@example.com'  # δεν αντικαθίσταται υπάρχον email
+    assert pel['master_name'] == 'Πλασματικός ΕπΜΔ'  # κενό → συμπληρώθηκε
 
 
 def test_calendar_and_filters(admin):
@@ -97,6 +98,7 @@ def test_notification_resets_when_date_changes(admin, app_module):
 
 
 def test_publish_province(admin):
+    admin.post('/lodges/new', data={'number': '984', 'name': 'ΑΝΕΥ ΗΜΕΡΟΜΗΝΙΑΣ', 'provincial': 'ΕπΜΣτ. Αθηνών', 'status': 'Ενεργή'})
     t = admin.get('/visits/publish', params={'prov': 'ΕπΜΣτ. Αθηνών', 'frm': date.today().isoformat()}).text
     assert 'Email προς Επαρχιακό Γραμματέα' in t and 'Πλασματική' in t
     t = admin.get('/visits/publish/compose', params={'prov': 'ΕπΜΣτ. Αθηνών', 'frm': date.today().isoformat(), 'missing': '1'}).text

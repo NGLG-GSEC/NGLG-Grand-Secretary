@@ -18,7 +18,7 @@ PROVINCE_SEED=[
  ('ΕΜΣτΕ Α.Ε. & Α.Τ.','Εθνική Μεγάλη Στοά της Ελλάδος των Αρχαίων, Ελευθέρων και Αποδεκτών Τεκτόνων','grand.secretary@nglgreece.gr','ΜΓρ. Εθνικής Μεγάλης Στοάς της Ελλάδος των Αρχαίων, Ελευθέρων και Αποδεκτών Τεκτόνων','Εθνική'),
 ]
 
-PROVINCE_COLS=['short','full_title','kind','email','addressee','secretary_name','master_name','master_email','sort_order','active','notes']
+PROVINCE_COLS=['short','full_title','kind','email','addressee','secretary_name','secretary_email','master_name','master_email','sort_order','active','notes']
 
 def _provinces_init():
     with con() as c:
@@ -26,6 +26,9 @@ def _provinces_init():
         id INTEGER PRIMARY KEY AUTOINCREMENT,short TEXT NOT NULL DEFAULT '',full_title TEXT DEFAULT '',kind TEXT DEFAULT 'Επαρχιακή',
         email TEXT DEFAULT '',addressee TEXT DEFAULT '',secretary_name TEXT DEFAULT '',master_name TEXT DEFAULT '',master_email TEXT DEFAULT '',
         sort_order INTEGER DEFAULT 0,active INTEGER DEFAULT 1,notes TEXT DEFAULT '',created_at TEXT,updated_at TEXT);""")
+        if USE_PG:c.execute("ALTER TABLE grand_lodges ADD COLUMN IF NOT EXISTS secretary_email TEXT DEFAULT ''")
+        elif 'secretary_email' not in [r['name'] for r in c.execute('PRAGMA table_info(grand_lodges)')]:
+            c.execute("ALTER TABLE grand_lodges ADD COLUMN secretary_email TEXT DEFAULT ''")
         if not c.execute('SELECT COUNT(*) n FROM grand_lodges').fetchone()['n']:
             ts=now()
             for i,(short,full,email,addressee,kind) in enumerate(PROVINCE_SEED,1):
@@ -50,7 +53,7 @@ def _province_from_form(f):
     if d['kind'] not in PROVINCE_KINDS:d['kind']='Επαρχιακή'
     d['sort_order']=int(d['sort_order']) if d['sort_order'].lstrip('-').isdigit() else 0
     d['active']=0 if d['active']=='0' else 1
-    for k in ('email','master_email'):
+    for k in ('email','master_email','secretary_email'):
         if d[k] and not re.fullmatch(r'[^@\s,;]+@[^@\s,;]+\.[^@\s,;]+',d[k]):raise HTTPException(400,f'Μη έγκυρο email: {d[k]}')
     return d
 
@@ -65,3 +68,19 @@ def _province_save(c,d,pid=None):
             c.execute('UPDATE lodges SET provincial=?,updated_at=? WHERE provincial=?',(d['short'],ts,old))
     else:
         c.execute('INSERT INTO grand_lodges('+','.join(PROVINCE_COLS)+',created_at,updated_at) VALUES('+','.join('?'*(len(PROVINCE_COLS)+2))+')',tuple(d[k] for k in PROVINCE_COLS)+(ts,ts))
+
+# ---------------------------------------------------------------- στοιχεία επικοινωνίας ανά Επαρχία
+ROLE_ABBR={'Επαρχιακή':('ΕπΜΔ','ΕπΜΓρ.'),'Περιφερειακή':('ΠερΜΔ','ΠερΜΓρ.'),'Εθνική':('ΜΔ','ΜΓρ.')}
+
+def province_roles(p):
+    # (Μέγας Διδάσκαλος, Μέγας Γραμματέας) της Επαρχίας: τίτλος ρόλου, όνομα, email, «Προς» για επιστολή
+    gm,gs=ROLE_ABBR.get(p.get('kind') or 'Επαρχιακή',ROLE_ABBR['Επαρχιακή'])
+    full=p.get('full_title') or p['short']
+    gen=re.sub(r'^\S+\.?\s+','',p.get('addressee') or '') or full  # «Επαρχιακής Μεγάλης Στοάς Αθηνών»
+    sec_email=(p.get('secretary_email') or '').strip() or (p.get('email') or '').strip()
+    return [
+        {'role':'gm','abbr':gm,'label':('Επαρχιακός' if gm=='ΕπΜΔ' else 'Περιφερειακός' if gm=='ΠερΜΔ' else '')+' Μέγας Διδάσκαλος','name':(p.get('master_name') or '').strip(),
+         'email':(p.get('master_email') or '').strip(),'addressee':f"{gm} {gen}"+(f", {p['master_name'].strip()}" if (p.get('master_name') or '').strip() else '')},
+        {'role':'gs','abbr':gs,'label':('Επαρχιακός' if gs=='ΕπΜΓρ.' else 'Περιφερειακός' if gs=='ΠερΜΓρ.' else '')+' Μέγας Γραμματέας','name':(p.get('secretary_name') or '').strip(),
+         'email':sec_email,'addressee':(p.get('addressee') or f"{gs} {gen}")+(f", {p['secretary_name'].strip()}" if (p.get('secretary_name') or '').strip() else '')},
+    ]

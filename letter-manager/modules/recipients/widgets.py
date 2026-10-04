@@ -2,14 +2,24 @@
 # Φορτώνεται από το app.py (βλ. MODULES) στον κοινό χώρο ονομάτων της εφαρμογής.
 
 def grand_lodge_recipient_widget(name_id='recipient_name',email_id='recipient_email',member_id_id='recipient_member_id'):
-    # Από τον πίνακα grand_lodges (σελίδα «Επαρχιακές Μεγάλες Στοές»).
-    xs=[p for p in provinces_all(active_only=True) if (p.get('email') or '').strip()]
-    regional=[p for p in xs if p.get('kind')!='Εθνική']
-    opts=''.join(f'<option value="{p["id"]}" data-name="{esc(p.get("addressee") or p.get("full_title") or p["short"])}" data-email="{esc(p["email"])}">{esc(p["short"])} — {esc(p.get("full_title") or "")} ({esc(p["email"])})</option>' for p in xs)
+    # Από τον πίνακα grand_lodges (σελίδα «Επαρχιακές Μεγάλες Στοές»): Γραμματεία, ΕπΜΔ και ΕπΜΓρ. κάθε Επαρχίας.
+    provs=provinces_all(active_only=True);regional=[p for p in provs if p.get('kind')!='Εθνική' and (p.get('email') or '').strip()]
+    opt=lambda v,name,email,text:f'<option value="{esc(v)}" data-name="{esc(name)}" data-email="{esc(email)}">{esc(text)}</option>'
+    opts=''
+    for p in provs:
+        o=''
+        if (p.get('email') or '').strip():o+=opt(p['id'],p.get('addressee') or p.get('full_title') or p['short'],p['email'],f"Γραμματεία — {p['email']}")
+        for r in province_roles(p):
+            if r['email']:o+=opt(f"{p['id']}{r['role']}",r['addressee'],r['email'],f"{r['abbr']} {r['name'] or ''} — {r['email']}")
+        if o:opts+=f'<optgroup label="{esc(p["short"])}">{o}</optgroup>'
     has_reg=any(p.get('kind')=='Περιφερειακή' for p in regional)
     allname='ΕπΜΓρ. των Επαρχιακών Μεγάλων Στοών'+(' και ΠερΜΓρ. της Περιφερειακής Μεγάλης Στοάς Κύπρου' if has_reg else '')
-    if regional:opts+=f'<option value="all" data-name="{esc(allname)}" data-email="{esc(", ".join(p["email"] for p in regional))}">Όλες οι Επαρχιακές Μεγάλες Στοές{" και η ΠΜΣτ. Κύπρου" if has_reg else ""} ({len(regional)})</option>'
-    return f"""<div class="full"><label for="gl_recipient">Παραλήπτης: Επαρχιακή / Περιφερειακή Μεγάλη Στοά</label><select id="gl_recipient"><option value="">— Επιλογή Μεγάλης Στοάς —</option>{opts}</select><small>Από τις <a href="/provinces">Επαρχιακές Μεγάλες Στοές</a>· η επιλογή συμπληρώνει αυτόματα τον Παραλήπτη («Προς») και το Email· μπορείτε να τα διορθώσετε πριν την αποθήκευση.</small></div>
+    gms=[r for p in provs if p.get('kind')!='Εθνική' for r in province_roles(p)[:1] if r['email']]
+    allo=''
+    if regional:allo+=opt('all',allname,', '.join(p['email'] for p in regional),f"Όλες οι Γραμματείες Επαρχιών{' και ΠΜΣτ. Κύπρου' if has_reg else ''} ({len(regional)})")
+    if gms:allo+=opt('allgm','Επαρχιακούς Μεγάλους Διδασκάλους',', '.join(r['email'] for r in gms),f'Όλοι οι Επαρχιακοί Μεγάλοι Διδάσκαλοι ({len(gms)})')
+    if allo:opts=f'<optgroup label="▸ Όλες μαζί">{allo}</optgroup>'+opts
+    return f"""<div class="full"><label for="gl_recipient">Παραλήπτης: Επαρχία — Γραμματεία, ΕπΜΔ ή ΕπΜΓρ.</label><select id="gl_recipient"><option value="">— Επιλογή Μεγάλης Στοάς —</option>{opts}</select><small>Από τον <a href="/directory">📇 Κατάλογο</a> (Γραμματεία, ΕπΜΔ, ΕπΜΓρ.)· η επιλογή συμπληρώνει αυτόματα τον Παραλήπτη («Προς») και το Email· μπορείτε να τα διορθώσετε πριν την αποθήκευση.</small></div>
 <script>
 (function(){{
  const s=document.getElementById('gl_recipient');if(!s)return;
@@ -62,3 +72,30 @@ def lodge_recipient_widget(name_id='recipient_name',email_id='recipient_email',m
  const g=document.getElementById('gl_recipient');if(g)g.addEventListener('change',()=>{{s.value='';}});
 }})();
 </script>"""
+
+
+def contact_picker_widget(fields=('to','bcc')):
+    # Προσθήκη παραληπτών από τον Κατάλογο σε πεδία email μιας φόρμας (π.χ. «Προς» / «Κρυφή κοινοποίηση»).
+    provs=provinces_all(active_only=True);regional=[p for p in provs if p.get('kind')!='Εθνική']
+    o=lambda email,text:f'<option value="{esc(email)}">{esc(text)}</option>' if email else ''
+    groups=[]
+    allsec=', '.join(p['email'] for p in regional if p.get('email'))
+    gm=[r for p in regional for r in province_roles(p)[:1] if r['email']];gs=[r for p in regional for r in province_roles(p)[1:] if r['email']]
+    groups.append(('▸ Όλες μαζί',o(allsec,'Όλες οι Γραμματείες Επαρχιών')+o(', '.join(r['email'] for r in gm),f'Όλοι οι ΕπΜΔ ({len(gm)})')+o(', '.join(r['email'] for r in gs),f'Όλοι οι ΕπΜΓρ. ({len(gs)})')))
+    for p in provs:
+        x=o(p.get('email') or '',f"Γραμματεία — {p.get('email')}")+''.join(o(r['email'],f"{r['abbr']} {r['name']} — {r['email']}") for r in province_roles(p))
+        groups.append((p['short'],x))
+    by={}
+    for l in _lodges_all(active_only=True):
+        if lodge_email(l):by.setdefault(l.get('provincial') or 'Χωρίς Επαρχία',[]).append(l)
+    for prov,ls in by.items():
+        groups.append(('Στοές — '+prov,o(', '.join(lodge_email(l) for l in ls),f'Όλες οι Στοές ({len(ls)})')+''.join(o(lodge_email(l),f"{l['number']} · {l['name']} — {lodge_email(l)}") for l in ls)))
+    opts=''.join(f'<optgroup label="{esc(g)}">{x}</optgroup>' for g,x in groups if x)
+    radios=''.join(f'<label style="display:inline-flex;gap:6px;align-items:center;margin:0 14px 0 0;font-weight:normal"><input type="radio" name="_pick_target" value="{f}" style="width:auto"{" checked" if i==0 else ""}> {lab}</label>'
+                   for i,(f,lab) in enumerate(zip(fields,['στο «Προς»','στην «Κρυφή κοινοποίηση»'])))
+    return f"""<div class="card" style="background:#f9fbff;margin:8px 0"><label for="cpick">📇 Προσθήκη παραλήπτη από τον Κατάλογο</label>
+<select id="cpick"><option value="">— Επιλογή Επαρχίας, ΕπΜΔ, ΕπΜΓρ. ή Στοάς —</option>{opts}</select><div style="margin-top:6px">{radios}</div></div>
+<script>(function(){{const s=document.getElementById('cpick');s.addEventListener('change',()=>{{if(!s.value)return;
+ const f=s.form.querySelector('[name='+s.form.querySelector('[name=_pick_target]:checked').value+']');
+ const have=f.value.split(/[\\s,;]+/).filter(Boolean),add=s.value.split(/[\\s,;]+/).filter(Boolean);
+ f.value=[...new Set(have.concat(add))].join(', ');s.value='';f.dispatchEvent(new Event('input',{{bubbles:true}}));}});}})();</script>"""

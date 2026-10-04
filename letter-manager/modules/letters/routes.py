@@ -23,7 +23,7 @@ def home(req:Request):
     return page(f'''<div class="hero"><div><h1>Μεγάλη Γραμματεία</h1><p>Οι επιστολές και τα Διατάγματα τηρούνται πλέον ως δύο διακριτές κατηγορίες εγγράφων.</p></div><div class="toolbar"><a class="btn primary" href="/new">+ Νέα Επιστολή</a><a class="btn" href="/decrees/new">+ Νέο Διάταγμα</a></div></div><div class="card"><table><tr><th>Αρ. Πρωτ.</th><th>Ημερομηνία</th><th>Θέμα</th><th>Κατάσταση</th><th>Ενέργειες</th></tr>{rows}</table></div>''',u)
 
 @app.get('/new')
-def new(req:Request,copy_from:int=0,template_id:int=0):
+def new(req:Request,copy_from:int=0,template_id:int=0,to_name:str='',to_email:str=''):
     u=need(req);s=settings();profile=signer_profile(u.get('_actor','dimitrios'),s);tpls=templates_for(u);sub=body=rn=re='';rmid='';selected=0
     preview_sig=(f'<img class="signature-img" src="/asset/{profile["asset"]}">' if profile['key']=='nikolaos' else f'<img class="signature-img" src="/clean/{profile["asset"]}">') if asset_available(profile['asset']) else '<div style="height:22mm"></div>'
     preview_seal='<img class="seal-img" src="/clean/seal_original.png">'
@@ -33,6 +33,7 @@ def new(req:Request,copy_from:int=0,template_id:int=0):
     elif template_id and can_tpl(u,template_id):
         with con() as c:r=c.execute('SELECT * FROM letter_templates WHERE id=?',(template_id,)).fetchone()
         if r:selected=r['id'];body=r['body']
+    if not copy_from and (to_name or to_email):rn=to_name.strip();re=to_email.strip()  # από τον Κατάλογο: «Επιστολή προς…»
     opts='<option value="">— Επιλογή —</option>'+''.join(f"<option value='{t['id']}' {'selected' if selected==t['id'] else ''}>{esc(t['name'])}</option>" for t in tpls)
     signer_switch=''
     if u['email'].lower() in {SHARED_SECRETARIAT_EMAIL,PRIMARY_ADMIN_EMAIL}:

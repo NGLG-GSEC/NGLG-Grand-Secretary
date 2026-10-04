@@ -44,6 +44,7 @@ MODULES = [
     'modules/lodges/routes.py',
     'modules/lodges/startup.py',
     'modules/recipients/widgets.py',
+    'modules/directory/routes.py',
     'modules/visits/data.py',
     'modules/visits/mails.py',
     'modules/visits/routes.py',

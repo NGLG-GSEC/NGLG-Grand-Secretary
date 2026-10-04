@@ -33,12 +33,13 @@
 | Επετηρίδα — σελίδα και PDF. | `modules/epeteirida/routes.py` | GET `/epeteirida`, GET `/epeteirida/pdf` |
 | Επετηρίδα — τροφοδότηση από τα Διατάγματα και εφάπαξ φόρτωση ιστορικού. | `modules/epeteirida/sync.py` | POST `/internal/epeteirida-bootstrap` |
 | Επαρχιακές / Περιφερειακή Μεγάλη Στοά και ΕΜΣτΕ — πίνακας της βάσης (όχι σταθερή λίστα στον κώδικα). | `modules/provinces/data.py` | — |
-| Επαρχιακές Μεγάλες Στοές — σελίδες: λίστα, νέα, επεξεργασία. | `modules/provinces/routes.py` | GET `/provinces`, GET `/provinces/new`, POST `/provinces/new`, GET `/provinces/edit/{pid}`, POST `/provinces/edit/{pid}` |
+| Επαρχιακές Μεγάλες Στοές — σελίδες: λίστα, νέα, επεξεργασία. | `modules/provinces/routes.py` | GET `/provinces`, GET `/provinces/new`, POST `/provinces/new`, GET `/provinces/edit/{pid}`, POST `/provinces/edit/{pid}`, GET `/provinces/export.xlsx` |
 | Επαρχιακές Μεγάλες Στοές — εκκίνηση (πίνακας, αρχικά δεδομένα). | `modules/provinces/startup.py` | — |
 | Συμβολικές Στοές — η κεντρική βάση Στοών (πίνακας, αρχικά δεδομένα, τίτλοι, email). | `modules/lodges/data.py` | — |
 | Συμβολικές Στοές — σελίδες, εισαγωγή/εξαγωγή Excel. | `modules/lodges/routes.py` | GET `/lodges`, GET `/lodges/new`, POST `/lodges/new`, GET `/lodges/edit/{lid}`, POST `/lodges/edit/{lid}`, GET `/lodges/export.xlsx`, POST `/lodges/import` |
 | Συμβολικές Στοές — εκκίνηση (πίνακας, αρχικά δεδομένα). | `modules/lodges/startup.py` | — |
 | Παραλήπτες — λίστες για Επιστολές: Επαρχιακές Μεγάλες Στοές, Συμβολικές Στοές, μέλη. | `modules/recipients/widgets.py` | — |
+| Κατάλογος — όλα τα στοιχεία επικοινωνίας σε μία σελίδα: Επαρχίες (Γραμματεία, ΕπΜΔ, ΕπΜΓρ.) και Συμβολικές Στοές, | `modules/directory/routes.py` | GET `/directory` |
 | Επισκέψεις Στοών & Εκπρόσωποι — πίνακες, βαθμοί εκπροσώπων, βοηθητικά κειμένων και ημερολογίου. | `modules/visits/data.py` | — |
 | Επισκέψεις Στοών — κείμενα email: ενημέρωση εκπροσώπου (με πρόσκληση ημερολογίου) και ενημέρωση Επαρχίας. | `modules/visits/mails.py` | — |
 | Επισκέψεις Στοών — ημερολόγιο, νέα/επεξεργασία, επικόλληση λίστας, ενημέρωση εκπροσώπου και Επαρχίας. | `modules/visits/routes.py` | GET `/visits`, GET `/visits/new`, POST `/visits/new`, GET `/visits/edit/{vid}`, POST `/visits/edit/{vid}`, POST `/visits/delete/{vid}`, GET `/visits/import`, POST `/visits/import`, GET `/visits/brief`, POST `/visits/brief`, GET `/visits/publish`, GET `/visits/publish/compose`, POST `/visits/publish/send`, POST `/visits/publish/bulk` |

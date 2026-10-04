@@ -184,6 +184,7 @@ def _compose(u,title,action,to,subject,body,hidden,hint='',attach='',bcc=''):
     ready='' if mail_ready() else '<div class="card" style="border-color:#e3b17a"><b>Η αποστολή από τον διακομιστή δεν είναι ρυθμισμένη (SMTP).</b> Χρησιμοποιήστε «Άνοιγμα στο πρόγραμμα email» και μετά «Σημείωση ως σταλμένο».</div>'
     return page(f"""<h1>{esc(title)}</h1>{sender_banner('general')}{ready}{f'<div class="card">{esc(hint)}</div>' if hint else ''}
 <form method="post" action="{action}" class="card">{hid}
+{contact_picker_widget()}
 <label>Προς</label><input name="to" value="{esc(to)}" required>
 <label style="margin-top:10px">Κρυφή κοινοποίηση (Bcc)</label><input name="bcc" value="{esc(bcc)}" placeholder="προαιρετικό">
 <label style="margin-top:10px">Θέμα</label><input name="subject" value="{esc(subject)}" required>
