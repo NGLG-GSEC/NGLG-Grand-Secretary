@@ -2,7 +2,7 @@
 
 The way in to the work of the Secretariat. This repository holds the main portal and the new **NGLG Letter Manager**.
 
-**Portal:** https://dskiad.github.io/NGLG-GRAND-SECRETARY/
+**Portal:** https://nglg-gsec.github.io/NGLG-Grand-Secretary/
 
 ## 🔑 Είσοδος ως Γραμματέας
 
