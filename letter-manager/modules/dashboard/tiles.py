@@ -54,6 +54,8 @@ def dashboard_html(u):
     except Exception:pass
     tiles.append(_dash_tile('Μητρώο Μελών','/members',f"{_dash_count('SELECT COUNT(*) n FROM member_registry WHERE active=1')} ενεργά μέλη",[],
                             [('Αναζήτηση','/members'),('Επετηρίδα','/epeteirida')]))
+    tiles.append(_dash_tile('🗄 Βάση Δεδομένων','/database',f"{len(DB_TABLES)} πίνακες",[],
+                            [('Πίνακες','/database'),('Βιβλίο Πρωτοκόλλου','/database/protocol'),('Έλεγχος','/system/check')]))
     try:
         tiles.append(_dash_tile('Google Drive','/drive','Συνδεδεμένο' if drive_connected() else 'Μη συνδεδεμένο',
                                 [('' if drive_connected() else 'Τα PDF δεν ανεβαίνουν ακόμη αυτόματα',not drive_connected())],[('Ρύθμιση','/drive')]))

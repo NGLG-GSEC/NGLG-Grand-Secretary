@@ -63,6 +63,8 @@ MODULES = [
     'modules/drive/client.py',
     'modules/drive/upload.py',
     'modules/drive/routes.py',
+    'modules/database/registry.py',
+    'modules/database/routes.py',
     'modules/dashboard/tiles.py',
 ]
 

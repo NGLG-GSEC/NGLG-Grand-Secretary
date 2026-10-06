@@ -16,16 +16,42 @@ class _PGCursor:
     def __iter__(self):
         return iter(self.cur)
 
+# Επαναχρησιμοποίηση συνδέσεων Postgres (pool): κάθε σελίδα ανοίγει πολλές φορές con(), και μια νέα σύνδεση
+# στο Render κοστίζει χρόνο. Κρατάμε έως PG_POOL_MAX ανενεργές συνδέσεις για PG_POOL_IDLE δευτερόλεπτα.
+import threading as _threading, time as _time
+PG_POOL_MAX=int(os.getenv('PG_POOL_MAX','5'));PG_POOL_IDLE=float(os.getenv('PG_POOL_IDLE','60'))
+_pg_pool=[];_pg_pool_lock=_threading.Lock()
+
+def _pg_acquire():
+    now_=_time.monotonic()
+    with _pg_pool_lock:
+        while _pg_pool:
+            raw,t=_pg_pool.pop()
+            if now_-t<PG_POOL_IDLE and not raw.closed and not getattr(raw,'broken',False):return raw
+            try:raw.close()
+            except Exception:pass
+    return psycopg.connect(DATABASE_URL,row_factory=dict_row)
+
+def _pg_release(raw,healthy):
+    if healthy and not raw.closed and not getattr(raw,'broken',False):
+        with _pg_pool_lock:
+            if len(_pg_pool)<PG_POOL_MAX:_pg_pool.append((raw,_time.monotonic()));return
+    try:raw.close()
+    except Exception:pass
+
 class _PGConn:
     def __init__(self):
-        self.raw=psycopg.connect(DATABASE_URL,row_factory=dict_row)
+        self.raw=_pg_acquire()
     def __enter__(self):
         return self
     def __exit__(self,exc_type,exc,tb):
+        healthy=True
         try:
             self.raw.rollback() if exc_type else self.raw.commit()
+        except Exception:
+            healthy=False;raise
         finally:
-            self.raw.close()
+            _pg_release(self.raw,healthy)
     def commit(self):
         self.raw.commit()
     def rollback(self):

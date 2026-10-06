@@ -21,7 +21,7 @@
 | Διαχείριση — πρόσβαση χρηστών και ρυθμίσεις. | `modules/admin/routes.py` | GET `/users`, POST `/users`, GET `/settings`, POST `/settings` |
 | Κοινά εργαλεία PDF: γραμματοσειρές, καθαρισμός εικόνων (θυρεός/σφραγίδα/υπογραφή), σύνδεσμοι. | `core/pdf.py` | GET `/clean/{name}` |
 | Επιστολές — παραγωγή PDF. | `modules/letters/pdf.py` | GET `/pdf/{lid}` |
-| Σύστημα: έλεγχος υγείας (/health), robots.txt, κεφαλίδες ασφαλείας. | `core/system.py` | GET `/health`, GET `/robots.txt` |
+| Σύστημα: έλεγχος υγείας (/health) με την έκδοση που τρέχει, robots.txt, κεφαλίδες ασφαλείας, συμπίεση (gzip). | `core/system.py` | GET `/health`, GET `/robots.txt` |
 | Διατάγματα — κατάλογοι αξιωμάτων, διακρίσεων, βάσεων και τίτλων. | `modules/decrees/catalog.py` | — |
 | Διατάγματα — κείμενο διατάγματος, φόρμες και η παλιά διαδρομή /decree (συμβατότητα). | `modules/decrees/legacy.py` | GET `/api/member`, GET `/decree`, POST `/decree`, GET `/decree-asset/gm`, GET `/decree/edit/{lid}`, POST `/decree/edit/{lid}` |
 | Μητρώο Μελών — πίνακες, αρχική φόρτωση, καταχώριση/αποθήκευση μέλους, Excel ασφαλείας. | `modules/members/storage.py` | — |
@@ -58,6 +58,8 @@
 | Google Drive — σύνδεση OAuth, αποθήκευση κλειδιών, κλήσεις στο Drive API. | `modules/drive/client.py` | — |
 | Google Drive — ανέβασμα PDF εγγράφων και κατάσταση ανεβάσματος. | `modules/drive/upload.py` | — |
 | Google Drive — σελίδα ρύθμισης, σύνδεση/αποσύνδεση, δοκιμή, χειροκίνητο ανέβασμα. | `modules/drive/routes.py` | POST `/drive/upload/{kind}/{doc_id}`, GET `/drive`, GET `/drive/connect`, GET `/drive/callback`, POST `/drive/disconnect`, POST `/drive/test` |
+| Βάση Δεδομένων — κατάλογος των πινάκων που εμφανίζονται/επεξεργάζονται στη σελίδα «Βάση Δεδομένων». | `modules/database/registry.py` | — |
+| Βάση Δεδομένων — μία σελίδα για όλα τα δεδομένα της εφαρμογής: προβολή, αναζήτηση, επεξεργασία, Excel, | `modules/database/routes.py` | GET `/database`, GET `/database/protocol`, GET `/database/{key}/export.xlsx`, GET `/database/{key}`, GET `/database/{key}/{rid}`, POST `/database/{key}/{rid}`, GET `/system/check` |
 | Αρχική σελίδα — πίνακας ελέγχου: μία κάρτα ανά ενότητα με ό,τι εκκρεμεί και τις συχνές ενέργειες. | `modules/dashboard/tiles.py` | — |
 <!-- map:end -->
 

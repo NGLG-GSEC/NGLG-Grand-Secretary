@@ -191,7 +191,17 @@ uvicorn app:app --host 0.0.0.0 --port 8000
 
 ## Βάση δεδομένων
 
-Η εφαρμογή χρησιμοποιεί SQLite.
+Μία κοινή βάση για όλες τις σελίδες: PostgreSQL όταν υπάρχει `DATABASE_URL` (Render, με pool συνδέσεων),
+αλλιώς SQLite.
+
+Η σελίδα **🗄 Βάση Δεδομένων** (`/database`, μόνο για διαχειριστές) δείχνει όλους τους πίνακες
+(Μητρώο Μελών, Στοές, Επαρχίες, Επιστολές, Διατάγματα, Εκπρόσωποι, Επισκέψεις, Εορτολόγιο, Πρότζεκτ, Πρότυπα…)
+με αναζήτηση, επεξεργασία πεδίων και εξαγωγή σε Excel, καθώς και το **📖 Βιβλίο Πρωτοκόλλου** (`/database/protocol`).
+Ποιοι πίνακες/στήλες εμφανίζονται ορίζεται σε ένα σημείο: `modules/database/registry.py` (`DB_TABLES`).
+Ο **🩺 Έλεγχος συστήματος** (`/system/check`) δείχνει ποιος κώδικας τρέχει, SMTP, Drive, εγγραφές ανά πίνακα
+και ανοίγει αυτόματα κάθε σελίδα του μενού.
+
+Τοπικά (SQLite):
 
 Default local path:
 
@@ -218,9 +228,16 @@ GET /health
 ```json
 {
   "status": "ok",
-  "service": "nglg-letter-manager"
+  "service": "nglg-letter-manager",
+  "repo": "NGLG-GSEC/NGLG-Grand-Secretary",
+  "branch": "main",
+  "commit": "…",
+  "database": "postgres"
 }
 ```
+
+Τα `repo`/`commit` δείχνουν από ποιο αποθετήριο και commit έγινε η τελευταία ανάπτυξη στο Render
+(πρέπει να είναι `NGLG-GSEC/NGLG-Grand-Secretary`).
 
 ## Ροή εργασίας
 
