@@ -547,3 +547,43 @@ def test_lodge_rituals_and_masters_pasted(app):
     assert ls['95']['orient'] == 'Κερκύρας' and ls['95']['kind'] == 'Γαλλόφωνη'
     assert ls['28']['master'] == 'Άλλος Δοκιμαστικός' and ls['28']['kind'] == 'Κανονική' and ls['28']['email'] == ''
     assert 'ΔΟΚΙΜΟΣ ΣΕΒΑΣΜΙΟΣ' in app.text() and '6900000095' in app.text()
+
+
+def test_epeteirida_import_of_grand_officers(app):
+    app.connect_local()
+    add_member(app, surname='Δοκιμόπουλος', first='Κωνσταντίνος', email='k@example.com', mobile='6900000001')
+    add_member(app, surname='Πρότυπος', first='Νικόλαος', email='n@example.com', mobile='6900000002')
+    paste = ('Ονοματεπώνυμο\tΒαθμός Μεγ. Αξιωματικού\tΔιάταγμα διορισμού\tΈτος\tΕν Ενεργεία Αξίωματικοί\n'
+             "Δοκιμόπουλος Κω/νος\tΠρΒ'Μεπ\t475\t2025\tΑν.Μεγ.Τελετάρχης 502/2026\n"
+             'Πρότυπος Νικόλαος \tΕπΜΔ Πειραιώς\t419\t2024\t\n'
+             'Άγνωστος Τεστ\tΠρΑΜΔιακ\t?\t2018\tΜετέστη στην Αιώνια Ανατολή 24/06/2026\n'
+             'Test Person\tΑΓΝΩΣΤΟ\t\t\t\n')
+    app.go('/epeteirida')
+    app.page.locator('details.fold summary', has_text='Εισαγωγή καταλόγου').click()
+    app.page.fill('#epimp [name=paste]', paste)
+    app.page.locator('#epimp button').click()
+    app.page.wait_for_selector('text=Επετηρίδα: 4 Μεγάλοι Αξιωματικοί')
+    body = app.text('body')
+    assert '5 εγγραφές' in body and '2 συνδέθηκαν' in body and 'Test Person: ΑΓΝΩΣΤΟ' in body
+    recs = app.page.evaluate("async () => { const m = await import('./core/store.js'); return m.db.all('member_degrees_offices'); }")
+    by = {(r['full_name'], r['office']): r for r in recs}
+    a = by[('Δοκιμόπουλος Κω/νος', 'Πρώην Δεύτερος Μέγας Επόπτης')]
+    assert a['member_id'] and a['decree_no'] == 475 and a['decree_year'] == 2025
+    c = by[('Δοκιμόπουλος Κω/νος', 'Αναπληρωτής Μέγας Τελετάρχης')]
+    assert c['is_current'] == 1 and c['decree_no'] == 502 and c['decree_year'] == 2026
+    p = by[('Πρότυπος Νικόλαος', 'Επαρχιακός Μέγας Διδάσκαλος')]
+    assert p['member_id'] and 'Πειραιώς' in p['notes']
+    u = by[('Άγνωστος Τεστ', 'Πρώην Πρώτος Μέγας Διάκονος')]
+    assert u['member_id'] is None and u['decree_no'] is None and 'Μετέστη' in u['notes']
+    app.go('/epeteirida?cur=1')
+    assert 'Αναπληρωτής Μέγας Τελετάρχης' in app.text('.tablecard') and 'Πρώην Δεύτερος' not in app.text('.tablecard')
+    app.go('/epeteirida?sort=prec')
+    assert app.page.locator('tbody tr').first.locator('td').nth(3).inner_text() == 'Επαρχιακός Μέγας Διδάσκαλος'
+    # νέα εισαγωγή αντικαθιστά την προηγούμενη
+    app.go('/epeteirida')
+    app.page.locator('details.fold summary', has_text='Εισαγωγή καταλόγου').click()
+    app.page.fill('#epimp [name=paste]', "Πρότυπος Νικόλαος\tΠρΜΞιφ\t414\t2024\t\n")
+    app.page.locator('#epimp button').click()
+    app.page.wait_for_selector('text=Επετηρίδα: 1 Μεγάλοι Αξιωματικοί')
+    recs = app.page.evaluate("async () => { const m = await import('./core/store.js'); return m.db.all('member_degrees_offices'); }")
+    assert [r['office'] for r in recs] == ['Πρώην Μέγας Ξιφοφόρος']
