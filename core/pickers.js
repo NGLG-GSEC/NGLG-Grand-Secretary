@@ -2,13 +2,16 @@
 import { db } from './store.js';
 import { esc, matches, sortBy } from './util.js';
 
+// Διαγραμμένο μέλος (All_Deregistered = ΝΑΙ ή Status_1 = «5. ΔΙΑΓΡΑΦΕΝ»): απαγορεύεται κάθε επικοινωνία.
+export const noContact = (m) => !!m && Number(m.no_contact) === 1;
+export const NO_CONTACT = '⛔ Διαγραμμένος — απαγορεύεται κάθε επικοινωνία';
 export const memberName = (m) => `${m.surname || ''} ${m.first_name || ''}`.trim();
 export const memberLodges = (mid) => db.all('member_lodges').filter((l) => l.member_id === mid);
-export function searchMembers(q, limit = 12) {
+export function searchMembers(q, limit = 12, withBlocked = false) {
   if (!q || q.trim().length < 2) return [];
   const byM = {};
   for (const l of db.all('member_lodges')) (byM[l.member_id] ||= []).push(`${l.lodge_name} ${l.lodge_number}`);
-  return sortBy(db.all('member_registry').filter((m) => matches(q, m.surname, m.first_name, m.surname_variants, m.first_name_variants, m.email, m.other_emails, m.mobile, m.other_mobiles, m.registry_no, (byM[m.id] || []).join(' '))), 'surname', 'first_name').slice(0, limit);
+  return sortBy(db.all('member_registry').filter((m) => (withBlocked || !noContact(m)) && matches(q, m.surname, m.first_name, m.surname_variants, m.first_name_variants, m.email, m.other_emails, m.mobile, m.other_mobiles, m.registry_no, (byM[m.id] || []).join(' '))), 'surname', 'first_name').slice(0, limit);
 }
 
 // Πεδίο αναζήτησης· onPick(item) όταν επιλεγεί. items(q) → [{label, sub, value}]

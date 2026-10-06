@@ -435,3 +435,67 @@ def test_official_lodges_applied_to_existing_database(app):
     app.page.reload()
     app.page.wait_for_selector('.dash')
     assert len(gh.commits) == n  # δεν ξανατρέχει
+
+
+def test_paste_member_registry_and_deregistered_no_contact(app):
+    # Επικόλληση από το Excel-πηγή: All_Deregistered = ΝΑΙ ή Status_1 = «5. ΔΙΑΓΡΑΦΕΝ» → διαγραμμένος, απαγορεύεται κάθε επικοινωνία
+    head = ['Member_ID', 'Surname', 'First_Name', 'Name_Has_Variants', 'All_Surname_Variants', 'All_FirstName_Variants', 'Email', 'Multiple_Emails', 'Mobile',
+            'Multiple_Mobiles', 'Degree', 'Number_of_Lodges', 'All_Deregistered (ΔΙΑΓΡΑΦΕΝ)']
+    for j in range(1, 7):
+        head += [f'Lodge_{j}', f'Number_{j}', f'Status_{j}']
+    head.append('Additional_Lodges (beyond 6)')
+
+    def row(rid, sn, fn, email, dereg, lodges):
+        r = [rid, sn, fn, 'ΟΧΙ', sn, fn, email, 'ΟΧΙ', '6900000' + rid, 'ΟΧΙ', 'Διδάσκαλος', str(len(lodges)), dereg]
+        for j in range(6):
+            r += list(lodges[j]) if j < len(lodges) else ['', '', '']
+        return r + ['']
+    rows = [head,
+            row('901', 'Ενεργόπουλος', 'Γεώργιος', 'act@example.com', 'ΟΧΙ', [('ΠΑΡΘΕΝΩΝ', '3', '1. ΤΑΚΤΙΚΟ'), ('ΠΛΑΤΩΝ 1990', '', '1. ΤΑΚΤΙΚΟ')]),
+            row('902', 'Διαγραμμένος', 'Γεώργιος', 'gone@example.com', 'ΝΑΙ', [('ΠΑΡΘΕΝΩΝ', '3', '5. ΔΙΑΓΡΑΦΕΝ')]),
+            row('903', 'Πρώτοδιαγραφείς', 'Γεώργιος', 'first@example.com', 'ΟΧΙ', [('LA ΡAIX', '', '5. ΔΙΑΓΡΑΦΕΝ'), ('ΑΚΡΟΠΟΛΙΣ  2010', '', '1. ΤΑΚΤΙΚΟ')])]
+    app.connect_local().go('/members')
+    app.page.locator('details.fold summary').click()
+    app.page.fill('[name=paste]', '\n'.join('\t'.join(r) for r in rows))
+    app.fill(mode='replace')
+    with app.page.expect_download():
+        app.page.locator('#imp button').click()
+    app.page.wait_for_selector('text=Γενική αντικατάσταση ολοκληρώθηκε')
+    assert '3 εγγραφές' in app.text('body') and '2 διαγραμμένα μέλη' in app.text('body')
+    ms = app.page.evaluate("async () => { const m = await import('./core/store.js'); return [m.db.all('member_registry'), m.db.all('member_lodges')]; }")
+    by = {m['surname']: m for m in ms[0]}
+    assert by['Ενεργόπουλος']['no_contact'] == 0 and by['Ενεργόπουλος']['active'] == 1
+    assert by['Διαγραμμένος']['no_contact'] == 1 and by['Διαγραμμένος']['active'] == 0
+    assert by['Πρώτοδιαγραφείς']['no_contact'] == 1
+    nums = sorted(l['lodge_number'] for l in ms[1])
+    assert nums == ['103', '104', '3', '3', '95']
+    assert app.page.locator('.pill.bad').count() == 2
+    # δεν εμφανίζονται ως παραλήπτες επιστολών, ούτε στα μέλη για διατάγματα / εκπροσώπους
+    found = app.page.evaluate("async () => { const p = await import('./core/pickers.js'); return [p.contactItems('Γεώργιος').map((x) => x.label), p.memberItems('Γεώργιος').map((x) => x.label)]; }")
+    assert found == [['Ενεργόπουλος Γεώργιος'], ['Ενεργόπουλος Γεώργιος']]
+    # η καρτέλα του μέλους δείχνει την απαγόρευση και δεν έχει κουμπί επιστολής
+    app.go(f"/members/{by['Διαγραμμένος']['id']}")
+    assert 'απαγορεύεται κάθε επικοινωνία' in app.text() and app.page.locator('a:has-text("✉ Επιστολή")').count() == 0
+    # ευχές: δεν εμφανίζεται στους εορτάζοντες
+    cel = app.page.evaluate("async () => { const n = await import('./modules/namedays.js'); return JSON.stringify(n.celebrants('2026-01-01', '2026-12-31')); }")
+    assert 'Διαγραμμένος' not in cel and 'Πρώτοδιαγραφείς' not in cel
+
+
+def test_existing_deregistered_members_marked_once(app):
+    gh = MockGitHub()
+    gh.ref = gh.put_commit(gh.put_tree({}), [], 'init')
+    gh.external_commit('data/member_registry.json', json.dumps([
+        {'id': 1, 'surname': 'Α', 'first_name': 'Β', 'email': 'a@example.com', 'active': 1, 'deregistered_note': ''},
+        {'id': 2, 'surname': 'Γ', 'first_name': 'Δ', 'email': 'g@example.com', 'active': 0, 'deregistered_note': 'ΔΙΑΓΡΑΦΕΝ από όλες τις Στοές'},
+        {'id': 3, 'surname': 'Ε', 'first_name': 'Ζ', 'email': 'e@example.com', 'active': 1, 'deregistered_note': ''}], ensure_ascii=False))
+    gh.external_commit('data/member_lodges.json', json.dumps([
+        {'id': 1, 'member_id': 3, 'seq': 1, 'lodge_name': 'ΠΑΡΘΕΝΩΝ', 'lodge_number': '3', 'member_status': '5. ΔΙΑΓΡΑΦΕΝ'},
+        {'id': 2, 'member_id': 3, 'seq': 2, 'lodge_name': 'ΠΛΑΤΩΝ', 'lodge_number': '70', 'member_status': '1. ΤΑΚΤΙΚΟ'},
+        {'id': 3, 'member_id': 1, 'seq': 1, 'lodge_name': 'ΠΑΡΘΕΝΩΝ', 'lodge_number': '3', 'member_status': '1. ΤΑΚΤΙΚΟ'},
+        {'id': 4, 'member_id': 1, 'seq': 2, 'lodge_name': 'ΠΛΑΤΩΝ', 'lodge_number': '70', 'member_status': '5. ΔΙΑΓΡΑΦΕΝ'}], ensure_ascii=False))
+    gh.external_commit('data/settings.json', json.dumps({'closing': 'x'}))
+    connect_github(app, gh)
+    app.page.wait_for_selector('.dash')
+    ms = {m['id']: m for m in gh.read_json('data/member_registry.json')}
+    assert not ms[1].get('no_contact') and ms[1]['active'] == 1
+    assert ms[2]['no_contact'] == 1 and ms[3]['no_contact'] == 1 and ms[3]['active'] == 0

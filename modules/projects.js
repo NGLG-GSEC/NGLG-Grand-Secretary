@@ -4,7 +4,7 @@ import { db } from '../core/store.js';
 import { module, onSubmit, go, flash, bind, confirmDo, table, toast } from '../core/app.js';
 import { esc, fold, today, fmtDate, parseIso, sortBy } from '../core/util.js';
 import { reportPaper, printPaper } from '../core/paper.js';
-import { attachPicker, memberItems } from '../core/pickers.js';
+import { attachPicker, memberItems, noContact, NO_CONTACT } from '../core/pickers.js';
 import { lodgesByMember, memberLodgesLine } from './members.js';
 
 export const TYPES = { lodge: 'Ίδρυση νέας Στοάς', body: 'Ίδρυση νέου Σώματος', other: 'Άλλο έργο' };
@@ -195,7 +195,7 @@ ${logs.length ? table(['Ημερομηνία', 'Καταχώριση', 'Ενέρ
           }); flash('Το πρότζεκτ διαγράφηκε.'); go('/projects');
         },
         async report() {
-          const pa = el.querySelector('#pa'), lead = (id) => { const m = db.get('member_registry', id); return m ? [`${m.surname} ${m.first_name}`, [m.mobile, m.email].filter(Boolean).join(' · ')] : ['—', '']; };
+          const pa = el.querySelector('#pa'), lead = (id) => { const m = db.get('member_registry', id); return m ? [`${m.surname} ${m.first_name}`, noContact(m) ? NO_CONTACT : [m.mobile, m.email].filter(Boolean).join(' · ')] : ['—', '']; };
           const t = (h, rows) => `<h3>${h}</h3><table><thead><tr>${rows[0].map((x) => `<th>${esc(x)}</th>`).join('')}</tr></thead><tbody>${rows.slice(1).map((r) => `<tr>${r.map((c) => `<td style="white-space:pre-wrap">${esc(c ?? '')}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
           let inner = `<p style="text-align:center">${esc(`${TYPES[p.ptype] || ''} · ${STATUSES[p.status] || ''} · Έναρξη ${fmtDate(p.start_date) || '—'} · Στόχος ${fmtDate(p.target_date) || '—'} · ${due(p)}`)}</p>`;
           if (p.cover_file) inner += `<p style="text-align:center"><img data-file="${p.cover_file}" style="max-width:70mm;max-height:50mm" alt=""></p>`;

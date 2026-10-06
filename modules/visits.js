@@ -7,7 +7,7 @@ import { crud } from '../core/crud.js';
 import { esc, fold, today, fmtDate, dayStr, parseIso, sortBy, download, EMAIL_RE, splitEmails, grUpper, DAYS, isoDate } from '../core/util.js';
 import { senderBanner, copyText } from '../core/mail.js';
 import { reportPaper, printPaper } from '../core/paper.js';
-import { attachPicker, contactItems, memberItems } from '../core/pickers.js';
+import { attachPicker, contactItems, memberItems, noContact } from '../core/pickers.js';
 import { provincialChoices, provinceByShort } from './provinces.js';
 import { lodgesAll, lodgeNoKey, lodgeByNumber, cleanLodgeName } from './lodges.js';
 
@@ -40,6 +40,7 @@ const repVocative = (r) => (repRank(r) || 'Αγαπητός Αδ.').replace(/ο�
 function repContact(r) {
   let email = String(r.email || '').trim(), mobile = String(r.mobile || '').trim();
   const m = r.member_id && db.get('member_registry', r.member_id);
+  if (noContact(m)) return ['', ''];
   if (m) { email ||= String(m.email || '').trim(); mobile ||= String(m.mobile || '').trim(); }
   return [email, mobile];
 }

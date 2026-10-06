@@ -6,6 +6,7 @@ import { crud } from '../core/crud.js';
 import { esc, foldName, today, addDays, parseIso, isoDate, dayStr, fmtDate, sortBy, EMAIL_RE, splitEmails, exportXlsx, DAYS } from '../core/util.js';
 import { senderBanner, gmailUrl, copyHtml, mailButtons } from '../core/mail.js';
 import { reportPaper, printPaper } from '../core/paper.js';
+import { noContact } from '../core/pickers.js';
 import { lodgesByMember, memberLodgesLine } from './members.js';
 import { lodgeByNumber } from './lodges.js';
 import { provinceByShort, provinceRoles, provincesAll } from './provinces.js';
@@ -40,14 +41,14 @@ export function namedayIn(it, y) {
   return d;
 }
 const label = (it) => it.official || it.name || '';
-export const greetEmail = (m) => [m.email || '', ...splitEmails(m.other_emails)].map((e) => e.trim()).find((e) => EMAIL_RE.test(e)) || '';
+export const greetEmail = (m) => noContact(m) ? '' : [m.email || '', ...splitEmails(m.other_emails)].map((e) => e.trim()).find((e) => EMAIL_RE.test(e)) || '';
 const sentMap = () => Object.fromEntries(db.all('greetings_log').filter((g) => g.member_id).map((g) => [`${g.member_id}|${g.feast_date}`, g.sent_on]));
 
 export function celebrants(frm, to) {
   const idx = {};
   for (const it of sortBy(db.all('namedays'), 'name_key')) idx[it.name_key] ||= it;
   const d0 = parseIso(frm), d1 = parseIso(to), groups = {}, byM = lodgesByMember();
-  for (const m of db.all('member_registry').filter((x) => x.active !== 0)) {
+  for (const m of db.all('member_registry').filter((x) => x.active !== 0 && !noContact(x))) {
     const it = idx[ndKey(m.first_name)];
     if (!it) continue;
     for (let y = d0.getFullYear(); y <= d1.getFullYear(); y++) {
@@ -144,7 +145,7 @@ function greetPage() {
   let keys = [];
   try { keys = JSON.parse(sessionStorage.getItem('nglg-greet') || '[]'); } catch { /* */ }
   const ms = Object.fromEntries(db.all('member_registry').map((m) => [m.id, m])), byM = lodgesByMember(), sent = sentMap();
-  const items = keys.map((k) => { const [mid, d, ...l] = k.split('|'); const m = ms[mid]; return m && parseIso(d) ? { k, m: { ...m, lodges: byM[m.id] || [] }, date: d, label: l.join('|'), email: greetEmail(m) } : null; }).filter(Boolean);
+  const items = keys.map((k) => { const [mid, d, ...l] = k.split('|'); const m = ms[mid]; return m && !noContact(m) && parseIso(d) ? { k, m: { ...m, lodges: byM[m.id] || [] }, date: d, label: l.join('|'), email: greetEmail(m) } : null; }).filter(Boolean);
   if (!items.length) return '<h1>Δεν επιλέχθηκαν εορτάζοντες</h1><p><a href="#/namedays">← Εορτολόγιο</a></p>';
   items.forEach((it) => (it.rk = rankIdx(it.m)));
   const selfBcc = splitEmails(db.setting('greet_bcc_self'));

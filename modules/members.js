@@ -5,6 +5,7 @@ import { db } from '../core/store.js';
 import { module, onSubmit, go, flash, bind, confirmDo, table, notice, pager } from '../core/app.js';
 import { esc, fold, sortBy, readXlsx, XLSX } from '../core/util.js';
 import { lodgeNoKey, lodgesAll } from './lodges.js';
+import { noContact, NO_CONTACT } from '../core/pickers.js';
 
 const PAGE = 100;
 const MEMBER_FIELDS = [['surname', 'Επώνυμο'], ['first_name', 'Όνομα'], ['mobile', 'Κινητό'], ['email', 'Email'], ['lodge', 'Στοά'], ['all', 'Όλα']];
@@ -76,10 +77,12 @@ export function findMember(tx, m, freeOnly = false) {
   if (!r && sn && fn) r = all.find((x) => ok(x) && String(x.surname || '').toLowerCase() === sn && String(x.first_name || '').toLowerCase() === fn);
   return r ? r.id : null;
 }
-const MEMBER_COLS = ['registry_no', 'surname', 'first_name', 'email', 'other_emails', 'mobile', 'other_mobiles', 'degree', 'declared_lodge_count', 'deregistered_note', 'additional_lodges', 'active', 'surname_variants', 'first_name_variants', 'source_row'];
+const MEMBER_COLS = ['registry_no', 'surname', 'first_name', 'email', 'other_emails', 'mobile', 'other_mobiles', 'degree', 'declared_lodge_count', 'deregistered_note', 'additional_lodges', 'active', 'surname_variants', 'first_name_variants', 'source_row', 'no_contact'];
 export function insertMember(tx, m, id) {
   const row = Object.fromEntries(MEMBER_COLS.map((k) => [k, m[k] ?? (k === 'active' ? 1 : k === 'registry_no' || k === 'source_row' ? null : '')]));
   row.active = m.active === false || m.active === 0 ? 0 : 1;
+  row.no_contact = m.no_contact ? 1 : 0;
+  if (row.no_contact) row.active = 0;
   const r = tx.insert('member_registry', id ? { id, ...row } : row);
   setMemberLodges(tx, r.id, m.lodges || []);
   return r.id;
@@ -87,6 +90,7 @@ export function insertMember(tx, m, id) {
 export function updateMember(tx, id, m) {
   const row = Object.fromEntries(MEMBER_COLS.filter((k) => m[k] !== undefined).map((k) => [k, m[k]]));
   if ('active' in row) row.active = row.active === false || row.active === 0 ? 0 : 1;
+  if ('no_contact' in row) { row.no_contact = row.no_contact ? 1 : 0; if (row.no_contact) row.active = 0; }
   if (row.registry_no == null) delete row.registry_no;
   tx.update('member_registry', id, row);
   if (m.lodges) setMemberLodges(tx, id, m.lodges);
@@ -109,7 +113,7 @@ function listPage({ query }) {
     const ls = byM[x.id] || [];
     const lod = ls.slice(0, 3).map((l) => hl(`${l.lodge_name} ${l.lodge_number}`.trim(), lq, field === 'lodge' || field === 'all')).join('<br>') + (ls.length > 3 ? `<br><small>+${ls.length - 3} ακόμη</small>` : '');
     return [`<b>${x.id}</b>`, H(x.registry_no ?? '', 'all'), H(x.surname, 'surname') + extra(x, 'surname_variants', 'surname'), H(x.first_name, 'first_name') + extra(x, 'first_name_variants', 'first_name'),
-      H(x.email, 'email') + extra(x, 'other_emails', 'email'), H(x.mobile, 'mobile') + extra(x, 'other_mobiles', 'mobile'), esc(x.degree), lod, x.active ? 'ΝΑΙ' : 'ΟΧΙ', `<a class="btn small" href="#/members/${x.id}">Επεξεργασία</a>`];
+      noContact(x) ? '<span class="muted">⛔</span>' : H(x.email, 'email') + extra(x, 'other_emails', 'email'), noContact(x) ? '<span class="muted">⛔</span>' : H(x.mobile, 'mobile') + extra(x, 'other_mobiles', 'mobile'), esc(x.degree), lod, noContact(x) ? `<span class="pill bad" title="${NO_CONTACT}">⛔ Διαγραμμένος</span>` : x.active ? 'ΝΑΙ' : 'ΟΧΙ', `<a class="btn small" href="#/members/${x.id}">Επεξεργασία</a>`];
   });
   const [qlabel, ph, itype] = HINTS[field];
   const flabel = Object.fromEntries(MEMBER_FIELDS)[field];
@@ -127,7 +131,9 @@ ${table(['ID', 'Αρ. Μητρώου', 'Επώνυμο', 'Όνομα', 'Email', 
 ${pager(xs.length, pg, PAGE, mk)}
 <details class="card fold"><summary><b>Εισαγωγή μελών από Excel (Προσθήκη / Γενική Αντικατάσταση)</b></summary><form id="imp" style="margin-top:10px">
 <p class="muted">Δεκτά: το αρχείο-πηγή του Μητρώου (Member_ID, Surname, First_Name, …, Lodge_1, Number_1, Status_1, …) ή το Excel που κατεβάζει η εφαρμογή.</p>
-<label>Αρχείο (.xlsx, .csv)</label><input type="file" name="file" accept=".xlsx,.xls,.csv" required>
+<label>Αρχείο (.xlsx, .csv)</label><input type="file" name="file" accept=".xlsx,.xls,.csv">
+<label style="margin-top:10px">ή Επικόλληση από Excel (επιλέξτε όλο το φύλλο μαζί με τις επικεφαλίδες, Ctrl+C, και Ctrl+V εδώ)</label><textarea name="paste" class="short" placeholder="Member_ID	Surname	First_Name	…"></textarea>
+<p class="muted">Μέλη με <b>All_Deregistered (ΔΙΑΓΡΑΦΕΝ) = ΝΑΙ</b> ή <b>Status_1 = 5. ΔΙΑΓΡΑΦΕΝ</b> καταχωρούνται ως <b>διαγραμμένα</b>: απαγορεύεται κάθε επικοινωνία (δεν εμφανίζονται σε παραλήπτες, ευχές, εκπροσώπους).</p>
 <label style="margin-top:10px">Λειτουργία</label><select name="mode"><option value="merge">Προσθήκη / Ενημέρωση (συνιστάται)</option><option value="replace">Γενική Αντικατάσταση</option></select>
 <div class="toolbar" style="margin-top:10px"><button class="btn primary">Εισαγωγή</button></div></form></details>`,
     mount(el) {
@@ -139,9 +145,11 @@ ${pager(xs.length, pg, PAGE, mk)}
       onSubmit(el.querySelector('#ms'), (d) => go('/members', { q: d.q, field: d.field }));
       bind(el, { export: exportMembers });
       onSubmit(el.querySelector('#imp'), async (d) => {
+        const paste = String(d.paste || '').trim(), hasFile = d.file && d.file.size;
+        if (!paste && !hasFile) throw new Error('Επιλέξτε αρχείο ή επικολλήστε τις γραμμές από το Excel.');
         if (d.mode === 'replace' && !confirmDo('Γενική αντικατάσταση: όλο το Μητρώο θα αντικατασταθεί από το αρχείο (η προηγούμενη μορφή μένει στο ιστορικό του GitHub). Συνέχεια;')) return;
         await exportMembers(); // αντίγραφο ασφαλείας πριν από κάθε εισαγωγή
-        const msg = await importMembers(d.file, d.mode);
+        const msg = await importMembers(hasFile ? d.file : paste, d.mode);
         flash(msg); go('/members');
       });
     },
@@ -155,15 +163,16 @@ function formPage(m) {
   const offices = m ? sortBy(db.all('member_degrees_offices').filter((o) => o.member_id === m.id), (o) => -(o.decree_year || 0)) : [];
   return {
     title: m ? `Μέλος #${m.id}` : 'Νέο Μέλος',
-    html: `<p><a href="#/members">← Μητρώο Μελών</a></p><h1>${m ? `${esc(m.surname)} ${esc(m.first_name)} <small class="muted">#${m.id}</small>` : 'Νέο Μέλος'}</h1>
+    html: `<p><a href="#/members">← Μητρώο Μελών</a></p><h1>${m ? `${esc(m.surname)} ${esc(m.first_name)} <small class="muted">#${m.id}</small>` : 'Νέο Μέλος'}</h1>${noContact(m) ? `<div class="card nocontact">${NO_CONTACT}</div>` : ''}
 <form id="mf"><div class="grid card">${f('registry_no', 'Αρ. Μητρώου', 'inputmode="numeric"')}${f('surname', 'Επώνυμο', 'required')}${f('first_name', 'Όνομα', 'required')}
 ${f('surname_variants', 'Παραλλαγές Επωνύμου', 'placeholder="π.χ. CASTANEDA; ΚΑΣΤΑΝΕΔΑ"')}${f('first_name_variants', 'Παραλλαγές Ονόματος', 'placeholder="π.χ. CARLOS; ΚΑΡΛΟΣ"')}
 ${f('email', 'Κύριο Email', 'inputmode="email"')}${f('other_emails', 'Άλλα Email')}${f('mobile', 'Κύριο Κινητό', 'inputmode="tel"')}${f('other_mobiles', 'Άλλα Κινητά')}${f('degree', 'Τεκτονικός Βαθμός')}
 <div><label>Ενεργός</label><select name="active"><option value="1"${x.active ? ' selected' : ''}>ΝΑΙ</option><option value="0"${x.active ? '' : ' selected'}>ΟΧΙ</option></select></div>
+<div><label>Επικοινωνία</label><select name="no_contact"><option value="0">Επιτρέπεται</option><option value="1"${noContact(x) ? ' selected' : ''}>⛔ Απαγορεύεται (διαγραμμένος)</option></select></div>
 <div class="full"><label>Σημείωση Διαγραφής</label><input name="deregistered_note" value="${esc(x.deregistered_note || '')}"></div>
 <div class="full"><label>Πρόσθετες Στοές / παλαιά πληροφορία</label><textarea name="additional_lodges" class="short">${esc(x.additional_lodges || '')}</textarea></div>
 <div class="full"><label>Στοές</label><textarea name="lodges_text" class="short" placeholder="Μία Στοά ανά γραμμή: ΟΝΟΜΑ | ΑΡΙΘΜΟΣ | ΚΑΤΑΣΤΑΣΗ">${esc(lodgesText(ls))}</textarea><small class="muted">Παράδειγμα: ΠΑΡΘΕΝΩΝ | 3 | 1. ΤΑΚΤΙΚΟ</small></div></div>
-<div class="toolbar"><button class="btn primary">💾 Αποθήκευση</button><a class="btn" href="#/members">Ακύρωση</a>${m ? `<a class="btn" href="#/letters/new?to_name=${encodeURIComponent(`${m.first_name} ${m.surname}`)}&to_email=${encodeURIComponent(m.email || '')}">✉ Επιστολή</a><button type="button" class="btn danger" data-act="del">Διαγραφή</button>` : ''}</div></form>
+<div class="toolbar"><button class="btn primary">💾 Αποθήκευση</button><a class="btn" href="#/members">Ακύρωση</a>${m && !noContact(m) ? `<a class="btn" href="#/letters/new?to_name=${encodeURIComponent(`${m.first_name} ${m.surname}`)}&to_email=${encodeURIComponent(m.email || '')}">✉ Επιστολή</a>` : ''}${m ? '<button type="button" class="btn danger" data-act="del">Διαγραφή</button>' : ''}</div></form>
 ${offices.length ? `<h2>Επετηρίδα</h2>${table(['Έτος', 'Αξίωμα / Τίτλος', 'Διάταγμα'], offices.map((o) => [esc(o.decree_year), esc(o.office), o.decree_id ? `<a href="#/decrees/${o.decree_id}">${esc(o.decree_no)}/${esc(o.decree_year)}</a>` : esc(o.decree_no ? `${o.decree_no}/${o.decree_year}` : '')]))}` : ''}`,
     mount(el) {
       onSubmit(el.querySelector('#mf'), async (d) => {
@@ -171,7 +180,7 @@ ${offices.length ? `<h2>Επετηρίδα</h2>${table(['Έτος', 'Αξίωμ�
         if (rn && !/^\d+$/.test(rn)) throw new Error('Ο αριθμός μητρώου πρέπει να είναι αριθμός.');
         const lodges = parseLodges(d.lodges_text);
         const row = { ...Object.fromEntries(['surname', 'first_name', 'email', 'other_emails', 'mobile', 'other_mobiles', 'degree', 'deregistered_note', 'additional_lodges', 'surname_variants', 'first_name_variants'].map((k) => [k, String(d[k] || '').trim()])),
-          active: d.active === '1' ? 1 : 0, registry_no: rn ? Number(rn) : null, declared_lodge_count: String(lodges.length), lodges };
+          active: d.active === '1' ? 1 : 0, no_contact: d.no_contact === '1' || isDereg('', lodges[0]?.status) ? 1 : 0, registry_no: rn ? Number(rn) : null, declared_lodge_count: String(lodges.length), lodges };
         const id = await db.save(m ? `Μέλος #${m.id}: ενημέρωση` : 'Νέο μέλος', (tx) => {
           if (rn && tx.find('member_registry', (x) => x.registry_no === Number(rn) && (!m || x.id !== m.id))) throw new Error(`Ο αριθμός μητρώου ${rn} υπάρχει ήδη.`);
           if (m) { updateMember(tx, m.id, { ...row, registry_no: row.registry_no }); if (row.registry_no == null) tx.update('member_registry', m.id, { registry_no: null }); return m.id; }
@@ -196,8 +205,8 @@ export async function exportMembers() {
   const ms = sortBy(membersAll(), 'surname', 'first_name', 'id');
   const wb = X.utils.book_new();
   const add = (name, rows) => { const ws = X.utils.aoa_to_sheet(rows); ws['!cols'] = rows[0].map(() => ({ wch: 20 })); X.utils.book_append_sheet(wb, ws, name); };
-  add('ΜΗΤΡΩΟ ΜΕΛΩΝ', [['ID', 'Αρ. Μητρώου', 'Επώνυμο', 'Όνομα', 'Κύριο Email', 'Άλλα Email', 'Κύριο Κινητό', 'Άλλα Κινητά', 'Τεκτονικός Βαθμός', 'Ενεργός', 'Σημείωση Διαγραφής', 'Δηλωμένος Αρ. Στοών', 'Πρόσθετες Στοές', 'Γραμμή Πηγής', 'Ενημερώθηκε', 'Παραλλαγές Επωνύμου', 'Παραλλαγές Ονόματος'],
-    ...ms.map((m) => [m.id, m.registry_no ?? '', m.surname, m.first_name, m.email, m.other_emails, m.mobile, m.other_mobiles, m.degree, m.active ? 'ΝΑΙ' : 'ΟΧΙ', m.deregistered_note, m.declared_lodge_count, m.additional_lodges, m.source_row ?? '', m.updated_at, m.surname_variants || '', m.first_name_variants || ''])]);
+  add('ΜΗΤΡΩΟ ΜΕΛΩΝ', [['ID', 'Αρ. Μητρώου', 'Επώνυμο', 'Όνομα', 'Κύριο Email', 'Άλλα Email', 'Κύριο Κινητό', 'Άλλα Κινητά', 'Τεκτονικός Βαθμός', 'Ενεργός', 'Σημείωση Διαγραφής', 'Δηλωμένος Αρ. Στοών', 'Πρόσθετες Στοές', 'Γραμμή Πηγής', 'Ενημερώθηκε', 'Παραλλαγές Επωνύμου', 'Παραλλαγές Ονόματος', 'Απαγορεύεται Επικοινωνία'],
+    ...ms.map((m) => [m.id, m.registry_no ?? '', m.surname, m.first_name, m.email, m.other_emails, m.mobile, m.other_mobiles, m.degree, m.active ? 'ΝΑΙ' : 'ΟΧΙ', m.deregistered_note, m.declared_lodge_count, m.additional_lodges, m.source_row ?? '', m.updated_at, m.surname_variants || '', m.first_name_variants || '', noContact(m) ? 'ΝΑΙ' : 'ΟΧΙ'])]);
   add('ΣΤΟΕΣ ΜΕΛΩΝ', [['ID Μέλους', 'Α/Α Στοάς', 'Στοά', 'Αριθμός Στοάς', 'Κατάσταση'], ...sortBy(db.all('member_lodges'), 'member_id', 'seq').map((l) => [l.member_id, l.seq, l.lodge_name, l.lodge_number, l.member_status])]);
   add('ΒΑΘΜΟΙ & ΑΞΙΩΜΑΤΑ', [['ID', 'ID Μέλους', 'Τύπος Εγγραφής', 'Βαθμός', 'Αξίωμα', 'ID Διατάγματος', 'Αρ. Διατάγματος', 'Έτος', 'Από', 'Έως', 'Ενεργό', 'Σημειώσεις'],
     ...sortBy(db.all('member_degrees_offices'), 'member_id', 'id').map((o) => [o.id, o.member_id, o.record_type, o.degree, o.office, o.decree_id, o.decree_no, o.decree_year, o.valid_from, o.valid_to, o.is_current ? 'ΝΑΙ' : 'ΟΧΙ', o.notes])]);
@@ -208,31 +217,61 @@ export async function exportMembers() {
 const hkey = (x) => String(x || '').toLowerCase().replace(/[^0-9a-zͰ-Ͽ]/g, '');
 const splitMulti = (v) => String(v || '').split(/[;\n]+/).map((p) => p.trim().replace(/^,|,$/g, '').trim()).filter(Boolean);
 const plainUpper = (v) => String(v || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().trim();
-const yes = (v) => ['ΝΑΙ', 'YES', 'TRUE', '1', 'Y'].includes(String(v || '').trim().toUpperCase());
+const yes = (v) => ['ΝΑΙ', 'NAI', 'YES', 'TRUE', '1', 'Y'].includes(plainUpper(v));
+// Κανόνας διαγραφής: All_Deregistered = ΝΑΙ ή Status_1 (κατάσταση στην πρώτη Στοά) = «5. ΔΙΑΓΡΑΦΕΝ»
+export const isDereg = (all, status1) => yes(all) || /ΔΙΑΓΡΑΦ/.test(plainUpper(status1));
+// Αριθμός Στοάς από το όνομα όταν λείπει. Ονόματα που υπάρχουν δύο φορές (ΠΛΑΤΩΝ 70/103, ΑΚΡΟΠΟΛΙΣ 2/104) ξεχωρίζουν με το έτος.
+const lodgeKey = (v) => plainUpper(v).replace(/[ABEZHIKMNOPTXY]/g, (c) => 'ΑΒΕΖΗΙΚΜΝΟΡΤΧΥ'['ABEZHIKMNOPTXY'.indexOf(c)]).replace(/[^0-9Α-Ω]/g, '');
+const LODGE_ALIASES = { ΑΚΡΟΠΟΛΙΣ2010: '104', ΠΛΑΤΩΝ1990: '103', ΠΡΟΜΗΘΕΥΣ2014: '105', ΔΗΜΗΤΗΡ: '113', ΕΝΩΣΙΣΚΥΠΡΟΣ: '55', ΦΟΙΝΙΞΚΕΡΚΥΡΑΣ: 'Φ', ΦΟΙΝΙΞ: 'Φ' };
+export function lodgeNumberFor(name, num) {
+  if (String(num || '').trim()) return String(num).trim().replace(/\.0$/, '');
+  const n = lodgeKey(name);
+  if (!n) return '';
+  if (LODGE_ALIASES[n]) return LODGE_ALIASES[n];
+  const all = lodgesAll(), one = (xs) => (xs.length === 1 ? String(xs[0].number) : '');
+  return one(all.filter((l) => lodgeKey(l.name) === n)) || one(all.filter((l) => lodgeKey(l.name).length > 3 && (n.startsWith(lodgeKey(l.name)) || lodgeKey(l.name).startsWith(n))));
+}
 function sourceMember(d, rn) {
   const g = (...ks) => { for (const k of ks) { const v = d[hkey(k)]; if (v) return v; } return ''; };
   const sv = g('All_Surname_Variants'), fv = g('All_FirstName_Variants');
   const sn = g('Surname') || (splitMulti(sv)[0] || ''), fn = g('First_Name') || (splitMulti(fv)[0] || '');
   if (!sn && !fn) return null;
   const emails = splitMulti(g('Email')), mobiles = splitMulti(g('Mobile')), lodges = [];
-  for (let j = 1; j <= 6; j++) { const n = g(`Lodge_${j}`), num = g(`Number_${j}`), st = g(`Status_${j}`); if (n || num || st) lodges.push({ seq: lodges.length + 1, name: n, number: num, status: st }); }
+  for (let j = 1; j <= 6; j++) { const n = g(`Lodge_${j}`), num = g(`Number_${j}`), st = g(`Status_${j}`); if (n || num || st) lodges.push({ seq: lodges.length + 1, name: n, number: lodgeNumberFor(n, num), status: st }); }
   const bad = [];
   for (const part of String(g('Additional_Lodges (beyond 6)', 'Additional_Lodges')).split(';').map((p) => p.trim()).filter(Boolean)) {
     const mm = /^(.*?)\s+(\S+)\s*\((.*)\)\s*$/.exec(part);
-    if (mm) lodges.push({ seq: lodges.length + 1, name: mm[1].trim(), number: mm[2].trim(), status: mm[3].trim() }); else bad.push(part);
+    if (mm) lodges.push({ seq: lodges.length + 1, name: mm[1].trim(), number: lodgeNumberFor(mm[1], mm[2]), status: mm[3].trim() }); else bad.push(part);
   }
-  const dereg = yes(g('All_Deregistered (ΔΙΑΓΡΑΦΕΝ)', 'All_Deregistered')), sts = lodges.map((l) => l.status.toUpperCase()).filter(Boolean);
+  const dereg = isDereg(g('All_Deregistered (ΔΙΑΓΡΑΦΕΝ)', 'All_Deregistered'), g('Status_1')), sts = lodges.map((l) => l.status.toUpperCase()).filter(Boolean);
   const deceased = sts.length > 0 && sts.every((x) => x.includes('ΜΕΤΕΣΘΕΝ'));
   const variants = (v, name) => { const vs = splitMulti(v); return vs.some((x) => plainUpper(x) !== plainUpper(name)) ? vs.join('; ') : ''; };
   const rid = String(g('Member_ID')).replace('.0', '');
   return { source_row: rn, registry_no: /^\d+$/.test(rid) ? Number(rid) : null, surname: sn, first_name: fn, surname_variants: variants(sv, sn), first_name_variants: variants(fv, fn),
     email: emails[0] || '', other_emails: emails.slice(1).join('; '), mobile: mobiles[0] || '', other_mobiles: mobiles.slice(1).join('; '), degree: g('Degree'),
-    declared_lodge_count: g('Number_of_Lodges') || String(lodges.length), deregistered_note: dereg ? 'ΔΙΑΓΡΑΦΕΝ από όλες τις Στοές' : deceased ? 'ΜΕΤΕΣΘΕΝ ΕΙΣ ΑΙ. ΑΝ.' : '',
-    additional_lodges: bad.join('; '), active: !dereg && !deceased, lodges };
+    declared_lodge_count: g('Number_of_Lodges') || String(lodges.length), deregistered_note: dereg ? 'ΔΙΑΓΡΑΦΕΝ — απαγορεύεται κάθε επικοινωνία' : deceased ? 'ΜΕΤΕΣΘΕΝ ΕΙΣ ΑΙ. ΑΝ.' : '',
+    additional_lodges: bad.join('; '), active: !dereg && !deceased, no_contact: dereg ? 1 : 0, lodges };
+}
+
+// Επικόλληση από Excel: γραμμές με στηλοθέτες (Tab) — τα κελιά με εισαγωγικά μπορεί να έχουν αλλαγές γραμμής
+export function parsePasted(text) {
+  const rows = [];
+  let row = [], cell = '', q = false;
+  const t = String(text || '').replace(/\r\n?/g, '\n');
+  for (let i = 0; i < t.length; i++) {
+    const c = t[i];
+    if (q) { if (c === '"' && t[i + 1] === '"') { cell += '"'; i++; } else if (c === '"') q = false; else cell += c; }
+    else if (c === '"' && cell === '') q = true;
+    else if (c === '\t') { row.push(cell); cell = ''; }
+    else if (c === '\n') { row.push(cell); rows.push(row); row = []; cell = ''; }
+    else cell += c;
+  }
+  if (cell || row.length) { row.push(cell); rows.push(row); }
+  return rows.filter((r) => r.some((x) => String(x).trim()));
 }
 
 export async function importMembers(file, mode = 'merge') {
-  const sheets = await readXlsx(file), first = sheets[0].rows;
+  const sheets = typeof file === 'string' ? [{ name: 'paste', rows: parsePasted(file) }] : await readXlsx(file), first = sheets[0].rows;
   if (!first.length) throw new Error('Το αρχείο είναι κενό.');
   const keys = first[0].map(hkey);
   let items;
@@ -244,7 +283,7 @@ export async function importMembers(file, mode = 'merge') {
     if (!h.includes('Επώνυμο')) throw new Error('Δεν αναγνωρίστηκαν οι στήλες. Η πρώτη γραμμή πρέπει να είναι οι επικεφαλίδες (Member_ID, Surname, First_Name, … ή ID, Επώνυμο, Όνομα, …).');
     items = sh.rows.slice(1).filter((r) => v(r, 'Επώνυμο') || v(r, 'Όνομα')).map((r) => ({ id: Number(v(r, 'ID')) || null, member: {
       surname: v(r, 'Επώνυμο'), first_name: v(r, 'Όνομα'), email: v(r, 'Κύριο Email'), other_emails: v(r, 'Άλλα Email'), mobile: v(r, 'Κύριο Κινητό'), other_mobiles: v(r, 'Άλλα Κινητά'), degree: v(r, 'Τεκτονικός Βαθμός'),
-      active: yes(v(r, 'Ενεργός')), deregistered_note: v(r, 'Σημείωση Διαγραφής'), declared_lodge_count: v(r, 'Δηλωμένος Αρ. Στοών'), additional_lodges: v(r, 'Πρόσθετες Στοές'),
+      active: yes(v(r, 'Ενεργός')), no_contact: yes(v(r, 'Απαγορεύεται Επικοινωνία')) ? 1 : 0, deregistered_note: v(r, 'Σημείωση Διαγραφής'), declared_lodge_count: v(r, 'Δηλωμένος Αρ. Στοών'), additional_lodges: v(r, 'Πρόσθετες Στοές'),
       source_row: Number(v(r, 'Γραμμή Πηγής')) || null, registry_no: Number(v(r, 'Αρ. Μητρώου')) || null, surname_variants: v(r, 'Παραλλαγές Επωνύμου'), first_name_variants: v(r, 'Παραλλαγές Ονόματος'), lodges: [] } }));
     const ls = sheets.find((s) => s.name === 'ΣΤΟΕΣ ΜΕΛΩΝ');
     if (ls) {
@@ -272,9 +311,19 @@ export async function applyMemberItems(items, mode = 'merge') {
       insertMember(tx, m, mode === 'replace' && id ? id : undefined); added++;
     }
   });
-  const lodges = items.reduce((s, x) => s + (x.member.lodges || []).length, 0);
-  return `${mode === 'replace' ? 'Γενική αντικατάσταση' : 'Προσθήκη / ενημέρωση'} ολοκληρώθηκε: ${items.length} εγγραφές (${added} νέες, ${updated} ενημερωμένες), ${lodges} συμμετοχές σε Στοές.`;
+  const lodges = items.reduce((s, x) => s + (x.member.lodges || []).length, 0), blocked = items.filter((x) => x.member.no_contact).length;
+  return `${mode === 'replace' ? 'Γενική αντικατάσταση' : 'Προσθήκη / ενημέρωση'} ολοκληρώθηκε: ${items.length} εγγραφές (${added} νέες, ${updated} ενημερωμένες), ${lodges} συμμετοχές σε Στοές, ${blocked} διαγραμμένα μέλη (απαγορεύεται η επικοινωνία).`;
 }
+
+// Εφάπαξ: σήμανση των ήδη καταχωρημένων διαγραμμένων μελών (σημείωση ΔΙΑΓΡΑΦΕΝ ή 1η Στοά «5. ΔΙΑΓΡΑΦΕΝ»)
+db.migrate('members-no-contact-2026-10', (tx) => {
+  const first = {};
+  for (const l of sortBy(tx.all('member_lodges'), 'seq', 'id')) first[l.member_id] ??= l.member_status;
+  for (const m of tx.all('member_registry')) {
+    if (noContact(m) || !(/ΔΙΑΓΡΑΦ/.test(plainUpper(m.deregistered_note)) || isDereg('', first[m.id]))) continue;
+    tx.update('member_registry', m.id, { no_contact: 1, active: 0 });
+  }
+});
 
 module({
   id: 'members',
@@ -283,6 +332,6 @@ module({
     '/members/new': () => formPage(null),
     '/members/:id': ({ params }) => { const m = db.get('member_registry', params.id); return m ? formPage(m) : '<h1>Δεν βρέθηκε το μέλος</h1>'; },
   },
-  tile: { order: 60, render: () => `<div class="dtile"><h3><a href="#/members">Μητρώο Μελών</a></h3><div class="big">${membersAll().filter((m) => m.active !== 0).length} ενεργά μέλη</div>
+  tile: { order: 60, render: () => `<div class="dtile"><h3><a href="#/members">Μητρώο Μελών</a></h3><div class="big">${membersAll().filter((m) => m.active !== 0).length} ενεργά μέλη</div><small class="muted">${membersAll().filter(noContact).length} διαγραμμένα (⛔ χωρίς επικοινωνία)</small>
 <div class="acts"><a class="btn primary" href="#/members">Αναζήτηση</a><a class="btn" href="#/epeteirida">Επετηρίδα</a></div></div>` },
 });
