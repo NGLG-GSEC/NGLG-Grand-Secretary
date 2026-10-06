@@ -389,3 +389,24 @@ def test_import_member_registry_from_render_env(app, tmp_path, fmt):
     assert 'Σπόρος' in app.text()
     stored = app.page.evaluate("async () => { const m = await import('./core/store.js'); return JSON.stringify([m.db.tables, m.db.settings]); }")
     assert 'topsecret' not in stored and 'also secret' not in stored
+
+
+def test_render_env_with_lost_character_is_repaired(app, tmp_path):
+    # Το Render «έχασε» έναν χαρακτήρα (+) σε ένα τμήμα: η εφαρμογή τον βρίσκει και τον επισκευάζει (έλεγχος CRC του gzip)
+    import random
+    random.seed(7)
+    people = [{'registry_no': 2000 + i, 'surname': f'Μέλος{i}', 'first_name': 'Γεώργιος', 'email': f'm{i}@example.com', 'mobile': f'69{random.randint(10**7, 10**8 - 1)}',
+               'active': True, 'lodges': [{'seq': 1, 'name': 'ΠΑΡΘΕΝΩΝ', 'number': '3', 'status': '1. ΤΑΚΤΙΚΟ'}]} for i in range(60)]
+    b64 = base64.b64encode(gzip.compress(json.dumps({'members': people}, ensure_ascii=False).encode())).decode()
+    size = 300
+    parts = [b64[i:i + size] for i in range(0, len(b64), size)]
+    k = next(i for i, p in enumerate(parts[:-1]) if '+' in p)
+    pos = parts[k].index('+')
+    parts[k] = parts[k][:pos] + parts[k][pos + 1:]
+    f = tmp_path / 'render.env'
+    f.write_text('SMTP_PASSWORD=topsecret\n' + ''.join(f'MEMBER_REGISTRY_SEED_{i:03d}={p}\n' for i, p in enumerate(parts)))
+    app.connect_local().go('/database/backup')
+    app.page.set_input_files('[name=file]', str(f))
+    app.page.locator('#imf button').click()
+    app.page.wait_for_selector('text=Επισκευάστηκε αυτόματα', timeout=120000)
+    assert '60 εγγραφές (60 νέες' in app.text()

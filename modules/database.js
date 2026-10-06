@@ -1,7 +1,7 @@
 // Βάση Δεδομένων — όλοι οι πίνακες σε μία σελίδα (προβολή, αναζήτηση, επεξεργασία, Excel), Βιβλίο Πρωτοκόλλου,
 // πλήρες αντίγραφο/επαναφορά και μεταφορά δεδομένων από την παλιά εφαρμογή (Render) ή από «Επιστολές Γραμματείας».
 import { db } from '../core/store.js';
-import { module, onSubmit, go, flash, bind, confirmDo, table, notice, pager } from '../core/app.js';
+import { module, onSubmit, go, flash, bind, confirmDo, table, notice, pager, toast } from '../core/app.js';
 import { esc, matches, sortBy, fmtDate, exportXlsx, download, today } from '../core/util.js';
 import { protocolBook } from './protocol.js';
 import { importVisitsPayload, importVisitsMessage } from './visits.js';
@@ -128,16 +128,72 @@ export async function seedMembers(text) {
   const missing = [];
   for (let i = 0; i <= Number(keys.at(-1)); i++) if (!parts[String(i).padStart(3, '0')]) missing.push(String(i).padStart(3, '0'));
   if (missing.length) throw new Error(`Λείπουν τα τμήματα MEMBER_REGISTRY_SEED_${missing.join(', ')} από το αρχείο — εξαγάγετε όλες τις μεταβλητές (Show more) και ξαναδοκιμάστε.`);
-  const b64 = keys.map((k) => parts[k]).join('').replace(/-/g, '+').replace(/_/g, '/');
-  let data, why = '';
-  try {
-    const raw = unb64(b64.replace(/=+$/, '') + '='.repeat((4 - (b64.replace(/=+$/, '').length % 4)) % 4));
-    const bytes = raw[0] === 0x1f && raw[1] === 0x8b ? new Uint8Array(await new Response(new Blob([raw]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer()) : raw;
-    data = JSON.parse(new TextDecoder().decode(bytes));
-  } catch (e) { why = e.message; }
-  if (!data) throw new Error(`Βρέθηκαν ${keys.length} τμήματα MEMBER_REGISTRY_SEED (${keys[0]}–${keys.at(-1)}, ${b64.length} χαρακτήρες, ${b64.startsWith('H4sI') ? 'σωστή αρχή' : 'μη αναμενόμενη αρχή'}) αλλά δεν διαβάστηκαν (${why}). Στείλτε αυτό το μήνυμα στον Claude.`);
+  const res = await decodeSeed(keys.map((k) => parts[k]));
+  if (!res.data) {
+    const lens = keys.map((k) => parts[k].length).join(', ');
+    throw new Error(`Βρέθηκαν ${keys.length} τμήματα MEMBER_REGISTRY_SEED (${keys[0]}–${keys.at(-1)}) αλλά δεν διαβάστηκαν. Μήκη τμημάτων: ${lens}. Στείλτε αυτό το μήνυμα στον Claude.`);
+  }
+  const data = res.data;
   const members = Array.isArray(data) ? data : data.members || [];
-  return applyMemberItems(members.filter((m) => m.surname || m.first_name).map((m) => ({ id: null, member: m })), 'merge');
+  const msg = await applyMemberItems(members.filter((m) => m.surname || m.first_name).map((m) => ({ id: null, member: m })), 'merge');
+  return msg + (res.note ? ' ' + res.note : '');
+}
+
+// Αποκωδικοποίηση των τμημάτων (base64 → gzip → JSON). Αν κατά την εξαγωγή χάθηκε κάποιος χαρακτήρας (π.χ. «+» ή «/»),
+// εντοπίζεται το κοντύτερο τμήμα και δοκιμάζεται η συμπλήρωσή του· η ορθότητα επιβεβαιώνεται από το άθροισμα ελέγχου
+// (CRC) του gzip. Αν δεν γίνει, ανακτώνται όσα μέλη διαβάζονται πριν από το σημείο της βλάβης.
+async function gunzip(bytes, partial = false) {
+  const reader = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip')).getReader(), chunks = [];
+  try { for (;;) { const { done, value } = await reader.read(); if (done) break; chunks.push(value); } }
+  catch (e) { if (!partial) throw e; }
+  return new TextDecoder().decode(await new Blob(chunks).arrayBuffer());
+}
+const b64bytes = (s) => { s = s.replace(/=+$/, ''); if (s.length % 4 === 1) s = s.slice(0, -1); return unb64(s + '='.repeat((4 - (s.length % 4)) % 4)); };
+async function tryDecode(str) { try { return JSON.parse(await gunzip(b64bytes(str))); } catch { return null; } }
+export async function decodeSeed(parts) {
+  parts = parts.map((p) => p.replace(/-/g, '+').replace(/_/g, '/'));
+  let data = await tryDecode(parts.join(''));
+  if (data) return { data };
+  // επισκευή: τμήμα (εκτός του τελευταίου) κοντύτερο από τα υπόλοιπα κατά 1–2 χαρακτήρες
+  toast('Λείπει ένας χαρακτήρας από το αρχείο του Render — γίνεται αυτόματη επισκευή, παρακαλώ περιμένετε έως 1–2 λεπτά…');
+  const counts = {};
+  for (const p of parts.slice(0, -1)) counts[p.length] = (counts[p.length] || 0) + 1;
+  const common = Number(Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] || 0);
+  for (let i = 0; i < parts.length; i++) {
+    const miss = (i < parts.length - 1 ? common : 0) - parts[i].length;
+    const total = parts.join('').replace(/=+$/, '').length;
+    const need = i < parts.length - 1 ? miss : (4 - (total % 4)) % 4;
+    if (need < 1 || need > 2) continue;
+    const combos = need === 1 ? ['+', '/'] : ['++', '+/', '/+', '//'];
+    for (let pos = 0; pos <= parts[i].length; pos++) {
+      for (const c of combos) {
+        const fixed = [...parts]; fixed[i] = parts[i].slice(0, pos) + c + parts[i].slice(pos);
+        // γρήγορος έλεγχος: μόνο αν η αποσυμπίεση φτάνει πέρα από το σημείο
+        data = await tryDecode(fixed.join(''));
+        if (data) return { data, note: `(Επισκευάστηκε αυτόματα ένας χαρακτήρας που είχε χαθεί στο τμήμα ${String(i).padStart(3, '0')}.)` };
+      }
+    }
+  }
+  // ανάκτηση όσων μελών διαβάζονται πριν από τη βλάβη
+  let text = '';
+  try { text = await gunzip(b64bytes(parts.join('')), true); } catch { /* */ }
+  const members = salvageObjects(text);
+  return members.length ? { data: { members }, note: `(Το αρχείο ήταν ελλιπές: ανακτήθηκαν ${members.length} μέλη — τα υπόλοιπα προσθέστε από το Excel του Μητρώου.)` } : {};
+}
+function salvageObjects(text) {
+  const start = text.indexOf('[', Math.max(0, text.indexOf('"members"')));
+  if (start < 0) return [];
+  const out = [];
+  let depth = 0, inStr = false, esc = false, objStart = -1;
+  for (let i = start + 1; i < text.length; i++) {
+    const c = text[i];
+    if (inStr) { if (esc) esc = false; else if (c === '\\') esc = true; else if (c === '"') inStr = false; continue; }
+    if (c === '"') inStr = true;
+    else if (c === '{') { if (depth === 0) objStart = i; depth++; }
+    else if (c === '}') { depth--; if (depth === 0 && objStart >= 0) { try { out.push(JSON.parse(text.slice(objStart, i + 1))); } catch { /* */ } objStart = -1; } }
+    else if (c === ']' && depth === 0) break;
+  }
+  return out;
 }
 
 export async function importFile(file) {
