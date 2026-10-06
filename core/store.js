@@ -64,6 +64,8 @@ export class Store {
   // Οι ενότητες δηλώνουν τις προεπιλεγμένες ρυθμίσεις και τα αρχικά δεδομένα τους (π.χ. οι 78 Στοές).
   defaultSettings(obj) { Object.assign(this.defaults, obj); }
   seed(name, fn) { this.seeds.push({ name, fn }); }
+  // Εφάπαξ αναβάθμιση δεδομένων (π.χ. επίσημα στοιχεία Στοών): εκτελείται μία φορά σε κάθε βάση και σημειώνεται στις ρυθμίσεις.
+  migrate(id, fn) { (this.migrations ||= []).push({ id, fn }); }
   on(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn); }
   emit(ev) { for (const f of this.listeners) try { f(ev); } catch (e) { console.error(e); } }
 
@@ -109,11 +111,22 @@ export class Store {
   async runSeeds() {
     const missing = Object.keys(this.defaults).filter((k) => this.settings[k] === undefined);
     const seeds = this.seeds.filter((s) => !this.tables[s.name]);
-    if (!missing.length && !seeds.length) return;
-    await this.save('Αρχικά δεδομένα εφαρμογής', async (tx) => {
-      for (const k of Object.keys(this.defaults)) if (tx.setting(k) === undefined) tx.setting(k, this.defaults[k]);
-      for (const s of this.seeds) if (!this.tables[s.name]) tx.replace(s.name, await s.fn(tx));
-    });
+    if (missing.length || seeds.length) {
+      await this.save('Αρχικά δεδομένα εφαρμογής', async (tx) => {
+        for (const k of Object.keys(this.defaults)) if (tx.setting(k) === undefined) tx.setting(k, this.defaults[k]);
+        for (const s of this.seeds) if (!this.tables[s.name]) tx.replace(s.name, await s.fn(tx));
+      });
+    }
+    for (const m of this.migrations || []) {
+      const done = String(this.settings._migrations || '').split(',');
+      if (done.includes(m.id)) continue;
+      await this.save(`Αναβάθμιση δεδομένων: ${m.id}`, async (tx) => {
+        const now = String(tx.setting('_migrations') || '').split(',').filter(Boolean);
+        if (now.includes(m.id)) return;
+        await m.fn(tx);
+        tx.setting('_migrations', [...now, m.id].join(','));
+      });
+    }
   }
 
   all(name) { return this.tables[name] || []; }

@@ -7,8 +7,20 @@ import { addContactSource } from '../core/pickers.js';
 import { provincialChoices } from './provinces.js';
 
 export const LODGE_STATUSES = ['Ενεργή', 'Σε αργία', 'Ανενεργή'];
-const SEED = '1|ΠΑΛΑΙΩΝ ΠΑΤΡΩΝ ΓΕΡΜΑΝΟΣ;2|ΑΚΡΟΠΟΛΙΣ;3|ΠΑΡΘΕΝΩΝ;4|ΜΙΑΟΥΛΗΣ;5|ΠΙΣΤΙΣ;8|ΗΛΙΟΤΡΟΠΙΟΝ;9|ΙΣΙΣ;10|ΗΡΑΚΛΕΙΤΟΣ;12|ΗΡΑΚΛΗΣ;13|GARIBALDI;15|ΕΜΠΕΔΟΚΛΗΣ;16|ΕΝΩΣΙΣ ΛΕΥΚΑΔΟΣ;17|ΑΝΑΓΕΝΝΗΣΙΣ;18|ΕΓΚΑΤΕΣΤΗΜΕΝΩΝ ΣΕΒΑΣΜΙΩΝ;19|ΤΡΙΠΤΟΛΕΜΟΣ;21|ΑΤΤΙΚΟΣ ΑΣΤΗΡ;23|ΠΥΘΑΓΟΡΑΣ;24|ΦΙΛΙΚΗ ΕΤΑΙΡΕΙΑ;26|ΜΕΓΑΣ ΑΛΕΞΑΝΔΡΟΣ;28|ΚΑΜΕΙΡΟΣ;29|ΚΑΣΣΑΝΔΡΟΣ;30|ΘΕΣΣΑΛΟΝΙΚΗ;31|ΣΩΚΡΑΤΗΣ;32|ΔΙΩΝΗ;36|ΔΕΙΝΟΚΡΑΤΗΣ;42|ΑΔΑΜΑΝΤΙΟΣ ΚΟΡΑΗΣ;44|ΒΥΖΑΣ;48|ΑΡΗΤΗ;50|ΔΑΙΔΑΛΟΣ;52|SAINT GEORGE;53|BENEFICENZA;54|ΑΡΓΩ;55|ΕΝΩΣΙΣ (ΚΥΠΡΟΣ);58|LA FRANCE;59|ΟΜΗΡΟΣ;60|ΔΗΜΗΤΡΑ;61|ΑΝΤΩΝΙΟΣ ΜΠΕΝΑΚΗΣ;62|ΠΛΟΥΤΑΡΧΟΣ;64|ΦΙΛΕΛΛΗΝΩΝ;66|ΠΥΘΑΓΟΡΑΣ;67|ΕΛΛΗΝΟΓΛΩΣΣΟΝ ΞΕΝΟΔΟΧΕΙΟΝ;69|ΑΝΤΙΠΛΟΙΑΡΧΟΣ ΒΛΑΧΑΚΟΣ;71|ΛΗΔΡΑ;73|ΑΧΙΛΛΕΥΣ Ο ΜΥΡΜΙΔΩΝ;76|ΛΟΡΔΟΣ ΒΥΡΩΝ;78|ΑΘΗΝΑ ΣΤΑΘΜΙΑ;80|ΑΠΟΛΛΩΝΙΟΣ Ο ΡΟΔΙΟΣ;84|ΚΥΠΡΑΙΩΝ ΗΡΩΩΝ;85|RUDYARD KIPLING;86|FRATELLI BANDIERA;88|ΑΓΙΟΥ ΙΩΑΝΝΟΥ;89|ΛΟΓΟΣ;90|ΑΘΑΝΑΣΙΟΣ ΛΕΥΚΑΔΙΤΗΣ;91|ΕΛΛΗΝΩΝ ΗΡΩΩΝ;92|ΙΩΑΝΝΗΣ ΚΑΠΟΔΙΣΤΡΙΑΣ;93|ΦΙΛΟΓΕΝΕΙΑ;94|ΔΙΟΝΥΣΙΟΣ ΡΩΜΑΣ;95|LA PAIX;96|ΘΕΜΙΣΤΟΚΛΗΣ;97|ΙΣΟΤΗΣ 1882;98|ΔΩΔΩΝΗ;99|ΚΑΘΗΚΟΝ;100|ΑΚΑΚΙΑ;101|ΑΛΕΞΑΝΔΡΟΣ ΡΩΜΑΣ;102|ΦΕΡΔΙΝΑΝΔΟΣ ΦΟΝ ΜΠΡΑΟΥΝΣΒΑΪΚ;103|ΠΛΑΤΩΝ 1990;104|ΑΚΡΟΠΟΛΙΣ 2010;105|ΠΡΟΜΗΘΕΥΣ 2014;106|ΜΑΚΕΔΩΝ;107|ΑΤΛΑΝΤΙΣ;108|ΕΥΡΩΠΗ;109|ΑΡΙΣΤΟΜΕΝΗΣ;111|ΣΠΥΡΙΔΩΝ ΝΑΓΟΣ;112|ΗΦΑΙΣΤΙΑ;113|ΔΗΜΗΤΗΡ;114|ΓΕΩΡΓΙΟΣ ΣΟΥΡΗΣ;115|ΟΡΦΕΥΣ;Φ|ΦΟΙΝΙΞ ΚΕΡΚΥΡΑΣ';
-db.seed('lodges', () => SEED.split(';').map((s, i) => { const [number, name] = s.split('|'); return { id: i + 1, number, name, orient: '', provincial: '', email: '', master: '', secretary: '', secretary_email: '', status: 'Ενεργή', ritual: '', meeting_place: '', notes: '', source: 'Μητρώο Μελών' }; }));
+export const LODGE_KINDS = ['Κανονική', 'Ειδική', 'Ερευνητική', 'Αγγλόφωνη', 'Γαλλόφωνη', 'Γερμανόφωνη', 'Ιταλόφωνη'];
+// Επίσημος κατάλογος Στοών (seed/lodges.json): αριθμός, όνομα, ΕπΜΣτ., Ανατολή, είδος, κατάσταση, Τυπικό, πλήρης τίτλος.
+const official = async () => (await fetch(new URL('../seed/lodges.json', import.meta.url))).json();
+const OFFICIAL_KEYS = ['name', 'provincial', 'orient', 'kind', 'status', 'ritual', 'full_title'];
+db.seed('lodges', async () => (await official()).map((x, i) => ({ id: i + 1, ...x, email: '', master: '', secretary: '', secretary_email: '', meeting_place: '', notes: '', source: 'Επίσημος κατάλογος' })));
+// Εφαρμογή του επίσημου καταλόγου σε υπάρχουσα βάση: ενημερώνει αυτά τα πεδία, προσθέτει όσες Στοές λείπουν·
+// email, Σεβάσμιος, Γραμματέας, τόπος και σημειώσεις δεν αλλάζουν.
+db.migrate('lodges-official-2026-10', async (tx) => {
+  for (const x of await official()) {
+    const ex = tx.find('lodges', (l) => lodgeNoKey(l.number) === lodgeNoKey(x.number));
+    if (ex) tx.update('lodges', ex.id, Object.fromEntries(OFFICIAL_KEYS.map((k) => [k, x[k]])));
+    else tx.insert('lodges', { ...x, email: '', master: '', secretary: '', secretary_email: '', meeting_place: '', notes: '', source: 'Επίσημος κατάλογος' });
+  }
+});
 
 export const lodgeNoKey = (n) => { n = String(n ?? '').replace(/\s+/g, '').toUpperCase(); return n.replace(/^0+/, '') || n; };
 export const cleanLodgeName = (v) => String(v || '').replace(/\s+/g, ' ').trim().split(' ')
@@ -49,6 +61,8 @@ const fields = [
   { k: 'provincial', label: 'Επαρχιακή / Περιφερειακή Μεγάλη Στοά', type: 'select', empty: '— Χωρίς ορισμό —', options: () => provincialChoices() },
   { k: 'email', label: 'Email Στοάς', type: 'email' },
   { k: 'status', label: 'Κατάσταση', type: 'select', options: LODGE_STATUSES },
+  { k: 'kind', label: 'Είδος', type: 'select', empty: '—', options: LODGE_KINDS },
+  { k: 'full_title', label: 'Πλήρης τίτλος', full: true, placeholder: 'π.χ. ΣΣτ. 2 Ακρόπολις υπό την Σκ. της ΕπΜΣτ. Αθηνών' },
   { k: 'master', label: 'Σεβάσμιος' },
   { k: 'secretary', label: 'Γραμματέας' },
   { k: 'secretary_email', label: 'Email Γραμματέα', type: 'email' },
@@ -66,7 +80,7 @@ module({
     sort: (xs) => sortBy(xs, sortKey, 'number'),
     filterHtml: (q) => `<select name="prov"><option value="">Όλες οι ΕπΜΣτ.</option>${provincialChoices().map((p) => `<option${p === q.prov ? ' selected' : ''}>${esc(p)}</option>`).join('')}<option value="-"${q.prov === '-' ? ' selected' : ''}>Χωρίς ορισμό</option></select>`,
     filter: (xs, q) => (q.prov === '-' ? xs.filter((x) => !x.provincial) : q.prov ? xs.filter((x) => x.provincial === q.prov) : xs),
-    search: ['number', 'name', 'orient', 'provincial', 'email', 'master', 'secretary', 'secretary_email', 'ritual', 'meeting_place'],
+    search: ['number', 'name', 'orient', 'provincial', 'email', 'master', 'secretary', 'secretary_email', 'ritual', 'meeting_place', 'kind', 'full_title'],
     intro: () => {
       const xs = db.all('lodges'), miss = xs.filter((x) => !lodgeEmail(x)).length, noprov = xs.filter((x) => !x.provincial).length;
       return miss || noprov ? `<p class="muted">Προς συμπλήρωση: ${miss} Στοές χωρίς email, ${noprov} χωρίς ορισμένη ΕπΜΣτ.</p>` : '';
@@ -75,6 +89,8 @@ module({
       { label: 'Αρ.', v: (x) => `<b>${esc(x.number)}</b>` },
       { label: 'Όνομα', v: (x) => esc(x.name) + (x.status && x.status !== 'Ενεργή' ? ` <span class="pill warn">${esc(x.status)}</span>` : '') },
       { label: 'Ανατολή', v: (x) => esc(x.orient) },
+      { label: 'Είδος', v: (x) => esc(x.kind || '') },
+      { label: 'Τυπικό', v: (x) => esc(x.ritual || '') },
       { label: 'ΕπΜΣτ.', v: (x) => esc(x.provincial || '—') },
       { label: 'Email', v: (x) => esc(lodgeEmail(x)) || '<span class="muted">—</span>' },
       { label: 'Σεβάσμιος', v: (x) => esc(x.master) },
@@ -91,7 +107,8 @@ module({
       cols: [{ k: 'number', label: 'Αριθμός', aliases: ['Αρ.', 'Αρ', 'Number', 'No'], w: 9 }, { k: 'name', label: 'Όνομα', aliases: ['Στοά', 'Name', 'Lodge'], w: 32 }, { k: 'orient', label: 'Ανατολή', aliases: ['Πόλη', 'Orient', 'City'], w: 16 },
         { k: 'provincial', label: 'Επαρχιακή Μεγάλη Στοά', aliases: ['ΕπΜΣτ.', 'ΕπΜΣτ', 'Provincial'], w: 34 }, { k: 'email', label: 'Email Στοάς', aliases: ['Email'], w: 32 }, { k: 'master', label: 'Σεβάσμιος', aliases: ['Master'], w: 26 },
         { k: 'secretary', label: 'Γραμματέας', aliases: ['Secretary'], w: 26 }, { k: 'secretary_email', label: 'Email Γραμματέα', aliases: ['Secretary Email'], w: 32 }, { k: 'status', label: 'Κατάσταση', aliases: ['Status'], w: 12 },
-        { k: 'ritual', label: 'Τυπικό', aliases: ['Ritual'], w: 18 }, { k: 'meeting_place', label: 'Τόπος συνεδριάσεων', aliases: ['Τόπος', 'Venue'], w: 40 }, { k: 'notes', label: 'Σημειώσεις', aliases: ['Notes'], w: 30 }],
+        { k: 'ritual', label: 'Τυπικό', aliases: ['Ritual'], w: 18 }, { k: 'meeting_place', label: 'Τόπος συνεδριάσεων', aliases: ['Τόπος', 'Venue'], w: 40 }, { k: 'notes', label: 'Σημειώσεις', aliases: ['Notes'], w: 30 },
+        { k: 'kind', label: 'Είδος', aliases: ['ΕΙΔΟΣ'], w: 14 }, { k: 'full_title', label: 'Πλήρης τίτλος', aliases: ['Πληρης', 'Πλήρης'], w: 70 }],
       normalize(d) {
         d.number = lodgeNoKey(d.number);
         if (d.name) d.name = cleanLodgeName(d.name);

@@ -293,7 +293,7 @@ def test_github_storage_and_concurrent_edits(app):
     connect_github(app, gh)
     app.page.wait_for_selector('.dash')
     assert gh.files()['README.md'].startswith('# Δεδομένα'.encode())
-    assert len(gh.read_json('data/lodges.json')) == 78 and 'data/settings.json' in gh.files()
+    assert len(gh.read_json('data/lodges.json')) == 86 and 'data/settings.json' in gh.files()
     app.go('/letters/new').fill(subject='Από τον Δημήτρη', body='x')
     app.click('Αποθήκευση & απόδοση')
     app.page.wait_for_url('**/#/letters/1')
@@ -410,3 +410,28 @@ def test_render_env_with_lost_character_is_repaired(app, tmp_path):
     app.page.locator('#imf button').click()
     app.page.wait_for_selector('text=Επισκευάστηκε αυτόματα', timeout=120000)
     assert '60 εγγραφές (60 νέες' in app.text()
+
+
+def test_official_lodges_applied_to_existing_database(app):
+    # Υπάρχουσα βάση με τον παλιό κατάλογο Στοών: η αναβάθμιση ενημερώνει τα επίσημα στοιχεία και προσθέτει όσες λείπουν,
+    # χωρίς να αγγίζει email/Σεβάσμιο που είχαν ήδη συμπληρωθεί.
+    gh = MockGitHub()
+    gh.ref = gh.put_commit(gh.put_tree({}), [], 'init')
+    old = [{'id': 1, 'number': '2', 'name': 'ΑΚΡΟΠΟΛΙΣ', 'provincial': '', 'orient': '', 'email': 'akropolis@example.com', 'master': 'Σεβάσμιος Α', 'status': 'Ενεργή'},
+           {'id': 2, 'number': '73', 'name': 'ΑΧΙΛΛΕΥΣ Ο ΜΥΡΜΙΔΩΝ', 'provincial': '', 'status': 'Ενεργή'}]
+    gh.external_commit('data/lodges.json', json.dumps(old, ensure_ascii=False))
+    gh.external_commit('data/settings.json', json.dumps({'closing': 'x'}))
+    connect_github(app, gh)
+    app.page.wait_for_selector('.dash')
+    lodges = {l['number']: l for l in gh.read_json('data/lodges.json')}
+    assert len(lodges) == 87  # 86 επίσημες + η 73 που υπήρχε ήδη
+    a = lodges['2']
+    assert a['provincial'] == 'ΕπΜΣτ. Αθηνών' and a['orient'] == 'Αθηνών' and a['kind'] == 'Κανονική' and a['ritual'] == 'Αμίλης'
+    assert a['email'] == 'akropolis@example.com' and a['master'] == 'Σεβάσμιος Α'
+    assert a['full_title'] == 'ΣΣτ. 2 Ακρόπολις υπό την Σκ. της ΕπΜΣτ. Αθηνών'
+    assert lodges['52']['status'] == 'Ανενεργή' and lodges['117']['kind'] == 'Ειδική' and lodges['Φ']['orient'] == 'Κερκύρας'
+    assert 'lodges-official-2026-10' in gh.read_json('data/settings.json')['_migrations']
+    n = len(gh.commits)
+    app.page.reload()
+    app.page.wait_for_selector('.dash')
+    assert len(gh.commits) == n  # δεν ξανατρέχει
