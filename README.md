@@ -1,28 +1,28 @@
 # Grand Secretary — National Grand Lodge of Greece
 
-The way in to the work of the Secretariat. This repository holds the main portal and the **Ψηφιακή Μεγάλη Γραμματεία** app (`app/`, runs on GitHub Pages only).
+The way in to the work of the Secretariat. Everything opens at one address: the **Ψηφιακή Μεγάλη Γραμματεία** app, with the portal of all other sections inside it (menu «🏛 Πύλη»). Runs on GitHub Pages only.
 
 **Portal:** https://nglg-gsec.github.io/NGLG-Grand-Secretary/
 
 ## 🔑 Ψηφιακή Μεγάλη Γραμματεία
 
-### 👉 [Άνοιγμα της εφαρμογής](https://nglg-gsec.github.io/NGLG-Grand-Secretary/app/)
+### 👉 [Άνοιγμα της εφαρμογής](https://nglg-gsec.github.io/NGLG-Grand-Secretary/)
 
-`https://nglg-gsec.github.io/NGLG-Grand-Secretary/app/`
+`https://nglg-gsec.github.io/NGLG-Grand-Secretary/`
 
 Τρέχει **μόνο στο GitHub** (χωρίς Render, χωρίς κόστος)· τα δεδομένα φυλάσσονται στο ιδιωτικό αποθετήριο
-`NGLG-GSEC/nglg-grammateia-data`. Πρώτη χρήση και μεταφορά δεδομένων: [app/README.md](app/README.md).
+`NGLG-GSEC/nglg-grammateia-data`. Πρώτη χρήση και μεταφορά δεδομένων: [docs/ΕΦΑΡΜΟΓΗ.md](docs/ΕΦΑΡΜΟΓΗ.md).
 
 Απευθείας σύνδεσμοι:
-[Νέα Επιστολή](https://nglg-gsec.github.io/NGLG-Grand-Secretary/app/#/letters/new) · [Νέο Διάταγμα](https://nglg-gsec.github.io/NGLG-Grand-Secretary/app/#/decrees/new) · [Επισκέψεις Στοών](https://nglg-gsec.github.io/NGLG-Grand-Secretary/app/#/visits) ·
-[Εορτολόγιο](https://nglg-gsec.github.io/NGLG-Grand-Secretary/app/#/namedays) · [Πρότζεκτ ΜΔ](https://nglg-gsec.github.io/NGLG-Grand-Secretary/app/#/projects) · [Κατάλογος](https://nglg-gsec.github.io/NGLG-Grand-Secretary/app/#/directory) · [Μητρώο Μελών](https://nglg-gsec.github.io/NGLG-Grand-Secretary/app/#/members) ·
-[Βάση Δεδομένων](https://nglg-gsec.github.io/NGLG-Grand-Secretary/app/#/database)
+[Νέα Επιστολή](https://nglg-gsec.github.io/NGLG-Grand-Secretary/#/letters/new) · [Νέο Διάταγμα](https://nglg-gsec.github.io/NGLG-Grand-Secretary/#/decrees/new) · [Επισκέψεις Στοών](https://nglg-gsec.github.io/NGLG-Grand-Secretary/#/visits) ·
+[Εορτολόγιο](https://nglg-gsec.github.io/NGLG-Grand-Secretary/#/namedays) · [Πρότζεκτ ΜΔ](https://nglg-gsec.github.io/NGLG-Grand-Secretary/#/projects) · [Κατάλογος](https://nglg-gsec.github.io/NGLG-Grand-Secretary/#/directory) · [Μητρώο Μελών](https://nglg-gsec.github.io/NGLG-Grand-Secretary/#/members) ·
+[Βάση Δεδομένων](https://nglg-gsec.github.io/NGLG-Grand-Secretary/#/database)
 
 ## Main sections
 
 | Section | Where it lives | Opens |
 | --- | --- | --- |
-| **Ψηφιακή Μεγάλη Γραμματεία** | `app/` in this repository (GitHub Pages only) — guide and code map in [`app/README.md`](app/README.md) | one app for the whole Secretariat: letters & decrees with protocol numbers, lodge visits & Grand Master's representatives, name days & greetings, Grand Master's projects, directory of provinces & lodges, member registry, Epeteirida |
+| **Ψηφιακή Μεγάλη Γραμματεία** | root of this repository (`index.html`, `core/`, `modules/`) — guide and code map in [`docs/ΕΦΑΡΜΟΓΗ.md`](docs/ΕΦΑΡΜΟΓΗ.md) | one app for the whole Secretariat: letters & decrees with protocol numbers, lodge visits & Grand Master's representatives, name days & greetings, Grand Master's projects, directory of provinces & lodges, member registry, Epeteirida |
 | **Ψηφιακό Έντυπο Διατάγματος** | `diatagma/` in this repository | decree form with live preview, PNG / A4 PDF export, automatic background removal for emblem and signature |
 | Registration forms | [`dskiad/nglg-registration-forms`](https://github.com/dskiad/nglg-registration-forms) | the register, with the live forms linked from it |
 | Τεκτονικές Ομιλίες | [`dskiad/nglg-tektonikes-omilies`](https://github.com/dskiad/nglg-tektonikes-omilies) | [the library](https://dskiad.github.io/nglg-tektonikes-omilies/) |
@@ -31,8 +31,8 @@ The way in to the work of the Secretariat. This repository holds the main portal
 ## Παλιά έκδοση (letter-manager, Render)
 
 Ο φάκελος `letter-manager/` και το `render.yaml` είναι η παλιά έκδοση με διακομιστή στο Render. Αντικαταστάθηκαν από την
-εφαρμογή `app/`, που τρέχει μόνο στο GitHub Pages. Διατηρούνται προσωρινά, μόνο για τη μεταφορά των δεδομένων
-(βλ. [app/README.md](app/README.md)). Μετά τη μεταφορά διαγράφονται μαζί με την υπηρεσία στο Render.
+νέα εφαρμογή (ρίζα του αποθετηρίου), που τρέχει μόνο στο GitHub Pages. Διατηρούνται προσωρινά, μόνο για τη μεταφορά των δεδομένων
+(βλ. [docs/ΕΦΑΡΜΟΓΗ.md](docs/ΕΦΑΡΜΟΓΗ.md)). Μετά τη μεταφορά διαγράφονται μαζί με την υπηρεσία στο Render.
 
 ## The three offices
 

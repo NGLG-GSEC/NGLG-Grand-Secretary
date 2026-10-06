@@ -15,6 +15,7 @@ import './modules/namedays.js';
 import './modules/projects.js';
 import './modules/database.js';
 import './modules/settings.js';
+import './modules/portal.js';
 
 await boot();
 start();

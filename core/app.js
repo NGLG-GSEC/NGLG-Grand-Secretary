@@ -125,7 +125,7 @@ export async function render() {
   const seq = ++renderSeq;
   const { path, query } = parseHash();
   const root = document.getElementById('app');
-  if (!db.backend && path !== '/connect') { location.hash = '#/connect'; return; }
+  if (!db.backend && path !== '/connect' && path !== '/portal') { location.hash = '#/connect'; return; }
   let r = null, params = {};
   for (const x of routes) { const m = x.re.exec(path); if (m) { r = x; x.keys.forEach((k, i) => (params[k] = decodeURIComponent(m[i + 1]))); break; } }
   let out;

@@ -43,7 +43,8 @@ ${query.error ? `<div class="card toast error" style="position:static">${esc(que
 <li>Επικολλήστε τον παραπάνω και πατήστε «Σύνδεση». Ο κωδικός μένει μόνο σε αυτή τη συσκευή.</li></ol>
 <p class="muted">Τα δεδομένα (μέλη, Στοές, πρωτόκολλο…) αποθηκεύονται μόνο στο ιδιωτικό αποθετήριο· κάθε αλλαγή κρατιέται στο ιστορικό του GitHub.</p></details></form>
 <div class="card"><b>Δοκιμή χωρίς σύνδεση</b><p class="muted" style="margin:6px 0 10px">Τα δεδομένα μένουν μόνο σε αυτόν τον browser — για γνωριμία με την εφαρμογή.</p>
-<button class="btn" data-act="local">Δοκιμή σε αυτή τη συσκευή</button></div></div>`,
+<button class="btn" data-act="local">Δοκιμή σε αυτή τη συσκευή</button></div>
+<div class="card"><b>🏛 Πύλη Μεγάλης Γραμματείας</b><p class="muted" style="margin:6px 0 10px">Έντυπο Διατάγματος, Τεκτονικές Ομιλίες, φόρμες εγγραφής, άλλα Γραφεία.</p><a class="btn" href="#/portal">Άνοιγμα Πύλης</a></div></div>`,
     mount(el) {
       onSubmit(el.querySelector('#ghForm'), async (d) => {
         const repo = d.repo.trim().replace(/^https:\/\/github\.com\//, '').replace(/\/$/, '');

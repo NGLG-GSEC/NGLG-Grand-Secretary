@@ -12,7 +12,7 @@ import pytest
 
 from mock_github import MockGitHub
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[1]
 PNG = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR4nGNkYPjPwMDAxMDAwMDAAAAOGQEDqv3yVwAAAABJRU5ErkJggg==')
 
 
@@ -331,15 +331,18 @@ def test_github_errors(app):
     app.errors.clear()
 
 
-def test_portal_links_open_in_app(app):
-    app.connect_local()
-    html = (ROOT / 'index.html').read_text(encoding='utf-8')
-    links = sorted(set(re.findall(r'href="app/(#/[^"]*)"', html)))
-    assert len(links) >= 10, links
-    for h in links:
-        app.page.goto(app.base + h)
-        app.page.wait_for_selector('main h1')
-        assert 'Η σελίδα δεν βρέθηκε' not in app.text(), h
+def test_portal_and_old_links(browser, base_url):
+    ctx = browser.new_context()
+    page = ctx.new_page()
+    page.goto(base_url + '#/portal')  # η Πύλη ανοίγει και χωρίς σύνδεση
+    page.wait_for_selector('text=Πύλη Μεγάλης Γραμματείας')
+    for s in ['Ψηφιακό Έντυπο Διατάγματος', 'Τεκτονικές Ομιλίες', 'Φόρμες εγγραφής', 'Bear Bell Ritual', 'Μέγας Καγκελάριος']:
+        assert page.get_by_text(s).count(), s
+    assert (ROOT / 'diatagma' / 'index.html').exists() and page.locator('a[href="diatagma/"]').count()
+    page.goto(base_url + 'app/#/letters')  # παλιοί σύνδεσμοι …/app/#/… → κεντρική διεύθυνση
+    page.wait_for_url(base_url + '#/connect')
+    assert page.url.startswith(base_url + '#/')
+    ctx.close()
 
 
 @pytest.mark.parametrize('path', ['/', '/letters/new', '/decrees/new', '/members', '/directory', '/visits', '/namedays', '/projects', '/database', '/settings'])

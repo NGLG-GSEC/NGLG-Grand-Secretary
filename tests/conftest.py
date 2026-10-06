@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 from playwright.sync_api import sync_playwright
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[1]
 
 
 @pytest.fixture(scope='session')
@@ -19,7 +19,7 @@ def base_url():
     handler = functools.partial(Quiet, directory=str(ROOT))
     srv = http.server.ThreadingHTTPServer(('127.0.0.1', 0), handler)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
-    yield f'http://127.0.0.1:{srv.server_address[1]}/app/'
+    yield f'http://127.0.0.1:{srv.server_address[1]}/'
     srv.shutdown()
 
 
