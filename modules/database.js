@@ -110,16 +110,32 @@ const unb64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
 // Μητρώο Μελών από τις μεταβλητές MEMBER_REGISTRY_SEED_000… της παλιάς εφαρμογής (Render → Environment → Export).
 // Διαβάζονται ΜΟΝΟ αυτές οι γραμμές· οι υπόλοιπες (κωδικοί κ.λπ.) αγνοούνται και δεν αποθηκεύονται πουθενά.
 export async function seedMembers(text) {
+  // Δεκτές μορφές εξαγωγής: .env (KEY=value), JSON αντικείμενο {"KEY":"value"} ή λίστα [{"key":"KEY","value":"..."}]
   const parts = {};
-  for (const m of text.matchAll(/MEMBER_REGISTRY_SEED_(\d{3})["']?\s*[=:]\s*["']?([A-Za-z0-9+/=_-]+)/g)) parts[m[1]] = m[2];
+  const put = (k, v) => { const m = /MEMBER_REGISTRY_SEED_(\d{3})$/.exec(String(k).trim()); if (m) parts[m[1]] = String(v ?? '').replace(/\\\//g, '/').replace(/\\n/g, '').replace(/[^A-Za-z0-9+/=_-]/g, ''); };
+  let json = null;
+  try { json = JSON.parse(text); } catch { /* όχι JSON */ }
+  if (Array.isArray(json)) for (const x of json) put(x.key ?? x.name ?? x.Key ?? '', x.value ?? x.Value ?? '');
+  else if (json && typeof json === 'object') for (const [k, v] of Object.entries(json)) put(k, typeof v === 'object' && v ? v.value : v);
+  if (!Object.keys(parts).length) {
+    for (const line of text.split(/\r?\n/)) {
+      const m = /^\s*(?:export\s+)?["']?(MEMBER_REGISTRY_SEED_\d{3})["']?\s*[=:]\s*(.*)$/.exec(line);
+      if (m) put(m[1], m[2]);
+    }
+  }
   const keys = Object.keys(parts).sort();
   if (!keys.length) return null;
+  const missing = [];
+  for (let i = 0; i <= Number(keys.at(-1)); i++) if (!parts[String(i).padStart(3, '0')]) missing.push(String(i).padStart(3, '0'));
+  if (missing.length) throw new Error(`Λείπουν τα τμήματα MEMBER_REGISTRY_SEED_${missing.join(', ')} από το αρχείο — εξαγάγετε όλες τις μεταβλητές (Show more) και ξαναδοκιμάστε.`);
   const b64 = keys.map((k) => parts[k]).join('').replace(/-/g, '+').replace(/_/g, '/');
-  let data;
+  let data, why = '';
   try {
-    const gz = unb64(b64);
-    data = JSON.parse(new TextDecoder().decode(await new Response(new Blob([gz]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer()));
-  } catch { throw new Error(`Βρέθηκαν ${keys.length} τμήματα MEMBER_REGISTRY_SEED αλλά δεν διαβάστηκαν — ελέγξτε ότι εξαγάγατε όλες τις μεταβλητές (Show more).`); }
+    const raw = unb64(b64.replace(/=+$/, '') + '='.repeat((4 - (b64.replace(/=+$/, '').length % 4)) % 4));
+    const bytes = raw[0] === 0x1f && raw[1] === 0x8b ? new Uint8Array(await new Response(new Blob([raw]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer()) : raw;
+    data = JSON.parse(new TextDecoder().decode(bytes));
+  } catch (e) { why = e.message; }
+  if (!data) throw new Error(`Βρέθηκαν ${keys.length} τμήματα MEMBER_REGISTRY_SEED (${keys[0]}–${keys.at(-1)}, ${b64.length} χαρακτήρες, ${b64.startsWith('H4sI') ? 'σωστή αρχή' : 'μη αναμενόμενη αρχή'}) αλλά δεν διαβάστηκαν (${why}). Στείλτε αυτό το μήνυμα στον Claude.`);
   const members = Array.isArray(data) ? data : data.members || [];
   return applyMemberItems(members.filter((m) => m.surname || m.first_name).map((m) => ({ id: null, member: m })), 'merge');
 }

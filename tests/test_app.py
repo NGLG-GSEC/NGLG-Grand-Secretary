@@ -359,7 +359,8 @@ def test_mobile_no_horizontal_scroll(browser, base_url, path):
     ctx.close()
 
 
-def test_import_member_registry_from_render_env(app, tmp_path):
+@pytest.mark.parametrize('fmt', ['env', 'env_quoted', 'json_object', 'json_list'])
+def test_import_member_registry_from_render_env(app, tmp_path, fmt):
     # Render → Environment → Export (.env): το Μητρώο στις μεταβλητές MEMBER_REGISTRY_SEED_000…, μαζί με άσχετους κωδικούς
     members = {'members': [
         {'registry_no': 1201, 'surname': 'Σπόρος', 'first_name': 'Αλέξανδρος', 'email': 'a@example.com', 'mobile': '6900000001', 'active': True,
@@ -367,9 +368,18 @@ def test_import_member_registry_from_render_env(app, tmp_path):
         {'registry_no': 1202, 'surname': 'Δεύτερος', 'first_name': 'Βασίλειος', 'email': '', 'mobile': '', 'active': True, 'lodges': []}]}
     b64 = base64.b64encode(gzip.compress(json.dumps(members, ensure_ascii=False).encode())).decode()
     parts = [b64[i:i + 40] for i in range(0, len(b64), 40)]
-    env = 'APP_SECRET=topsecret\nSMTP_PASSWORD="also secret"\n' + ''.join(f'MEMBER_REGISTRY_SEED_{i:03d}={p}\n' for i, p in enumerate(parts))
-    f = tmp_path / 'nglg-letter-manager.env'
-    f.write_text(env)
+    secrets = {'APP_SECRET': 'topsecret', 'SMTP_PASSWORD': 'also secret'}
+    seeds = {f'MEMBER_REGISTRY_SEED_{i:03d}': p for i, p in enumerate(parts)}
+    if fmt == 'env':
+        body = ''.join(f'{k}={v}\n' for k, v in {**secrets, **seeds}.items())
+    elif fmt == 'env_quoted':
+        body = ''.join(f'{k}="{v}"\n' for k, v in {**secrets, **seeds}.items())
+    elif fmt == 'json_object':
+        body = json.dumps({**secrets, **seeds}).replace('/', '\\/')  # μορφή με «\/» όπως σε κάποιες εξαγωγές
+    else:
+        body = json.dumps([{'key': k, 'value': v} for k, v in {**secrets, **seeds}.items()], indent=2)
+    f = tmp_path / ('nglg-letter-manager.' + ('json' if fmt.startswith('json') else 'env'))
+    f.write_text(body)
     app.connect_local().go('/database/backup')
     app.page.set_input_files('[name=file]', str(f))
     app.page.locator('#imf button').click()
