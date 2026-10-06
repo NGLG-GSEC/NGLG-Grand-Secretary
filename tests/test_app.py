@@ -499,3 +499,24 @@ def test_existing_deregistered_members_marked_once(app):
     ms = {m['id']: m for m in gh.read_json('data/member_registry.json')}
     assert not ms[1].get('no_contact') and ms[1]['active'] == 1
     assert ms[2]['no_contact'] == 1 and ms[3]['no_contact'] == 1 and ms[3]['active'] == 0
+
+
+def test_official_provinces_applied_and_lodges_counted(app):
+    gh = MockGitHub()
+    gh.ref = gh.put_commit(gh.put_tree({}), [], 'init')
+    gh.external_commit('data/grand_lodges.json', json.dumps([
+        {'id': 1, 'short': 'ΕπΜΣτ. Αθηνών', 'full_title': 'παλιό', 'email': 'old@example.com', 'addressee': 'x', 'kind': 'Επαρχιακή', 'master_name': 'Α. Διδάσκαλος', 'sort_order': 10, 'active': 1},
+        {'id': 2, 'short': 'ΠΜΣτ.  Κύπρου', 'full_title': '', 'email': '', 'kind': 'Επαρχιακή', 'sort_order': 60, 'active': 1}], ensure_ascii=False))
+    gh.external_commit('data/settings.json', json.dumps({'closing': 'x'}))
+    connect_github(app, gh)
+    app.page.wait_for_selector('.dash')
+    ps = {p['short']: p for p in gh.read_json('data/grand_lodges.json')}
+    assert len(ps) == 7
+    a = ps['ΕπΜΣτ. Αθηνών']
+    assert a['email'] == 'athens.secretary@nglgreece.gr' and a['full_title'] == 'Επαρχιακή Μεγάλη Στοά Αθηνών' and a['master_name'] == 'Α. Διδάσκαλος'
+    c = ps['ΠΜΣτ. Κύπρου']
+    assert c['kind'] == 'Περιφερειακή' and c['email'] == 'dglcyprus@nglgreece.gr' and c['addressee'].startswith('ΠερΜΓρ.')
+    assert ps['ΕΜΣτΕ Α.Ε. & Α.Τ.']['email'] == 'grand.secretary@nglgreece.gr'
+    app.go('/provinces')
+    rows = app.page.locator('tr', has_text='ΕπΜΣτ. Αθηνών').first.inner_text()
+    assert '36' in rows

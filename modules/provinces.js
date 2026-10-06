@@ -20,6 +20,18 @@ db.seed('grand_lodges', () => SEED.map(([short, full_title, email, addressee, ki
   id: i + 1, short, full_title, kind, email, addressee, secretary_name: '', secretary_email: '', master_name: '', master_email: '', sort_order: (i + 1) * 10, active: 1, notes: '',
 })));
 
+// Εφάπαξ: επίσημα στοιχεία (συντομογραφία, πλήρης τίτλος, είδος, email Γραμματείας, «Προς») σε υπάρχουσα βάση·
+// ΕπΜΔ, ΕπΜΓρ., σημειώσεις και σειρά δεν αλλάζουν. Όσες λείπουν προστίθενται.
+const shortKey = (v) => String(v || '').replace(/\s+/g, ' ').trim();
+db.migrate('provinces-official-2026-10', (tx) => {
+  SEED.forEach(([short, full_title, email, addressee, kind], i) => {
+    const ex = tx.find('grand_lodges', (p) => shortKey(p.short) === short);
+    if (ex) tx.update('grand_lodges', ex.id, { short, full_title, email, addressee, kind });
+    else tx.insert('grand_lodges', { short, full_title, kind, email, addressee, secretary_name: '', secretary_email: '', master_name: '', master_email: '', sort_order: (i + 1) * 10, active: 1, notes: '' });
+  });
+});
+const provinceLodges = (p) => db.all('lodges').filter((l) => shortKey(l.provincial) === shortKey(p.short));
+
 export const provincesAll = (activeOnly = false) => sortBy(db.all('grand_lodges').filter((p) => !activeOnly || p.active), 'sort_order', 'id');
 export const regionalProvinces = () => provincesAll(true).filter((p) => p.kind !== 'Εθνική');
 export const provincialChoices = () => regionalProvinces().map((p) => p.short);
@@ -75,6 +87,7 @@ module({
     search: ['short', 'full_title', 'email', 'master_name', 'master_email', 'secretary_name', 'secretary_email'],
     columns: [
       { label: 'Επαρχία', v: (p) => `<b>${esc(p.short)}</b>${p.active ? '' : ' <span class="pill warn">Ανενεργή</span>'}<br><small class="muted">${esc(p.full_title)}</small>` },
+      { label: 'Στοές', v: (p) => { const ls = provinceLodges(p); return ls.length ? `<b>${ls.length}</b><br><small class="muted">${ls.map((l) => esc(l.number)).sort((x, y) => (Number(x) || 1e9) - (Number(y) || 1e9)).join(', ')}</small>` : '—'; } },
       { label: 'Email Γραμματείας', v: (p) => esc(p.email) },
       { label: 'ΕπΜΔ', v: (p) => `${esc(p.master_name || '—')}<br><small class="muted">${esc(p.master_email)}</small>` },
       { label: 'ΕπΜΓρ.', v: (p) => `${esc(p.secretary_name || '—')}<br><small class="muted">${esc(p.secretary_email)}</small>` },
