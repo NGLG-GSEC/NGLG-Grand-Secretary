@@ -22,7 +22,16 @@ db.migrate('lodges-official-2026-10', async (tx) => {
   }
 });
 
+// Τυπικό: 19 Στοές εργάζονται σε Σκωτικό (η Φοίνιξ Κερκύρας σε Σκωτικό 1700)· οι υπόλοιπες σε Emulation.
+db.migrate('lodges-rituals-2026-10', (tx) => {
+  for (const l of tx.all('lodges')) {
+    const r = lodgeNoKey(l.number) === 'Φ' ? 'ΣΚΩΤΙΚΟ 1700' : String(l.ritual || '').trim() === 'Αμίλης' ? 'Emulation' : null;
+    if (r && r !== l.ritual) tx.update('lodges', l.id, { ritual: r });
+  }
+});
+
 export const lodgeNoKey = (n) => { n = String(n ?? '').replace(/\s+/g, '').toUpperCase(); return n.replace(/^0+/, '') || n; };
+const cleanGreek = (v) => String(v || '').toUpperCase().replace(/[ABEZHIKMNOPTXY]/g, (c) => 'ΑΒΕΖΗΙΚΜΝΟΡΤΧΥ'['ABEZHIKMNOPTXY'.indexOf(c)]);
 export const cleanLodgeName = (v) => String(v || '').replace(/\s+/g, ' ').trim().split(' ')
   .map((w) => (/[A-Za-z]/.test(w) ? w.replace(/[ΑΒΕΖΗΙΚΜΝΟΡΤΥΧ]/g, (c) => 'ABEZHIKMNOPTYX'['ΑΒΕΖΗΙΚΜΝΟΡΤΥΧ'.indexOf(c)]) : w)).join(' ');
 const sortKey = (x) => (/^\d+$/.test(String(x.number)) ? Number(x.number) : 1e9);
@@ -64,6 +73,7 @@ const fields = [
   { k: 'kind', label: 'Είδος', type: 'select', empty: '—', options: LODGE_KINDS },
   { k: 'full_title', label: 'Πλήρης τίτλος', full: true, placeholder: 'π.χ. ΣΣτ. 2 Ακρόπολις υπό την Σκ. της ΕπΜΣτ. Αθηνών' },
   { k: 'master', label: 'Σεβάσμιος' },
+  { k: 'master_mobile', label: 'Κινητό Σεβασμίου', type: 'tel' },
   { k: 'secretary', label: 'Γραμματέας' },
   { k: 'secretary_email', label: 'Email Γραμματέα', type: 'email' },
   { k: 'ritual', label: 'Τυπικό', placeholder: 'π.χ. Emulation, Σκωτικό', datalist: rituals },
@@ -93,7 +103,7 @@ module({
       { label: 'Τυπικό', v: (x) => esc(x.ritual || '') },
       { label: 'ΕπΜΣτ.', v: (x) => esc(x.provincial || '—') },
       { label: 'Email', v: (x) => esc(lodgeEmail(x)) || '<span class="muted">—</span>' },
-      { label: 'Σεβάσμιος', v: (x) => esc(x.master) },
+      { label: 'Σεβάσμιος', v: (x) => esc(x.master) + (x.master_mobile ? `<br><small><a href="tel:${esc(String(x.master_mobile).replace(/[^\d+]/g, ''))}">${esc(x.master_mobile)}</a></small>` : '') },
       { label: 'Ενεργά μέλη', v: (x) => { const n = lodgeMemberCounts()[lodgeNoKey(x.number)] || 0; return `<a href="#/members?field=lodge&q=${encodeURIComponent(x.number)}">${n}</a>`; } },
     ],
     validate(d, tx, id) {
@@ -104,13 +114,25 @@ module({
     },
     excel: {
       file: 'EMSTE_SYMBOLIKES_STOES.xlsx', sheet: 'ΣΥΜΒΟΛΙΚΕΣ ΣΤΟΕΣ', key: 'number',
-      cols: [{ k: 'number', label: 'Αριθμός', aliases: ['Αρ.', 'Αρ', 'Number', 'No'], w: 9 }, { k: 'name', label: 'Όνομα', aliases: ['Στοά', 'Name', 'Lodge'], w: 32 }, { k: 'orient', label: 'Ανατολή', aliases: ['Πόλη', 'Orient', 'City'], w: 16 },
-        { k: 'provincial', label: 'Επαρχιακή Μεγάλη Στοά', aliases: ['ΕπΜΣτ.', 'ΕπΜΣτ', 'Provincial'], w: 34 }, { k: 'email', label: 'Email Στοάς', aliases: ['Email'], w: 32 }, { k: 'master', label: 'Σεβάσμιος', aliases: ['Master'], w: 26 },
+      cols: [{ k: 'number', label: 'Αριθμός', aliases: ['Αρ.', 'Αρ', 'Number', 'No', 'ΝΟ'], w: 9 }, { k: 'name', label: 'Όνομα', aliases: ['Στοά', 'Name', 'Lodge'], w: 32 }, { k: 'orient', label: 'Ανατολή', aliases: ['Πόλη', 'Orient', 'City'], w: 16 },
+        { k: 'provincial', label: 'Επαρχιακή Μεγάλη Στοά', aliases: ['ΕπΜΣτ.', 'ΕπΜΣτ', 'Provincial'], w: 34 }, { k: 'email', label: 'Email Στοάς', aliases: ['Email'], w: 32 }, { k: 'master', label: 'Σεβάσμιος', aliases: ['Master'], w: 26 }, { k: 'master_mobile', label: 'Κινητό Σεβασμίου', aliases: ['Κιν', 'Κινητό'], w: 16 },
         { k: 'secretary', label: 'Γραμματέας', aliases: ['Secretary'], w: 26 }, { k: 'secretary_email', label: 'Email Γραμματέα', aliases: ['Secretary Email'], w: 32 }, { k: 'status', label: 'Κατάσταση', aliases: ['Status'], w: 12 },
         { k: 'ritual', label: 'Τυπικό', aliases: ['Ritual'], w: 18 }, { k: 'meeting_place', label: 'Τόπος συνεδριάσεων', aliases: ['Τόπος', 'Venue'], w: 40 }, { k: 'notes', label: 'Σημειώσεις', aliases: ['Notes'], w: 30 },
         { k: 'kind', label: 'Είδος', aliases: ['ΕΙΔΟΣ'], w: 14 }, { k: 'full_title', label: 'Πλήρης τίτλος', aliases: ['Πληρης', 'Πλήρης'], w: 70 }],
-      normalize(d) {
+      // Πίνακας «ΝΟ, ΣΤΟΑ, ΕΔΡΑ, ΕΙΔΟΣ, ΤΥΠΙΚΟ, Ονομα, Επώνυμο, Κιν»: Όνομα + Επώνυμο = Σεβάσμιος
+      importOnly: [{ k: '_fn', label: 'Όνομα Σεβασμίου' }, { k: '_sn', label: 'Επώνυμο Σεβασμίου', aliases: ['Επώνυμο'] }],
+      prepare(rows) {
+        const K = (x) => fold(String(x || '')).replace(/[^\p{L}\p{N}]/gu, ''), h = rows[0].map(K);
+        if (!h.includes(K('Επώνυμο'))) return rows;
+        return [rows[0].map((x, i) => (h[i] === K('Ονομα') ? 'Όνομα Σεβασμίου' : h[i] === K('ΣΤΟΑ') ? 'Όνομα' : h[i] === K('ΕΔΡΑ') ? '' : x)), ...rows.slice(1)];
+      },
+      normalize(d, tx) {
         d.number = lodgeNoKey(d.number);
+        const fn = String(d._fn || '').trim(), sn = String(d._sn || '').trim();
+        delete d._fn; delete d._sn;
+        if (fn || sn) d.master = `${fn} ${sn}`.trim();
+        if (d.kind) d.kind = LODGE_KINDS.find((k) => fold(k) === fold(cleanGreek(d.kind))) || '';
+        if (d.name && tx && tx.find('lodges', (x) => lodgeNoKey(x.number) === d.number)) delete d.name; // τα ονόματα έρχονται από τον επίσημο κατάλογο
         if (d.name) d.name = cleanLodgeName(d.name);
         if (d.provincial) d.provincial = provincialChoices().find((p) => fold(p) === fold(d.provincial)) || d.provincial;
         if (d.status && !LODGE_STATUSES.includes(d.status)) d.status = 'Ενεργή';

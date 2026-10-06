@@ -81,3 +81,20 @@ export const sortBy = (arr, ...keys) => [...arr].sort((a, b) => {
   }
   return 0;
 });
+
+// Επικόλληση από Excel: γραμμές με στηλοθέτες (Tab) — τα κελιά με εισαγωγικά μπορεί να έχουν αλλαγές γραμμής
+export function parsePasted(text) {
+  const rows = [];
+  let row = [], cell = '', q = false;
+  const t = String(text || '').replace(/\r\n?/g, '\n');
+  for (let i = 0; i < t.length; i++) {
+    const c = t[i];
+    if (q) { if (c === '"' && t[i + 1] === '"') { cell += '"'; i++; } else if (c === '"') q = false; else cell += c; }
+    else if (c === '"' && cell === '') q = true;
+    else if (c === '\t') { row.push(cell); cell = ''; }
+    else if (c === '\n') { row.push(cell); rows.push(row); row = []; cell = ''; }
+    else cell += c;
+  }
+  if (cell || row.length) { row.push(cell); rows.push(row); }
+  return rows.filter((r) => r.some((x) => String(x).trim()));
+}

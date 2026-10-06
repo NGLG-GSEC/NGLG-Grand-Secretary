@@ -3,7 +3,7 @@
 // Κάθε αλλαγή μένει στο ιστορικό του GitHub, άρα και μια διαγραφή μπορεί να ανακτηθεί.
 import { db } from '../core/store.js';
 import { module, onSubmit, go, flash, bind, confirmDo, table, notice, pager } from '../core/app.js';
-import { esc, fold, sortBy, readXlsx, XLSX } from '../core/util.js';
+import { esc, fold, sortBy, readXlsx, XLSX, parsePasted } from '../core/util.js';
 import { lodgeNoKey, lodgesAll } from './lodges.js';
 import { noContact, NO_CONTACT } from '../core/pickers.js';
 
@@ -251,23 +251,6 @@ function sourceMember(d, rn) {
     email: emails[0] || '', other_emails: emails.slice(1).join('; '), mobile: mobiles[0] || '', other_mobiles: mobiles.slice(1).join('; '), degree: g('Degree'),
     declared_lodge_count: g('Number_of_Lodges') || String(lodges.length), deregistered_note: dereg ? 'ΔΙΑΓΡΑΦΕΝ — απαγορεύεται κάθε επικοινωνία' : deceased ? 'ΜΕΤΕΣΘΕΝ ΕΙΣ ΑΙ. ΑΝ.' : '',
     additional_lodges: bad.join('; '), active: !dereg && !deceased, no_contact: dereg ? 1 : 0, lodges };
-}
-
-// Επικόλληση από Excel: γραμμές με στηλοθέτες (Tab) — τα κελιά με εισαγωγικά μπορεί να έχουν αλλαγές γραμμής
-export function parsePasted(text) {
-  const rows = [];
-  let row = [], cell = '', q = false;
-  const t = String(text || '').replace(/\r\n?/g, '\n');
-  for (let i = 0; i < t.length; i++) {
-    const c = t[i];
-    if (q) { if (c === '"' && t[i + 1] === '"') { cell += '"'; i++; } else if (c === '"') q = false; else cell += c; }
-    else if (c === '"' && cell === '') q = true;
-    else if (c === '\t') { row.push(cell); cell = ''; }
-    else if (c === '\n') { row.push(cell); rows.push(row); row = []; cell = ''; }
-    else cell += c;
-  }
-  if (cell || row.length) { row.push(cell); rows.push(row); }
-  return rows.filter((r) => r.some((x) => String(x).trim()));
 }
 
 export async function importMembers(file, mode = 'merge') {

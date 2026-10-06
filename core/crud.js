@@ -1,7 +1,7 @@
 // Κοινό εργαλείο για πίνακες «λίστα → αναζήτηση → νέα/επεξεργασία → Excel». Μια ενότητα περιγράφει μόνο
 // τα πεδία της· οι σελίδες, οι φόρμες, η αναζήτηση και η εισαγωγή/εξαγωγή Excel προκύπτουν από εδώ.
 import { db } from './store.js';
-import { esc, matches, exportXlsx, readXlsx, EMAIL_RE, fold } from './util.js';
+import { esc, matches, exportXlsx, readXlsx, EMAIL_RE, fold, parsePasted } from './util.js';
 import { onSubmit, go, flash, table, notice, bind, confirmDo, href } from './app.js';
 
 const val = (x, k) => (x && x[k] != null ? x[k] : '');
@@ -59,13 +59,15 @@ export function crud(spec) {
 ${table([...spec.columns.map((c) => c.label), 'Ενέργειες'], rows)}
 ${spec.excel ? `<details class="card fold"><summary><b>Εισαγωγή / ενημέρωση από Excel</b></summary><form id="imp" style="margin-top:10px">
 <p class="muted">Στήλες (πρώτη γραμμή): <b>${esc(spec.excel.cols.map((c) => c.label).join(', '))}</b>. Ταύτιση με «${esc(spec.excel.cols.find((c) => c.k === spec.excel.key).label)}» · κενά κελιά δεν σβήνουν υπάρχοντα στοιχεία. Κατεβάστε πρώτα το Excel, συμπληρώστε το και ανεβάστε το.</p>
-<input type="file" name="file" accept=".xlsx,.xls,.csv" required><div class="toolbar" style="margin-top:10px"><button class="btn primary">Εισαγωγή</button></div></form></details>` : ''}`,
+<input type="file" name="file" accept=".xlsx,.xls,.csv"><label style="margin-top:10px">ή Επικόλληση από Excel (μαζί με τη γραμμή επικεφαλίδων)</label><textarea name="paste" class="short"></textarea><div class="toolbar" style="margin-top:10px"><button class="btn primary">Εισαγωγή</button></div></form></details>` : ''}`,
       mount(el) {
         onSubmit(el.querySelector('#flt'), (d) => go(base, { ...query, ...d, msg: '' }));
         bind(el, { export: () => exportXlsx(spec.excel.file, spec.excel.sheet, spec.excel.cols.map((c) => c.label), sortRows([...db.all(tbl)]).map((x) => spec.excel.cols.map((c) => (c.out ? c.out(x) : val(x, c.k)))), spec.excel.cols.map((c) => c.w || 18)) });
         if (spec.excel) onSubmit(el.querySelector('#imp'), async (d) => {
-          const [sheet] = await readXlsx(d.file);
-          const msg = await importRows(spec, sheet.rows);
+          const paste = String(d.paste || '').trim();
+          if (!paste && !(d.file && d.file.size)) throw new Error('Επιλέξτε αρχείο ή επικολλήστε τις γραμμές από το Excel.');
+          const rows = d.file && d.file.size ? (await readXlsx(d.file))[0].rows : parsePasted(paste);
+          const msg = await importRows(spec, spec.excel.prepare ? spec.excel.prepare(rows) : rows);
           flash(msg); go(base);
         });
       },
@@ -110,7 +112,7 @@ const hkey = (h) => fold(String(h || '')).replace(/[^a-zα-ω0-9@]/g, '');
 export async function importRows(spec, rows) {
   if (!rows.length) throw new Error('Το αρχείο είναι κενό.');
   const hk = rows[0].map(hkey), idx = {};
-  for (const c of spec.excel.cols) for (const n of [c.label, ...(c.aliases || [])]) { const i = hk.indexOf(hkey(n)); if (i >= 0) { idx[c.k] = i; break; } }
+  for (const c of spec.excel.cols.concat(spec.excel.importOnly || [])) for (const n of [c.label, ...(c.aliases || [])]) { const i = hk.indexOf(hkey(n)); if (i >= 0) { idx[c.k] = i; break; } }
   const key = spec.excel.key;
   if (idx[key] === undefined) throw new Error(`Χρειάζεται τουλάχιστον η στήλη «${spec.excel.cols.find((c) => c.k === key).label}».`);
   let added = 0, updated = 0;
