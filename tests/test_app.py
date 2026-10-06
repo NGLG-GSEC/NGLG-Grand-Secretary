@@ -587,3 +587,23 @@ def test_epeteirida_import_of_grand_officers(app):
     app.page.wait_for_selector('text=Επετηρίδα: 1 Μεγάλοι Αξιωματικοί')
     recs = app.page.evaluate("async () => { const m = await import('./core/store.js'); return m.db.all('member_degrees_offices'); }")
     assert [r['office'] for r in recs] == ['Πρώην Μέγας Ξιφοφόρος']
+
+
+def test_installations_pasted_as_table(app):
+    app.connect_local().go('/visits/import')
+    y = date.today().year + 1
+    paste = (f'ΝΟ\tΣΤΟΑ\tΕΔΡΑ\tΗμερ.Εγκ\tΝέος ΣΔ\n3\tΠΑΡΘΕΝΩΝ\tΑθήνα\t17/10/{y}\tΔοκιμαστής Α.\n'
+             f'95\tLA ΡAIX\tΚέρκυρα\t24.10.{y}\t\n28\tΚΑΜΕΙΡΟΣ\tΡόδος\t\t\n')
+    app.page.fill('[name=text]', paste)
+    app.page.locator('#imf button').click()
+    app.page.wait_for_selector('text=Προστέθηκαν 2 Εγκαταστάσεις')
+    assert '1 Στοές χωρίς ημερομηνία' in app.text('body')
+    vs = app.page.evaluate("async () => { const m = await import('./core/store.js'); return m.db.all('visits'); }")
+    by = {v['lodge_number']: v for v in vs}
+    assert by['3']['visit_date'] == f'{y}-10-17' and 'Δοκιμαστής Α.' in by['3']['notes'] and by['3']['province'] == 'ΕπΜΣτ. Πειραιώς & Νήσων Αρχ. Αιγαίου'
+    assert by['95']['lodge'] == 'LA PAIX' and by['95']['visit_date'] == f'{y}-10-24'
+    # ξανά η ίδια επικόλληση: δεν διπλασιάζεται
+    app.go('/visits/import')
+    app.page.fill('[name=text]', paste)
+    app.page.locator('#imf button').click()
+    app.page.wait_for_selector('text=Προστέθηκαν 0 Εγκαταστάσεις, 2 υπήρχαν ήδη')

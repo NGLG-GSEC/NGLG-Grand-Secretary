@@ -4,7 +4,7 @@
 import { db } from '../core/store.js';
 import { module, onSubmit, go, flash, bind, confirmDo, table, notice, toast } from '../core/app.js';
 import { crud } from '../core/crud.js';
-import { esc, fold, today, fmtDate, dayStr, parseIso, sortBy, download, EMAIL_RE, splitEmails, grUpper, DAYS, isoDate } from '../core/util.js';
+import { esc, fold, today, fmtDate, dayStr, parseIso, sortBy, download, EMAIL_RE, splitEmails, grUpper, DAYS, isoDate, parsePasted } from '../core/util.js';
 import { senderBanner, copyText } from '../core/mail.js';
 import { reportPaper, printPaper } from '../core/paper.js';
 import { attachPicker, contactItems, memberItems, noContact } from '../core/pickers.js';
@@ -280,14 +280,46 @@ function reportPage({ query }) {
   };
 }
 
+// Πίνακας από Excel (ΝΟ, ΣΤΟΑ, Ημερ.Εγκ, Ώρα, Νέος ΣΔ, Τόπος …): μία Εγκατάσταση ανά γραμμή· γραμμές χωρίς ημερομηνία παραλείπονται.
+export function parseVisitTable(text) {
+  const rows = parsePasted(text);
+  const K = (x) => fold(String(x || '')).replace(/[^\p{L}\p{N}]/gu, '');
+  const h = (rows[0] || []).map(K), col = (...ks) => h.findIndex((x) => ks.some((k) => x.startsWith(K(k))));
+  const ci = { no: col('ΝΟ', 'Αριθμός', 'Αρ', 'No', 'Number'), lodge: col('ΣΤΟΑ', 'Στοά', 'Όνομα'), date: col('Ημερ', 'Ημερομηνία', 'Date'), time: col('Ώρα', 'Ωρα', 'Time'),
+    master: col('Νέος', 'ΝέοςΣΔ', 'Νέος Σεβάσμιος'), place: col('Τόπος', 'Χώρος', 'Location') };
+  if (ci.date < 0 || (ci.no < 0 && ci.lodge < 0)) return null;
+  const out = [], skipped = [];
+  for (const r of rows.slice(1)) {
+    const v = (k) => (ci[k] >= 0 ? String(r[ci[k]] ?? '').trim() : '');
+    const m = /(\d{1,2})\s*[/.-]\s*(\d{1,2})\s*[/.-]\s*(\d{2,4})/.exec(v('date'));
+    if (!m) { if (v('no') || v('lodge')) skipped.push(`${v('no')} ${v('lodge')}`.trim()); continue; }
+    const y = +m[3] < 100 ? 2000 + +m[3] : +m[3], d = new Date(y, +m[2] - 1, +m[1]);
+    if (d.getMonth() !== +m[2] - 1) { skipped.push(`${v('no')} ${v('lodge')}: ${v('date')}`); continue; }
+    const reg = (v('no') && lodgeByNumber(v('no'))) || null;
+    const notes = [v('time') && `Ώρα ${v('time')}`, v('master') && `Νέος Σεβάσμιος: ${v('master')}`].filter(Boolean).join(' · ');
+    out.push({ visit_date: isoDate(d), lodge: reg ? reg.name : cleanLodgeName(v('lodge')), lodge_number: reg ? String(reg.number) : lodgeNoKey(v('no')), location: v('place') || (reg || {}).meeting_place || '',
+      province: (reg || {}).provincial || '', rep_id: null, notes });
+  }
+  return { out, skipped };
+}
+
 function importPage() {
   return {
     title: 'Επικόλληση επισκέψεων',
     html: `<h1>Επικόλληση λίστας επισκέψεων</h1><form class="card" id="imf"><p>Μία επίσκεψη ανά γραμμή, π.χ. «Σάββατο 17/10/2026 Σ.Σ. Διώνη Υπ' Αρ 32 Τεκτονικόν Μέγαρον Ιωαννίνων».
-Τα «Σ.Σ.» και «Υπ' Αρ» αφαιρούνται αυτόματα· με τον αριθμό συμπληρώνονται από τις Συμβολικές Στοές το όνομα, η Επαρχία και ο τόπος.</p><textarea name="text" required></textarea>
+Τα «Σ.Σ.» και «Υπ' Αρ» αφαιρούνται αυτόματα· με τον αριθμό συμπληρώνονται από τις Συμβολικές Στοές το όνομα, η Επαρχία και ο τόπος.</p>
+<p>Ή επικολλήστε <b>πίνακα από Excel</b> μαζί με τη γραμμή επικεφαλίδων, π.χ. <b>ΝΟ, ΣΤΟΑ, Ημερ.Εγκ, Ώρα, Νέος ΣΔ</b>. Στοές χωρίς ημερομηνία παραλείπονται· Εγκαταστάσεις που υπάρχουν ήδη (ίδια Στοά, ίδια ημερομηνία) δεν διπλασιάζονται.</p><textarea name="text" required></textarea>
 <div class="toolbar"><button class="btn primary">Εισαγωγή</button><a class="btn" href="#/visits">Άκυρο</a></div></form>`,
     mount(el) {
       onSubmit(el.querySelector('#imf'), async (d, _, form) => {
+        const tbl = d.text.includes('\t') ? parseVisitTable(d.text) : null;
+        if (tbl) {
+          const have = new Set(db.all('visits').map((v) => `${lodgeNoKey(v.lodge_number)}|${v.visit_date}`));
+          const add = tbl.out.filter((v) => !have.has(`${lodgeNoKey(v.lodge_number)}|${v.visit_date}`));
+          if (add.length) await db.save(`Εγκαταστάσεις: επικόλληση ${add.length}`, (tx) => add.forEach((v) => tx.insert('visits', v)));
+          flash(`Προστέθηκαν ${add.length} Εγκαταστάσεις${tbl.out.length - add.length ? `, ${tbl.out.length - add.length} υπήρχαν ήδη` : ''}${tbl.skipped.length ? `· ${tbl.skipped.length} Στοές χωρίς ημερομηνία παραλείφθηκαν` : ''}.`);
+          go('/visits'); return;
+        }
         const ok = [], bad = [];
         for (const line of d.text.split('\n').map((x) => x.trim()).filter(Boolean)) { const v = parseVisitLine(line); if (v) ok.push(v); else bad.push(line); }
         if (ok.length) await db.save(`Επισκέψεις: επικόλληση ${ok.length}`, (tx) => ok.forEach((v) => tx.insert('visits', v)));
@@ -329,7 +361,7 @@ async function repsFromEpeteirida() {
     for (const [mid, { e }] of Object.entries(latest)) {
       const m = tx.get('member_registry', mid);
       if (!m || !m.surname || haveM.has(Number(mid)) || haveN.has(fold(m.surname) + '|' + fold(m.first_name))) continue;
-      tx.insert('reps', { name: m.first_name || '', surname: m.surname, rep_rank: '', office: (e.is_current ? '' : 'Πρώην ') + e.office, year: String(e.decree_year || ''), email: '', mobile: '', member_id: Number(mid), notes: 'Από την Επετηρίδα', ext_id: '' });
+      tx.insert('reps', { name: m.first_name || '', surname: m.surname, rep_rank: '', office: (e.is_current || /^Πρώην /.test(e.office) ? '' : 'Πρώην ') + e.office, year: String(e.decree_year || ''), email: '', mobile: '', member_id: Number(mid), notes: 'Από την Επετηρίδα', ext_id: '' });
       added++;
     }
   });
