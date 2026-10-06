@@ -357,3 +357,25 @@ def test_mobile_no_horizontal_scroll(browser, base_url, path):
     page.wait_for_timeout(200)
     assert page.evaluate('document.documentElement.scrollWidth') <= 390, path
     ctx.close()
+
+
+def test_import_member_registry_from_render_env(app, tmp_path):
+    # Render → Environment → Export (.env): το Μητρώο στις μεταβλητές MEMBER_REGISTRY_SEED_000…, μαζί με άσχετους κωδικούς
+    members = {'members': [
+        {'registry_no': 1201, 'surname': 'Σπόρος', 'first_name': 'Αλέξανδρος', 'email': 'a@example.com', 'mobile': '6900000001', 'active': True,
+         'lodges': [{'seq': 1, 'name': 'ΠΑΡΘΕΝΩΝ', 'number': '3', 'status': '1. ΤΑΚΤΙΚΟ'}]},
+        {'registry_no': 1202, 'surname': 'Δεύτερος', 'first_name': 'Βασίλειος', 'email': '', 'mobile': '', 'active': True, 'lodges': []}]}
+    b64 = base64.b64encode(gzip.compress(json.dumps(members, ensure_ascii=False).encode())).decode()
+    parts = [b64[i:i + 40] for i in range(0, len(b64), 40)]
+    env = 'APP_SECRET=topsecret\nSMTP_PASSWORD="also secret"\n' + ''.join(f'MEMBER_REGISTRY_SEED_{i:03d}={p}\n' for i, p in enumerate(parts))
+    f = tmp_path / 'nglg-letter-manager.env'
+    f.write_text(env)
+    app.connect_local().go('/database/backup')
+    app.page.set_input_files('[name=file]', str(f))
+    app.page.locator('#imf button').click()
+    app.page.wait_for_selector('text=Μητρώο Μελών από την παλιά εφαρμογή')
+    assert '2 εγγραφές (2 νέες' in app.text()
+    app.go('/members?field=lodge&q=3')
+    assert 'Σπόρος' in app.text()
+    stored = app.page.evaluate("async () => { const m = await import('./core/store.js'); return JSON.stringify([m.db.tables, m.db.settings]); }")
+    assert 'topsecret' not in stored and 'also secret' not in stored

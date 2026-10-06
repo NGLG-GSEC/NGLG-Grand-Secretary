@@ -252,6 +252,11 @@ export async function importMembers(file, mode = 'merge') {
       for (const r of ls.rows.slice(1)) { const it = byId[Number(lv(r, 'ID Μέλους'))]; if (it) it.member.lodges.push({ seq: Number(lv(r, 'Α/Α Στοάς')) || 1, name: lv(r, 'Στοά'), number: lv(r, 'Αριθμός Στοάς'), status: lv(r, 'Κατάσταση') }); }
     }
   }
+  return applyMemberItems(items, mode);
+}
+
+// Κοινή εφαρμογή εισαγωγής μελών (Excel, ή το Μητρώο από τις ρυθμίσεις της παλιάς εφαρμογής στο Render)
+export async function applyMemberItems(items, mode = 'merge') {
   if (!items.length) throw new Error('Δεν βρέθηκαν εγγραφές μελών.');
   let added = 0, updated = 0;
   await db.save(mode === 'replace' ? 'Μητρώο Μελών: γενική αντικατάσταση' : 'Μητρώο Μελών: εισαγωγή', (tx) => {

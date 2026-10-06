@@ -5,6 +5,7 @@ import { module, onSubmit, go, flash, bind, confirmDo, table, notice, pager } fr
 import { esc, matches, sortBy, fmtDate, exportXlsx, download, today } from '../core/util.js';
 import { protocolBook } from './protocol.js';
 import { importVisitsPayload, importVisitsMessage } from './visits.js';
+import { applyMemberItems } from './members.js';
 
 export const TABLES = {
   member_registry: ['Μητρώο Μελών', 'Μέλη', '#/members/{id}'], member_lodges: ['Στοές των μελών', 'Μέλη'], member_degrees_offices: ['Επετηρίδα (αξιώματα)', 'Μέλη'],
@@ -106,7 +107,28 @@ async function readJson(file) {
   try { return JSON.parse(new TextDecoder().decode(bytes).replace(/^﻿/, '')); } catch { throw new Error('Το αρχείο δεν είναι έγκυρο αρχείο δεδομένων (JSON).'); }
 }
 const unb64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+// Μητρώο Μελών από τις μεταβλητές MEMBER_REGISTRY_SEED_000… της παλιάς εφαρμογής (Render → Environment → Export).
+// Διαβάζονται ΜΟΝΟ αυτές οι γραμμές· οι υπόλοιπες (κωδικοί κ.λπ.) αγνοούνται και δεν αποθηκεύονται πουθενά.
+export async function seedMembers(text) {
+  const parts = {};
+  for (const m of text.matchAll(/MEMBER_REGISTRY_SEED_(\d{3})["']?\s*[=:]\s*["']?([A-Za-z0-9+/=_-]+)/g)) parts[m[1]] = m[2];
+  const keys = Object.keys(parts).sort();
+  if (!keys.length) return null;
+  const b64 = keys.map((k) => parts[k]).join('').replace(/-/g, '+').replace(/_/g, '/');
+  let data;
+  try {
+    const gz = unb64(b64);
+    data = JSON.parse(new TextDecoder().decode(await new Response(new Blob([gz]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer()));
+  } catch { throw new Error(`Βρέθηκαν ${keys.length} τμήματα MEMBER_REGISTRY_SEED αλλά δεν διαβάστηκαν — ελέγξτε ότι εξαγάγατε όλες τις μεταβλητές (Show more).`); }
+  const members = Array.isArray(data) ? data : data.members || [];
+  return applyMemberItems(members.filter((m) => m.surname || m.first_name).map((m) => ({ id: null, member: m })), 'merge');
+}
+
 export async function importFile(file) {
+  if (file.size < 20e6 && !/\.gz$/i.test(file.name)) {
+    const text = await file.text();
+    if (/MEMBER_REGISTRY_SEED_\d{3}/.test(text)) return 'Μητρώο Μελών από την παλιά εφαρμογή — ' + (await seedMembers(text));
+  }
   const d = await readJson(file);
   if (d.format === 'nglg-lodge-visits/1') { let n; await db.save('Εισαγωγή από «Επιστολές Γραμματείας»', (tx) => { n = importVisitsPayload(tx, d); }); return importVisitsMessage(n); }
   if (d.format === 'nglg-backup/1' || d.format === 'nglg-app/1') {
@@ -141,9 +163,10 @@ function backupPage({ query }) {
 <form class="card" id="imf"><h2 style="margin-top:0">2. Εισαγωγή / μεταφορά δεδομένων</h2>
 <ul><li><b>Από την παλιά εφαρμογή (Render):</b> στην παλιά εφαρμογή → Βάση Δεδομένων → «💾 Αντίγραφο ασφαλείας» → «Λήψη πλήρους αντιγράφου» και ανεβάστε εδώ το αρχείο <code>nglg-backup-….json.gz</code>.</li>
 <li><b>Αντίγραφο αυτής της εφαρμογής</b> (<code>nglg-antigrafo-….json.gz</code>) — επαναφορά.</li>
+<li><b>Μητρώο Μελών από τις ρυθμίσεις της παλιάς εφαρμογής:</b> Render → υπηρεσία → <b>Environment</b> → <b>Export</b> → αρχείο <code>.env</code>. Διαβάζονται μόνο οι γραμμές MEMBER_REGISTRY_SEED· οι κωδικοί που περιέχει το αρχείο αγνοούνται. Διαγράψτε το αρχείο μετά.</li>
 <li><b>Εξαγωγή «Επιστολές Γραμματείας»</b> ή αρχεία εισαγωγής (<code>.json</code>, μορφή nglg-lodge-visits/1) — συμπληρώνει Επαρχίες, Στοές, εκπροσώπους, επισκέψεις, ιστορικό ευχών χωρίς διπλοεγγραφές.</li></ul>
 <p class="muted">Η μεταφορά/επαναφορά αντικαθιστά τους πίνακες του αρχείου· η προηγούμενη μορφή μένει στο ιστορικό του GitHub.</p>
-<input type="file" name="file" accept=".gz,.json,application/json,application/gzip" required><div class="toolbar" style="margin-top:10px"><button class="btn primary">Εισαγωγή</button></div></form>`,
+<input type="file" name="file" accept=".gz,.json,.env,.txt,application/json,application/gzip,text/plain" required><div class="toolbar" style="margin-top:10px"><button class="btn primary">Εισαγωγή</button></div></form>`,
     mount(el) {
       bind(el, { export: exportAll });
       onSubmit(el.querySelector('#imf'), async (d) => {
