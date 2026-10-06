@@ -3,9 +3,12 @@
 from starlette.middleware.gzip import GZipMiddleware
 
 def app_version():
-    # Ποιος κώδικας τρέχει (στο Render: αποθετήριο, κλάδος και commit της τελευταίας ανάπτυξης)
-    return {'repo':os.getenv('RENDER_GIT_REPO_SLUG') or '','branch':os.getenv('RENDER_GIT_BRANCH') or '',
-            'commit':(os.getenv('RENDER_GIT_COMMIT') or '')[:12],'database':'postgres' if USE_PG else 'sqlite'}
+    # Ποιος κώδικας τρέχει: αποθετήριο, κλάδος και commit της τελευταίας ανάπτυξης
+    # (APP_GIT_* από τη ροή ανάπτυξης στο Google Cloud Run, RENDER_GIT_* στο Render)
+    g=lambda k:os.getenv('APP_GIT_'+k) or os.getenv('RENDER_GIT_'+k) or ''
+    return {'repo':g('REPO_SLUG'),'branch':g('BRANCH'),'commit':g('COMMIT')[:12],
+            'host':'cloud-run' if os.getenv('K_SERVICE') else ('render' if os.getenv('RENDER') else 'local'),
+            'database':'postgres' if USE_PG else 'sqlite'}
 
 @app.get('/health')
 def health():

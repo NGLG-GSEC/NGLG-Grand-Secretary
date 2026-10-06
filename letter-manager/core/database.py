@@ -61,6 +61,7 @@ class _PGConn:
         if s.upper()=='BEGIN IMMEDIATE':
             return 'SELECT pg_advisory_xact_lock(EXTRACT(YEAR FROM CURRENT_DATE)::bigint)'
         s=s.replace('INTEGER PRIMARY KEY AUTOINCREMENT','BIGSERIAL PRIMARY KEY')
+        if s.upper().startswith('CREATE TABLE'):s=s.replace(' BLOB',' BYTEA')
         if s.startswith('INSERT OR IGNORE INTO settings VALUES'):
             return 'INSERT INTO settings(key,value) VALUES(%s,%s) ON CONFLICT(key) DO NOTHING'
         if s.startswith('INSERT OR IGNORE INTO letter_templates'):
@@ -82,6 +83,9 @@ class _PGConn:
             row=cur.fetchone()
             return _PGCursor(cur,row['id'] if row else None)
         cur.execute(q,params)
+        return _PGCursor(cur)
+    def executemany(self,sql,seq):
+        cur=self.raw.cursor();cur.executemany(self._adapt(sql),seq)
         return _PGCursor(cur)
     def executescript(self,script):
         cur=self.raw.cursor()

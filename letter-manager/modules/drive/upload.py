@@ -56,8 +56,14 @@ def drive_upload_doc(kind,doc_id,req):
 def drive_on_ready(resp,kind,doc_id,req,status):
     # Όταν ένα έγγραφο γίνεται (ή αποθηκεύεται ως) «Έτοιμο», το τελικό PDF ανεβαίνει στο Drive
     # στο παρασκήνιο· η ειδοποίηση εμφανίζεται στην εφαρμογή μόλις ολοκληρωθεί.
-    if str(status)=='ready':resp.background=BackgroundTask(drive_upload_doc,kind,doc_id,req)
+    if str(status)=='ready':drive_upload_later(resp,kind,doc_id,req)
     return resp
+
+def drive_upload_later(resp,kind,doc_id,req):
+    # Στο Google Cloud Run (K_SERVICE) ο επεξεργαστής περιορίζεται μόλις σταλεί η απάντηση, οπότε εκεί το ανέβασμα
+    # γίνεται πριν από την απάντηση· αλλού στο παρασκήνιο.
+    if os.getenv('K_SERVICE'):drive_upload_doc(kind,doc_id,req)
+    else:resp.background=BackgroundTask(drive_upload_doc,kind,doc_id,req)
 
 def drive_status_html(kind,doc_id,u=None):
     d=_doc_info(kind,doc_id) or {}

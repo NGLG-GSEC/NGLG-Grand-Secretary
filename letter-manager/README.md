@@ -152,6 +152,13 @@ uvicorn app:app --host 0.0.0.0 --port 8000
 
 ## Παραγωγή / Live deployment
 
+**Νέα φιλοξενία (δωρεάν): Google Cloud Run + βάση Neon.** Οδηγίες βήμα-βήμα: [`deploy/ΟΔΗΓΙΕΣ_CLOUD_RUN.md`](../deploy/ΟΔΗΓΙΕΣ_CLOUD_RUN.md).
+Η ανάπτυξη γίνεται αυτόματα από το GitHub (`.github/workflows/deploy-cloudrun.yml`) μόλις περάσουν οι έλεγχοι στο `main`.
+Τα αρχεία των Πρότζεκτ αποθηκεύονται στη βάση, οπότε δεν χρειάζεται μόνιμος δίσκος. Η μεταφορά δεδομένων από την παλιά
+εγκατάσταση γίνεται από τη σελίδα «💾 Αντίγραφο ασφαλείας» (`/database/restore`).
+
+Οι παρακάτω οδηγίες αφορούν την παλιά εγκατάσταση στο Render (μέχρι να ολοκληρωθεί η μεταφορά).
+
 Το repository περιλαμβάνει έτοιμο `render.yaml` για deployment στο **Render**.
 
 Το service χρησιμοποιεί Docker και persistent disk για τη βάση SQLite.

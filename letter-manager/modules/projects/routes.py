@@ -247,9 +247,7 @@ def project_file_delete(req:Request,pid:int,fid:int):
         f=c.execute('SELECT * FROM project_files WHERE id=? AND project_id=?',(fid,pid)).fetchone()
         if f:
             c.execute('DELETE FROM project_files WHERE id=?',(fid,));c.execute('UPDATE projects SET cover_file=NULL WHERE cover_file=?',(fid,));_pj_touch(c,pid)
-    if f and f['stored_name']:
-        try:project_file_path(dict(f)).unlink()
-        except Exception:pass
+    if f:project_file_drop(dict(f))
     return _pj_back(pid,'','files')
 
 @app.post('/projects/{pid}/cover')
@@ -270,9 +268,7 @@ def _pj_drop_cover(fid):
     with con() as c:
         f=c.execute("SELECT * FROM project_files WHERE id=? AND kind='cover'",(fid,)).fetchone()
         if f:c.execute('DELETE FROM project_files WHERE id=?',(fid,))
-    if f:
-        try:project_file_path(dict(f)).unlink()
-        except Exception:pass
+    if f:project_file_drop(dict(f))
 
 @app.post('/projects/{pid}/cover/delete')
 def project_cover_delete(req:Request,pid:int):
@@ -286,10 +282,10 @@ def project_file(req:Request,fid:int):
     _pj_admin(req)
     with con() as c:f=c.execute('SELECT * FROM project_files WHERE id=?',(fid,)).fetchone()
     if not f or not f['stored_name']:raise HTTPException(404)
-    path=project_file_path(dict(f))
-    if not path.exists():raise HTTPException(404)
-    fn=quote(f['name'] or path.name)
-    return Response(path.read_bytes(),media_type=f['content_type'],headers={'Content-Disposition':f"inline; filename*=UTF-8''{fn}",'Cache-Control':'private, max-age=3600'})
+    data=project_file_bytes(dict(f))
+    if data is None:raise HTTPException(404)
+    fn=quote(f['name'] or f['stored_name'])
+    return Response(data,media_type=f['content_type'],headers={'Content-Disposition':f"inline; filename*=UTF-8''{fn}",'Cache-Control':'private, max-age=3600'})
 
 @app.post('/projects/{pid}/log')
 def project_log_add(req:Request,pid:int,log_date:str=Form(''),text:str=Form('')):
@@ -306,11 +302,10 @@ def project_log_delete(req:Request,pid:int,lid:int):
 
 @app.post('/projects/{pid}/delete')
 def project_delete(req:Request,pid:int):
-    _pj_admin(req);_pj(pid)
+    _pj_admin(req);_pj(pid);project_delete_files(pid)
     with con() as c:
         for t in ('project_units','project_members','project_contacts','project_files','project_log'):c.execute(f'DELETE FROM {t} WHERE project_id=?',(pid,))
         c.execute('DELETE FROM projects WHERE id=?',(pid,))
-    project_delete_files(pid)
     return RedirectResponse('/projects',303)
 
 @app.get('/projects/{pid}/report.pdf')
@@ -329,8 +324,8 @@ def project_report(req:Request,pid:int):
     cover=next((f for f in p['files'] if f['id']==p.get('cover_file')),None)
     if cover:
         try:
-            im=PILImage.open(project_file_path(cover));w,hh=im.size;s=min(70*mm/w,50*mm/hh)
-            story+=[Spacer(1,3*mm),RLImage(str(project_file_path(cover)),width=w*s,height=hh*s)]
+            raw=project_file_bytes(cover);im=PILImage.open(BytesIO(raw));w,hh=im.size;s=min(70*mm/w,50*mm/hh)
+            story+=[Spacer(1,3*mm),RLImage(BytesIO(raw),width=w*s,height=hh*s)]
         except Exception:pass
     if p['description']:story+=[Paragraph('Περιγραφή',h),Paragraph(esc(p['description']).replace('\n','<br/>'),cell)]
     mi={m['id']:m for m in project_members_info([x['leader_member_id'] for x in p['units'] if x.get('leader_member_id')])}

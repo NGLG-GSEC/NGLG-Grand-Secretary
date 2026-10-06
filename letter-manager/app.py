@@ -64,6 +64,7 @@ MODULES = [
     'modules/drive/upload.py',
     'modules/drive/routes.py',
     'modules/database/registry.py',
+    'modules/database/backup.py',
     'modules/database/routes.py',
     'modules/dashboard/tiles.py',
 ]

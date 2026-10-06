@@ -20,6 +20,7 @@ def _projects_init():
         role TEXT DEFAULT '',phone TEXT DEFAULT '',email TEXT DEFAULT '',notes TEXT DEFAULT '');
         CREATE TABLE IF NOT EXISTS project_files(id INTEGER PRIMARY KEY AUTOINCREMENT,project_id BIGINT NOT NULL,kind TEXT DEFAULT '',
         name TEXT DEFAULT '',url TEXT DEFAULT '',stored_name TEXT DEFAULT '',content_type TEXT DEFAULT '',size BIGINT DEFAULT 0,added_on TEXT);
+        CREATE TABLE IF NOT EXISTS project_blobs(stored_name TEXT PRIMARY KEY,data BLOB NOT NULL);
         CREATE TABLE IF NOT EXISTS project_log(id INTEGER PRIMARY KEY AUTOINCREMENT,project_id BIGINT NOT NULL,log_date TEXT DEFAULT '',
         text TEXT DEFAULT '',created_at TEXT);""")
 
@@ -74,14 +75,31 @@ def project_members_info(ids):
         m['lodges']=ls.get(i,[]);out.append(m)
     return sorted(out,key=lambda m:(nd_fold(m['surname']),nd_fold(m['first_name'])))
 
+# Τα αρχεία (εικόνες, PDF) αποθηκεύονται μέσα στη βάση (project_blobs), ώστε η εφαρμογή να μη χρειάζεται μόνιμο δίσκο.
+# Αρχεία παλαιότερων εκδόσεων στον δίσκο (PROJECT_FILES_DIR) μεταφέρονται στη βάση στην εκκίνηση.
 def project_store_file(pid,data,content_type):
-    ext=PROJECT_FILE_TYPES[content_type];d=PROJECT_FILES_DIR/str(pid);d.mkdir(parents=True,exist_ok=True)
-    name=secrets.token_hex(12)+ext;(d/name).write_bytes(data);return name
+    name=secrets.token_hex(12)+PROJECT_FILE_TYPES[content_type]
+    with con() as c:c.execute('INSERT INTO project_blobs(stored_name,data) VALUES(?,?)',(name,data))
+    return name
 
 def project_file_path(f):
     return PROJECT_FILES_DIR/str(f['project_id'])/f['stored_name']
 
+def project_file_bytes(f):
+    with con() as c:r=c.execute('SELECT data FROM project_blobs WHERE stored_name=?',(f['stored_name'],)).fetchone()
+    if r:return bytes(r['data'])
+    path=project_file_path(f)
+    return path.read_bytes() if path.exists() else None
+
+def project_file_drop(f):
+    if not f or not f['stored_name']:return
+    with con() as c:c.execute('DELETE FROM project_blobs WHERE stored_name=?',(f['stored_name'],))
+    try:project_file_path(f).unlink()
+    except Exception:pass
+
 def project_delete_files(pid):
+    with con() as c:
+        for f in c.execute("SELECT project_id,stored_name FROM project_files WHERE project_id=? AND stored_name<>''",(pid,)).fetchall():project_file_drop(dict(f))
     d=PROJECT_FILES_DIR/str(pid)
     if d.exists():
         for x in d.iterdir():
@@ -89,3 +107,16 @@ def project_delete_files(pid):
             except Exception:pass
         try:d.rmdir()
         except Exception:pass
+
+def project_files_to_db():
+    # μία φορά: αρχεία από τον δίσκο → βάση
+    if not PROJECT_FILES_DIR.exists():return 0
+    n=0
+    with con() as c:
+        have={r['stored_name'] for r in c.execute('SELECT stored_name FROM project_blobs')}
+        for f in c.execute("SELECT project_id,stored_name FROM project_files WHERE stored_name<>''").fetchall():
+            path=project_file_path(f)
+            if f['stored_name'] not in have and path.exists():
+                c.execute('INSERT INTO project_blobs(stored_name,data) VALUES(?,?)',(f['stored_name'],path.read_bytes()));n+=1
+    if n:print(f'[projects] {n} αρχεία μεταφέρθηκαν από τον δίσκο στη βάση')
+    return n

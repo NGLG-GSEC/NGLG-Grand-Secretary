@@ -1,0 +1,99 @@
+# Ανάπτυξη της «Ψηφιακής Μεγάλης Γραμματείας» στο Google Cloud Run.
+# Τρέχει αυτόματα μόλις περάσουν οι έλεγχοι (Tests) στο main, ή χειροκίνητα (Actions → Deploy → Run workflow).
+# Ρύθμιση μία φορά: deploy/ΟΔΗΓΙΕΣ_CLOUD_RUN.md (μεταβλητές GCP_* και μυστικά στο GitHub → Settings → Secrets and variables → Actions).
+name: Deploy (Cloud Run)
+
+on:
+  workflow_run:
+    workflows: [Tests]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-cloudrun
+  cancel-in-progress: false
+
+env:
+  SERVICE: nglg-letter-manager
+  REGION: ${{ vars.GCP_REGION || 'europe-west1' }}
+
+jobs:
+  deploy:
+    if: vars.GCP_PROJECT_ID != '' && (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Έλεγχος ρυθμίσεων
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          APP_SECRET: ${{ secrets.APP_SECRET }}
+        run: |
+          test -n "$DATABASE_URL" || { echo "::error::Λείπει το μυστικό DATABASE_URL (βάση Neon)"; exit 1; }
+          test -n "$APP_SECRET" || { echo "::error::Λείπει το μυστικό APP_SECRET"; exit 1; }
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SA }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Δημιουργία και αποστολή εικόνας
+        id: image
+        run: |
+          IMAGE="$REGION-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/nglg/app:$(git rev-parse --short=12 HEAD)"
+          gcloud auth configure-docker "$REGION-docker.pkg.dev" --quiet
+          docker build -t "$IMAGE" letter-manager
+          docker push "$IMAGE"
+          echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
+
+      - name: Μεταβλητές περιβάλλοντος
+        env:
+          APP_SECRET: ${{ secrets.APP_SECRET }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+          GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+          PRIMARY_ADMIN_EMAIL: ${{ secrets.PRIMARY_ADMIN_EMAIL }}
+          PRIMARY_ADMIN_PASSWORD_HASH: ${{ secrets.PRIMARY_ADMIN_PASSWORD_HASH }}
+          AUTHORIZED_USER_EMAIL: ${{ secrets.AUTHORIZED_USER_EMAIL }}
+          AUTHORIZED_USER_PASSWORD_HASH: ${{ secrets.AUTHORIZED_USER_PASSWORD_HASH }}
+          PUBLIC_BASE_URL: ${{ vars.PUBLIC_BASE_URL }}
+          ADMIN_EMAILS: ${{ vars.ADMIN_EMAILS || 'grand.secretary@nglgreece.gr' }}
+          SMTP_USERNAME: ${{ vars.SMTP_USERNAME || 'grand.secretary@nglgreece.gr' }}
+        run: |
+          python3 - <<'PY' > "$RUNNER_TEMP/env.yaml"
+          import json, os, subprocess
+          fixed = {'COOKIE_SECURE': '1', 'DEV_SHOW_OTP': '0', 'DATA_DIR': '/tmp/nglg-data', 'SMTP_HOST': 'smtp.gmail.com', 'SMTP_PORT': '587',
+                   'APP_GIT_REPO_SLUG': os.environ['GITHUB_REPOSITORY'], 'APP_GIT_BRANCH': 'main',
+                   'APP_GIT_COMMIT': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()}
+          keys = ['APP_SECRET', 'DATABASE_URL', 'SMTP_PASSWORD', 'GOOGLE_OAUTH_CLIENT_ID', 'GOOGLE_OAUTH_CLIENT_SECRET', 'PRIMARY_ADMIN_EMAIL',
+                  'PRIMARY_ADMIN_PASSWORD_HASH', 'AUTHORIZED_USER_EMAIL', 'AUTHORIZED_USER_PASSWORD_HASH', 'PUBLIC_BASE_URL', 'ADMIN_EMAILS', 'SMTP_USERNAME']
+          env = {**fixed, **{k: os.environ[k] for k in keys if os.environ.get(k)}}
+          for k, v in env.items():
+              print(f'{k}: {json.dumps(v)}')
+          PY
+
+      - name: Ανάπτυξη στο Cloud Run
+        run: |
+          gcloud run deploy "$SERVICE" --image "${{ steps.image.outputs.image }}" --region "$REGION" \
+            --service-account "${{ vars.GCP_RUN_SA }}" --env-vars-file "$RUNNER_TEMP/env.yaml" \
+            --allow-unauthenticated --memory 512Mi --cpu 1 --min-instances 0 --max-instances 2 \
+            --concurrency 40 --timeout 300 --cpu-boost --quiet
+
+      - name: Έλεγχος λειτουργίας (/health)
+        run: |
+          URL=$(gcloud run services describe "$SERVICE" --region "$REGION" --format 'value(status.url)')
+          echo "Η εφαρμογή: $URL" >> "$GITHUB_STEP_SUMMARY"
+          for i in 1 2 3 4 5 6; do
+            if curl -fsS "$URL/health" | tee /tmp/health.json; then break; fi; sleep 10
+          done
+          grep -q "$(git rev-parse --short=12 HEAD)" /tmp/health.json

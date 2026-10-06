@@ -52,13 +52,14 @@
 | Εορτολόγιο — εκκίνηση (πίνακες, αρχικό εορτολόγιο ονομάτων, πρότυπο ευχών). | `modules/namedays/startup.py` | — |
 | Πρότζεκτ ΜΔ — πίνακες (πρότζεκτ, Στοές/ομάδες, μέλη, επαφές, αρχεία, ημερολόγιο) και αποθήκευση αρχείων. | `modules/projects/data.py` | — |
 | Πρότζεκτ ΜΔ — λίστα, νέο πρότζεκτ, σελίδα πρότζεκτ (στοιχεία, Στοές/ομάδες, μέλη, επαφές, αρχεία, ημερολόγιο), αναφορά PDF. | `modules/projects/routes.py` | GET `/projects`, GET `/projects/new`, POST `/projects/new`, GET `/projects/{pid}`, POST `/projects/{pid}/save`, POST `/projects/{pid}/units`, POST `/projects/{pid}/units/add`, POST `/projects/{pid}/units/delete/{uid}`, POST `/projects/{pid}/members/add`, POST `/projects/{pid}/members/delete/{mid}`, POST `/projects/{pid}/contacts`, POST `/projects/{pid}/contacts/add`, POST `/projects/{pid}/contacts/delete/{cid}`, POST `/projects/{pid}/files`, POST `/projects/{pid}/links`, POST `/projects/{pid}/files/delete/{fid}`, POST `/projects/{pid}/cover`, POST `/projects/{pid}/cover/delete`, GET `/projects/file/{fid}`, POST `/projects/{pid}/log`, POST `/projects/{pid}/log/delete/{lid}`, POST `/projects/{pid}/delete`, GET `/projects/{pid}/report.pdf` |
-| Πρότζεκτ ΜΔ — εκκίνηση (πίνακες). | `modules/projects/startup.py` | — |
+| Πρότζεκτ ΜΔ — εκκίνηση (πίνακες, μεταφορά παλιών αρχείων από τον δίσκο στη βάση). | `modules/projects/startup.py` | — |
 | Αριθμός Πρωτοκόλλου — ενιαία συνεχής αρίθμηση Επιστολών & Διαταγμάτων (20.542_26_Κατηγορία_Θέμα). | `modules/protocol/numbering.py` | — |
 | Ειδοποιήσεις μέσα στην εφαρμογή. | `core/notifications.py` | POST `/notifications/seen`, GET `/api/notifications` |
 | Google Drive — σύνδεση OAuth, αποθήκευση κλειδιών, κλήσεις στο Drive API. | `modules/drive/client.py` | — |
 | Google Drive — ανέβασμα PDF εγγράφων και κατάσταση ανεβάσματος. | `modules/drive/upload.py` | — |
 | Google Drive — σελίδα ρύθμισης, σύνδεση/αποσύνδεση, δοκιμή, χειροκίνητο ανέβασμα. | `modules/drive/routes.py` | POST `/drive/upload/{kind}/{doc_id}`, GET `/drive`, GET `/drive/connect`, GET `/drive/callback`, POST `/drive/disconnect`, POST `/drive/test` |
 | Βάση Δεδομένων — κατάλογος των πινάκων που εμφανίζονται/επεξεργάζονται στη σελίδα «Βάση Δεδομένων». | `modules/database/registry.py` | — |
+| Πλήρες αντίγραφο ασφαλείας όλης της βάσης (λήψη) και επαναφορά του (ανέβασμα). Λειτουργεί ανάμεσα σε SQLite και | `modules/database/backup.py` | GET `/database/backup.json.gz`, GET `/database/restore`, POST `/database/restore` |
 | Βάση Δεδομένων — μία σελίδα για όλα τα δεδομένα της εφαρμογής: προβολή, αναζήτηση, επεξεργασία, Excel, | `modules/database/routes.py` | GET `/database`, GET `/database/protocol`, GET `/database/{key}/export.xlsx`, GET `/database/{key}`, GET `/database/{key}/{rid}`, POST `/database/{key}/{rid}`, GET `/system/check` |
 | Αρχική σελίδα — πίνακας ελέγχου: μία κάρτα ανά ενότητα με ό,τι εκκρεμεί και τις συχνές ενέργειες. | `modules/dashboard/tiles.py` | — |
 <!-- map:end -->

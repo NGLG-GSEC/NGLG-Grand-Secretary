@@ -59,10 +59,28 @@ def test_full_project_flow(admin, app_module):
     assert r.status_code == 200 and r.content[:4] == b'%PDF'
     t = admin.get('/projects').text
     assert 'Ίδρυση Σ.Σ. «Δοκιμή»' in t and '1 μέλη' in t
-    path = app_module.project_file_path(img)
-    assert path.exists()
+    assert not app_module.project_file_path(img).exists()  # τα αρχεία είναι στη βάση, όχι στον δίσκο
+    with app_module.con() as c:
+        assert c.execute('SELECT COUNT(*) n FROM project_blobs WHERE stored_name=?', (img['stored_name'],)).fetchone()['n'] == 1
     assert admin.post(f'/projects/{pid}/delete').status_code == 303
-    assert app_module.project_get(pid) is None and not path.exists()
+    assert app_module.project_get(pid) is None
+    with app_module.con() as c:
+        assert c.execute('SELECT COUNT(*) n FROM project_blobs WHERE stored_name=?', (img['stored_name'],)).fetchone()['n'] == 0
+
+
+def test_old_files_on_disk_move_to_database(admin, app_module):
+    pid = _new(admin, title='Παλιό πρότζεκτ με αρχείο στον δίσκο')
+    d = app_module.PROJECT_FILES_DIR / str(pid)
+    d.mkdir(parents=True, exist_ok=True)
+    (d / 'old123.png').write_bytes(PNG)
+    with app_module.con() as c:
+        fid = c.execute("INSERT INTO project_files(project_id,kind,name,stored_name,content_type,size,added_on) VALUES(?,?,?,?,?,?,?)",
+                        (pid, 'image', 'old.png', 'old123.png', 'image/png', len(PNG), '2026-01-01')).lastrowid
+    assert admin.get(f'/projects/file/{fid}').content == PNG  # διαβάζεται και πριν τη μεταφορά
+    assert app_module.project_files_to_db() == 1 and app_module.project_files_to_db() == 0
+    (d / 'old123.png').unlink()
+    assert admin.get(f'/projects/file/{fid}').content == PNG
+    admin.post(f'/projects/{pid}/delete')
 
 
 def test_body_with_units(admin, app_module):

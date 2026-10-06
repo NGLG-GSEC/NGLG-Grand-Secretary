@@ -61,3 +61,39 @@ def test_protocol_book_and_system_check(admin):
 def test_database_is_admin_only(anon):
     assert anon.get('/database').status_code in (302, 303, 307)
     assert anon.get('/system/check').status_code in (302, 303, 307)
+
+
+def test_backup_and_restore_roundtrip(admin, app_module):
+    import gzip, json
+    r = admin.get('/database/backup.json.gz')
+    assert r.status_code == 200
+    data = json.loads(gzip.decompress(r.content))
+    assert data['format'] == 'nglg-backup/1' and 'lodges' in data['tables'] and 'otps' not in data['tables']
+    with app_module.con() as c:
+        n_lodges = c.execute('SELECT COUNT(*) n FROM lodges').fetchone()['n']
+        lid = c.execute('SELECT id FROM lodges ORDER BY id LIMIT 1').fetchone()['id']
+        c.execute("UPDATE lodges SET meeting_place='ΑΛΛΑΓΗ ΜΕΤΑ ΤΟ ΑΝΤΙΓΡΑΦΟ' WHERE id=?", (lid,))
+        c.execute("DELETE FROM lodges WHERE id=(SELECT MAX(id) FROM lodges)")
+    assert admin.get('/database/restore').status_code == 200
+    bad = admin.post('/database/restore', data={'confirm': 'όχι'}, files={'file': ('b.json.gz', r.content, 'application/gzip')})
+    assert bad.status_code == 400
+    bad = admin.post('/database/restore', data={'confirm': 'ΕΠΑΝΑΦΟΡΑ'}, files={'file': ('x.json', b'{}', 'application/json')})
+    assert bad.status_code == 400
+    ok = admin.post('/database/restore', data={'confirm': 'ΕΠΑΝΑΦΟΡΑ'}, files={'file': ('b.json.gz', r.content, 'application/gzip')})
+    assert ok.status_code == 303
+    with app_module.con() as c:
+        assert c.execute('SELECT COUNT(*) n FROM lodges').fetchone()['n'] == n_lodges
+        assert c.execute('SELECT meeting_place FROM lodges WHERE id=?', (lid,)).fetchone()['meeting_place'] != 'ΑΛΛΑΓΗ ΜΕΤΑ ΤΟ ΑΝΤΙΓΡΑΦΟ'
+    # μετά την επαναφορά οι νέες εγγραφές παίρνουν νέο αριθμό (σωστή συνέχεια αρίθμησης και στο Postgres)
+    assert admin.get('/directory').status_code == 200
+    with app_module.con() as c:
+        top = c.execute('SELECT MAX(id) m FROM lodges').fetchone()['m']
+        new = c.execute("INSERT INTO lodges(number,name) VALUES('999','ΔΟΚΙΜΗ ΜΕΤΑ ΤΗΝ ΕΠΑΝΑΦΟΡΑ')").lastrowid
+        assert new > top
+        c.execute('DELETE FROM lodges WHERE id=?', (new,))
+
+
+def test_restore_coerces_sqlite_values(app_module):
+    assert app_module._bk_in('', 'integer') is None and app_module._bk_in(' 12 ', 'bigint') == 12
+    assert app_module._bk_in('12.0', 'integer') == 12 and app_module._bk_in(5, 'text') == '5'
+    assert app_module._bk_in({'$b64': 'AAE='}, 'bytea') == b'\x00\x01'

@@ -6,7 +6,7 @@ def drive_upload_now(req:Request,kind:str,doc_id:int):
     u=need(req)
     if kind not in DOC_KINDS or not _doc_info(kind,doc_id):raise HTTPException(404)
     resp=RedirectResponse(f'/letter/{doc_id}' if kind=='letter' else f'/decrees/{doc_id}',303)
-    resp.background=BackgroundTask(drive_upload_doc,kind,doc_id,req)
+    drive_upload_later(resp,kind,doc_id,req)
     return resp
 
 def _public_base(req):

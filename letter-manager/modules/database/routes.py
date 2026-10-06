@@ -36,7 +36,7 @@ def database_home(req:Request):
 .dbcard{{margin:0;display:flex;flex-direction:column;gap:4px;text-decoration:none;color:inherit}}.dbcard:hover{{outline:2px solid #1f4e78}}.dbn{{font-size:1.6rem;font-weight:700;color:#1f4e78}}</style>
 <div class="card"><p style="margin-top:0">Όλα τα δεδομένα της εφαρμογής σε μία κοινή βάση. Επιλέξτε πίνακα για αναζήτηση, επεξεργασία ή εξαγωγή σε Excel.
 Οι αριθμοί πρωτοκόλλου δεν αλλάζουν από εδώ.</p>
-<div class="toolbar"><a class="btn primary" href="/database/protocol">📖 Βιβλίο Πρωτοκόλλου ({n_proto})</a><a class="btn" href="/directory">📇 Κατάλογος</a><a class="btn" href="/system/check">🩺 Έλεγχος συστήματος</a></div></div>
+<div class="toolbar"><a class="btn primary" href="/database/protocol">📖 Βιβλίο Πρωτοκόλλου ({n_proto})</a><a class="btn" href="/directory">📇 Κατάλογος</a><a class="btn" href="/system/check">🩺 Έλεγχος συστήματος</a><a class="btn" href="/database/restore">💾 Αντίγραφο ασφαλείας</a></div></div>
 {html_groups}""",u,'Βάση Δεδομένων')
 
 @app.get('/database/protocol')
