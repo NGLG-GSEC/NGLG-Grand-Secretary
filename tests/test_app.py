@@ -76,8 +76,12 @@ def test_decree_epeteirida_and_members(app):
         assert s in body, s
     app.go('/epeteirida')
     assert 'Μέγας Γραμματεύς' in app.text() and '513/' in app.text()
+    assert app.page.locator('tbody tr').first.locator('td').nth(2).inner_text() == '23'  # τάξη προβαδίσματος
+    pr = app.page.evaluate("async () => { const m = await import('./modules/decree-catalog.js'); return [m.PRECEDENCE.length, m.PRECEDENCE[22], m.precedenceOf('Μέγας Γραμματεύς'), m.precedenceOf('Πρώην Μέγας Γραμματεύς'), m.precedenceOf('Μέγας Θησαυροφύλαξ'), m.precedenceOf('Μέγας Στεγαστής'), m.precedenceOf('Πρώην Μέγας Στεγαστής')]; }")
+    assert pr == [67, 'Μέγας Γραμματεύς', 23, 24, 29, 66, 67]
     # ΕΥΑΡΕΣΤΟΥΜΕΘΑ: σταθερό κείμενο, χωρίς Επετηρίδα
     app.go('/decrees/new?action=service_award')
+    assert 'Τάξις και προβάδισμα των μελών' in app.text()
     app.pick('.registry-search', 'Παπαδ')
     app.click('Έκδοση Διατάγματος')
     app.page.wait_for_url('**/#/decrees/2')

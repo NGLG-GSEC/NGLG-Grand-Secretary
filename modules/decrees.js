@@ -8,7 +8,7 @@ import { mailButtons, senderBanner } from '../core/mail.js';
 import { attachPicker, memberItems } from '../core/pickers.js';
 import { nextProtocol } from './protocol.js';
 import { findMember, insertMember } from './members.js';
-import { DEC_OFFICES, AWARD_OFFICES, AWARD_MAP, DEC_MAP, DEC_BASIS, HON_ACC_BY_SHORT, HONORIFIC_OPTIONS, OFFICE_FORMS, DEGREE_CC_DEFAULT } from './decree-catalog.js';
+import { DEC_OFFICES, AWARD_OFFICES, AWARD_MAP, DEC_MAP, DEC_BASIS, HON_ACC_BY_SHORT, HONORIFIC_OPTIONS, OFFICE_FORMS, DEGREE_CC_DEFAULT, PRECEDENCE } from './decree-catalog.js';
 
 db.defaultSettings({ decree_cc: DEGREE_CC_DEFAULT.join(', '), decree_first_no: '513' });
 const ACTIONS = { appoint: 'ΔΙΟΡΙΖΟΜΕΝ', award: 'ΑΠΟΝΕΜΕΙ', service_award: 'ΕΥΑΡΕΣΤΟΥΜΕΘΑ ΝΑ ΑΠΟΝΕΙΜΩΜΕΝ' };
@@ -111,7 +111,8 @@ function infoTables() {
   for (const [, o, r] of DEC_OFFICES) (groups[r] ||= []).push(o);
   const grows = [[`<b>Καν. 19</b>`, `<b>ΑΠΟΝΕΜΕΙ</b><br><small>${esc(DEC_BASIS['19'])}</small>`], ...sortBy(Object.keys(groups), Number).map((r) => [`<b>Καν. ${r}</b>`, `<small>${esc(DEC_BASIS[r] || '')}</small><div>${groups[r].map((o) => '• ' + esc(o)).join('<br>')}</div>`])];
   return `<details class="card fold"><summary><b>Πίνακες: Προβάδισμα — Αξίωμα — Κανόνας · Ομαδοποιήσεις κατά Κανόνα</b></summary><div class="cols2" style="margin-top:10px">
-${table(['Προβάδισμα', 'Αξίωμα / Διορισμός', 'Κανόνας'], rows)}${table(['Κανόνας', 'Ομαδοποίηση'], grows)}</div></details>`;
+${table(['Προβάδισμα', 'Αξίωμα / Διορισμός', 'Κανόνας'], rows)}${table(['Κανόνας', 'Ομαδοποίηση'], grows)}</div></details>
+<details class="card fold"><summary><b>Τάξις και προβάδισμα των μελών της Μεγάλης Στοάς (άρθρο 5)</b></summary><ol style="margin-top:10px">${PRECEDENCE.map((t) => `<li>${esc(t)}</li>`).join('')}</ol></details>`;
 }
 
 function decreeForm(d, query = {}) {
