@@ -26,6 +26,8 @@ jobs:
         uses: actions/configure-pages@v5
         with:
           enablement: true
+      - name: Έκδοση στα αρχεία (νέα έκδοση χωρίς παλιά cache)
+        run: python3 tools/stamp_version.py "${GITHUB_SHA}"
       - name: Upload site
         uses: actions/upload-pages-artifact@v3
         with:

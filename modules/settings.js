@@ -55,6 +55,7 @@ async function systemPage() {
     title: 'Έλεγχος εφαρμογής',
     html: `<h1>🩺 Έλεγχος εφαρμογής</h1><div class="card"><table class="stack">
 <tr><th>Δεδομένα</th><td>${esc(b.kind === 'github' ? 'GitHub: ' + b.label : 'Μόνο σε αυτόν τον browser (δοκιμή)')}</td></tr>
+<tr><th>Έκδοση εφαρμογής</th><td><code>${esc((document.querySelector('meta[name=app-version]') || {}).content || 'τοπική')}</code></td></tr>
 <tr><th>Τελευταία αποθήκευση</th><td><code>${esc(String(db.head || '').slice(0, 12))}</code></td></tr>
 <tr><th>Ενότητες</th><td>${modules.length}</td></tr><tr><th>Σελίδες</th><td>${allRoutes().length}</td></tr>
 <tr><th>Αποστολέας: Επιστολές & Διατάγματα</th><td>${esc(db.setting('mail_from_official'))}</td></tr><tr><th>Αποστολέας: Γενικά</th><td>${esc(db.setting('mail_from_general'))}</td></tr></table></div>
