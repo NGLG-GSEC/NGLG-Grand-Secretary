@@ -30,6 +30,11 @@ db.migrate('lodges-rituals-2026-10', (tx) => {
   }
 });
 
+// Οι 3, 31 και 85 (Emulation En / Schroder) εργάζονται κι αυτές σε Emulation.
+db.migrate('lodges-rituals-emulation-2026-10', (tx) => {
+  for (const l of tx.all('lodges')) if (['3', '31', '85'].includes(lodgeNoKey(l.number)) && l.ritual !== 'Emulation') tx.update('lodges', l.id, { ritual: 'Emulation' });
+});
+
 export const lodgeNoKey = (n) => { n = String(n ?? '').replace(/\s+/g, '').toUpperCase(); return n.replace(/^0+/, '') || n; };
 const cleanGreek = (v) => String(v || '').toUpperCase().replace(/[ABEZHIKMNOPTXY]/g, (c) => 'ΑΒΕΖΗΙΚΜΝΟΡΤΧΥ'['ABEZHIKMNOPTXY'.indexOf(c)]);
 export const cleanLodgeName = (v) => String(v || '').replace(/\s+/g, ' ').trim().split(' ')

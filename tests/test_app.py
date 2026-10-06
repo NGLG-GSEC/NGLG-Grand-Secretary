@@ -417,7 +417,7 @@ def test_official_lodges_applied_to_existing_database(app):
     # χωρίς να αγγίζει email/Σεβάσμιο που είχαν ήδη συμπληρωθεί.
     gh = MockGitHub()
     gh.ref = gh.put_commit(gh.put_tree({}), [], 'init')
-    old = [{'id': 1, 'number': '2', 'name': 'ΑΚΡΟΠΟΛΙΣ', 'provincial': '', 'orient': '', 'email': 'akropolis@example.com', 'master': 'Σεβάσμιος Α', 'status': 'Ενεργή'},
+    old = [{'id': 3, 'number': '31', 'name': 'x', 'ritual': 'Schroder', 'status': 'Ενεργή'}, {'id': 1, 'number': '2', 'name': 'ΑΚΡΟΠΟΛΙΣ', 'provincial': '', 'orient': '', 'email': 'akropolis@example.com', 'master': 'Σεβάσμιος Α', 'status': 'Ενεργή'},
            {'id': 2, 'number': '73', 'name': 'ΑΧΙΛΛΕΥΣ Ο ΜΥΡΜΙΔΩΝ', 'provincial': '', 'status': 'Ενεργή'}]
     gh.external_commit('data/lodges.json', json.dumps(old, ensure_ascii=False))
     gh.external_commit('data/settings.json', json.dumps({'closing': 'x'}))
@@ -425,6 +425,7 @@ def test_official_lodges_applied_to_existing_database(app):
     app.page.wait_for_selector('.dash')
     lodges = {l['number']: l for l in gh.read_json('data/lodges.json')}
     assert len(lodges) == 87  # 86 επίσημες + η 73 που υπήρχε ήδη
+    assert lodges['31']['ritual'] == 'Emulation'
     a = lodges['2']
     assert a['provincial'] == 'ΕπΜΣτ. Αθηνών' and a['orient'] == 'Αθηνών' and a['kind'] == 'Κανονική' and a['ritual'] == 'Emulation'
     assert a['email'] == 'akropolis@example.com' and a['master'] == 'Σεβάσμιος Α'
@@ -528,7 +529,8 @@ def test_lodge_rituals_and_masters_pasted(app):
     rit = app.page.evaluate("async () => { const m = await import('./core/store.js'); return Object.fromEntries(m.db.all('lodges').map((l) => [l.number, l.ritual])); }")
     scot = '28 58 89 95 96 97 98 99 101 102 103 104 105 106 108 111 113 115 Φ'.split()
     assert sorted(n for n, r in rit.items() if r.startswith('ΣΚΩΤΙΚΟ')) == sorted(scot)
-    assert rit['Φ'] == 'ΣΚΩΤΙΚΟ 1700' and rit['58'] == 'ΣΚΩΤΙΚΟ Frenche 1785' and rit['1'] == 'Emulation'
+    assert rit['Φ'] == 'ΣΚΩΤΙΚΟ 1700' and rit['58'] == 'ΣΚΩΤΙΚΟ Frenche 1785'
+    assert all(r == 'Emulation' for n, r in rit.items() if n not in scot)
     paste = 'ΝΟ\tΣΤΟΑ\tΕΔΡΑ\tΕΙΔΟΣ\tΤΥΠΙΚΟ\tΟνομα\tΕπώνυμο\tΚιν\n' \
             '95\tLA ΡAIX\tΚέρκυρα\tΓΑΛΛΟΦΩΝΗ\tΣΚΩΤΙΚΟ Frenche 1785\tΔΟΚΙΜΟΣ\tΣΕΒΑΣΜΙΟΣ\t6900000095\n' \
             '28\tΚΑΜΕΙΡΟΣ\tΡόδος\tKANONIKH\tΣΚΩΤΙΚΟ\tΆλλος\tΔοκιμαστικός\t6900000028\n'
