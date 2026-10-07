@@ -636,3 +636,15 @@ def test_installations_table_2026_2027_loaded(app, tmp_path):
     vs = app.page.evaluate("async () => { const m = await import('./core/store.js'); return m.db.all('visits'); }")
     new = [v for v in vs if v['visit_date'] == '2027-10-06'][0]
     assert new['lodge_number'] == '8' and new['location'] == 'Τεκτονικό Μέγαρο Αθηνών'
+
+
+def test_namedays_calendar_completed(app):
+    app.connect_local()
+    for sn, fn in [('Πρώτος', 'Σέργιος'), ('Δεύτερος', 'Κώστας'), ('Τρίτος', 'Τάσος'), ('Τέταρτος', 'Ξενόφερτος')]:
+        add_member(app, surname=sn, first=fn, email=f'{sn}@example.com', mobile='')
+    y = date.today().year
+    app.go(f'/namedays?frm={y}-10-07&to={y}-10-14')
+    t = app.text()
+    assert 'Πρώτος' in t and 'Μητρώο: 4 ενεργά μέλη · 3 με γνωστή ονομαστική εορτή' in t and 'Ξενόφερτος 1' in t
+    cel = app.page.evaluate(f"async () => {{ const n = await import('./modules/namedays.js'); return JSON.stringify(n.celebrants('{y}-01-01', '{y}-12-31')); }}")
+    assert 'Δεύτερος' in cel and 'Τρίτος' in cel  # Κωνσταντίνου (21/5) και Πάσχα

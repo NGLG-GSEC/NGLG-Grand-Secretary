@@ -25,6 +25,17 @@ db.seed('namedays', async () => {
   return xs.map((x, i) => ({ id: i + 1, name: x.name, name_key: ndKey(x.name), official: x.official || '', md: x.md || '', easter: x.easter ?? null, rule: x.rule || '', note: x.note || '' }));
 });
 db.seed('greetings_log', () => []);
+// Εφάπαξ: συμπλήρωση του εορτολογίου (ονόματα χωρίς ημερομηνία, χαϊδευτικά, ξενόγλωσσα) από seed/namedays-complete.json.
+// Ονόματα που έχουν ήδη ημερομηνία (π.χ. διορθωμένα από τον χρήστη) δεν αλλάζουν.
+db.migrate('namedays-complete-2026-10', async (tx) => {
+  const xs = await (await fetch('seed/namedays-complete.json')).json();
+  for (const x of xs) {
+    const k = ndKey(x.name), row = { official: x.official || x.name, md: x.md || '', easter: x.easter ?? null, rule: x.rule || '' };
+    const ex = tx.all('namedays').filter((n) => n.name_key === k);
+    if (!ex.length) tx.insert('namedays', { name: x.name, name_key: k, ...row, note: 'Συμπληρωματικό εορτολόγιο' });
+    else for (const n of ex) if (!n.md && (n.easter == null || n.easter === '')) tx.update('namedays', n.id, { ...row, note: '' });
+  }
+});
 
 export function orthodoxEaster(y) {
   const a = y % 4, b = y % 7, c = y % 19, d = (19 * c + 15) % 30, e = (2 * a + 4 * b - d + 34) % 7, mo = Math.floor((d + e + 114) / 31), da = ((d + e + 114) % 31) + 1;
@@ -44,9 +55,23 @@ const label = (it) => it.official || it.name || '';
 export const greetEmail = (m) => noContact(m) ? '' : [m.email || '', ...splitEmails(m.other_emails)].map((e) => e.trim()).find((e) => EMAIL_RE.test(e)) || '';
 const sentMap = () => Object.fromEntries(db.all('greetings_log').filter((g) => g.member_id).map((g) => [`${g.member_id}|${g.feast_date}`, g.sent_on]));
 
-export function celebrants(frm, to) {
+const hasDay = (it) => !!it && (/^\d{2}-\d{2}$/.test(it.md || '') || (it.easter != null && it.easter !== '' && /^-?\d+$/.test(String(it.easter))));
+// Ένα όνομα → η εγγραφή με ημερομηνία (οι σύνθετες χωρίς ημερομηνία δεν «κρύβουν» την κύρια)
+function namedayIndex() {
   const idx = {};
-  for (const it of sortBy(db.all('namedays'), 'name_key')) idx[it.name_key] ||= it;
+  for (const it of sortBy(db.all('namedays'), 'name_key')) if (!idx[it.name_key] || (!hasDay(idx[it.name_key]) && hasDay(it))) idx[it.name_key] = it;
+  return idx;
+}
+// Κάλυψη: πόσα ενεργά μέλη του Μητρώου έχουν γνωστή ονομαστική εορτή, και ποια ονόματα λείπουν
+export function coverage() {
+  const idx = namedayIndex(), ms = db.all('member_registry').filter((x) => x.active !== 0 && !noContact(x)), miss = {};
+  let ok = 0;
+  for (const m of ms) { if (hasDay(idx[ndKey(m.first_name)])) ok++; else { const n = String(m.first_name || '').split(' ')[0].trim(); if (n) miss[n] = (miss[n] || 0) + 1; } }
+  return { members: ms.length, ok, missing: Object.entries(miss).sort((a, b) => b[1] - a[1]) };
+}
+
+export function celebrants(frm, to) {
+  const idx = namedayIndex();
   const d0 = parseIso(frm), d1 = parseIso(to), groups = {}, byM = lodgesByMember();
   for (const m of db.all('member_registry').filter((x) => x.active !== 0 && !noContact(x))) {
     const it = idx[ndKey(m.first_name)];
@@ -107,6 +132,9 @@ function range(q) {
 function listPage({ query }) {
   const [frm, to] = range(query), sent = sentMap();
   const gs = celebrants(frm, to).map((g) => ({ ...g, members: g.members.filter((m) => (!query.mail || greetEmail(m)) && !(query.hide && sent[`${m.id}|${g.date}`])) })).filter((g) => g.members.length);
+  const cov = coverage();
+  const covHtml = !cov.members ? '<div class="card nocontact">Το Μητρώο Μελών είναι κενό σε αυτή τη βάση — κάντε πρώτα «Εισαγωγή μελών» (Μητρώα → Μητρώο Μελών).</div>'
+    : `<p class="muted">Μητρώο: <b>${cov.members}</b> ενεργά μέλη · <b>${cov.ok}</b> με γνωστή ονομαστική εορτή${cov.missing.length ? ` · <b>${cov.members - cov.ok}</b> χωρίς (π.χ. ${cov.missing.slice(0, 12).map(([n, c]) => `${esc(n)} ${c}`).join(', ')}) — <a href="#/namedays/calendar">συμπλήρωση στο Εορτολόγιο ονομάτων</a>` : ''}.</p>`;
   const people = gs.reduce((s, g) => s + g.members.length, 0), withMail = gs.reduce((s, g) => s + g.members.filter(greetEmail).length, 0);
   let last = '';
   const body = gs.map((g) => {
@@ -119,7 +147,7 @@ function listPage({ query }) {
   }).join('') || '<div class="card">Κανένα μέλος δεν εορτάζει σε αυτό το διάστημα.</div>';
   return {
     title: 'Εορτολόγιο',
-    html: `<h1>🎉 Εορτολόγιο</h1>${notice(query.msg)}<div class="toolbar"><a class="btn" href="#/namedays/report">Αναφορά ευχών σήμερα (ΜΔ)</a><button class="btn" data-act="xlsx">⬇ Excel εορταζόντων</button><a class="btn" href="#/namedays/calendar">Εορτολόγιο ονομάτων</a></div>
+    html: `<h1>🎉 Εορτολόγιο</h1>${notice(query.msg)}${covHtml}<div class="toolbar"><a class="btn" href="#/namedays/report">Αναφορά ευχών σήμερα (ΜΔ)</a><button class="btn" data-act="xlsx">⬇ Excel εορταζόντων</button><a class="btn" href="#/namedays/calendar">Εορτολόγιο ονομάτων</a></div>
 <form class="card ndf" id="flt"><label>Από <input type="date" name="frm" value="${esc(frm)}"></label><label>Έως <input type="date" name="to" value="${esc(to)}"></label>
 <label><input type="checkbox" name="mail"${query.mail ? ' checked' : ''}> Μόνο με email</label><label><input type="checkbox" name="hide"${query.hide ? ' checked' : ''}> Απόκρυψη όσων έλαβαν ευχές</label><button>Προβολή</button></form>
 <p><b>${people}</b> εορτάζοντες · <b>${new Set(gs.map((g) => g.date)).size}</b> ημέρες · <b>${withMail}</b> με email · <b>${gs.length}</b> εορτές</p>
