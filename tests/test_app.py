@@ -124,6 +124,8 @@ def test_lodges_provinces_directory(app):
 
 def test_visits_reps_and_mails(app):
     app.connect_local()
+    # χωρίς τον Πίνακα Εγκαταστάσεων 2026–2027, ώστε να ελεγχθεί μία μόνο επίσκεψη
+    app.page.evaluate("async () => { const m = await import('./core/store.js'); await m.db.save('x', (tx) => tx.replace('visits', [])); }")
     app.go('/lodges/edit/3').fill(provincial='ΕπΜΣτ. Αθηνών', meeting_place='Τεκτονικόν Μέγαρον Αθηνών')
     app.click('💾 Αποθήκευση')
     app.wait_saved()
@@ -607,3 +609,30 @@ def test_installations_pasted_as_table(app):
     app.page.fill('[name=text]', paste)
     app.page.locator('#imf button').click()
     app.page.wait_for_selector('text=Προστέθηκαν 0 Εγκαταστάσεις, 2 υπήρχαν ήδη')
+
+
+def test_installations_table_2026_2027_loaded(app, tmp_path):
+    app.connect_local()
+    vs = app.page.evaluate("async () => { const m = await import('./core/store.js'); return m.db.all('visits'); }")
+    assert len(vs) == 74
+    by = {(v['lodge_number'], v['visit_date']): v for v in vs}
+    assert by[('32', '2026-10-17')]['location'] == 'Τεκτονικό Μέγαρο Ιωαννίνων' and by[('32', '2026-10-17')]['province'] == 'ΕπΜΣτ. Πελοποννήσου & Δυτικής Ελλάδας'
+    assert by[('Φ', '2027-06-26')]['lodge'] == 'ΦΟΙΝΙΞ ΚΕΡΚΥΡΑΣ' and '04/10/2027' in by[('Φ', '2027-06-26')]['notes']
+    assert by[('3', '2026-10-07')]['lodge'] == 'ΠΑΡΘΕΝΩΝ'
+    # το ίδιο αρχείο Excel από τη σελίδα «Επικόλληση λίστας»: δεν διπλασιάζεται
+    import openpyxl
+    from datetime import datetime
+    wb = openpyxl.Workbook(); ws = wb.active
+    ws.append(['Εγκαταστάσεις Σεβασμίων Διδασκάλων']); ws.append([])
+    ws.append(['Επαρχία', 'Στοά', 'Αριθμός', 'Ημερομηνία εγκατάστασης', 'Σημειώσεις'])
+    ws.append(['Αθηνών', 'Λόγος', 89, datetime(2026, 10, 13, 12), None])
+    ws.append(['Αθηνών', 'Ηλιοτρόπιο', 8, datetime(2027, 10, 6, 12), 'Τεκτονικό Μέγαρο Αθηνών.'])
+    ws.append(['Αθηνών', 'Ευρώπη', 108, None, 'Δεν έχει δοθεί ημερομηνία.'])
+    f = tmp_path / 'egk.xlsx'; wb.save(f)
+    app.go('/visits/import')
+    app.page.set_input_files('[name=file]', str(f))
+    app.page.locator('#imf button').click()
+    app.page.wait_for_selector('text=Προστέθηκαν 1 Εγκαταστάσεις, 1 υπήρχαν ήδη')
+    vs = app.page.evaluate("async () => { const m = await import('./core/store.js'); return m.db.all('visits'); }")
+    new = [v for v in vs if v['visit_date'] == '2027-10-06'][0]
+    assert new['lodge_number'] == '8' and new['location'] == 'Τεκτονικό Μέγαρο Αθηνών'
