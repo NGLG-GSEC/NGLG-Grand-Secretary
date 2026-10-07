@@ -2,10 +2,11 @@
 // Πίνακες: member_registry, member_lodges (Στοές κάθε μέλους), member_degrees_offices (Επετηρίδα).
 // Κάθε αλλαγή μένει στο ιστορικό του GitHub, άρα και μια διαγραφή μπορεί να ανακτηθεί.
 import { db } from '../core/store.js';
-import { module, onSubmit, go, flash, bind, confirmDo, table, notice, pager } from '../core/app.js';
+import { module, onSubmit, go, flash, bind, confirmDo, table, notice, pager, toast } from '../core/app.js';
 import { esc, fold, sortBy, readXlsx, XLSX, parsePasted } from '../core/util.js';
 import { lodgeNoKey, lodgesAll } from './lodges.js';
 import { noContact, NO_CONTACT } from '../core/pickers.js';
+import { identify, canonicalId, person, digits10, sameNameGroups } from '../core/people.js';
 
 const PAGE = 100;
 const MEMBER_FIELDS = [['surname', 'Επώνυμο'], ['first_name', 'Όνομα'], ['mobile', 'Κινητό'], ['email', 'Email'], ['lodge', 'Στοά'], ['all', 'Όλα']];
@@ -121,7 +122,7 @@ function listPage({ query }) {
   const mk = (p) => '#/members?' + new URLSearchParams({ q, field, p });
   return {
     title: 'Μητρώο Μελών',
-    html: `<h1>Μητρώο Μελών</h1>${notice(query.msg)}<div class="toolbar"><a class="btn primary" href="#/members/new">+ Προσθήκη Μέλους</a><button class="btn" data-act="export">⬇ Excel</button></div>
+    html: `<h1>Μητρώο Μελών</h1>${notice(query.msg)}<div class="toolbar"><a class="btn primary" href="#/members/new">+ Προσθήκη Μέλους</a>${(() => { const n = sameNameGroups().length; return n ? `<a class="btn" href="#/members/duplicates">Διπλές εγγραφές (${n})</a>` : ''; })()}<button class="btn" data-act="export">⬇ Excel</button></div>
 <div class="card member-search"><h3 style="margin-top:0">Αναζήτηση μέλους</h3><form class="msearch" id="ms"><fieldset class="msfield"><legend>1. Τι θα δώσετε;</legend>
 ${MEMBER_FIELDS.map(([k, v]) => `<label class="chip"><input type="radio" name="field" value="${k}"${k === field ? ' checked' : ''}><span>${esc(v)}</span></label>`).join('')}</fieldset>
 <div><label for="msq" id="msqlabel">2. ${esc(qlabel)}</label><input id="msq" name="q" value="${esc(q)}" autofocus autocomplete="off" type="${itype}" placeholder="${esc(ph)}"${field === 'lodge' ? ' list="lodgelist"' : ''}>
@@ -156,6 +157,13 @@ ${pager(xs.length, pg, PAGE, mk)}
   };
 }
 
+// Πού εμφανίζεται το μέλος (οι λίστες δείχνουν σε αυτό — δεν κρατούν δικά τους αντίγραφα)
+function usesOf(m) {
+  const reps = db.all('reps').filter((r) => r.member_id === m.id), offs = db.all('member_degrees_offices').filter((o) => o.member_id === m.id), gr = db.all('greetings_log').filter((g) => g.member_id === m.id);
+  const parts = [reps.length && `Εκπρόσωπος ΜΔ: ${reps.map((r) => `<a href="#/reps/edit/${r.id}">${esc(String(r.office || 'χωρίς αξίωμα').split(' · ')[0])}</a>`).join(', ')}`,
+    offs.length && `Επετηρίδα: ${offs.length} εγγραφές`, gr.length && `Ευχές: ${gr.length}`, m.merged_from && `Συγχωνεύθηκαν: ${esc(m.merged_from)}`].filter(Boolean);
+  return parts.length ? `<p class="muted">${parts.join(' · ')}</p>` : '';
+}
 function formPage(m) {
   const ls = m ? lodgesByMember()[m.id] || [] : [];
   const x = m || { active: 1 };
@@ -163,7 +171,7 @@ function formPage(m) {
   const offices = m ? sortBy(db.all('member_degrees_offices').filter((o) => o.member_id === m.id), (o) => -(o.decree_year || 0)) : [];
   return {
     title: m ? `Μέλος #${m.id}` : 'Νέο Μέλος',
-    html: `<p><a href="#/members">← Μητρώο Μελών</a></p><h1>${m ? `${esc(m.surname)} ${esc(m.first_name)} <small class="muted">#${m.id}</small>` : 'Νέο Μέλος'}</h1>${noContact(m) ? `<div class="card nocontact">${NO_CONTACT}</div>` : ''}
+    html: `<p><a href="#/members">← Μητρώο Μελών</a></p><h1>${m ? `${esc(m.surname)} ${esc(m.first_name)} <small class="muted">#${m.id}</small>` : 'Νέο Μέλος'}</h1>${noContact(m) ? `<div class="card nocontact">${NO_CONTACT}</div>` : ''}${m ? usesOf(m) : ''}
 <form id="mf"><div class="grid card">${f('registry_no', 'Αρ. Μητρώου', 'inputmode="numeric"')}${f('surname', 'Επώνυμο', 'required')}${f('first_name', 'Όνομα', 'required')}
 ${f('surname_variants', 'Παραλλαγές Επωνύμου', 'placeholder="π.χ. CASTANEDA; ΚΑΣΤΑΝΕΔΑ"')}${f('first_name_variants', 'Παραλλαγές Ονόματος', 'placeholder="π.χ. CARLOS; ΚΑΡΛΟΣ"')}
 ${f('email', 'Κύριο Email', 'inputmode="email"')}${f('other_emails', 'Άλλα Email')}${f('mobile', 'Κύριο Κινητό', 'inputmode="tel"')}${f('other_mobiles', 'Άλλα Κινητά')}${f('degree', 'Τεκτονικός Βαθμός')}
@@ -308,11 +316,111 @@ db.migrate('members-no-contact-2026-10', (tx) => {
   }
 });
 
+// Συγχώνευση διπλών εγγραφών του ίδιου προσώπου σε μία (την κύρια): Στοές, email, κινητά, παραλλαγές ονόματος και
+// όλες οι αναφορές (Επετηρίδα, Εκπρόσωποι, Ευχές, Έργα, Επιστολές, Διατάγματα) μεταφέρονται· οι υπόλοιπες εγγραφές διαγράφονται.
+export function mergeMembers(tx, mainId, otherIds) {
+  const main = tx.get('member_registry', mainId), others = otherIds.filter((i) => i !== mainId).map((i) => tx.get('member_registry', i)).filter(Boolean);
+  if (!main || !others.length) return 0;
+  const all = [main, ...others], uniq = (xs) => [...new Map(xs.map((x) => String(x || '').trim()).filter(Boolean).map((x) => [x.toLowerCase(), x])).values()];
+  const emails = uniq(all.flatMap((m) => [m.email, ...String(m.other_emails || '').split(/[;,\s]+/)]));
+  const mobiles = uniq(all.flatMap((m) => [m.mobile, ...String(m.other_mobiles || '').split(/[;,]/)])).filter((v, i, a) => a.findIndex((w) => digits10(w) === digits10(v)) === i);
+  const vars = (k, vk) => { const base = plainUpper(main[k]); const vs = uniq(all.flatMap((m) => [m[k], ...String(m[vk] || '').split(';')])).filter((v) => plainUpper(v) !== base || v !== main[k]); return vs.filter((v) => plainUpper(v) !== base).join('; '); };
+  const regs = all.map((m) => m.registry_no).filter((x) => x != null), blocked = all.some((m) => Number(m.no_contact) === 1);
+  tx.update('member_registry', main.id, {
+    email: main.email || emails[0] || '', other_emails: emails.filter((e) => e.toLowerCase() !== String(main.email || emails[0] || '').toLowerCase()).join('; '),
+    mobile: main.mobile || mobiles[0] || '', other_mobiles: mobiles.filter((m) => digits10(m) !== digits10(main.mobile || mobiles[0] || '')).join('; '),
+    surname_variants: vars('surname', 'surname_variants'), first_name_variants: vars('first_name', 'first_name_variants'),
+    registry_no: main.registry_no ?? (regs.length ? Math.min(...regs) : null), degree: main.degree || (others.find((m) => m.degree) || {}).degree || '',
+    no_contact: blocked ? 1 : 0, active: blocked ? 0 : all.some((m) => m.active !== 0) ? 1 : 0,
+    merged_from: uniq([main.merged_from, ...others.map((m) => (m.registry_no != null ? `Αρ. Μητρώου ${m.registry_no}` : `#${m.id}`))]).join('; '),
+  });
+  const ids = new Set(others.map((m) => m.id)), have = new Set(tx.all('member_lodges').filter((l) => l.member_id === main.id).map((l) => lodgeNoKey(l.lodge_number) + '|' + l.member_status));
+  let seq = Math.max(0, ...tx.all('member_lodges').filter((l) => l.member_id === main.id).map((l) => Number(l.seq) || 0));
+  for (const l of tx.all('member_lodges').filter((l) => ids.has(l.member_id))) {
+    const k = lodgeNoKey(l.lodge_number) + '|' + l.member_status;
+    if (have.has(k)) tx.remove('member_lodges', l.id); else { have.add(k); tx.update('member_lodges', l.id, { member_id: main.id, seq: ++seq }); }
+  }
+  for (const [t, k] of [['member_degrees_offices', 'member_id'], ['reps', 'member_id'], ['greetings_log', 'member_id'], ['project_members', 'member_id'], ['project_units', 'leader_member_id'], ['letters', 'recipient_member_id']]) {
+    for (const x of tx.all(t)) if (ids.has(x[k])) tx.update(t, x.id, { [k]: main.id });
+  }
+  for (const d of tx.all('decree_documents')) {
+    let a; try { a = JSON.parse(d.appointments || '[]'); } catch { continue; }
+    if (a.some((x) => ids.has(Number(x.member_id)))) tx.update('decree_documents', d.id, { appointments: JSON.stringify(a.map((x) => (ids.has(Number(x.member_id)) ? { ...x, member_id: main.id } : x))) });
+  }
+  for (const m of others) tx.remove('member_registry', m.id);
+  return others.length;
+}
+
+function duplicatesPage() {
+  const groups = sameNameGroups(), byM = lodgesByMember(), sure = groups.filter((g) => g.sure), doubt = groups.filter((g) => !g.sure);
+  const card = (g, gi) => `<div class="card dupgroup" data-g="${gi}"><h3 style="margin-top:0">${esc(g.members[0].surname)} ${esc(g.members[0].first_name)} <small class="muted">${g.members.length} εγγραφές</small></h3>
+${table(['Κύρια', 'Μαζί', 'ID', 'Αρ. Μητρώου', 'Email', 'Κινητό', 'Στοές', 'Κατάσταση'], g.members.map((m) => [`<input type="radio" name="main${gi}" value="${m.id}"${m.id === g.main ? ' checked' : ''}>`,
+  `<input type="checkbox" class="inc" value="${m.id}"${g.sure ? ' checked' : ''}>`, `<a href="#/members/${m.id}">${m.id}</a>`, esc(m.registry_no ?? '—'), esc([m.email, m.other_emails].filter(Boolean).join('; ') || '—'),
+  esc([m.mobile, m.other_mobiles].filter(Boolean).join('; ') || '—'), esc((byM[m.id] || []).map((l) => `${l.lodge_name} ${l.lodge_number}`.trim()).join(', ') || '—'),
+  noContact(m) ? '<span class="pill bad">⛔ Διαγραμμένος</span>' : m.active !== 0 ? 'Ενεργός' : 'Ανενεργός']))}
+<div class="toolbar"><button class="btn primary" data-act="merge" data-g="${gi}">Συγχώνευση των επιλεγμένων σε μία εγγραφή</button></div></div>`;
+  const all = [...sure, ...doubt];
+  return {
+    title: 'Διπλές εγγραφές μελών',
+    html: `<p><a href="#/members">← Μητρώο Μελών</a></p><h1>Διπλές εγγραφές μελών</h1>
+<div class="card"><p style="margin-top:0">Ένα πρόσωπο = μία εγγραφή στο Μητρώο. Εδώ εμφανίζονται μέλη με ίδιο ονοματεπώνυμο. Η συγχώνευση κρατά την «Κύρια» εγγραφή και μεταφέρει σε αυτή
+Στοές, email, κινητά, αριθμούς μητρώου (ως σημείωση) και όλες τις αναφορές (Επετηρίδα, Εκπρόσωποι, Ευχές, Έργα, Επιστολές, Διατάγματα). Πριν από κάθε συγχώνευση κατεβαίνει Excel ασφαλείας.</p>
+${sure.length ? `<button class="btn primary" data-act="mergeAll">Συγχώνευση όλων των σίγουρων (${sure.length} πρόσωπα, ${sure.reduce((s, g) => s + g.members.length - 1, 0)} διπλές εγγραφές)</button>` : '<b>Δεν υπάρχουν σίγουρες διπλές εγγραφές.</b>'}</div>
+${sure.length ? `<h2>Σχεδόν σίγουρα το ίδιο πρόσωπο (${sure.length})</h2><p class="muted">Ίδιο ονοματεπώνυμο και όχι διαφορετικό κινητό.</p>${sure.map((g, i) => card(g, i)).join('')}` : ''}
+${doubt.length ? `<h2>Ίδιο όνομα, διαφορετικό κινητό — ελέγξτε (${doubt.length})</h2><p class="muted">Μπορεί να είναι συνώνυμοι Αδελφοί· επιλέξτε «Μαζί» μόνο όσες εγγραφές είναι σίγουρα το ίδιο πρόσωπο.</p>${doubt.map((g, i) => card(g, sure.length + i)).join('')}` : ''}`,
+    mount(el) {
+      bind(el, {
+        async merge(d) {
+          const box = el.querySelector(`.dupgroup[data-g="${d.g}"]`), main = Number((box.querySelector('input[type=radio]:checked') || {}).value);
+          const inc = [...box.querySelectorAll('.inc:checked')].map((i) => Number(i.value)).filter((i) => i !== main);
+          if (!main || !inc.length) return toast('Επιλέξτε την κύρια εγγραφή και τουλάχιστον μία ακόμη στο «Μαζί».', 'error');
+          if (!confirmDo(`Συγχώνευση ${inc.length + 1} εγγραφών σε μία (κύρια #${main}); Θα κατέβει πρώτα Excel ασφαλείας.`)) return;
+          await exportMembers();
+          await db.save(`Μητρώο: συγχώνευση διπλών εγγραφών #${main}`, (tx) => mergeMembers(tx, main, inc));
+          flash('Οι εγγραφές συγχωνεύθηκαν.'); go('/members/duplicates');
+        },
+        async mergeAll() {
+          if (!confirmDo(`Συγχώνευση ${sure.length} προσώπων (σίγουρες διπλές εγγραφές); Θα κατέβει πρώτα Excel ασφαλείας.`)) return;
+          await exportMembers();
+          let n = 0;
+          await db.save(`Μητρώο: συγχώνευση ${sure.length} διπλών προσώπων`, (tx) => { n = 0; for (const g of sure) n += mergeMembers(tx, g.main, g.members.map((m) => m.id)); });
+          flash(`Συγχωνεύθηκαν ${n} διπλές εγγραφές σε ${sure.length} πρόσωπα.`); go('/members/duplicates');
+        },
+      });
+    },
+  };
+}
+
+// Εφάπαξ: μία δεξαμενή — κάθε λίστα δείχνει στο μέλος (κύρια εγγραφή του προσώπου) και δεν κρατά αντίγραφα email/κινητών.
+export function relinkToPool(tx) {
+  const n = { linked: 0, copies: 0 };
+  for (const r of tx.all('reps')) {
+    const mid = r.member_id ? canonicalId(r.member_id, tx) : identify({ surname: r.surname, first_name: r.name, email: r.email, mobile: r.mobile }, tx);
+    const P = mid ? person(mid, tx) : null, ch = {};
+    if (mid && mid !== r.member_id) { ch.member_id = mid; n.linked++; }
+    if (P && r.email && P.emails.some((e) => e.toLowerCase() === String(r.email).trim().toLowerCase())) ch.email = '';
+    if (P && r.mobile && P.mobiles.some((m) => digits10(m) === digits10(r.mobile))) ch.mobile = '';
+    if (/Άλλα email:/.test(r.notes || '')) ch.notes = String(r.notes).replace(/\s*·?\s*Άλλα email:[^·]*/g, '').trim();
+    if ('email' in ch || 'mobile' in ch) n.copies++;
+    if (Object.keys(ch).length) tx.update('reps', r.id, ch);
+  }
+  for (const o of tx.all('member_degrees_offices')) {
+    const mid = o.member_id ? canonicalId(o.member_id, tx) : (o.full_name ? identify({ full_name: o.full_name }, tx) : null);
+    if (mid && mid !== o.member_id) { tx.update('member_degrees_offices', o.id, { member_id: mid }); n.linked++; }
+  }
+  for (const [t, k] of [['greetings_log', 'member_id'], ['project_members', 'member_id'], ['project_units', 'leader_member_id'], ['letters', 'recipient_member_id']]) {
+    for (const x of tx.all(t)) { const mid = x[k] && canonicalId(x[k], tx); if (mid && mid !== x[k]) { tx.update(t, x.id, { [k]: mid }); n.linked++; } }
+  }
+  return n;
+}
+db.migrate('people-single-source-2026-10', (tx) => { relinkToPool(tx); });
+
 module({
   id: 'members',
   routes: {
     '/members': listPage,
     '/members/new': () => formPage(null),
+    '/members/duplicates': duplicatesPage,
     '/members/:id': ({ params }) => { const m = db.get('member_registry', params.id); return m ? formPage(m) : '<h1>Δεν βρέθηκε το μέλος</h1>'; },
   },
   tile: { order: 60, render: () => `<div class="dtile"><h3><a href="#/members">Μητρώο Μελών</a></h3><div class="big">${membersAll().filter((m) => m.active !== 0).length} ενεργά μέλη</div><small class="muted">${membersAll().filter(noContact).length} διαγραμμένα (⛔ χωρίς επικοινωνία)</small>

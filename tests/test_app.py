@@ -926,3 +926,48 @@ def test_visit_card_email_and_letter_buttons(app):
     app.click('✓ Σημείωση ως σταλμένο')
     app.page.wait_for_url('**/#/visits')
     assert 'Εκπρόσωπος ενημερώθηκε' in app.text() and 'Επαρχία ενημερώθηκε' in app.text()
+
+
+def test_single_member_pool_identify_merge_and_relink(app):
+    # Μία δεξαμενή: οι λίστες δείχνουν στο μέλος· διπλές εγγραφές ενοποιούνται· τα στοιχεία διαβάζονται από το Μητρώο
+    app.connect_local()
+    app.page.evaluate("""async () => { const {db} = await import('./core/store.js');
+      await db.save('seed', (tx) => {
+        const a = tx.insert('member_registry', { registry_no: 80, surname: 'Διπλός', first_name: 'Αναστάσιος', email: 'a1@example.com', mobile: '', active: 1 });
+        const b = tx.insert('member_registry', { registry_no: 81, surname: 'Διπλος', first_name: 'Αναστάσιος', email: 'a2@example.com', mobile: '6900000080', active: 1 });
+        tx.insert('member_registry', { registry_no: 82, surname: 'ΔΙΠΛΟΣ', first_name: 'ΑΝΑΣΤΑΣΙΟΣ', email: '', mobile: '', active: 1 });
+        tx.insert('member_registry', { registry_no: 90, surname: 'Συνώνυμος', first_name: 'Γεώργιος', email: 's1@example.com', mobile: '6911111111', active: 1 });
+        tx.insert('member_registry', { registry_no: 91, surname: 'Συνώνυμος', first_name: 'Γεώργιος', email: 's2@example.com', mobile: '6922222222', active: 1 });
+        tx.insert('member_lodges', { member_id: a.id, seq: 1, lodge_name: 'ΠΑΡΘΕΝΩΝ', lodge_number: '3', member_status: '1. ΤΑΚΤΙΚΟ' });
+        tx.insert('member_lodges', { member_id: b.id, seq: 1, lodge_name: 'ΠΛΑΤΩΝ', lodge_number: '70', member_status: '1. ΤΑΚΤΙΚΟ' });
+        tx.insert('reps', { name: 'Αναστάσιος', surname: 'Διπλός', office: 'Μέγας Ευχέτης', year: '2026', email: 'a2@example.com', mobile: '6900000080', rep_rank: '', member_id: null, notes: 'Άλλα email: a1@example.com', ext_id: '' });
+        tx.insert('reps', { name: 'Γεώργιος', surname: 'Συνώνυμος', office: 'Μέγας Σημαιοφόρος', year: '2026', email: '', mobile: '', rep_rank: '', member_id: null, notes: '', ext_id: '' });
+      }); }""")
+    r = app.page.evaluate("""async () => { const P = await import('./core/people.js'), M = await import('./modules/members.js'), {db} = await import('./core/store.js');
+      const main = P.identify({ full_name: 'Διπλός Αναστάσιος' }), syn = P.identify({ full_name: 'Συνώνυμος Γεώργιος' }), syn2 = P.identify({ full_name: 'Συνώνυμος Γεώργιος', mobile: '6922 222222' });
+      const p = P.person(main);
+      let n; await db.save('relink', (tx) => { n = M.relinkToPool(tx); });
+      return { main, syn, syn2, regOfMain: db.get('member_registry', main).registry_no, emails: p.emails, lodges: p.lodges.map((l) => l.lodge_number).sort(), n, reps: db.all('reps') }; }""")
+    assert r['regOfMain'] == 81  # η πληρέστερη εγγραφή (email + κινητό)
+    assert sorted(r['emails']) == ['a1@example.com', 'a2@example.com'] and r['lodges'] == ['3', '70']
+    assert r['syn'] is None and r['syn2'] is not None  # συνώνυμοι: μόνο με κινητό/email
+    rep = [x for x in r['reps'] if x['surname'] == 'Διπλός'][0]
+    assert rep['member_id'] == r['main'] and rep['email'] == '' and rep['mobile'] == '' and 'Άλλα email' not in rep['notes']
+    # η επικοινωνία του εκπροσώπου έρχεται από το Μητρώο
+    app.go('/reps')
+    assert 'a2@example.com' in app.text() and '6900000080' in app.text()
+    # σελίδα διπλών: 1 σίγουρη ομάδα (3 εγγραφές), 1 προς έλεγχο (συνώνυμοι)
+    app.go('/members/duplicates')
+    t = app.text()
+    assert 'Σχεδόν σίγουρα το ίδιο πρόσωπο (1)' in t and 'διαφορετικό κινητό — ελέγξτε (1)' in t
+    with app.page.expect_download():
+        app.page.locator('[data-act=mergeAll]').click()
+    app.page.wait_for_selector('text=Συγχωνεύθηκαν 2 διπλές εγγραφές σε 1 πρόσωπα')
+    st = app.page.evaluate("""async () => { const {db} = await import('./core/store.js'); return { ms: db.all('member_registry').filter((m) => /διπλ/i.test(m.surname.normalize('NFD').replace(/[\\u0300-\\u036f]/g, ''))), ls: db.all('member_lodges'), reps: db.all('reps') }; }""")
+    assert len(st['ms']) == 1
+    m = st['ms'][0]
+    assert m['registry_no'] == 81 and 'a1@example.com' in m['other_emails'] and 'Αρ. Μητρώου 80' in m['merged_from'] and m['surname_variants'] == ''  # ίδιο όνομα με άλλους τόνους δεν είναι παραλλαγή
+    assert sorted(l['lodge_number'] for l in st['ls'] if l['member_id'] == m['id']) == ['3', '70']
+    assert [x for x in st['reps'] if x['surname'] == 'Διπλός'][0]['member_id'] == m['id']
+    app.go(f"/members/{m['id']}")
+    assert 'Εκπρόσωπος ΜΔ: Μέγας Ευχέτης' in app.text() and 'Συγχωνεύθηκαν: Αρ. Μητρώου 80' in app.text()

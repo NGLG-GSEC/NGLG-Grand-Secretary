@@ -8,6 +8,7 @@ import { mailButtons, senderBanner } from '../core/mail.js';
 import { attachPicker, memberItems } from '../core/pickers.js';
 import { nextProtocol } from './protocol.js';
 import { findMember, insertMember } from './members.js';
+import { identify } from '../core/people.js';
 import { DEC_OFFICES, AWARD_OFFICES, AWARD_MAP, DEC_MAP, DEC_BASIS, HON_ACC_BY_SHORT, HONORIFIC_OPTIONS, OFFICE_FORMS, DEGREE_CC_DEFAULT, PRECEDENCE } from './decree-catalog.js';
 
 db.defaultSettings({ decree_cc: DEGREE_CC_DEFAULT.join(', '), decree_first_no: '513' });
@@ -79,7 +80,7 @@ function syncOffices(tx, d) {
   for (const a of apps(d)) {
     let mid = a.member_id && tx.get('member_registry', a.member_id) ? a.member_id : null;
     const cand = { surname: a.last_name, first_name: a.first_name, email: a.email, mobile: a.mobile };
-    if (!mid) mid = findMember(tx, cand) || insertMember(tx, cand);
+    if (!mid) mid = identify(cand, tx) || findMember(tx, cand) || insertMember(tx, cand);
     tx.insert('member_degrees_offices', { member_id: mid, record_type: m.action, degree: '', office: epOfficeLabel(m, a), decree_id: d.id, decree_no: d.decree_no, decree_year: d.decree_year, valid_from: '', valid_to: '', is_current: 1, notes: '' });
   }
 }

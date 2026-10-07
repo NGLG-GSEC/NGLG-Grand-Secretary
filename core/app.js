@@ -152,7 +152,7 @@ export async function render() {
 
 // Γκρι πρόταση μέσα σε κενό πεδίο → πραγματικό κείμενο με Tab (ή διπλό πάτημα στο κινητό).
 // Ισχύει για data-suggest και για υποδείξεις-τιμές (π.χ. «2026 - 2027»)· όχι για παραδείγματα «π.χ. …» ή οδηγίες αναζήτησης.
-const NOT_VALUE = /^(π\.χ\.|🔎|—)|αναζήτηση|προαιρετικ|πολλά με|γράψτε|επιλέξτε|πληκτρολογ|(…|\.\.\.)\s*$|^https?:|ghp_/i;
+const NOT_VALUE = /^(π\.χ\.|🔎|—)|από το Μητρώο|αναζήτηση|προαιρετικ|πολλά με|γράψτε|επιλέξτε|πληκτρολογ|(…|\.\.\.)\s*$|^https?:|ghp_/i;
 export function suggestion(el) {
   if (!el || !el.matches || !el.matches('input, textarea') || el.value || el.readOnly || el.disabled) return '';
   if (/^(checkbox|radio|file|date|search|password|hidden|number)$/.test(el.type) || el.closest('.filters, .msearch, .picker') || el.name === 'q') return '';

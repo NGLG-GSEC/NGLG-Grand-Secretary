@@ -11,6 +11,7 @@ import { attachPicker, contactItems, memberItems, noContact } from '../core/pick
 import { provincialChoices, provinceByShort, provinceRoles } from './provinces.js';
 import { lodgesAll, lodgeNoKey, lodgeByNumber, cleanLodgeName } from './lodges.js';
 import { DEC_MAP, precedenceOf } from './decree-catalog.js';
+import { contactOf, person, canonicalId, identify } from '../core/people.js';
 import { parseRank, matchName, isCurrentRecord, hasActiveList, importEpeteiridaAny, hasEpeteirida } from './epeteirida-import.js';
 
 const MONTHS = ['Ιανουάριος', 'Φεβρουάριος', 'Μάρτιος', 'Απρίλιος', 'Μάιος', 'Ιούνιος', 'Ιούλιος', 'Αύγουστος', 'Σεπτέμβριος', 'Οκτώβριος', 'Νοέμβριος', 'Δεκέμβριος'];
@@ -70,11 +71,11 @@ export const repsByPrecedence = () => sortBy(db.all('reps'), repPrec, (r) => fol
 // Υποψήφιοι εκπρόσωποι από την Επετηρίδα (εν ενεργεία και Πρώην Μεγάλοι Αξιωματικοί) που δεν είναι ακόμη στους «Εκπροσώπους»
 export function repCandidates() {
   const reps = db.all('reps'), nk = (sn, fn) => fold(sn) + '|' + fold(fn).split(' ')[0];
-  const haveM = new Set(reps.map((r) => r.member_id).filter(Boolean)), haveN = new Set(reps.map((r) => nk(r.surname, r.name)));
+  const haveM = new Set(reps.map((r) => canonicalId(r.member_id)).filter(Boolean)), haveN = new Set(reps.map((r) => nk(r.surname, r.name)));
   const ms = Object.fromEntries(db.all('member_registry').map((m) => [m.id, m])), y0 = Number(masonicYear().from.slice(0, 4)), act = hasActiveList(), by = {};
   for (const o of db.all('member_degrees_offices')) {
     if (!o.office || precedenceOf(o.office.replace(/^Πρώην /, '')) == null) continue;
-    const m = o.member_id && ms[o.member_id];
+    const m = o.member_id && ms[canonicalId(o.member_id)];
     if (m && noContact(m)) continue;
     const p = m ? [m.surname, m.first_name] : (() => { const t = String(o.full_name || '').replace(/\(.*?\)/g, ' ').trim().split(/\s+/); return [t[0] || '', t.slice(1).join(' ')]; })();
     if (!p[0] || (m && haveM.has(m.id)) || haveN.has(nk(p[0], p[1]))) continue;
@@ -97,7 +98,7 @@ export function repDetails(value) {
   if (!value) return '';
   const c = String(value).startsWith('e:') ? repCandidates().find((x) => 'e:' + x.key === value) : null, r = c ? candRep(c) : db.get('reps', Number(value));
   if (!r) return '';
-  const m = r.member_id && db.get('member_registry', r.member_id), [email, mobile] = repContact(r), ls = m ? db.all('member_lodges').filter((l) => l.member_id === m.id).map((l) => `${l.lodge_name} ${l.lodge_number}`.trim()) : [];
+  const P = r.member_id ? person(r.member_id) : null, [email, mobile] = repContact(r), ls = P ? P.lodges.map((l) => `${l.lodge_name} ${l.lodge_number}`.trim()) : [];
   return `<div class="repinfo"><b>${esc(repRank(r) || 'Αδ.')} ${esc(r.name)} ${esc(r.surname)}</b>${c ? ' <span class="pill">από την Επετηρίδα — θα καταχωρηθεί στους Εκπροσώπους</span>' : ''}
 <div>${String(r.office || '').split(' · ').filter(Boolean).map((o) => esc(o)).join('<br>')}</div>
 <div class="muted">${[r.year && 'Έτος: ' + esc(r.year), email ? '✉ ' + esc(email) : '<span class="vwarn">χωρίς email</span>', mobile && '☎ ' + esc(mobile), ls.length && 'Στοές: ' + esc(ls.join(', '))].filter(Boolean).join(' · ')}</div></div>`;
@@ -128,12 +129,11 @@ const isPast = (r) => String(r.office || '').startsWith('Πρώην');
 export const repLabel = (r, rm) => (r ? [repRank(r, rm), r.surname, r.name].filter(Boolean).join(' ') : '');
 const repFull = (r) => { const o = firstOffice(r); return `${repRank(r) || 'Αδ.'} ${r.name || ''} ${r.surname || ''}${o ? ', ' + o : ''}`; };
 const repVocative = (r) => (repRank(r) || 'Αγαπητός Αδ.').replace(/ος Αδ\.$/, 'ε Αδελφέ');
+// Επικοινωνία εκπροσώπου: ό,τι έχει δοθεί ειδικά στον εκπρόσωπο, αλλιώς από το Μητρώο Μελών (όλες οι εγγραφές του προσώπου)
 function repContact(r) {
-  let email = String(r.email || '').trim(), mobile = String(r.mobile || '').trim();
-  const m = r.member_id && db.get('member_registry', r.member_id);
-  if (noContact(m)) return ['', ''];
-  if (m) { email ||= String(m.email || '').trim(); mobile ||= String(m.mobile || '').trim(); }
-  return [email, mobile];
+  const c = contactOf(r);
+  if (c.person && noContact(c.person.member)) return ['', ''];
+  return [c.email, c.mobile];
 }
 const lodgeRef = (v) => `Σ.Σ. «${v.lodge || ''}»` + (v.lodge_number ? ` Αρ. ${v.lodge_number}` : '');
 const monthTitle = (k) => { const [y, m] = k.split('-'); return `${MONTHS[Number(m) - 1]} ${y}`; };
@@ -685,7 +685,7 @@ const repFields = [
   { k: 'name', label: 'Όνομα', required: true }, { k: 'surname', label: 'Επώνυμο', required: true },
   { k: 'office', label: 'Αξίωμα', full: true, placeholder: 'π.χ. Μέγας Καγκελάριος ή Πρώην Μέγας Ευχέτης· πολλά με « · »' },
   { k: 'year', label: 'Έτος' }, { k: 'rep_rank', label: 'Βαθμός', type: 'select', empty: 'Αυτόματα από το αξίωμα', options: REP_RANKS },
-  { k: 'email', label: 'Email', type: 'email' }, { k: 'mobile', label: 'Κινητό' },
+  { k: 'email', label: 'Email (μόνο αν διαφέρει από το Μητρώο Μελών)', type: 'email' }, { k: 'mobile', label: 'Κινητό (μόνο αν διαφέρει από το Μητρώο)' },
   { k: 'member_id', label: 'Αρ. μέλους στο Μητρώο (προαιρετικό)', type: 'number', help: 'Αν λείπει email/κινητό, χρησιμοποιούνται του μέλους.' },
   { k: 'notes', label: 'Σημειώσεις', full: true },
 ];
@@ -702,13 +702,23 @@ const repRoutes = crud({
     { label: 'Αξίωμα', v: (r) => esc(r.office) }, { label: 'Έτος', v: (r) => esc(r.year) },
     { label: 'Προσεχείς', v: (r) => db.all('visits').filter((v) => v.rep_id === r.id && v.visit_date >= today()).length },
   ],
-  validate(d) { delete d.member_pick; if (!REP_RANKS.includes(d.rep_rank)) d.rep_rank = ''; d.member_id = Number(d.member_id) || null; return d; },
+  validate(d) {
+    delete d.member_pick; if (!REP_RANKS.includes(d.rep_rank)) d.rep_rank = '';
+    d.member_id = canonicalId(Number(d.member_id) || identify({ surname: d.surname, first_name: d.name, email: d.email, mobile: d.mobile }) || null) || null;
+    const P = d.member_id && person(d.member_id); // όχι αντίγραφα: ό,τι υπάρχει ήδη στο Μητρώο δεν αποθηκεύεται ξανά
+    if (P && d.email && P.emails.some((e) => e.toLowerCase() === String(d.email).trim().toLowerCase())) d.email = '';
+    if (P && d.mobile && P.mobiles.some((m) => m.replace(/\D/g, '').slice(-10) === String(d.mobile).replace(/\D/g, '').slice(-10))) d.mobile = '';
+    return d;
+  },
   afterDelete(tx, r) { for (const v of tx.all('visits')) if (v.rep_id === r.id) tx.update('visits', v.id, { rep_id: null }); },
   mountForm(el) {
     attachPicker(el.querySelector('[name=member_pick]'), memberItems, (m) => {
       const f = (k, v) => { const i = el.querySelector(`[name=${k}]`); if (v) i.value = v; };
-      f('name', m.first_name); f('surname', m.surname); f('email', m.email); f('mobile', m.mobile); f('member_id', m.id);
+      f('name', m.first_name); f('surname', m.surname); f('member_id', m.id);
+      const P = person(m.id); for (const [k, v] of [['email', P && P.email], ['mobile', P && P.mobile]]) { const i = el.querySelector(`[name=${k}]`); i.placeholder = v ? `από το Μητρώο: ${v}` : ''; }
     });
+    const mid = Number((el.querySelector('[name=member_id]') || {}).value), P = mid && person(mid);
+    if (P) for (const [k, v] of [['email', P.email], ['mobile', P.mobile]]) { const i = el.querySelector(`[name=${k}]`); if (v && !i.value) i.placeholder = `από το Μητρώο: ${v}`; }
   },
 });
 const repsList = repRoutes['/reps'];

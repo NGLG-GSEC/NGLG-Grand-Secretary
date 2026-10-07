@@ -3,6 +3,7 @@
 import { db } from '../core/store.js';
 import { foldName, parsePasted, fold, readXlsx } from '../core/util.js';
 import { RANK_OFFICES } from './decree-catalog.js';
+import { identify, canonicalId } from '../core/people.js';
 
 const LAT = 'ABEZHIKMNOPTXY', GRK = 'ΑΒΕΖΗΙΚΜΝΟΡΤΧΥ';
 const norm = (v) => String(v || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase()
@@ -52,45 +53,21 @@ export function parseRank(text, allowFormer = true) {
   return office ? { office: (former ? 'Πρώην ' : '') + office, former, note } : null;
 }
 
-// «Ααρών Μάρκος», «Κωνσταντινίδης Κων/νος», «Chris Jones» → μέλος του Μητρώου (μοναδική ταύτιση) ή null
-const FIRST = { 'κω/νοσ': 'κωνσταντινοσ', 'κων/νοσ': 'κωνσταντινοσ', 'κωσταντινοσ': 'κωνσταντινοσ' };
-const nk = (v) => foldName(v).replace(/[^a-zα-ω/ ]/g, ' ').replace(/\s+/g, ' ').trim();
-function nameIndex() {
-  const idx = new Map();
-  const add = (k, id) => { if (!k) return; const s = idx.get(k) || new Set(); s.add(id); idx.set(k, s); };
-  for (const m of db.all('member_registry')) {
-    const sns = [m.surname, ...String(m.surname_variants || '').split(';')].map(nk).filter(Boolean);
-    const fns = [m.first_name, ...String(m.first_name_variants || '').split(';')].map(nk).filter(Boolean);
-    for (const s of sns) for (const f of fns) { add(`${s}|${f}`, m.id); add(`${s}|${f.split(' ')[0]}`, m.id); }
-  }
-  return idx;
-}
-export function matchName(full, idx = nameIndex()) {
-  const clean = nk(String(full || '').replace(/\(.*?\)/g, ' ').replace(/\s+του\s+\S+\s*$/i, ' ').replace(/\s*-\s*/g, '-'));
-  const t = clean.split(' ').filter(Boolean).map((w) => FIRST[w] || w);
-  const hits = new Set();
-  for (let k = 1; k < t.length; k++) {
-    for (const [s, f] of [[t.slice(0, k).join(' '), t.slice(k).join(' ')], [t.slice(k).join(' '), t.slice(0, k).join(' ')]]) {
-      for (const id of idx.get(`${s}|${f}`) || []) hits.add(id);
-      for (const id of idx.get(`${s}|${f.split(' ')[0]}`) || []) hits.add(id);
-    }
-    if (hits.size) break;
-  }
-  return hits.size === 1 ? [...hits][0] : null;
-}
+// «Ααρών Μάρκος», «Κωνσταντινίδης Κων/νος», «Chris Jones» → μέλος του Μητρώου (κεντρική ταυτοποίηση) ή null
+export const matchName = (full) => identify({ full_name: full });
 
 const decRe = /(\d+)\s*\/\s*(\d{4})/;
 // Επικόλληση από Excel → εγγραφές Επετηρίδας. Αντικαθιστά όσες είχαν έρθει από προηγούμενη εισαγωγή.
 export async function importEpeteirida(text) {
   const rows = Array.isArray(text) ? text.map((r) => [...r]) : parsePasted(text);
   if (rows.length && /ονοματεπ|βαθμ/i.test(rows[0].join(' '))) rows.shift();
-  const idx = nameIndex(), recs = [], bad = [];
+  const recs = [], bad = [];
   let matched = 0, people = 0;
   for (const r of rows) {
     const [name, grade, dec, year, cur] = r.map((x) => String(x ?? '').trim());
     if (!name || /^https?:/.test(name)) continue;
     people++;
-    const mid = matchName(name, idx);
+    const mid = matchName(name);
     if (mid) matched++;
     const base = { member_id: mid, full_name: name.replace(/\s+/g, ' '), degree: '', valid_from: '', valid_to: '', decree_id: null, source: 'import' };
     if (grade) {
@@ -122,14 +99,14 @@ export const isActiveList = (rows) => { const h = (rows[0] || []).map((x) => fol
 export async function importActiveOfficers(input) {
   const rows = (Array.isArray(input) ? input : parsePasted(input)).map((r) => r.map((x) => String(x ?? '').trim())).filter((r) => r.some(Boolean));
   if (rows.length && !/^\d+$/.test(rows[0][0])) rows.shift();
-  const idx = nameIndex(), items = [], bad = [];
+  const items = [], bad = [];
   for (const [prec, officeText, hon, full, dec] of rows) {
     if (!full) continue;
     const p = parseRank(officeText, false), d = /(\d+)\s*\/\s*(\d{4})/.exec(dec || ''), y = d ? d[2] : (/^\d{4}$/.test(dec || '') ? dec : '');
     if (!p) bad.push(`${full}: ${officeText}`);
     const parts = full.replace(/\(.*?\)/g, ' ').trim().split(/\s+/);
     items.push({ full: full.replace(/\s+/g, ' '), surname: parts[0], name: parts.slice(1).join(' '), office: p ? p.office : officeText, note: p ? p.note : '', rank: HON_RANK[honKey(hon)] || '',
-      decree_no: d ? Number(d[1]) : null, decree_year: y ? Number(y) : null, member_id: matchName(full, idx), prec: Number(prec) || null });
+      decree_no: d ? Number(d[1]) : null, decree_year: y ? Number(y) : null, member_id: matchName(full), prec: Number(prec) || null });
   }
   if (!items.length) throw new Error('Δεν βρέθηκαν γραμμές. Στήλες: Τάξις, Αξίωμα, Βαθμός / Τίτλος, Ονοματεπώνυμο, Διάταγμα.');
   let added = 0, updated = 0;
@@ -139,7 +116,7 @@ export async function importActiveOfficers(input) {
     for (const x of items) {
       tx.insert('member_degrees_offices', { member_id: x.member_id, full_name: x.full, record_type: 'appoint', degree: '', office: x.office, decree_id: null, decree_no: x.decree_no, decree_year: x.decree_year,
         valid_from: '', valid_to: '', is_current: 1, honorific: x.rank, notes: ['Εν ενεργεία', x.note].filter(Boolean).join(' · '), source: 'active' });
-      const ex = tx.find('reps', (r) => (x.member_id && r.member_id === x.member_id) || (fold(r.surname) === fold(x.surname) && fold(r.name).split(' ')[0] === fold(x.name).split(' ')[0]));
+      const ex = tx.find('reps', (r) => (x.member_id && canonicalId(r.member_id) === x.member_id) || (fold(r.surname) === fold(x.surname) && fold(r.name).split(' ')[0] === fold(x.name).split(' ')[0]));
       const past = ex ? String(ex.office || '').split(' · ').filter((o) => /^Πρώην /.test(o)) : [];
       const office = [x.office, ...past.filter((o) => o !== x.office)].join(' · ');
       if (ex) { tx.update('reps', ex.id, { office, rep_rank: x.rank || ex.rep_rank || '', year: String(x.decree_year || ex.year || ''), member_id: ex.member_id || x.member_id || null }); updated++; }
