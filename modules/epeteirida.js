@@ -1,8 +1,7 @@
 // Επετηρίδα Μεγάλων Αξιωματικών — ιστορικό διορισμών/απονομών, υπολογίζεται αυτόματα από τα Διατάγματα.
 import { db } from '../core/store.js';
 import { module, onSubmit, go, bind, flash, notice } from '../core/app.js';
-import { importEpeteirida, importActiveOfficers, isActiveList, isCurrentRecord, hasActiveList } from './epeteirida-import.js';
-import { readXlsx, parsePasted } from '../core/util.js';
+import { importEpeteiridaAny, isCurrentRecord, hasActiveList } from './epeteirida-import.js';
 import { esc, fmtDate, sortBy, fold, today } from '../core/util.js';
 import { reportPaper, printPaper } from '../core/paper.js';
 import { precedenceOf } from './decree-catalog.js';
@@ -49,7 +48,7 @@ module({
 ${sel('office', 'Όλα τα αξιώματα', offices.map((o) => [o, o]), query.office)}${sel('action', 'Όλες οι πράξεις', Object.entries(LABELS), query.action)}${sel('cur', 'Όλοι', [['1', 'Μόνο εν ενεργεία']], query.cur)}${sel('sort', 'Ταξινόμηση: κατά Διάταγμα', [['prec', 'Ταξινόμηση: κατά τάξη προβαδίσματος']], query.sort)}<button>Αναζήτηση</button></form>
 <div class="toolbar" style="margin:10px 0"><button class="btn primary" data-act="print">⬇ Εκτύπωση Τεύχους (PDF)</button><span class="muted" style="align-self:center">${xs.length} εγγραφές${xs.length > 300 ? ' (εμφανίζονται οι πρώτες 300· το τεύχος τις περιλαμβάνει όλες)' : ''}</span></div>
 <div class="card tablecard">${tbl(shown)}</div>
-<details class="card fold"><summary><b>Εισαγωγή καταλόγου Μεγάλων Αξιωματικών (επικόλληση από Excel)</b></summary><form id="epimp" style="margin-top:10px">
+<details class="card fold"${query.imp ? ' open' : ''}><summary><b>Εισαγωγή καταλόγου Μεγάλων Αξιωματικών (επικόλληση από Excel)</b></summary><form id="epimp" style="margin-top:10px">
 <p class="muted">Στήλες: <b>Ονοματεπώνυμο, Βαθμός Μεγ. Αξιωματικού, Διάταγμα διορισμού, Έτος, Εν Ενεργεία Αξιωματικοί</b>. Οι συντομογραφίες (ΠρΑΜΔιακ, ΠρΒ'ΜΕπ, ΕπΜΔ Πειραιώς …) γίνονται πλήρεις τίτλοι
 και κάθε όνομα συνδέεται με το Μητρώο Μελών. Μια νέα εισαγωγή αντικαθιστά την προηγούμενη· οι εγγραφές από Διατάγματα δεν αλλάζουν.</p>
 <textarea name="paste" class="short"></textarea><label style="margin-top:10px">ή αρχείο Excel (π.χ. «Επετηρίδα 2026» — διαβάζεται το φύλλο «Πηγή»)</label><input type="file" name="file" accept=".xlsx,.xls,.csv">
@@ -57,20 +56,9 @@ ${sel('office', 'Όλα τα αξιώματα', offices.map((o) => [o, o]), quer
         mount(el) {
           onSubmit(el.querySelector('#flt'), (d) => go('/epeteirida', d));
           onSubmit(el.querySelector('#epimp'), async (d) => {
-            let rows;
-            if (d.file && d.file.size) { const sh = await readXlsx(d.file); rows = (sh.find((x) => /πηγ/i.test(x.name)) || sh.find((x) => isActiveList(x.rows.slice(x.rows.findIndex((r) => r.some(Boolean))))) || sh[0]).rows; }
-            else rows = parsePasted(d.paste || '');
-            rows = rows.filter((r) => r.some((c) => String(c ?? '').trim()));
-            if (!rows.length) throw new Error('Επικολλήστε τον πίνακα ή επιλέξτε αρχείο Excel.');
-            if (isActiveList(rows)) {
-              const a = await importActiveOfficers(rows);
-              flash(`Εν ενεργεία Μεγάλοι Αξιωματικοί: ${a.people} · Εκπρόσωποι: ${a.added} νέοι, ${a.updated} ενημερώθηκαν · ${a.matched} συνδέθηκαν με το Μητρώο${a.bad.length ? ` · δεν αναγνωρίστηκαν: ${a.bad.join('· ')}` : ''}.`);
-              return go('/epeteirida', { cur: '1', sort: 'prec' });
-            }
-            const r = await importEpeteirida(rows);
-            flash(`Επετηρίδα: ${r.people} Μεγάλοι Αξιωματικοί, ${r.records} εγγραφές· ${r.matched} συνδέθηκαν με το Μητρώο Μελών, ${r.people - r.matched} χωρίς ταύτιση (κρατούν το όνομα).`
-              + (r.bad.length ? ` Δεν αναγνωρίστηκαν (${r.bad.length}): ${r.bad.slice(0, 8).join('· ')}` : ''));
-            go('/epeteirida');
+            const r = await importEpeteiridaAny({ file: d.file, text: d.paste });
+            flash(r.message);
+            go('/epeteirida', r.kind === 'active' ? { cur: '1', sort: 'prec' } : {});
           });
           bind(el, { print() {
             const pa = el.querySelector('#pa');

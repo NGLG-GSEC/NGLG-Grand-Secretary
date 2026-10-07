@@ -11,7 +11,7 @@ import { attachPicker, contactItems, memberItems, noContact } from '../core/pick
 import { provincialChoices, provinceByShort, provinceRoles } from './provinces.js';
 import { lodgesAll, lodgeNoKey, lodgeByNumber, cleanLodgeName } from './lodges.js';
 import { DEC_MAP, precedenceOf } from './decree-catalog.js';
-import { parseRank, matchName, isCurrentRecord, hasActiveList } from './epeteirida-import.js';
+import { parseRank, matchName, isCurrentRecord, hasActiveList, importEpeteiridaAny, hasEpeteirida } from './epeteirida-import.js';
 
 const MONTHS = ['Ιανουάριος', 'Φεβρουάριος', 'Μάρτιος', 'Απρίλιος', 'Μάιος', 'Ιούνιος', 'Ιούλιος', 'Αύγουστος', 'Σεπτέμβριος', 'Οκτώβριος', 'Νοέμβριος', 'Δεκέμβριος'];
 export const REP_RANKS = ['Σεβάσμιος Αδ.', 'Λίαν Σεβάσμιος Αδ.', 'Πανσεβάσμιος Αδ.', 'Σεβασμιώτατος Αδ.'];
@@ -89,11 +89,24 @@ export function repCandidates() {
   return Object.values(by).map((c) => ({ ...c, offices: sortBy(c.offices, (o) => (/^Πρώην /.test(o) ? 1 : 0), (o) => precedenceOf(o) ?? 999) }));
 }
 const candRep = (c) => ({ name: c.name, surname: c.surname, rep_rank: c.rank || '', office: c.offices.join(' · '), year: c.year, email: '', mobile: '', member_id: c.member_id, notes: 'Από την Επετηρίδα', ext_id: '' });
+// Ετικέτα επιλογής: πρώτα ονοματεπώνυμο, μετά αξίωμα(τα), τίτλος, έτος
+const RANK_SHORT = { 'Σεβάσμιος Αδ.': 'Σεβ.', 'Λίαν Σεβάσμιος Αδ.': 'ΛΣεβ.', 'Πανσεβάσμιος Αδ.': 'Πσεβ.', 'Σεβασμιώτατος Αδ.': 'Σεβτ.' };
+const repOptionLabel = (r, rm) => { const os = String(r.office || '').split(' · ').filter(Boolean); return `${r.surname || ''} ${r.name || ''} — ${os.slice(0, 2).join(' · ')}${os.length > 2 ? ' …' : ''}${repRank(r, rm) ? ' · ' + RANK_SHORT[repRank(r, rm)] : ''}${r.year ? ' · ' + r.year : ''}`; };
+// Στοιχεία υποψηφίου (για την καρτέλα κάτω από την επιλογή)
+export function repDetails(value) {
+  if (!value) return '';
+  const c = String(value).startsWith('e:') ? repCandidates().find((x) => 'e:' + x.key === value) : null, r = c ? candRep(c) : db.get('reps', Number(value));
+  if (!r) return '';
+  const m = r.member_id && db.get('member_registry', r.member_id), [email, mobile] = repContact(r), ls = m ? db.all('member_lodges').filter((l) => l.member_id === m.id).map((l) => `${l.lodge_name} ${l.lodge_number}`.trim()) : [];
+  return `<div class="repinfo"><b>${esc(repRank(r) || 'Αδ.')} ${esc(r.name)} ${esc(r.surname)}</b>${c ? ' <span class="pill">από την Επετηρίδα — θα καταχωρηθεί στους Εκπροσώπους</span>' : ''}
+<div>${String(r.office || '').split(' · ').filter(Boolean).map((o) => esc(o)).join('<br>')}</div>
+<div class="muted">${[r.year && 'Έτος: ' + esc(r.year), email ? '✉ ' + esc(email) : '<span class="vwarn">χωρίς email</span>', mobile && '☎ ' + esc(mobile), ls.length && 'Στοές: ' + esc(ls.join(', '))].filter(Boolean).join(' · ')}</div></div>`;
+}
 // Επιλογή εκπροσώπου: ομάδες κατά τάξη προβαδίσματος — ΜΔ, εν ενεργεία, Πρώην, λοιποί
 function repOptions(sel, rm = rankmap()) {
   const items = [...db.all('reps').map((r) => ({ value: String(r.id), r, prec: repPrec(r), past: isPast(r) })),
     ...repCandidates().map((c) => { const r = candRep(c); return { value: 'e:' + c.key, r, prec: repPrec(r), past: isPast(r), ep: true }; })];
-  const lab = (it) => `${repLabel(it.r, rm)} — ${firstOffice(it.r) || ''}${it.ep ? ' (Επετηρίδα)' : ''}`;
+  const lab = (it) => repOptionLabel(it.r, rm);
   const groups = [['Μέγας Διδάσκαλος', (it) => it.prec === 1 && !it.past], ['Εν ενεργεία Μεγάλοι Αξιωματικοί', (it) => it.prec < 999 && !it.past], ['Πρώην Μεγάλοι Αξιωματικοί', (it) => it.prec < 999], ['Λοιποί εκπρόσωποι', () => true]];
   const used = new Set();
   const html = groups.map(([g, f]) => {
@@ -242,7 +255,9 @@ function visitsPage({ query }) {
   const yr = masonicYear(), summary = provinceSummary(yr), sumAll = summary.reduce((a, o) => ({ total: a.total + o.total, declared: a.declared + o.declared }), { total: 0, declared: 0 });
   return {
     title: 'Επισκέψεις Στοών',
-    html: `<h1>Επισκέψεις Στοών</h1>${notice(query.msg)}<div class="toolbar"><a class="btn primary" href="#/visits/new">+ Νέα επίσκεψη</a><a class="btn" href="#/visits/import">Επικόλληση λίστας</a>
+    html: `<h1>Επισκέψεις Στοών</h1>${notice(query.msg)}${hasEpeteirida() ? '' : `<div class="card nocontact noprint"><b>Οι υποψήφιοι εκπρόσωποι προέρχονται από την Επετηρίδα, που δεν έχει περαστεί ακόμη σε αυτή τη βάση.</b>
+<p style="margin:6px 0">Ανεβάστε το αρχείο Excel της Επετηρίδας (π.χ. «Επετηρίδα 2026») — μετά επικολλήστε και τον κατάλογο εν ενεργεία στην <a href="#/epeteirida?imp=1">Επετηρίδα → Εισαγωγή</a>.</p>
+<label class="btn primary" style="cursor:pointer">⬆ Αρχείο Επετηρίδας (.xlsx)<input type="file" id="epFile" accept=".xlsx,.xls" hidden></label></div>`}<div class="toolbar"><a class="btn primary" href="#/visits/new">+ Νέα επίσκεψη</a><a class="btn" href="#/visits/import">Επικόλληση λίστας</a>
 <a class="btn" href="#/visits/publish${query.prov ? '?prov=' + encodeURIComponent(query.prov) : ''}">Ενημέρωση Επαρχίας</a><a class="btn" href="#/visits/report">Αναφορά</a><a class="btn" href="#/reps">Εκπρόσωποι</a><a class="btn${sumAll.total - sumAll.declared ? ' warnbtn' : ''}" href="#/visits/missing${query.prov ? '?prov=' + encodeURIComponent(query.prov) : ''}">⚠ Στοές χωρίς ημερομηνία (${sumAll.total - sumAll.declared})</a></div>
 <details class="card fold vsum"${query.sum ? ' open' : ''}><summary><b>Σύνοψη Επαρχιών · τεκτονικό έτος ${yr.label}</b> — ${sumAll.declared} από ${sumAll.total} Στοές δήλωσαν ημερομηνία Εγκατάστασης</summary>
 ${table(['Επαρχία', 'Ενεργές Στοές', 'Δήλωσαν ημερομηνία', 'Χωρίς ημερομηνία', ''], summary.map((o) => [`<b>${esc(o.prov)}</b>`, o.total,
@@ -256,6 +271,10 @@ ${table(['Επαρχία', 'Ενεργές Στοές', 'Δήλωσαν ημερ
 <label><input type="checkbox" name="past"${query.past ? ' checked' : ''}> Παλαιότερες</label><button>Φίλτρο</button></form>${body}`,
     mount(el) {
       onSubmit(el.querySelector('#flt'), (d) => go('/visits', { ...d, past: d.past ? '1' : '' }));
+      const ef = el.querySelector('#epFile');
+      if (ef) ef.addEventListener('change', async () => {
+        try { const r = await importEpeteiridaAny({ file: ef.files[0] }); flash(r.message); go('/visits'); } catch (e) { toast(e.message || String(e), 'error'); }
+      });
       el.querySelectorAll('.vrepsel').forEach((s) => s.addEventListener('change', async () => {
         const id = Number(s.dataset.id), v = db.get('visits', id), cands = repCandidates();
         let rid = null;
@@ -290,11 +309,20 @@ ${v ? `<p>${repNotified(v) ? `<span class="vok">✓ Εκπρόσωπος ενη�
 <datalist id="vLodges">${lodgesAll(true).map((l) => `<option value="${esc(l.number)} · ${esc(l.name)}">`).join('')}</datalist><small class="muted">Με την επιλογή συμπληρώνονται αριθμός, Επαρχία και τόπος.</small></div>
 <div class="full"><label>Τόπος</label><input name="location" id="vLoc" value="${val('location')}" placeholder="${esc(placeSuggestion(x) || 'Τεκτονικόν Μέγαρον …')}"${placeSuggestion(x) ? ` data-suggest="${esc(placeSuggestion(x))}"` : ''}></div>
 <div><label>Επαρχιακή Μεγάλη Στοά</label><select name="province" id="vProv"><option value="">—</option>${[...provs, ...(x.province && !provs.includes(x.province) ? [x.province] : [])].map((p) => `<option${p === x.province ? ' selected' : ''}>${esc(p)}</option>`).join('')}</select></div>
-<div><label>Εκπρόσωπος</label><select name="rep_id"><option value="">— Χωρίς εκπρόσωπο —</option>${repOptions(x.rep_id, rm)}</select></div>
+<div class="full"><label>Εκπρόσωπος ΜΔ (ο Μέγας Διδάσκαλος ή εκπρόσωπός του)</label><input id="repQ" type="search" placeholder="🔎 Αναζήτηση ονοματεπωνύμου ή αξιώματος…" autocomplete="off" style="margin-bottom:6px"><select name="rep_id" id="repSel"><option value="">— Χωρίς εκπρόσωπο —</option>${repOptions(x.rep_id, rm)}</select><div id="repInfo">${repDetails(x.rep_id)}</div>${hasEpeteirida() ? '' : '<small class="muted">Για να εμφανιστούν όλοι οι Μεγάλοι Αξιωματικοί: <a href="#/epeteirida?imp=1">Επετηρίδα → Εισαγωγή</a> (αρχείο Excel ή κατάλογος εν ενεργεία).</small>'}</div>
 <div class="full"><label>Σημειώσεις</label><input name="notes" value="${val('notes')}"></div></div>
 <div class="toolbar"><button class="btn primary">💾 Αποθήκευση</button><button class="btn" data-next="brief">✉ Ενημέρωση εκπροσώπου</button>
 <button class="btn" data-next="notify">✉ Email ΕπΜΓρ. & Εκπροσώπου</button><button class="btn" data-next="letter">📄 Επιστολή (αρ. πρωτοκόλλου)</button><a class="btn" href="#/visits">Άκυρο</a>${v ? '<button type="button" class="btn danger" data-act="del">Διαγραφή</button>' : ''}</div></form>`,
     mount(el) {
+      const RS = el.querySelector('#repSel'), RQ = el.querySelector('#repQ');
+      RS.addEventListener('change', () => { el.querySelector('#repInfo').innerHTML = repDetails(RS.value); });
+      RQ.addEventListener('input', () => {
+        const q = fold(RQ.value.trim());
+        RS.querySelectorAll('option').forEach((o) => { if (o.value) o.hidden = !!q && !fold(o.textContent).includes(q); });
+        RS.querySelectorAll('optgroup').forEach((g) => { g.hidden = ![...g.children].some((o) => !o.hidden); });
+        const first = [...RS.querySelectorAll('option')].find((o) => o.value && !o.hidden);
+        if (q && first && (!RS.value || RS.selectedOptions[0].hidden)) { RS.value = first.value; RS.dispatchEvent(new Event('change')); }
+      });
       const L = el.querySelector('#vLodge');
       const fill = () => { const m = /^\s*(\d{1,4}|Φ)\s*·\s*(.+)$/.exec(L.value); if (!m) return; const l = lodgeByNumber(m[1]); L.value = m[2]; el.querySelector('#vNo').value = m[1];
         if (l && l.provincial) el.querySelector('#vProv').value = l.provincial; if (l && l.meeting_place && !el.querySelector('#vLoc').value) el.querySelector('#vLoc').value = l.meeting_place;

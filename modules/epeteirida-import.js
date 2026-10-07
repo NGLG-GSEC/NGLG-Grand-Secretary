@@ -1,7 +1,7 @@
 // Επετηρίδα — εισαγωγή του καταλόγου Μεγάλων Αξιωματικών (Ονοματεπώνυμο, Βαθμός, Διάταγμα, Έτος, Εν Ενεργεία).
 // Αναγνωρίζει τις συντομογραφίες (ΠρΑΜΔιακ, ΠρΒ'ΜΕπ, ΕπΜΔ Πειραιώς, Μεγ.Οργ. …) και συνδέει κάθε όνομα με το Μητρώο Μελών.
 import { db } from '../core/store.js';
-import { foldName, parsePasted, fold } from '../core/util.js';
+import { foldName, parsePasted, fold, readXlsx } from '../core/util.js';
 import { RANK_OFFICES } from './decree-catalog.js';
 
 const LAT = 'ABEZHIKMNOPTXY', GRK = 'ΑΒΕΖΗΙΚΜΝΟΡΤΧΥ';
@@ -162,3 +162,20 @@ export function isCurrentRecord(o, active = hasActiveList(), fromYear = 0) {
   if (active) return o.source === 'active';
   return o.record_type === 'appoint' && Number(o.is_current) === 1 && Number(o.decree_year || 0) >= fromYear && !/^Πρώην /.test(o.office || '');
 }
+
+// Ενιαία εισαγωγή (αρχείο Excel ή επικόλληση): Επετηρίδα ή κατάλογος εν ενεργεία → { kind, message }
+export async function importEpeteiridaAny({ file, text }) {
+  let rows;
+  if (file && file.size) { const sh = await readXlsx(file); rows = (sh.find((x) => /πηγ/i.test(x.name)) || sh.find((x) => isActiveList(x.rows.slice(x.rows.findIndex((r) => r.some(Boolean))))) || sh[0]).rows; }
+  else rows = parsePasted(text || '');
+  rows = rows.filter((r) => r.some((c) => String(c ?? '').trim()));
+  if (!rows.length) throw new Error('Επικολλήστε τον πίνακα ή επιλέξτε αρχείο Excel.');
+  if (isActiveList(rows)) {
+    const a = await importActiveOfficers(rows);
+    return { kind: 'active', message: `Εν ενεργεία Μεγάλοι Αξιωματικοί: ${a.people} · Εκπρόσωποι: ${a.added} νέοι, ${a.updated} ενημερώθηκαν · ${a.matched} συνδέθηκαν με το Μητρώο${a.bad.length ? ` · δεν αναγνωρίστηκαν: ${a.bad.join('· ')}` : ''}.` };
+  }
+  const r = await importEpeteirida(rows);
+  return { kind: 'epeteirida', message: `Επετηρίδα: ${r.people} Μεγάλοι Αξιωματικοί, ${r.records} εγγραφές· ${r.matched} συνδέθηκαν με το Μητρώο Μελών, ${r.people - r.matched} χωρίς ταύτιση (κρατούν το όνομα).`
+    + (r.bad.length ? ` Δεν αναγνωρίστηκαν (${r.bad.length}): ${r.bad.slice(0, 8).join('· ')}` : '') };
+}
+export const hasEpeteirida = () => db.all('member_degrees_offices').some((o) => o.source === 'import' || o.source === 'active');

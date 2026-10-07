@@ -714,9 +714,9 @@ def test_grand_officers_as_representatives_assigned_per_installation(app):
     app.go('/visits')
     sel = app.page.locator('.vrepsel').first
     labels = sel.locator('option').all_inner_texts()
-    assert labels[1].startswith('Σεβασμιώτατος Αδ. Μπενετάτος')
-    assert labels[2].startswith('Σεβασμιώτατος Αδ. Υπόδειγμα')  # Πρώην ΜΔ: 3ος στην τάξη προβαδίσματος
-    assert labels[3].startswith('Πανσεβάσμιος Αδ. Πρότυπος') and labels[4].startswith('Πανσεβάσμιος Αδ. Τεστάκης')
+    assert labels[1].startswith('Μπενετάτος Ιωάννης — Μέγας Διδάσκαλος · Σεβτ.')
+    assert labels[2].startswith('Υπόδειγμα Στυλιανός — Πρόεδρος του Συμβουλίου Γενικών Υποθέσεων · Πρώην Μέγας Διδάσκαλος · Σεβτ.')  # Πρώην ΜΔ: 3ος στην τάξη προβαδίσματος
+    assert labels[3].startswith('Πρότυπος Δημήτριος — Πρώτος Μέγας Επόπτης · Πσεβ.') and labels[4].startswith('Τεστάκης Άγγελος — Αναπληρωτής Μέγας Τελετάρχης · Πρώην Δεύτερος Μέγας Επόπτης · Πσεβ.')
     vid = sel.get_attribute('data-id')
     sel.select_option(label=labels[1])
     app.page.wait_for_selector('text=Ορίστηκε: Σεβασμιώτατος Αδ. Μπενετάτος')
@@ -843,9 +843,9 @@ def test_visit_candidates_from_epeteirida(app):
     sel = app.page.locator('.vrepsel').first
     groups = sel.locator('optgroup').evaluate_all('gs => gs.map(g => [g.label, [...g.children].map(o => o.textContent)])')
     labels = dict((g, o) for g, o in groups)
-    assert labels['Μέγας Διδάσκαλος'][0].startswith('Σεβασμιώτατος Αδ. Μπενετάτος')
-    assert labels['Εν ενεργεία Μεγάλοι Αξιωματικοί'][0].startswith('Λίαν Σεβάσμιος Αδ. Υποψήφιος Νικόλαος — Μέγας Ευχέτης (Επετηρίδα)')
-    assert labels['Πρώην Μεγάλοι Αξιωματικοί'][0].startswith('Πανσεβάσμιος Αδ. Παλαιός Γεώργιος — Πρώην Πρώτος Μέγας Επόπτης')
+    assert labels['Μέγας Διδάσκαλος'][0].startswith('Μπενετάτος Ιωάννης — Μέγας Διδάσκαλος')
+    assert labels['Εν ενεργεία Μεγάλοι Αξιωματικοί'][0].startswith('Υποψήφιος Νικόλαος — Μέγας Ευχέτης · Πρώην Μέγας Ξιφοφόρος · ΛΣεβ. · 2026')
+    assert labels['Πρώην Μεγάλοι Αξιωματικοί'][0].startswith('Παλαιός Γεώργιος — Πρώην Πρώτος Μέγας Επόπτης · Πσεβ. · 2021')
     vid = sel.get_attribute('data-id')
     sel.select_option(label=labels['Εν ενεργεία Μεγάλοι Αξιωματικοί'][0])
     app.page.wait_for_selector('text=Ορίστηκε: Λίαν Σεβάσμιος Αδ. Υποψήφιος')
@@ -856,7 +856,7 @@ def test_visit_candidates_from_epeteirida(app):
     # μετά την καταχώριση εμφανίζεται μία φορά (ως εκπρόσωπος, όχι ξανά από την Επετηρίδα)
     app.go('/visits')
     texts = app.page.locator('.vrepsel').first.locator('option').all_inner_texts()
-    assert sum('Υποψήφιος' in t for t in texts) == 1 and not any('Υποψήφιος' in t and 'Επετηρίδα' in t for t in texts)
+    assert sum('Υποψήφιος' in t for t in texts) == 1
 
 
 def test_epeteirida_excel_file_and_active_officers_list(app, tmp_path):
