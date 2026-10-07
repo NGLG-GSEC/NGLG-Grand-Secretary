@@ -11,7 +11,7 @@ import { attachPicker, contactItems, memberItems, noContact } from '../core/pick
 import { provincialChoices, provinceByShort, provinceRoles } from './provinces.js';
 import { lodgesAll, lodgeNoKey, lodgeByNumber, cleanLodgeName } from './lodges.js';
 import { DEC_MAP, precedenceOf } from './decree-catalog.js';
-import { parseRank, matchName } from './epeteirida-import.js';
+import { parseRank, matchName, isCurrentRecord, hasActiveList } from './epeteirida-import.js';
 
 const MONTHS = ['Ιανουάριος', 'Φεβρουάριος', 'Μάρτιος', 'Απρίλιος', 'Μάιος', 'Ιούνιος', 'Ιούλιος', 'Αύγουστος', 'Σεπτέμβριος', 'Οκτώβριος', 'Νοέμβριος', 'Δεκέμβριος'];
 export const REP_RANKS = ['Σεβάσμιος Αδ.', 'Λίαν Σεβάσμιος Αδ.', 'Πανσεβάσμιος Αδ.', 'Σεβασμιώτατος Αδ.'];
@@ -71,26 +71,30 @@ export const repsByPrecedence = () => sortBy(db.all('reps'), repPrec, (r) => fol
 export function repCandidates() {
   const reps = db.all('reps'), nk = (sn, fn) => fold(sn) + '|' + fold(fn).split(' ')[0];
   const haveM = new Set(reps.map((r) => r.member_id).filter(Boolean)), haveN = new Set(reps.map((r) => nk(r.surname, r.name)));
-  const ms = Object.fromEntries(db.all('member_registry').map((m) => [m.id, m])), y0 = Number(masonicYear().from.slice(0, 4)), by = {};
+  const ms = Object.fromEntries(db.all('member_registry').map((m) => [m.id, m])), y0 = Number(masonicYear().from.slice(0, 4)), act = hasActiveList(), by = {};
   for (const o of db.all('member_degrees_offices')) {
     if (!o.office || precedenceOf(o.office.replace(/^Πρώην /, '')) == null) continue;
     const m = o.member_id && ms[o.member_id];
     if (m && noContact(m)) continue;
     const p = m ? [m.surname, m.first_name] : (() => { const t = String(o.full_name || '').replace(/\(.*?\)/g, ' ').trim().split(/\s+/); return [t[0] || '', t.slice(1).join(' ')]; })();
     if (!p[0] || (m && haveM.has(m.id)) || haveN.has(nk(p[0], p[1]))) continue;
-    const key = m ? `m${m.id}` : `n${nk(p[0], p[1])}`, cur = o.record_type === 'appoint' && Number(o.is_current) === 1 && Number(o.decree_year) >= y0 && !/^Πρώην /.test(o.office);
+    const key = m ? `m${m.id}` : `n${nk(p[0], p[1])}`, cur = isCurrentRecord(o, act, y0);
     const c = (by[key] ||= { key, member_id: m ? m.id : null, surname: p[0], name: p[1], offices: [], year: '' });
     const label = cur || /^Πρώην /.test(o.office) ? o.office : 'Πρώην ' + o.office;
     if (!c.offices.includes(label)) c.offices.push(label);
     if (Number(o.decree_year) > Number(c.year || 0)) c.year = String(o.decree_year);
+    if (o.honorific) c.rank = o.honorific;
   }
-  return Object.values(by).map((c) => ({ ...c, offices: c.offices.sort((a, b) => (precedenceOf(a) ?? 999) - (precedenceOf(b) ?? 999)) }));
+  // πρώτα το εν ενεργεία αξίωμα, μετά οι «Πρώην» κατά προβάδισμα
+  return Object.values(by).map((c) => ({ ...c, offices: sortBy(c.offices, (o) => (/^Πρώην /.test(o) ? 1 : 0), (o) => precedenceOf(o) ?? 999) }));
 }
-const candRep = (c) => ({ name: c.name, surname: c.surname, rep_rank: '', office: c.offices.join(' · '), year: c.year, email: '', mobile: '', member_id: c.member_id, notes: 'Από την Επετηρίδα', ext_id: '' });
+const candRep = (c) => ({ name: c.name, surname: c.surname, rep_rank: c.rank || '', office: c.offices.join(' · '), year: c.year, email: '', mobile: '', member_id: c.member_id, notes: 'Από την Επετηρίδα', ext_id: '' });
+// Θέση προβαδίσματος: του εν ενεργεία αξιώματος (αν υπάρχει), αλλιώς η καλύτερη «Πρώην»
+const curPrec = (r) => (isPast(r) ? repPrec(r) : precedenceOf(firstOffice(r)) ?? repPrec(r));
 // Επιλογή εκπροσώπου: ομάδες κατά τάξη προβαδίσματος — ΜΔ, εν ενεργεία, Πρώην, λοιποί
 function repOptions(sel, rm = rankmap()) {
-  const items = [...db.all('reps').map((r) => ({ value: String(r.id), r, prec: repPrec(r), past: isPast(r) })),
-    ...repCandidates().map((c) => { const r = candRep(c); return { value: 'e:' + c.key, r, prec: repPrec(r), past: isPast(r), ep: true }; })];
+  const items = [...db.all('reps').map((r) => ({ value: String(r.id), r, prec: curPrec(r), past: isPast(r) })),
+    ...repCandidates().map((c) => { const r = candRep(c); return { value: 'e:' + c.key, r, prec: curPrec(r), past: isPast(r), ep: true }; })];
   const lab = (it) => `${repLabel(it.r, rm)} — ${firstOffice(it.r) || ''}${it.ep ? ' (Επετηρίδα)' : ''}`;
   const groups = [['Μέγας Διδάσκαλος', (it) => it.prec === 1 && !it.past], ['Εν ενεργεία Μεγάλοι Αξιωματικοί', (it) => it.prec < 999 && !it.past], ['Πρώην Μεγάλοι Αξιωματικοί', (it) => it.prec < 999], ['Λοιποί εκπρόσωποι', () => true]];
   const used = new Set();

@@ -1,7 +1,8 @@
 // Επετηρίδα Μεγάλων Αξιωματικών — ιστορικό διορισμών/απονομών, υπολογίζεται αυτόματα από τα Διατάγματα.
 import { db } from '../core/store.js';
 import { module, onSubmit, go, bind, flash, notice } from '../core/app.js';
-import { importEpeteirida } from './epeteirida-import.js';
+import { importEpeteirida, importActiveOfficers, isActiveList, isCurrentRecord, hasActiveList } from './epeteirida-import.js';
+import { readXlsx, parsePasted } from '../core/util.js';
 import { esc, fmtDate, sortBy, fold, today } from '../core/util.js';
 import { reportPaper, printPaper } from '../core/paper.js';
 import { precedenceOf } from './decree-catalog.js';
@@ -24,7 +25,7 @@ function filtered(q) {
   if (q.year) xs = xs.filter((r) => String(r.decree_year) === q.year);
   if (q.office) xs = xs.filter((r) => r.office === q.office);
   if (q.action) xs = xs.filter((r) => r.action === q.action);
-  if (q.cur) xs = xs.filter((r) => Number(r.is_current) === 1 && r.action !== 'historical');
+  if (q.cur) { const act = hasActiveList(), y0 = new Date().getFullYear() - (new Date().getMonth() < 8 ? 1 : 0); xs = xs.filter((r) => isCurrentRecord(r, act, y0)); }
   const prec = (r) => precedenceOf(r.office) ?? 9999;
   if (q.sort === 'prec') return sortBy(xs, prec, (r) => -(r.decree_year || 0), 'surname', 'first_name');
   return sortBy(xs, (r) => -(r.decree_year || 0), (r) => -(r.decree_no || 0), prec, 'surname', 'first_name');
@@ -40,7 +41,7 @@ module({
       const sel = (name, empty, opts, cur) => `<select name="${name}"><option value="">${empty}</option>${opts.map(([v, l]) => `<option value="${esc(v)}"${v === cur ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
       const tbl = (list) => `<table><thead><tr><th>Επώνυμο</th><th>Όνομα</th><th>Προβ.</th><th>Αξίωμα</th><th>Διάταγμα</th><th>Ημερομηνία</th><th>Πράξη</th></tr></thead><tbody>${list.map((r) => `<tr><td>${esc(r.surname)}</td><td>${esc(r.first_name)}</td><td>${esc(precedenceOf(r.office) ?? '')}</td><td>${esc(r.office)}</td>
 <td class="official-number">${r.decree_id ? `<a href="#/decrees/${r.decree_id}">${esc(r.decree_no)}/${esc(r.decree_year)}</a>` : esc(r.decree_no ? `${r.decree_no}/${r.decree_year}` : r.decree_year || '')}</td>
-<td>${esc(fmtDate(r.decree_date))}</td><td>${esc(LABELS[r.action] || r.action)}${r.notes && r.source === 'import' ? `<br><small class="muted">${esc(r.notes)}</small>` : ''}${r.member_id ? ` · <a href="#/members/${r.member_id}">Μητρώο</a>` : ''}</td></tr>`).join('') || '<tr><td colspan="7" class="muted">Δεν βρέθηκαν εγγραφές.</td></tr>'}</tbody></table>`;
+<td>${esc(fmtDate(r.decree_date))}</td><td>${esc(LABELS[r.action] || r.action)}${r.notes && (r.source === 'import' || r.source === 'active') ? `<br><small class="muted">${esc(r.notes)}</small>` : ''}${r.member_id ? ` · <a href="#/members/${r.member_id}">Μητρώο</a>` : ''}</td></tr>`).join('') || '<tr><td colspan="7" class="muted">Δεν βρέθηκαν εγγραφές.</td></tr>'}</tbody></table>`;
       return {
         title: 'Επετηρίδα',
         html: `<div class="noprint"><h1>Επετηρίδα Μεγάλων Αξιωματικών</h1>${notice(query.msg)}<p class="muted">Ιστορικό διορισμών και απονομών, υπολογισμένο αυτόματα από τα Διατάγματα.</p>
@@ -51,11 +52,22 @@ ${sel('office', 'Όλα τα αξιώματα', offices.map((o) => [o, o]), quer
 <details class="card fold"><summary><b>Εισαγωγή καταλόγου Μεγάλων Αξιωματικών (επικόλληση από Excel)</b></summary><form id="epimp" style="margin-top:10px">
 <p class="muted">Στήλες: <b>Ονοματεπώνυμο, Βαθμός Μεγ. Αξιωματικού, Διάταγμα διορισμού, Έτος, Εν Ενεργεία Αξιωματικοί</b>. Οι συντομογραφίες (ΠρΑΜΔιακ, ΠρΒ'ΜΕπ, ΕπΜΔ Πειραιώς …) γίνονται πλήρεις τίτλοι
 και κάθε όνομα συνδέεται με το Μητρώο Μελών. Μια νέα εισαγωγή αντικαθιστά την προηγούμενη· οι εγγραφές από Διατάγματα δεν αλλάζουν.</p>
-<textarea name="paste" class="short" required></textarea><div class="toolbar" style="margin-top:10px"><button class="btn primary">Εισαγωγή</button></div></form></details></div><div class="print-area" id="pa" hidden></div>`,
+<textarea name="paste" class="short"></textarea><label style="margin-top:10px">ή αρχείο Excel (π.χ. «Επετηρίδα 2026» — διαβάζεται το φύλλο «Πηγή»)</label><input type="file" name="file" accept=".xlsx,.xls,.csv">
+<p class="muted" style="margin-top:8px">Δεκτός και ο <b>κατάλογος εν ενεργεία Μεγάλων Αξιωματικών</b> (Τάξις · Αξίωμα · Βαθμός / Τίτλος · Ονοματεπώνυμο · Διάταγμα): ορίζει ποιοι είναι σήμερα εν ενεργεία και ενημερώνει τους Εκπροσώπους ΜΔ με τον σωστό τίτλο.</p><div class="toolbar" style="margin-top:10px"><button class="btn primary">Εισαγωγή</button></div></form></details></div><div class="print-area" id="pa" hidden></div>`,
         mount(el) {
           onSubmit(el.querySelector('#flt'), (d) => go('/epeteirida', d));
           onSubmit(el.querySelector('#epimp'), async (d) => {
-            const r = await importEpeteirida(d.paste);
+            let rows;
+            if (d.file && d.file.size) { const sh = await readXlsx(d.file); rows = (sh.find((x) => /πηγ/i.test(x.name)) || sh.find((x) => isActiveList(x.rows.slice(x.rows.findIndex((r) => r.some(Boolean))))) || sh[0]).rows; }
+            else rows = parsePasted(d.paste || '');
+            rows = rows.filter((r) => r.some((c) => String(c ?? '').trim()));
+            if (!rows.length) throw new Error('Επικολλήστε τον πίνακα ή επιλέξτε αρχείο Excel.');
+            if (isActiveList(rows)) {
+              const a = await importActiveOfficers(rows);
+              flash(`Εν ενεργεία Μεγάλοι Αξιωματικοί: ${a.people} · Εκπρόσωποι: ${a.added} νέοι, ${a.updated} ενημερώθηκαν · ${a.matched} συνδέθηκαν με το Μητρώο${a.bad.length ? ` · δεν αναγνωρίστηκαν: ${a.bad.join('· ')}` : ''}.`);
+              return go('/epeteirida', { cur: '1', sort: 'prec' });
+            }
+            const r = await importEpeteirida(rows);
             flash(`Επετηρίδα: ${r.people} Μεγάλοι Αξιωματικοί, ${r.records} εγγραφές· ${r.matched} συνδέθηκαν με το Μητρώο Μελών, ${r.people - r.matched} χωρίς ταύτιση (κρατούν το όνομα).`
               + (r.bad.length ? ` Δεν αναγνωρίστηκαν (${r.bad.length}): ${r.bad.slice(0, 8).join('· ')}` : ''));
             go('/epeteirida');

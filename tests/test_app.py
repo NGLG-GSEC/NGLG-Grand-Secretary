@@ -853,3 +853,48 @@ def test_visit_candidates_from_epeteirida(app):
     app.go('/visits')
     texts = app.page.locator('.vrepsel').first.locator('option').all_inner_texts()
     assert sum('Υποψήφιος' in t for t in texts) == 1 and not any('Υποψήφιος' in t and 'Επετηρίδα' in t for t in texts)
+
+
+def test_epeteirida_excel_file_and_active_officers_list(app, tmp_path):
+    import openpyxl
+    app.connect_local()
+    add_member(app, surname='Δοκιμαστής', first='Ανδρέας', email='a@example.com', mobile='6900000011')
+    # αρχείο Excel όπως το «Επετηρίδα 2026»: πρώτο φύλλο συγκεντρωτικό, φύλλο «Πηγή» με τα στοιχεία
+    wb = openpyxl.Workbook(); ws = wb.active; ws.title = 'Τάξις και προβάδισμα'; ws.append(['ΕΠΕΤΗΡΙΔΑ'])
+    src = wb.create_sheet('Πηγή')
+    src.append(['Ονοματεπώνυμο', 'Βαθμός Μεγ. Αξιωματικού', 'Διάταγμα διορισμού', 'Έτος', 'Εν ενεργεία αξίωμα', 'Μεταβολή'])
+    src.append(['Δοκιμαστής Ανδρέας', 'ΠρΜΞιφ', '414', '2024', 'Μέγας Γραμματεύ 502/2026', None])
+    src.append(['Παλαιός Ηλίας', "ΠρΑ'ΜΕπ", '362', '2021', None, None])
+    f = tmp_path / 'ep.xlsx'; wb.save(f)
+    app.go('/epeteirida')
+    app.page.locator('details.fold summary', has_text='Εισαγωγή καταλόγου').click()
+    app.page.set_input_files('#epimp [name=file]', str(f))
+    app.page.locator('#epimp button').click()
+    app.page.wait_for_selector('text=Επετηρίδα: 2 Μεγάλοι Αξιωματικοί')
+    # κατάλογος εν ενεργεία (νεότερος): ο Δοκιμαστής είναι πλέον Επαρχιακός ΜΔ Πειραιώς, Πσεβ.
+    active = ('Τάξις\tΑξίωμα\tΒαθμός / Τίτλος\tΟνοματεπώνυμο\tΔιάταγμα\n1\tΜέγας Διδάσκαλος\tΣεβτ\tΜπενετάτος Ιωάννης\t2024\n'
+              '9\tΕπαρχιακός Μ.Δ. Πειραιώς\tΠσεβ\tΔοκιμαστής Ανδρέας\t511/2026\n51\tΔεύτερος Μέγας Διάκονος\tΣεβ\tΝέος Πέτρος\t502/2026\n')
+    app.go('/epeteirida')
+    app.page.locator('details.fold summary', has_text='Εισαγωγή καταλόγου').click()
+    app.page.fill('#epimp [name=paste]', active)
+    app.page.locator('#epimp button').click()
+    app.page.wait_for_selector('text=Εν ενεργεία Μεγάλοι Αξιωματικοί: 3')
+    t = app.text('.tablecard')
+    assert 'Επαρχιακός Μέγας Διδάσκαλος' in t and 'Δεύτερος Μέγας Διάκονος' in t and 'Μέγας Γραμματεύς' not in t  # μόνο ο νέος κατάλογος
+    reps = {r['surname']: r for r in app.page.evaluate("async () => (await import('./core/store.js')).db.all('reps')")}
+    assert reps['Δοκιμαστής']['office'] == 'Επαρχιακός Μέγας Διδάσκαλος' and reps['Δοκιμαστής']['rep_rank'] == 'Πανσεβάσμιος Αδ.' and reps['Δοκιμαστής']['member_id']
+    assert reps['Νέος']['office'] == 'Δεύτερος Μέγας Διάκονος' and reps['Νέος']['rep_rank'] == 'Σεβάσμιος Αδ.'
+    assert len([r for r in reps.values() if r['surname'] == 'Μπενετάτος']) == 1
+    # στις Εγκαταστάσεις: ο Παλαιός (μόνο Επετηρίδα) εμφανίζεται στους Πρώην
+    app.go('/visits')
+    groups = dict(app.page.locator('.vrepsel').first.locator('optgroup').evaluate_all('gs => gs.map(g => [g.label, [...g.children].map(o => o.textContent)])'))
+    assert any('Δοκιμαστής' in o for o in groups['Εν ενεργεία Μεγάλοι Αξιωματικοί'])
+    assert any('Παλαιός Ηλίας' in o for o in groups['Πρώην Μεγάλοι Αξιωματικοί'])
+    # νέος κατάλογος χωρίς τον Νέο → γίνεται «Πρώην»
+    app.go('/epeteirida')
+    app.page.locator('details.fold summary', has_text='Εισαγωγή καταλόγου').click()
+    app.page.fill('#epimp [name=paste]', '\n'.join(active.split('\n')[:3]))
+    app.page.locator('#epimp button').click()
+    app.page.wait_for_selector('text=Εν ενεργεία Μεγάλοι Αξιωματικοί: 2')
+    reps = {r['surname']: r for r in app.page.evaluate("async () => (await import('./core/store.js')).db.all('reps')")}
+    assert reps['Νέος']['office'] == 'Πρώην Δεύτερος Μέγας Διάκονος'
