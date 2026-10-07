@@ -67,7 +67,47 @@ const EXTRA_RANKS = { 'Μέγας Θησαυροφύλαξ': 1, 'Μέγας Επ
 // Εκπρόσωποι κατά τάξη προβαδίσματος (ο Μέγας Διδάσκαλος πρώτος, μετά οι εν ενεργεία Μεγάλοι Αξιωματικοί, μετά οι Πρώην)
 const repPrec = (r) => Math.min(999, ...String(r.office || '').split(' · ').map((o) => precedenceOf(o.replace(/\s*\(\d{4}\)\s*$/, '')) ?? 999));
 export const repsByPrecedence = () => sortBy(db.all('reps'), repPrec, (r) => fold(r.surname), (r) => fold(r.name));
-const repOptions = (sel, rm = rankmap()) => repsByPrecedence().map((r) => `<option value="${r.id}"${r.id === sel ? ' selected' : ''}>${esc(repLabel(r, rm))} — ${esc(firstOffice(r) || '')}</option>`).join('');
+// Υποψήφιοι εκπρόσωποι από την Επετηρίδα (εν ενεργεία και Πρώην Μεγάλοι Αξιωματικοί) που δεν είναι ακόμη στους «Εκπροσώπους»
+export function repCandidates() {
+  const reps = db.all('reps'), nk = (sn, fn) => fold(sn) + '|' + fold(fn).split(' ')[0];
+  const haveM = new Set(reps.map((r) => r.member_id).filter(Boolean)), haveN = new Set(reps.map((r) => nk(r.surname, r.name)));
+  const ms = Object.fromEntries(db.all('member_registry').map((m) => [m.id, m])), y0 = Number(masonicYear().from.slice(0, 4)), by = {};
+  for (const o of db.all('member_degrees_offices')) {
+    if (!o.office || precedenceOf(o.office.replace(/^Πρώην /, '')) == null) continue;
+    const m = o.member_id && ms[o.member_id];
+    if (m && noContact(m)) continue;
+    const p = m ? [m.surname, m.first_name] : (() => { const t = String(o.full_name || '').replace(/\(.*?\)/g, ' ').trim().split(/\s+/); return [t[0] || '', t.slice(1).join(' ')]; })();
+    if (!p[0] || (m && haveM.has(m.id)) || haveN.has(nk(p[0], p[1]))) continue;
+    const key = m ? `m${m.id}` : `n${nk(p[0], p[1])}`, cur = o.record_type === 'appoint' && Number(o.is_current) === 1 && Number(o.decree_year) >= y0 && !/^Πρώην /.test(o.office);
+    const c = (by[key] ||= { key, member_id: m ? m.id : null, surname: p[0], name: p[1], offices: [], year: '' });
+    const label = cur || /^Πρώην /.test(o.office) ? o.office : 'Πρώην ' + o.office;
+    if (!c.offices.includes(label)) c.offices.push(label);
+    if (Number(o.decree_year) > Number(c.year || 0)) c.year = String(o.decree_year);
+  }
+  return Object.values(by).map((c) => ({ ...c, offices: c.offices.sort((a, b) => (precedenceOf(a) ?? 999) - (precedenceOf(b) ?? 999)) }));
+}
+const candRep = (c) => ({ name: c.name, surname: c.surname, rep_rank: '', office: c.offices.join(' · '), year: c.year, email: '', mobile: '', member_id: c.member_id, notes: 'Από την Επετηρίδα', ext_id: '' });
+// Επιλογή εκπροσώπου: ομάδες κατά τάξη προβαδίσματος — ΜΔ, εν ενεργεία, Πρώην, λοιποί
+function repOptions(sel, rm = rankmap()) {
+  const items = [...db.all('reps').map((r) => ({ value: String(r.id), r, prec: repPrec(r), past: isPast(r) })),
+    ...repCandidates().map((c) => { const r = candRep(c); return { value: 'e:' + c.key, r, prec: repPrec(r), past: isPast(r), ep: true }; })];
+  const lab = (it) => `${repLabel(it.r, rm)} — ${firstOffice(it.r) || ''}${it.ep ? ' (Επετηρίδα)' : ''}`;
+  const groups = [['Μέγας Διδάσκαλος', (it) => it.prec === 1 && !it.past], ['Εν ενεργεία Μεγάλοι Αξιωματικοί', (it) => it.prec < 999 && !it.past], ['Πρώην Μεγάλοι Αξιωματικοί', (it) => it.prec < 999], ['Λοιποί εκπρόσωποι', () => true]];
+  const used = new Set();
+  const html = groups.map(([g, f]) => {
+    const xs = sortBy(items.filter((it) => !used.has(it.value) && f(it)), (it) => it.prec, (it) => fold(it.r.surname), (it) => fold(it.r.name));
+    xs.forEach((it) => used.add(it.value));
+    return xs.length ? `<optgroup label="${esc(g)}">${xs.map((it) => `<option value="${esc(it.value)}"${String(sel) === it.value ? ' selected' : ''}>${esc(lab(it))}</option>`).join('')}</optgroup>` : '';
+  }).join('');
+  return html || '<option value="" disabled>Δεν υπάρχουν υποψήφιοι — Εκπρόσωποι → «Επικόλληση πίνακα» ή Επετηρίδα → «Εισαγωγή»</option>';
+}
+// Τιμή επιλογής → id εκπροσώπου (μέσα σε συναλλαγή)· υποψήφιος της Επετηρίδας καταχωρείται πρώτα στους «Εκπροσώπους»
+function repIdIn(tx, value, cands) {
+  if (!value) return null;
+  if (!String(value).startsWith('e:')) return Number(value) || null;
+  const c = cands.find((x) => 'e:' + x.key === value);
+  return c ? tx.insert('reps', candRep(c)).id : null;
+}
 const firstOffice = (r) => String((r || {}).office || '').split(' · ')[0].replace(/\s*\(\d{4}\)\s*$/, '');
 const isPast = (r) => String(r.office || '').startsWith('Πρώην');
 export const repLabel = (r, rm) => (r ? [repRank(r, rm), r.surname, r.name].filter(Boolean).join(' ') : '');
@@ -213,9 +253,11 @@ ${table(['Επαρχία', 'Ενεργές Στοές', 'Δήλωσαν ημερ
     mount(el) {
       onSubmit(el.querySelector('#flt'), (d) => go('/visits', { ...d, past: d.past ? '1' : '' }));
       el.querySelectorAll('.vrepsel').forEach((s) => s.addEventListener('change', async () => {
-        const id = Number(s.dataset.id), rid = s.value ? Number(s.value) : null, r = rid && db.get('reps', rid), v = db.get('visits', id);
-        try { await db.save(`Επίσκεψη ${v ? v.lodge : id}: εκπρόσωπος`, (tx) => tx.update('visits', id, { rep_id: rid })); }
+        const id = Number(s.dataset.id), v = db.get('visits', id), cands = repCandidates();
+        let rid = null;
+        try { await db.save(`Επίσκεψη ${v ? v.lodge : id}: εκπρόσωπος`, (tx) => { rid = repIdIn(tx, s.value, cands); tx.update('visits', id, { rep_id: rid }); }); }
         catch (e) { toast(e.message || String(e), 'error'); return; }
+        const r = rid && db.get('reps', rid);
         toast(r ? `Ορίστηκε: ${repLabel(r)} — ${v ? v.lodge : ''}` : 'Ο εκπρόσωπος αφαιρέθηκε.');
         go('/visits', query);
       }));
@@ -256,13 +298,14 @@ ${v ? `<p>${repNotified(v) ? `<span class="vok">✓ Εκπρόσωπος ενη�
       L.addEventListener('change', fill); L.addEventListener('input', fill);
       onSubmit(el.querySelector('#vf'), async (d, sub) => {
         if (!parseIso(d.visit_date)) throw new Error('Συμπληρώστε έγκυρη ημερομηνία.');
-        const row = { visit_date: d.visit_date, lodge: cleanVisit(d.lodge), lodge_number: d.lodge_number.trim(), location: d.location.trim(), province: d.province, rep_id: Number(d.rep_id) || null, notes: d.notes.trim() };
+        const row = { visit_date: d.visit_date, lodge: cleanVisit(d.lodge), lodge_number: d.lodge_number.trim(), location: d.location.trim(), province: d.province, rep_id: d.rep_id || null, notes: d.notes.trim() };
         if (!row.lodge) throw new Error('Συμπληρώστε τη Στοά.');
         const l = row.lodge_number && lodgeByNumber(row.lodge_number);
         if (l) { row.province ||= l.provincial || ''; row.location ||= l.meeting_place || ''; }
         const next = sub && sub.dataset.next;
         if (next === 'brief' && !row.rep_id) throw new Error('Ορίστε πρώτα εκπρόσωπο.');
-        const id = await db.save(v ? 'Επίσκεψη: ενημέρωση' : 'Νέα επίσκεψη', (tx) => (v ? tx.update('visits', v.id, row) : tx.insert('visits', row)).id);
+        const cands = repCandidates();
+        const id = await db.save(v ? 'Επίσκεψη: ενημέρωση' : 'Νέα επίσκεψη', (tx) => { row.rep_id = repIdIn(tx, row.rep_id, cands); return (v ? tx.update('visits', v.id, row) : tx.insert('visits', row)).id; });
         flash('Η επίσκεψη αποθηκεύτηκε.');
         if (next === 'brief' || next === 'notify') return go(`/visits/${next}`, { ids: String(id) });
         if (next === 'letter') return go('/letters/new', provinceLetter(db.get('visits', id)));

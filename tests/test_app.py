@@ -823,3 +823,33 @@ def test_decree_live_preview(app):
     app.page.select_option('#dAction', 'service_award')
     app.page.wait_for_function("() => document.querySelector('#dprev').innerText.includes('ΕΥΑΡΕΣΤΟΥΜΕΘΑ')")
     assert 'υπ’ αριθ. 513/' in pv()
+
+
+def test_visit_candidates_from_epeteirida(app):
+    app.connect_local()
+    paste = ('Ονοματεπώνυμο\tΒαθμός Μεγ. Αξιωματικού\tΔιάταγμα διορισμού\tΈτος\tΕν Ενεργεία Αξίωματικοί\n'
+             'Υποψήφιος Νικόλαος\tΠρΜΞιφ\t414\t2024\tΜέγας Ευχέτης 502/2026\n'
+             "Παλαιός Γεώργιος\tΠρΑ'ΜΕπ\t362\t2021\t\n")
+    app.go('/epeteirida')
+    app.page.locator('details.fold summary', has_text='Εισαγωγή καταλόγου').click()
+    app.page.fill('#epimp [name=paste]', paste)
+    app.page.locator('#epimp button').click()
+    app.page.wait_for_selector('text=Επετηρίδα: 2 Μεγάλοι Αξιωματικοί')
+    app.go('/visits')
+    sel = app.page.locator('.vrepsel').first
+    groups = sel.locator('optgroup').evaluate_all('gs => gs.map(g => [g.label, [...g.children].map(o => o.textContent)])')
+    labels = dict((g, o) for g, o in groups)
+    assert labels['Μέγας Διδάσκαλος'][0].startswith('Σεβασμιώτατος Αδ. Μπενετάτος')
+    assert labels['Εν ενεργεία Μεγάλοι Αξιωματικοί'][0].startswith('Λίαν Σεβάσμιος Αδ. Υποψήφιος Νικόλαος — Μέγας Ευχέτης (Επετηρίδα)')
+    assert labels['Πρώην Μεγάλοι Αξιωματικοί'][0].startswith('Πανσεβάσμιος Αδ. Παλαιός Γεώργιος — Πρώην Πρώτος Μέγας Επόπτης')
+    vid = sel.get_attribute('data-id')
+    sel.select_option(label=labels['Εν ενεργεία Μεγάλοι Αξιωματικοί'][0])
+    app.page.wait_for_selector('text=Ορίστηκε: Λίαν Σεβάσμιος Αδ. Υποψήφιος')
+    st = app.page.evaluate(f"async () => {{ const m = await import('./core/store.js'); return [m.db.get('visits', {vid}), m.db.all('reps')]; }}")
+    v, reps = st
+    r = [x for x in reps if x['surname'] == 'Υποψήφιος'][0]
+    assert v['rep_id'] == r['id'] and r['office'].startswith('Μέγας Ευχέτης') and 'Πρώην Μέγας Ξιφοφόρος' in r['office']
+    # μετά την καταχώριση εμφανίζεται μία φορά (ως εκπρόσωπος, όχι ξανά από την Επετηρίδα)
+    app.go('/visits')
+    texts = app.page.locator('.vrepsel').first.locator('option').all_inner_texts()
+    assert sum('Υποψήφιος' in t for t in texts) == 1 and not any('Υποψήφιος' in t and 'Επετηρίδα' in t for t in texts)
