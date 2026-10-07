@@ -804,3 +804,22 @@ def test_namedays_empty_range_explains(app):
     t = app.text()
     assert 'Κανένα ενεργό μέλος' in t and 'Λουκάς (18/10)' in t and 'Σέργιος (07/10)' in t
     assert 'Επόμενοι εορτάζοντες: 26/10 Δημήτριος (1)' in t
+
+
+def test_decree_live_preview(app):
+    app.connect_local()
+    add_member(app)
+    app.go('/decrees/new')
+    pv = lambda: app.page.locator('#dprev').inner_text()
+    app.page.wait_for_function("() => document.querySelector('#dprev .paper')")
+    assert 'ΔΙΑΤΑΓΜΑ' in pv() and '513/' in pv() and 'περί ……' in pv()
+    app.page.fill('[name=matter]', 'διορισμού Μεγάλων Αξιωματικών')
+    app.page.wait_for_function("() => document.querySelector('#dprev').innerText.includes('περί διορισμού Μεγάλων Αξιωματικών')")
+    app.page.select_option('#dOffice', 'Μέγας Γραμματεύς')
+    app.page.wait_for_function("() => document.querySelector('#dprev').innerText.includes('ΜΕΓΑΝ ΓΡΑΜΜΑΤΕΑ')")
+    app.pick('.registry-search', 'Παπαδ')
+    app.page.wait_for_function("() => document.querySelector('#dprev').innerText.includes('Παπαδόπουλον')")
+    assert 'Κανόνα 22' in pv()
+    app.page.select_option('#dAction', 'service_award')
+    app.page.wait_for_function("() => document.querySelector('#dprev').innerText.includes('ΕΥΑΡΕΣΤΟΥΜΕΘΑ')")
+    assert 'υπ’ αριθ. 513/' in pv()

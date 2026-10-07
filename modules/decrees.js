@@ -119,7 +119,7 @@ function decreeForm(d, query = {}) {
   const m = d ? meta(d) : { action: ['appoint', 'award', 'service_award'].includes(query.action) ? query.action : 'appoint', award_office: '', decree_office: '', period: `${new Date().getFullYear()} - ${new Date().getFullYear() + 1}` };
   const list = d ? apps(d) : [];
   if (m.action === 'appoint' && !m.decree_office && list.length) m.decree_office = list[0].office || '';
-  return { m, html: `<form id="df"><div class="card"><div class="grid"><div><label>Πράξη Διατάγματος</label><select name="action" id="dAction">${Object.entries(ACTIONS).map(([k, v]) => `<option value="${k}"${k === m.action ? ' selected' : ''}>${v}</option>`).join('')}</select></div>
+  return { m, html: `<div class="dec-split"><div class="dec-formcol"><form id="df"><div class="card"><div class="grid"><div><label>Πράξη Διατάγματος</label><select name="action" id="dAction">${Object.entries(ACTIONS).map(([k, v]) => `<option value="${k}"${k === m.action ? ' selected' : ''}>${v}</option>`).join('')}</select></div>
 <div id="matterWrap"><label>Περί</label><input name="matter" value="${esc(d ? d.matter : '')}"></div></div></div>
 <div class="card" id="officeCard"><label id="officeLabel">Ενεργός Μέγας Αξιωματικός</label><select name="office" id="dOffice"></select></div>
 <div class="card" id="periodCard"><label>Τεκτονική Περίοδος</label><input name="period" value="${esc(m.period)}" placeholder="2026 - 2027"></div>
@@ -130,7 +130,8 @@ function decreeForm(d, query = {}) {
 <p class="muted">Δεν απαιτείται αξίωμα, τίτλος ή Τεκτονική Περίοδος· εισάγονται μόνο τα στοιχεία του Αδελφού.</p></div>
 <h2 id="peopleHead">Διοριζόμενοι Αδελφοί</h2><div id="people">${(list.length ? list : [{}]).map(personRow).join('')}</div>
 <div class="toolbar"><button type="button" class="btn" data-act="addPerson">+ Προσθήκη Αδελφού</button><button class="btn primary">${d && d.id ? '💾 Αποθήκευση Διατάγματος' : 'Έκδοση Διατάγματος'}</button>
-<a class="btn" href="${d && d.id ? '#/decrees/' + d.id : '#/decrees'}">Ακύρωση</a></div></form>${infoTables()}` };
+<a class="btn" href="${d && d.id ? '#/decrees/' + d.id : '#/decrees'}">Ακύρωση</a></div></form></div>
+<aside class="dec-live"><div class="dec-live-head">👁 Προεπισκόπηση <small class="muted">— ενημερώνεται καθώς συμπληρώνετε</small></div><div id="dprev" aria-live="polite"></div></aside></div>${infoTables()}` };
 }
 
 function mountDecreeForm(el, d, m0) {
@@ -161,6 +162,28 @@ function mountDecreeForm(el, d, m0) {
     addPerson() { const z = document.createElement('div'); z.innerHTML = personRow(); const r = z.firstElementChild; el.querySelector('#people').appendChild(r); wire(r); sync(); },
     rmPerson(_, b) { b.closest('.dec-person').remove(); },
   });
+  // Ζωντανή προεπισκόπηση: το Διάταγμα όπως θα εκδοθεί, με «……» όπου λείπει κάτι
+  const DOTS = '……';
+  const draft = () => {
+    const data = Object.fromEntries(new FormData(f)), action = data.action, service = action === 'service_award';
+    const office = service ? '' : data.office || '', period = String(data.period || '').trim() || DOTS;
+    const matter = service ? SERVICE_MATTER : String(data.matter || '').trim() || DOTS;
+    const people = [...el.querySelectorAll('.dec-person')].map((r) => {
+      const q = (c) => String((r.querySelector(c) || {}).value || '').trim();
+      return { first_name: proper(q('.fn')) || DOTS, last_name: proper(q('.ln')) || DOTS, decree_first_name: proper(q('.dfn')), decree_last_name: proper(q('.dln')),
+        honorific: q('.hon'), office: action === 'appoint' ? office || DOTS : '', rule: action === 'appoint' ? (DEC_MAP[office] || {}).rule || '' : '19' };
+    });
+    const date = d ? d.decree_date : today(), year = d ? d.decree_year : new Date().getFullYear();
+    const no = d ? d.decree_no : Math.max(db.all('decree_documents').reduce((x, y) => Math.max(x, Number(y.decree_no) || 0), 0) + 1, Number(db.setting('decree_first_no')) || 513);
+    const { body } = decreeBody(matter, people.length ? people : [{ first_name: DOTS, last_name: DOTS }], date, action, action === 'award' ? office || DOTS : '', period);
+    return { decree_no: no, decree_year: year, decree_date: date, body, rules: JSON.stringify({ action }) };
+  };
+  const pv = el.querySelector('#dprev');
+  let tmr;
+  const preview = () => { clearTimeout(tmr); tmr = setTimeout(() => { try { pv.innerHTML = decreePaper(draft()); } catch (e) { console.warn(e); } }, 120); };
+  f.addEventListener('input', preview); f.addEventListener('change', preview);
+  el.addEventListener('click', (e) => { if (e.target.closest('[data-act], .picker-list button')) setTimeout(preview, 50); });
+  preview();
   onSubmit(f, async (data) => {
     const action = data.action, service = action === 'service_award';
     const matter = service ? SERVICE_MATTER : String(data.matter || '').trim();
