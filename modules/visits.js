@@ -107,9 +107,44 @@ function repMail(r, vs) {
     ics: icsFor(vs), icsName: one ? `egkatastasi-${v.lodge_number || 'stoa'}.ics` : 'egkatastaseis.ics',
   };
 }
+// Τεκτονικό έτος Εγκαταστάσεων: 1 Σεπτεμβρίου – 31 Αυγούστου
+export function masonicYear(d = today()) {
+  const y = Number(d.slice(0, 4)) - (Number(d.slice(5, 7)) < 9 ? 1 : 0);
+  return { from: `${y}-09-01`, to: `${y + 1}-08-31`, label: `${y}–${y + 1}` };
+}
+const declaredLodges = (yr = masonicYear()) => new Set(visitsAll().filter((v) => v.visit_date >= yr.from && v.visit_date <= yr.to && v.lodge_number).map((v) => lodgeNoKey(v.lodge_number)));
 function provinceMissing(prov) {
-  const has = new Set(visitsAll().filter((v) => v.visit_date >= today() && v.lodge_number).map((v) => lodgeNoKey(v.lodge_number)));
+  const has = declaredLodges();
   return lodgesAll(true).filter((l) => (l.provincial || '') === prov && !has.has(lodgeNoKey(l.number)));
+}
+// Σύνοψη ανά Επαρχία: ενεργές Στοές, πόσες δήλωσαν ημερομηνία Εγκατάστασης στο τεκτονικό έτος, ποιες λείπουν
+export function provinceSummary(yr = masonicYear()) {
+  const has = declaredLodges(yr), out = {};
+  for (const l of lodgesAll(true)) {
+    const k = l.provincial || '—', o = (out[k] ||= { prov: k, total: 0, declared: 0, missing: [] });
+    o.total++;
+    if (has.has(lodgeNoKey(l.number))) o.declared++; else o.missing.push(l);
+  }
+  const order = provincialChoices();
+  return Object.values(out).sort((a, b) => ((order.indexOf(a.prov) + 1) || 99) - ((order.indexOf(b.prov) + 1) || 99));
+}
+function missingPage({ query }) {
+  const yr = masonicYear(), sum = provinceSummary(yr).filter((o) => !query.prov || o.prov === query.prov), n = sum.reduce((s, o) => s + o.missing.length, 0);
+  const tbl = sum.filter((o) => o.missing.length).map((o) => `<h2>${esc(o.prov)} <small class="muted">${o.missing.length} από ${o.total} Στοές χωρίς ημερομηνία</small></h2>
+${table(['Αρ.', 'Στοά', 'Ανατολή', 'Email Στοάς', ''], o.missing.map((l) => [`<b>${esc(l.number)}</b>`, esc(l.name), esc(l.orient || ''), esc(l.email || l.secretary_email || '—'),
+    `<a class="btn small noprint" href="#/visits/new?lodge=${encodeURIComponent(l.number)}">+ Ημερομηνία</a>`]))}
+${o.prov !== '—' ? `<p class="noprint"><a class="btn small" href="#/visits/publish/compose?${new URLSearchParams({ prov: o.prov, frm: today(), to: '', missing: '1' })}">✉ Υπενθύμιση στην Επαρχία</a></p>` : ''}`).join('');
+  return {
+    title: 'Στοές χωρίς ημερομηνία Εγκατάστασης',
+    html: `<p class="noprint"><a href="#/visits">← Επισκέψεις</a></p><h1>Στοές χωρίς ημερομηνία Εγκατάστασης Σεβασμίου</h1>
+<p>Τεκτονικό έτος <b>${yr.label}</b> (${fmtDate(yr.from)} – ${fmtDate(yr.to)}) · <b>${n}</b> Στοές${query.prov ? ` · ${esc(query.prov)}` : ''}</p>
+<div class="toolbar noprint"><select id="mProv"><option value="">Όλες οι Επαρχίες</option>${provincialChoices().map((p) => `<option${p === query.prov ? ' selected' : ''}>${esc(p)}</option>`).join('')}</select>
+<button class="btn" data-act="print">⬇ PDF / Εκτύπωση</button></div>${tbl || '<div class="card">Όλες οι Στοές έχουν δηλώσει ημερομηνία.</div>'}`,
+    mount(el) {
+      el.querySelector('#mProv').addEventListener('change', (e) => go('/visits/missing', { prov: e.target.value }));
+      bind(el, { print: () => printPaper(`stoes-xoris-egkatastasi-${yr.label}`) });
+    },
+  };
 }
 function provinceMail(p, rows, missing) {
   const reps = repMap();
@@ -150,13 +185,18 @@ function visitsPage({ query }) {
   const body = !vs.length ? '<div class="card">Δεν υπάρχουν ακόμη επισκέψεις. Πατήστε «Νέα επίσκεψη» ή «Επικόλληση λίστας».</div>' : !lst.length ? '<div class="card">Καμία επίσκεψη δεν ταιριάζει με τα φίλτρα.</div>'
     : Object.entries(groups).map(([k, items]) => `<section class="vmonth"><h2>${monthTitle(k)} <small>${items.length} ${items.length === 1 ? 'επίσκεψη' : 'επισκέψεις'}</small></h2>${items.map((v) => visitCard(v, reps, opts)).join('')}</section>`).join('');
   const sel = (n, v) => (String(query[n] || '') === String(v) ? ' selected' : '');
+  const yr = masonicYear(), summary = provinceSummary(yr), sumAll = summary.reduce((a, o) => ({ total: a.total + o.total, declared: a.declared + o.declared }), { total: 0, declared: 0 });
   return {
     title: 'Επισκέψεις Στοών',
     html: `<h1>Επισκέψεις Στοών</h1>${notice(query.msg)}<div class="toolbar"><a class="btn primary" href="#/visits/new">+ Νέα επίσκεψη</a><a class="btn" href="#/visits/import">Επικόλληση λίστας</a>
-<a class="btn" href="#/visits/publish${query.prov ? '?prov=' + encodeURIComponent(query.prov) : ''}">Ενημέρωση Επαρχίας</a><a class="btn" href="#/visits/report">Αναφορά</a><a class="btn" href="#/reps">Εκπρόσωποι</a></div>
+<a class="btn" href="#/visits/publish${query.prov ? '?prov=' + encodeURIComponent(query.prov) : ''}">Ενημέρωση Επαρχίας</a><a class="btn" href="#/visits/report">Αναφορά</a><a class="btn" href="#/reps">Εκπρόσωποι</a><a class="btn${sumAll.total - sumAll.declared ? ' warnbtn' : ''}" href="#/visits/missing${query.prov ? '?prov=' + encodeURIComponent(query.prov) : ''}">⚠ Στοές χωρίς ημερομηνία (${sumAll.total - sumAll.declared})</a></div>
+<details class="card fold vsum"${query.sum ? ' open' : ''}><summary><b>Σύνοψη Επαρχιών · τεκτονικό έτος ${yr.label}</b> — ${sumAll.declared} από ${sumAll.total} Στοές δήλωσαν ημερομηνία Εγκατάστασης</summary>
+${table(['Επαρχία', 'Ενεργές Στοές', 'Δήλωσαν ημερομηνία', 'Χωρίς ημερομηνία', ''], summary.map((o) => [`<b>${esc(o.prov)}</b>`, o.total,
+  `${o.declared} <span class="bar"><i style="width:${o.total ? Math.round(100 * o.declared / o.total) : 0}%"></i></span>`, o.missing.length ? `<span class="vwarn">${o.missing.length}</span>` : '<span class="vok">✓</span>',
+  `<a class="btn small" href="#/visits?prov=${encodeURIComponent(o.prov)}">Εγκαταστάσεις</a>${o.missing.length ? ` <a class="btn small" href="#/visits/missing?prov=${encodeURIComponent(o.prov)}">Χωρίς ημερομηνία</a>` : ''}`]))}</details>
 <div class="vstats"><span><b>${up.length}</b> προσεχείς επισκέψεις</span><span class="${unas ? 'warn' : ''}"><b>${unas}</b> χωρίς εκπρόσωπο</span><span class="${tobrief ? 'warn' : ''}"><b>${tobrief}</b> εκπρόσωποι προς ενημέρωση</span><span><b>${Object.keys(reps).length}</b> εκπρόσωποι</span></div>
 <form class="card filters vfilters" id="flt"><input name="q" value="${esc(query.q || '')}" placeholder="Αναζήτηση Στοάς, αριθμού, τόπου, εκπροσώπου…">
-<select name="prov"><option value="">Όλες οι Επαρχίες</option>${provincialChoices().map((p) => `<option${sel('prov', p)}>${esc(p)}</option>`).join('')}</select>
+<select name="prov"><option value="">Όλες οι Επαρχίες (${sumAll.declared}/${sumAll.total} Στοές με ημερομηνία)</option>${summary.filter((o) => o.prov !== '—').map((o) => `<option value="${esc(o.prov)}"${sel('prov', o.prov)}>${esc(o.prov)} — ${o.declared}/${o.total} δήλωσαν</option>`).join('')}</select>
 <select name="rep"><option value="">Όλοι οι εκπρόσωποι</option><option value="__none"${sel('rep', '__none')}>Χωρίς εκπρόσωπο</option>${repsAll().map((r) => `<option value="${r.id}"${sel('rep', r.id)}>${esc(repLabel(r, rm))}</option>`).join('')}</select>
 <select name="notif"><option value="">Όλες οι ενημερώσεις</option><option value="rep"${sel('notif', 'rep')}>Εκπρόσωπος δεν ενημερώθηκε</option><option value="prov"${sel('notif', 'prov')}>Επαρχία δεν ενημερώθηκε</option></select>
 <label><input type="checkbox" name="past"${query.past ? ' checked' : ''}> Παλαιότερες</label><button>Φίλτρο</button></form>${body}`,
@@ -181,8 +221,8 @@ function placeSuggestion(x) {
   if (prev) return prev.location;
   return l && l.orient ? `Τεκτονικόν Μέγαρον ${l.orient}` : '';
 }
-function visitForm(v) {
-  const x = v || {}, rm = rankmap(), val = (k) => esc(x[k] ?? '');
+function visitForm(v, pre = null) {
+  const x = v || pre || {}, rm = rankmap(), val = (k) => esc(x[k] ?? '');
   const provs = provincialChoices();
   return {
     title: v ? 'Επίσκεψη' : 'Νέα επίσκεψη',
@@ -585,9 +625,9 @@ repRoutes['/reps'] = (ctx) => {
 module({
   id: 'visits',
   routes: {
-    '/visits': visitsPage, '/visits/new': () => visitForm(null),
+    '/visits': visitsPage, '/visits/new': ({ query }) => { const l = query.lodge && lodgeByNumber(query.lodge); return visitForm(null, l ? { lodge: l.name, lodge_number: String(l.number), province: l.provincial || '', location: l.meeting_place || '' } : null); },
     '/visits/edit/:id': ({ params }) => { const v = db.get('visits', params.id); return v ? visitForm(v) : '<h1>Δεν βρέθηκε η επίσκεψη</h1>'; },
-    '/visits/import': importPage, '/visits/brief': briefPage, '/visits/notify': notifyPage, '/visits/publish': publishPage, '/visits/publish/compose': publishCompose, '/visits/report': reportPage,
+    '/visits/import': importPage, '/visits/brief': briefPage, '/visits/notify': notifyPage, '/visits/missing': missingPage, '/visits/publish': publishPage, '/visits/publish/compose': publishCompose, '/visits/report': reportPage,
     ...repRoutes, '/reps/ranks': ranksPage,
     '/reps/import': () => ({
       title: 'Επικόλληση εκπροσώπων',

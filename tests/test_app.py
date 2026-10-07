@@ -758,3 +758,27 @@ def test_visit_letter_and_email_to_province_and_grand_master(app):
     assert app.page.input_value('[name=recipient_name]').startswith('ΕπΜΓρ.')
     assert 'Εγκατάσταση Σεβασμίου' in app.page.input_value('[name=subject]') and 'Λίαν Σεβάσμιος Αδ. Ιωάννης Εκπρόσωπος' in app.page.input_value('[name=body]')
     assert 'Με Τεκτονικούς χαιρετισμούς' not in app.page.input_value('[name=body]')
+
+
+def test_province_summary_and_lodges_without_installation_date(app):
+    app.connect_local()
+    app.go('/visits')
+    t = app.text()
+    # Πίνακας 2026–2027: 74 Εγκαταστάσεις, 2 πριν από τον Σεπτέμβριο 2026 → 72 Στοές με ημερομηνία στο τεκτονικό έτος
+    opts = app.page.locator('[name=prov] option').all_inner_texts()
+    assert any(o.startswith('ΕπΜΣτ. Αθηνών — ') and 'δήλωσαν' in o for o in opts)
+    assert 'Σύνοψη Επαρχιών' in t and 'Στοές χωρίς ημερομηνία (' in t
+    s = app.page.evaluate("async () => { const m = await import('./modules/visits.js'); return m.provinceSummary(m.masonicYear('2026-10-07')); }")
+    tot = sum(o['total'] for o in s); dec = sum(o['declared'] for o in s)
+    assert tot == 82 and dec == 72  # 86 Στοές − 4 ανενεργές
+    ath = [o for o in s if o['prov'] == 'ΕπΜΣτ. Αθηνών'][0]
+    assert {l['number'] for l in ath['missing']} >= {'17', '108', '105'}
+    app.click('⚠ Στοές χωρίς ημερομηνία')
+    app.page.wait_for_url('**/#/visits/missing*')
+    assert 'ΑΝΑΓΕΝΝΗΣΙΣ' in app.text() and 'Τεκτονικό έτος 2026–2027' in app.text()
+    app.page.select_option('#mProv', 'ΕπΜΣτ. Αθηνών')
+    app.page.wait_for_url('**prov=*')
+    assert all('Αθηνών' in h for h in app.page.locator('main h2').all_inner_texts())
+    app.page.locator('a:has-text("+ Ημερομηνία")').first.click()
+    app.page.wait_for_selector('#vf')
+    assert app.page.input_value('#vNo')
