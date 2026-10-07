@@ -770,7 +770,7 @@ def test_province_summary_and_lodges_without_installation_date(app):
     assert 'Σύνοψη Επαρχιών' in t and 'Στοές χωρίς ημερομηνία (' in t
     s = app.page.evaluate("async () => { const m = await import('./modules/visits.js'); return m.provinceSummary(m.masonicYear('2026-10-07')); }")
     tot = sum(o['total'] for o in s); dec = sum(o['declared'] for o in s)
-    assert tot == 82 and dec == 72  # 86 Στοές − 4 ανενεργές
+    assert tot == 82 and dec == 73  # 86 Στοές − 4 ανενεργές
     ath = [o for o in s if o['prov'] == 'ΕπΜΣτ. Αθηνών'][0]
     assert {l['number'] for l in ath['missing']} >= {'17', '108', '105'}
     app.click('⚠ Στοές χωρίς ημερομηνία')
@@ -782,3 +782,14 @@ def test_province_summary_and_lodges_without_installation_date(app):
     app.page.locator('a:has-text("+ Ημερομηνία")').first.click()
     app.page.wait_for_selector('#vf')
     assert app.page.input_value('#vNo')
+
+
+def test_installation_69_moved_to_2027_in_existing_database(app):
+    gh = MockGitHub()
+    gh.ref = gh.put_commit(gh.put_tree({}), [], 'init')
+    gh.external_commit('data/visits.json', json.dumps([{'id': 1, 'visit_date': '2026-01-04', 'lodge': 'ΑΝΤΙΠΛΟΙΑΡΧΟΣ ΒΛΑΧΑΚΟΣ', 'lodge_number': '69', 'location': '', 'province': '', 'rep_id': None, 'notes': 'Η ημερομηνία δόθηκε ως 04/01/26.'}], ensure_ascii=False))
+    gh.external_commit('data/settings.json', json.dumps({'closing': 'x'}))
+    connect_github(app, gh)
+    app.page.wait_for_selector('.dash')
+    vs = [v for v in gh.read_json('data/visits.json') if v['lodge_number'] == '69']
+    assert [(v['visit_date'], v['notes']) for v in vs] == [('2027-01-04', '')]

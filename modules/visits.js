@@ -32,6 +32,16 @@ db.migrate('installations-2026-2027', async (tx) => {
   }
 });
 
+// Διόρθωση: η Εγκατάσταση της 69 Αντιπλοίαρχος Βλαχάκος είναι 04/01/2027 (όχι 2026)
+db.migrate('installation-69-2027', (tx) => {
+  const is69 = (v) => lodgeNoKey(v.lodge_number) === '69';
+  const ok = tx.all('visits').some((v) => is69(v) && v.visit_date === '2027-01-04');
+  for (const v of tx.all('visits').filter((v) => is69(v) && v.visit_date === '2026-01-04')) {
+    if (ok) tx.remove('visits', v.id); // υπάρχει ήδη η σωστή
+    else tx.update('visits', v.id, { visit_date: '2027-01-04', notes: String(v.notes || '').replace(/\s*·?\s*Η ημερομηνία δόθηκε ως 04\/01\/26\.?/, '').trim() });
+  }
+});
+
 // Εφάπαξ: ο Μέγας Διδάσκαλος στους εκπροσώπους (για να ορίζεται και ο ίδιος σε μια Εγκατάσταση)
 db.migrate('reps-grand-master-2026-10', (tx) => {
   if (tx.all('reps').some((r) => baseOffices(r).includes('Μέγας Διδάσκαλος') && !isPast(r))) return;
