@@ -150,7 +150,25 @@ export async function render() {
   if (f && matchMedia('(min-width:800px)').matches) f.focus();
 }
 
+// Γκρι πρόταση μέσα σε κενό πεδίο → πραγματικό κείμενο με Tab (ή διπλό πάτημα στο κινητό).
+// Ισχύει για data-suggest και για υποδείξεις-τιμές (π.χ. «2026 - 2027»)· όχι για παραδείγματα «π.χ. …» ή οδηγίες αναζήτησης.
+const NOT_VALUE = /^(π\.χ\.|🔎|—)|αναζήτηση|προαιρετικ|πολλά με|γράψτε|επιλέξτε|πληκτρολογ|(…|\.\.\.)\s*$|^https?:|ghp_/i;
+export function suggestion(el) {
+  if (!el || !el.matches || !el.matches('input, textarea') || el.value || el.readOnly || el.disabled) return '';
+  if (/^(checkbox|radio|file|date|search|password|hidden|number)$/.test(el.type) || el.closest('.filters, .msearch, .picker') || el.name === 'q') return '';
+  const ph = el.dataset.suggest || el.getAttribute('placeholder') || '';
+  return el.dataset.suggest ? ph : NOT_VALUE.test(ph.trim()) || /[,;]/.test(ph) ? '' : ph.trim();
+}
+function acceptSuggestion(el) {
+  const v = suggestion(el);
+  if (!v) return false;
+  el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true }));
+  return true;
+}
+
 export function start() {
+  document.addEventListener('keydown', (e) => { if (e.key === 'Tab' && !e.shiftKey && !e.altKey && !e.ctrlKey) acceptSuggestion(e.target); });
+  document.addEventListener('dblclick', (e) => acceptSuggestion(e.target));
   window.addEventListener('hashchange', render);
   db.on((ev) => {
     const p = document.getElementById('syncPill');

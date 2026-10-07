@@ -722,3 +722,39 @@ def test_grand_officers_as_representatives_assigned_per_installation(app):
     app.page.wait_for_selector('text=Ορίστηκε: Σεβασμιώτατος Αδ. Μπενετάτος')
     v = app.page.evaluate(f"async () => {{ const m = await import('./core/store.js'); return m.db.get('visits', {vid}); }}")
     assert v['rep_id'] == by['Μπενετάτος']['id']
+
+
+def test_visit_letter_and_email_to_province_and_grand_master(app):
+    app.connect_local()
+    app.page.evaluate("async () => { const m = await import('./core/store.js'); await m.db.save('x', (tx) => tx.replace('visits', [])); }")
+    app.go('/reps/new').fill(name='Ιωάννης', surname='Εκπρόσωπος', office='Μέγας Καγκελάριος', email='rep@example.com')
+    app.click('💾 Αποθήκευση')
+    app.wait_saved()
+    d = (date.today() + timedelta(days=20)).isoformat()
+    app.go('/visits/new')
+    app.page.fill('[name=visit_date]', d)
+    app.page.fill('#vLodge', '32 · ΔΙΩΝΗ')
+    app.page.dispatch_event('#vLodge', 'input')
+    # γκρι πρόταση τόπου → πραγματικό κείμενο με Tab
+    app.page.focus('#vLoc')
+    app.page.keyboard.press('Tab')
+    assert app.page.input_value('#vLoc') == 'Τεκτονικόν Μέγαρον Ιωαννίνων'
+    app.page.focus('[name=notes]')
+    app.page.keyboard.press('Tab')
+    assert app.page.input_value('[name=notes]') == ''  # χωρίς πρόταση, μένει κενό
+    rid = app.page.locator('[name=rep_id] option', has_text='Εκπρόσωπος').first.get_attribute('value')
+    app.page.select_option('[name=rep_id]', rid)
+    app.click('✉ Email ΕπΜΓρ. & ΜΔ')
+    app.page.wait_for_selector('#cf')
+    assert app.page.input_value('[name=to]') and app.page.input_value('[name=cc]') == 'i.benetatos@gmail.com'
+    body = app.page.input_value('[name=body]')
+    assert 'ΔΙΩΝΗ' in body and 'Λίαν Σεβάσμιος Αδ. Ιωάννης Εκπρόσωπος' in body
+    vs = app.page.evaluate("async () => { const m = await import('./core/store.js'); return m.db.all('visits'); }")
+    assert len(vs) == 1 and vs[0]['rep_id'] == int(rid) and vs[0]['location'] == 'Τεκτονικόν Μέγαρον Ιωαννίνων'
+    app.go(f"/visits/edit/{vs[0]['id']}")
+    app.click('📄 Επιστολή προς ΕπΜΓρ. & ΜΔ')
+    app.page.wait_for_selector('#lf')
+    assert 'i.benetatos@gmail.com' in app.page.input_value('[name=recipient_email]')
+    assert app.page.input_value('[name=recipient_name]').startswith('ΕπΜΓρ.')
+    assert 'Εγκατάσταση Σεβασμίου' in app.page.input_value('[name=subject]') and 'Λίαν Σεβάσμιος Αδ. Ιωάννης Εκπρόσωπος' in app.page.input_value('[name=body]')
+    assert 'Με Τεκτονικούς χαιρετισμούς' not in app.page.input_value('[name=body]')

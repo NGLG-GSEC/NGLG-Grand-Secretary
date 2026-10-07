@@ -8,7 +8,7 @@ import { esc, fold, today, fmtDate, dayStr, parseIso, sortBy, download, EMAIL_RE
 import { senderBanner, copyText } from '../core/mail.js';
 import { reportPaper, printPaper } from '../core/paper.js';
 import { attachPicker, contactItems, memberItems, noContact } from '../core/pickers.js';
-import { provincialChoices, provinceByShort } from './provinces.js';
+import { provincialChoices, provinceByShort, provinceRoles } from './provinces.js';
 import { lodgesAll, lodgeNoKey, lodgeByNumber, cleanLodgeName } from './lodges.js';
 import { DEC_MAP, precedenceOf } from './decree-catalog.js';
 import { parseRank, matchName } from './epeteirida-import.js';
@@ -19,7 +19,7 @@ const REP_DEFAULT_RANKS = { 'Μέγας Διδάσκαλος': 3, 'Αναπλη�
   'Πρώτος Μέγας Επόπτης': 2, 'Δεύτερος Μέγας Επόπτης': 2, 'Μέγας Καγκελάριος': 1, 'Αναπληρωτής Μέγας Καγκελάριος': 1, 'Μέγας Γραμματέας': 1, 'Αναπληρωτής Μέγας Γραμματέας': 1, 'Μέγας Ευχέτης': 1,
   'Μέγας Τελετάρχης': 1, 'Μέγας Επόπτης Έργων': 1, 'Μέγας Ξιφοφόρος': 1, 'Μέγας Επιθεωρητής': 1, 'Πρόεδρος Συμβουλίου Μεγάλης Φιλανθρωπίας': 1, 'Πρόεδρος Μεγάλης Φιλανθρωπίας': 1 };
 const PUB_SUBJECT = 'Ενημέρωση Εκπροσώπησης ΜΔ στις Εγκαταστάσεις Σεβασμίων Σ. Στοών της Επαρχίας σας';
-db.defaultSettings({ visits_signer_name: 'Πσεβ. Αδ. Δημήτριος Σκιαδόπουλος', visits_signer_title: 'Μέγας Γραμματεύς', visits_rankmap: '{}' });
+db.defaultSettings({ gm_email: 'i.benetatos@gmail.com', visits_signer_name: 'Πσεβ. Αδ. Δημήτριος Σκιαδόπουλος', visits_signer_title: 'Μέγας Γραμματεύς', visits_rankmap: '{}' });
 
 // Εφάπαξ: Πίνακας Εγκαταστάσεων Σεβασμίων 2026–2027 (seed/installations-2026-2027.json)· ό,τι υπάρχει ήδη (ίδια Στοά, ίδια ημερομηνία) δεν διπλασιάζεται.
 db.migrate('installations-2026-2027', async (tx) => {
@@ -173,6 +173,14 @@ function visitsPage({ query }) {
   };
 }
 
+// Πρόταση τόπου: τόπος συνεδριάσεων της Στοάς, αλλιώς ο τόπος της προηγούμενης Εγκατάστασής της, αλλιώς το Τεκτονικόν Μέγαρον της Ανατολής της
+function placeSuggestion(x) {
+  const l = x.lodge_number && lodgeByNumber(x.lodge_number);
+  if (l && l.meeting_place) return l.meeting_place;
+  const prev = x.lodge_number && sortBy(db.all('visits').filter((o) => o.id !== x.id && lodgeNoKey(o.lodge_number) === lodgeNoKey(x.lodge_number) && o.location), (o) => o.visit_date).at(-1);
+  if (prev) return prev.location;
+  return l && l.orient ? `Τεκτονικόν Μέγαρον ${l.orient}` : '';
+}
 function visitForm(v) {
   const x = v || {}, rm = rankmap(), val = (k) => esc(x[k] ?? '');
   const provs = provincialChoices();
@@ -184,24 +192,31 @@ ${v ? `<p>${repNotified(v) ? `<span class="vok">✓ Εκπρόσωπος ενη�
 <div><label>Αριθμός Στοάς</label><input name="lodge_number" id="vNo" value="${val('lodge_number')}" placeholder="π.χ. 32"></div>
 <div class="full"><label>Στοά</label><input name="lodge" id="vLodge" list="vLodges" value="${val('lodge')}" required placeholder="Αριθμός ή όνομα — επιλέξτε από τις Συμβολικές Στοές">
 <datalist id="vLodges">${lodgesAll(true).map((l) => `<option value="${esc(l.number)} · ${esc(l.name)}">`).join('')}</datalist><small class="muted">Με την επιλογή συμπληρώνονται αριθμός, Επαρχία και τόπος.</small></div>
-<div class="full"><label>Τόπος</label><input name="location" id="vLoc" value="${val('location')}" placeholder="Τεκτονικόν Μέγαρον …"></div>
+<div class="full"><label>Τόπος</label><input name="location" id="vLoc" value="${val('location')}" placeholder="${esc(placeSuggestion(x) || 'Τεκτονικόν Μέγαρον …')}"${placeSuggestion(x) ? ` data-suggest="${esc(placeSuggestion(x))}"` : ''}></div>
 <div><label>Επαρχιακή Μεγάλη Στοά</label><select name="province" id="vProv"><option value="">—</option>${[...provs, ...(x.province && !provs.includes(x.province) ? [x.province] : [])].map((p) => `<option${p === x.province ? ' selected' : ''}>${esc(p)}</option>`).join('')}</select></div>
 <div><label>Εκπρόσωπος</label><select name="rep_id"><option value="">— Χωρίς εκπρόσωπο —</option>${repOptions(x.rep_id, rm)}</select></div>
 <div class="full"><label>Σημειώσεις</label><input name="notes" value="${val('notes')}"></div></div>
-<div class="toolbar"><button class="btn primary">💾 Αποθήκευση</button>${v && v.rep_id ? `<a class="btn" href="#/visits/brief?ids=${v.id}">✉ Ενημέρωση εκπροσώπου</a>` : ''}<a class="btn" href="#/visits">Άκυρο</a>${v ? '<button type="button" class="btn danger" data-act="del">Διαγραφή</button>' : ''}</div></form>`,
+<div class="toolbar"><button class="btn primary">💾 Αποθήκευση</button><button class="btn" data-next="brief">✉ Ενημέρωση εκπροσώπου</button>
+<button class="btn" data-next="notify">✉ Email ΕπΜΓρ. & ΜΔ</button><button class="btn" data-next="letter">📄 Επιστολή προς ΕπΜΓρ. & ΜΔ</button><a class="btn" href="#/visits">Άκυρο</a>${v ? '<button type="button" class="btn danger" data-act="del">Διαγραφή</button>' : ''}</div></form>`,
     mount(el) {
       const L = el.querySelector('#vLodge');
       const fill = () => { const m = /^\s*(\d{1,4}|Φ)\s*·\s*(.+)$/.exec(L.value); if (!m) return; const l = lodgeByNumber(m[1]); L.value = m[2]; el.querySelector('#vNo').value = m[1];
-        if (l && l.provincial) el.querySelector('#vProv').value = l.provincial; if (l && l.meeting_place && !el.querySelector('#vLoc').value) el.querySelector('#vLoc').value = l.meeting_place; };
+        if (l && l.provincial) el.querySelector('#vProv').value = l.provincial; if (l && l.meeting_place && !el.querySelector('#vLoc').value) el.querySelector('#vLoc').value = l.meeting_place;
+        const sg = placeSuggestion({ lodge_number: m[1] }), loc = el.querySelector('#vLoc'); if (sg) { loc.placeholder = sg; loc.dataset.suggest = sg; } };
       L.addEventListener('change', fill); L.addEventListener('input', fill);
-      onSubmit(el.querySelector('#vf'), async (d) => {
+      onSubmit(el.querySelector('#vf'), async (d, sub) => {
         if (!parseIso(d.visit_date)) throw new Error('Συμπληρώστε έγκυρη ημερομηνία.');
         const row = { visit_date: d.visit_date, lodge: cleanVisit(d.lodge), lodge_number: d.lodge_number.trim(), location: d.location.trim(), province: d.province, rep_id: Number(d.rep_id) || null, notes: d.notes.trim() };
         if (!row.lodge) throw new Error('Συμπληρώστε τη Στοά.');
         const l = row.lodge_number && lodgeByNumber(row.lodge_number);
         if (l) { row.province ||= l.provincial || ''; row.location ||= l.meeting_place || ''; }
-        await db.save(v ? 'Επίσκεψη: ενημέρωση' : 'Νέα επίσκεψη', (tx) => (v ? tx.update('visits', v.id, row) : tx.insert('visits', row)));
-        flash('Η επίσκεψη αποθηκεύτηκε.'); go('/visits');
+        const next = sub && sub.dataset.next;
+        if (next === 'brief' && !row.rep_id) throw new Error('Ορίστε πρώτα εκπρόσωπο.');
+        const id = await db.save(v ? 'Επίσκεψη: ενημέρωση' : 'Νέα επίσκεψη', (tx) => (v ? tx.update('visits', v.id, row) : tx.insert('visits', row)).id);
+        flash('Η επίσκεψη αποθηκεύτηκε.');
+        if (next === 'brief' || next === 'notify') return go(`/visits/${next}`, { ids: String(id) });
+        if (next === 'letter') return go('/letters/new', provinceLetter(db.get('visits', id)));
+        go('/visits');
       });
       bind(el, { async del() { if (!confirmDo('Διαγραφή της επίσκεψης;')) return; await db.save('Διαγραφή επίσκεψης', (tx) => tx.remove('visits', v.id)); flash('Η επίσκεψη διαγράφηκε.'); go('/visits'); } });
     },
@@ -225,12 +240,12 @@ function parseVisitLine(line) {
 }
 
 // Σύνθεση email: ο χρήστης βλέπει/διορθώνει, ανοίγει στο Gmail και σημειώνει «στάλθηκε».
-function composePage(title, msg, { onSent, hint = '', attach = null, back = '#/visits' }) {
+function composePage(title, msg, { onSent, hint = '', attach = null, back = '#/visits', kind = 'general' }) {
   return {
     title,
-    html: `<p><a href="${back}">← Επιστροφή</a></p><h1>${esc(title)}</h1>${senderBanner('general')}${hint ? `<div class="card">${esc(hint)}</div>` : ''}
+    html: `<p><a href="${back}">← Επιστροφή</a></p><h1>${esc(title)}</h1>${senderBanner(kind)}${hint ? `<div class="card">${esc(hint)}</div>` : ''}
 <form class="card" id="cf"><label>🔎 Παραλήπτης από τον Κατάλογο</label><input id="cPick" placeholder="Επαρχία, Στοά, μέλος…" autocomplete="off">
-<label style="margin-top:10px">Προς</label><input name="to" value="${esc(msg.to)}" required><label style="margin-top:10px">Κρυφή κοινοποίηση (Bcc)</label><input name="bcc" value="${esc(msg.bcc || '')}" placeholder="προαιρετικό">
+<label style="margin-top:10px">Προς</label><input name="to" value="${esc(msg.to)}" required><label style="margin-top:10px">Κοινοποίηση (Cc)</label><input name="cc" value="${esc(msg.cc || '')}" placeholder="προαιρετικό"><label style="margin-top:10px">Κρυφή κοινοποίηση (Bcc)</label><input name="bcc" value="${esc(msg.bcc || '')}" placeholder="προαιρετικό">
 <label style="margin-top:10px">Θέμα</label><input name="subject" value="${esc(msg.subject)}" required><label style="margin-top:10px">Κείμενο</label><textarea name="body" style="min-height:340px">${esc(msg.body)}</textarea>
 ${attach ? `<p><button type="button" class="btn" data-act="ics">📅 Λήψη ${esc(attach.name)} (πρόσκληση ημερολογίου)</button> <small class="muted">Επισυνάψτε το στο email.</small></p>` : ''}
 <div class="toolbar" style="margin-top:10px"><button type="button" class="btn primary" data-act="gmail">✉ Άνοιγμα στο Gmail</button><button type="button" class="btn" data-act="device">📱 Εφαρμογή email</button><button type="button" class="btn" data-act="copy">📋 Αντιγραφή κειμένου</button>
@@ -238,7 +253,7 @@ ${attach ? `<p><button type="button" class="btn" data-act="ics">📅 Λήψη ${
     async mount(el) {
       const f = el.querySelector('#cf');
       const { gmailUrl, mailtoUrl } = await import('../core/mail.js');
-      const cur = () => ({ to: f.to.value, bcc: f.bcc.value, subject: f.subject.value, body: f.body.value, kind: 'general' });
+      const cur = () => ({ to: f.to.value, cc: f.cc.value, bcc: f.bcc.value, subject: f.subject.value, body: f.body.value, kind });
       attachPicker(el.querySelector('#cPick'), contactItems, (c) => { if (c.email) f.to.value = [...splitEmails(f.to.value), c.email].join(', '); });
       bind(el, {
         gmail: () => window.open(gmailUrl(cur()), '_blank', 'noopener'),
@@ -262,6 +277,28 @@ function briefPage({ query }) {
     hint: email ? '' : `Ο ${r.surname} ${r.name} δεν έχει email· συμπληρώστε το εδώ ή στην καρτέλα «Εκπρόσωποι».`, attach: { name: c.icsName, data: c.ics },
     onSent: async () => { await markVisits(c.visits.map((v) => v.id), 'rep', r.id); flash(`Σημειώθηκε η ενημέρωση του ${r.surname} ${r.name}.`); go('/visits'); },
   });
+}
+
+// Μία Εγκατάσταση → Επαρχιακός Μέγας Γραμματέας (Προς) και Μέγας Διδάσκαλος (Κοιν.)
+function provinceRecipients(v) {
+  const p = provinceByShort(v.province || ''), gs = p ? provinceRoles(p)[1] : null;
+  return { p, to: gs ? gs.email : '', toName: gs ? gs.addressee : '', cc: String(db.setting('gm_email') || '').trim() };
+}
+const oneSubject = (v) => `Εκπροσώπηση ΜΔ — Εγκατάσταση Σεβασμίου ${lodgeRef(v)} — ${dayStr(v.visit_date)}`;
+function notifyPage({ query }) {
+  const v = db.get('visits', ids(query.ids)[0]);
+  if (!v) return '<h1>Δεν βρέθηκε η επίσκεψη</h1>';
+  const { p, to, cc } = provinceRecipients(v);
+  return composePage('Ενημέρωση Επαρχίας & Μεγάλου Διδασκάλου', { to, cc, subject: oneSubject(v), body: provinceMail(p, [v], []) }, {
+    hint: to ? '' : 'Η Επαρχία δεν έχει email Γραμματείας (Μητρώα → Επαρχιακές Μεγάλες Στοές) — συμπληρώστε το εδώ.', back: `#/visits/edit/${v.id}`, kind: 'official',
+    onSent: async () => { await markVisits([v.id], 'prov'); flash('Σημειώθηκε η ενημέρωση της Επαρχίας.'); go(`/visits/edit/${v.id}`); },
+  });
+}
+// Επιστολή (με αριθμό πρωτοκόλλου) — παράμετροι για τη «Νέα Επιστολή»
+export function provinceLetter(v) {
+  const { p, to, toName, cc } = provinceRecipients(v);
+  const body = provinceMail(p, [v], []).replace(signature(), '').trim();
+  return { to_name: toName || (p || {}).full_title || v.province || '', to_email: [to, cc].filter(Boolean).join(', '), subject: oneSubject(v), body };
 }
 
 const pubRows = (prov, frm, to) => visitsAll().filter((v) => v.province === prov && (!frm || v.visit_date >= frm) && (!to || v.visit_date <= to));
@@ -550,7 +587,7 @@ module({
   routes: {
     '/visits': visitsPage, '/visits/new': () => visitForm(null),
     '/visits/edit/:id': ({ params }) => { const v = db.get('visits', params.id); return v ? visitForm(v) : '<h1>Δεν βρέθηκε η επίσκεψη</h1>'; },
-    '/visits/import': importPage, '/visits/brief': briefPage, '/visits/publish': publishPage, '/visits/publish/compose': publishCompose, '/visits/report': reportPage,
+    '/visits/import': importPage, '/visits/brief': briefPage, '/visits/notify': notifyPage, '/visits/publish': publishPage, '/visits/publish/compose': publishCompose, '/visits/report': reportPage,
     ...repRoutes, '/reps/ranks': ranksPage,
     '/reps/import': () => ({
       title: 'Επικόλληση εκπροσώπων',
