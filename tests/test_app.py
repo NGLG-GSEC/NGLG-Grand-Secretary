@@ -687,3 +687,38 @@ def test_letter_word_and_digital_form(app, tmp_path):
     app.page.wait_for_selector('#lf')
     assert app.page.input_value('[name=subject]') == 'Δοκιμή Word' and app.page.input_value('[name=recipient_email]') == 'test@example.com'
     app.errors.clear()
+
+
+def test_grand_officers_as_representatives_assigned_per_installation(app):
+    app.connect_local()
+    paste = ('Ονοματεπώνυμο\tΒαθμός Μεγ. Αξιωματικού\tΔιάταγμα διορισμού\tΈτος\tΕν ενεργεία αξίωμα 2026\n'
+             'Δοκιμάκος Κωνσταντίνος\tMΣημ\t474\t2025\tΜέγας Σημαιοφόρος 502/2026\n'
+             "Τεστάκης Άγγελος\tΠρΒ'ΜΕπ\t475\t2025\tΑν.Μεγ.Τελετάρχης 502/2026\n"
+             'Πρότυπος Δημήτριος\tΜεγ Α\'Επ\t502\t2026\tΑ\' Μέγας Επόπτης 502/2026\n'
+             'Υπόδειγμα Στυλιανός\tΠρΜΔ\t\t2014\tΠρΣΓΥ 502/2026\n')
+    app.go('/reps/import')
+    app.page.fill('[name=text]', paste)
+    app.page.locator('#rif button').click()
+    app.page.wait_for_selector('text=Εκπρόσωποι: 4 νέοι')
+    reps = app.page.evaluate("async () => { const m = await import('./core/store.js'); return m.db.all('reps'); }")
+    by = {r['surname']: r for r in reps}
+    assert by['Μπενετάτος']['office'] == 'Μέγας Διδάσκαλος'  # ο ΜΔ προστίθεται αυτόματα
+    assert by['Τεστάκης']['office'] == 'Αναπληρωτής Μέγας Τελετάρχης · Πρώην Δεύτερος Μέγας Επόπτης' and by['Τεστάκης']['year'] == '2026'
+    assert by['Υπόδειγμα']['office'].startswith('Πρόεδρος του Συμβουλίου Γενικών Υποθέσεων')
+    # ξανά: ενημέρωση, όχι διπλοεγγραφές
+    app.go('/reps/import')
+    app.page.fill('[name=text]', paste)
+    app.page.locator('#rif button').click()
+    app.page.wait_for_selector('text=Εκπρόσωποι: 0 νέοι, 4 ενημερώθηκαν')
+    # σε κάθε Εγκατάσταση: ΜΔ πρώτος, μετά κατά προβάδισμα
+    app.go('/visits')
+    sel = app.page.locator('.vrepsel').first
+    labels = sel.locator('option').all_inner_texts()
+    assert labels[1].startswith('Σεβασμιώτατος Αδ. Μπενετάτος')
+    assert labels[2].startswith('Σεβασμιώτατος Αδ. Υπόδειγμα')  # Πρώην ΜΔ: 3ος στην τάξη προβαδίσματος
+    assert labels[3].startswith('Πανσεβάσμιος Αδ. Πρότυπος') and labels[4].startswith('Πανσεβάσμιος Αδ. Τεστάκης')
+    vid = sel.get_attribute('data-id')
+    sel.select_option(label=labels[1])
+    app.page.wait_for_selector('text=Ορίστηκε: Σεβασμιώτατος Αδ. Μπενετάτος')
+    v = app.page.evaluate(f"async () => {{ const m = await import('./core/store.js'); return m.db.get('visits', {vid}); }}")
+    assert v['rep_id'] == by['Μπενετάτος']['id']

@@ -10,6 +10,8 @@ import { reportPaper, printPaper } from '../core/paper.js';
 import { attachPicker, contactItems, memberItems, noContact } from '../core/pickers.js';
 import { provincialChoices, provinceByShort } from './provinces.js';
 import { lodgesAll, lodgeNoKey, lodgeByNumber, cleanLodgeName } from './lodges.js';
+import { DEC_MAP, precedenceOf } from './decree-catalog.js';
+import { parseRank, matchName } from './epeteirida-import.js';
 
 const MONTHS = ['Ιανουάριος', 'Φεβρουάριος', 'Μάρτιος', 'Απρίλιος', 'Μάιος', 'Ιούνιος', 'Ιούλιος', 'Αύγουστος', 'Σεπτέμβριος', 'Οκτώβριος', 'Νοέμβριος', 'Δεκέμβριος'];
 export const REP_RANKS = ['Σεβάσμιος Αδ.', 'Λίαν Σεβάσμιος Αδ.', 'Πανσεβάσμιος Αδ.', 'Σεβασμιώτατος Αδ.'];
@@ -30,6 +32,13 @@ db.migrate('installations-2026-2027', async (tx) => {
   }
 });
 
+// Εφάπαξ: ο Μέγας Διδάσκαλος στους εκπροσώπους (για να ορίζεται και ο ίδιος σε μια Εγκατάσταση)
+db.migrate('reps-grand-master-2026-10', (tx) => {
+  if (tx.all('reps').some((r) => baseOffices(r).includes('Μέγας Διδάσκαλος') && !isPast(r))) return;
+  const full = String(tx.setting('grand_master_name') || 'Σεβτ. Αδ. Ιωάννης Μπενετάτος').replace(/^.*?Αδ\.\s*/, '').trim().split(/\s+/);
+  tx.insert('reps', { name: full.slice(0, -1).join(' '), surname: full.at(-1) || '', rep_rank: 'Σεβασμιώτατος Αδ.', office: 'Μέγας Διδάσκαλος', year: '', email: '', mobile: '', member_id: null, notes: '', ext_id: '' });
+});
+
 // ---------------------------------------------------------------- δεδομένα
 export const repsAll = () => sortBy(db.all('reps'), (r) => fold(r.surname), (r) => fold(r.name));
 export const visitsAll = () => sortBy(db.all('visits'), 'visit_date', (v) => Number(v.lodge_number) || 0);
@@ -41,8 +50,14 @@ export function repRank(r, rm = rankmap()) {
   if (!r) return '';
   if (REP_RANKS.includes(r.rep_rank)) return r.rep_rank;
   const os = baseOffices(r);
-  return os.length ? REP_RANKS[Math.max(...os.map((o) => rm[o] ?? REP_DEFAULT_RANKS[o] ?? 0))] : '';
+  return os.length ? REP_RANKS[Math.max(...os.map((o) => rm[o] ?? REP_DEFAULT_RANKS[o] ?? HON_IDX[(DEC_MAP[o] || {}).hon_short] ?? EXTRA_RANKS[o] ?? 0))] : '';
 }
+const HON_IDX = { 'Σεβ. Αδ.': 0, 'ΛΣεβ. Αδ.': 1, 'Πσεβ. Αδ.': 2, 'Σεβτ. Αδ.': 3 };
+const EXTRA_RANKS = { 'Μέγας Θησαυροφύλαξ': 1, 'Μέγας Επιθεωρητής Περιοχής': 1, 'Αντικαταστάτης Επαρχιακός Μέγας Διδάσκαλος': 2 };
+// Εκπρόσωποι κατά τάξη προβαδίσματος (ο Μέγας Διδάσκαλος πρώτος, μετά οι εν ενεργεία Μεγάλοι Αξιωματικοί, μετά οι Πρώην)
+const repPrec = (r) => Math.min(999, ...String(r.office || '').split(' · ').map((o) => precedenceOf(o.replace(/\s*\(\d{4}\)\s*$/, '')) ?? 999));
+export const repsByPrecedence = () => sortBy(db.all('reps'), repPrec, (r) => fold(r.surname), (r) => fold(r.name));
+const repOptions = (sel, rm = rankmap()) => repsByPrecedence().map((r) => `<option value="${r.id}"${r.id === sel ? ' selected' : ''}>${esc(repLabel(r, rm))} — ${esc(firstOffice(r) || '')}</option>`).join('');
 const firstOffice = (r) => String((r || {}).office || '').split(' · ')[0].replace(/\s*\(\d{4}\)\s*$/, '');
 const isPast = (r) => String(r.office || '').startsWith('Πρώην');
 export const repLabel = (r, rm) => (r ? [repRank(r, rm), r.surname, r.name].filter(Boolean).join(' ') : '');
@@ -107,14 +122,15 @@ function provinceMail(p, rows, missing) {
 }
 
 // ---------------------------------------------------------------- σελίδες
-function visitCard(v, reps) {
+function visitCard(v, reps, opts = '') {
   const d = parseIso(v.visit_date), r = reps[v.rep_id], p = provinceByShort(v.province || '');
   const oks = (repNotified(v) ? `<span class="vok">✓ Εκπρόσωπος ενημερώθηκε ${esc(fmtDate(v.rep_notified_at))}</span>` : '') + (provNotified(v) ? `<span class="vok">✓ Επαρχία ενημερώθηκε ${esc(fmtDate(v.prov_notified_at))}</span>` : '');
   const brief = r ? `<a class="btn small${repNotified(v) ? '' : ' primary'}" href="#/visits/brief?ids=${v.id}">${repNotified(v) ? '↻ Ξανά στον εκπρόσωπο' : '✉ Ενημέρωση εκπροσώπου'}</a>` : '';
   return `<div class="vcard${v.visit_date < today() ? ' past' : ''}"><div class="vdate"><b>${d ? d.getDate() : ''}</b><small>${d ? DAYS[d.getDay()].slice(0, 3) : ''}</small></div>
 <div><div class="vlodge"><a href="#/visits/edit/${v.id}">${esc(v.lodge)}</a>${v.lodge_number ? `<span class="no">Αρ. ${esc(v.lodge_number)}</span>` : ''}</div><div class="vmeta">${esc(dayStr(v.visit_date))} · ${esc(v.location || 'Τόπος —')}</div>
 ${v.notes ? `<div class="vnote">${esc(v.notes)}</div>` : ''}${v.province ? `<span class="vchip">${esc(v.province)}</span>` : ''}${p && p.email ? ` <span class="vmeta">${esc(p.email)}</span>` : ''}${brief || oks ? `<div>${brief} ${oks}</div>` : ''}</div>
-<div class="vrep">${r ? `<b>${esc(repLabel(r))}</b><div class="vmeta">${esc(r.office || '')}</div>` : '<span class="vwarn">Χωρίς εκπρόσωπο</span>'}</div></div>`;
+<div class="vrep">${r ? `<b>${esc(repLabel(r))}</b><div class="vmeta">${esc(r.office || '')}</div>` : '<span class="vwarn">Χωρίς εκπρόσωπο</span>'}
+${v.visit_date >= today() ? `<select class="vrepsel" data-id="${v.id}" aria-label="Εκπρόσωπος ΜΔ"><option value="">${r ? '— Αφαίρεση εκπροσώπου —' : '+ Ορισμός ΜΔ / εκπροσώπου…'}</option>${opts.replace(`value="${v.rep_id}"`, `value="${v.rep_id}" selected`)}</select>` : ''}</div></div>`;
 }
 
 function visitsPage({ query }) {
@@ -129,10 +145,10 @@ function visitsPage({ query }) {
     if (query.notif === 'prov' && provNotified(v)) return false;
     return !ql || fold([v.lodge, v.lodge_number, v.location, v.province, repLabel(reps[v.rep_id], rm)].join(' ')).includes(ql);
   });
-  const groups = {};
+  const groups = {}, opts = repOptions(null, rm);
   for (const v of lst) (groups[v.visit_date.slice(0, 7)] ||= []).push(v);
   const body = !vs.length ? '<div class="card">Δεν υπάρχουν ακόμη επισκέψεις. Πατήστε «Νέα επίσκεψη» ή «Επικόλληση λίστας».</div>' : !lst.length ? '<div class="card">Καμία επίσκεψη δεν ταιριάζει με τα φίλτρα.</div>'
-    : Object.entries(groups).map(([k, items]) => `<section class="vmonth"><h2>${monthTitle(k)} <small>${items.length} ${items.length === 1 ? 'επίσκεψη' : 'επισκέψεις'}</small></h2>${items.map((v) => visitCard(v, reps)).join('')}</section>`).join('');
+    : Object.entries(groups).map(([k, items]) => `<section class="vmonth"><h2>${monthTitle(k)} <small>${items.length} ${items.length === 1 ? 'επίσκεψη' : 'επισκέψεις'}</small></h2>${items.map((v) => visitCard(v, reps, opts)).join('')}</section>`).join('');
   const sel = (n, v) => (String(query[n] || '') === String(v) ? ' selected' : '');
   return {
     title: 'Επισκέψεις Στοών',
@@ -144,7 +160,16 @@ function visitsPage({ query }) {
 <select name="rep"><option value="">Όλοι οι εκπρόσωποι</option><option value="__none"${sel('rep', '__none')}>Χωρίς εκπρόσωπο</option>${repsAll().map((r) => `<option value="${r.id}"${sel('rep', r.id)}>${esc(repLabel(r, rm))}</option>`).join('')}</select>
 <select name="notif"><option value="">Όλες οι ενημερώσεις</option><option value="rep"${sel('notif', 'rep')}>Εκπρόσωπος δεν ενημερώθηκε</option><option value="prov"${sel('notif', 'prov')}>Επαρχία δεν ενημερώθηκε</option></select>
 <label><input type="checkbox" name="past"${query.past ? ' checked' : ''}> Παλαιότερες</label><button>Φίλτρο</button></form>${body}`,
-    mount(el) { onSubmit(el.querySelector('#flt'), (d) => go('/visits', { ...d, past: d.past ? '1' : '' })); },
+    mount(el) {
+      onSubmit(el.querySelector('#flt'), (d) => go('/visits', { ...d, past: d.past ? '1' : '' }));
+      el.querySelectorAll('.vrepsel').forEach((s) => s.addEventListener('change', async () => {
+        const id = Number(s.dataset.id), rid = s.value ? Number(s.value) : null, r = rid && db.get('reps', rid), v = db.get('visits', id);
+        try { await db.save(`Επίσκεψη ${v ? v.lodge : id}: εκπρόσωπος`, (tx) => tx.update('visits', id, { rep_id: rid })); }
+        catch (e) { toast(e.message || String(e), 'error'); return; }
+        toast(r ? `Ορίστηκε: ${repLabel(r)} — ${v ? v.lodge : ''}` : 'Ο εκπρόσωπος αφαιρέθηκε.');
+        go('/visits', query);
+      }));
+    },
   };
 }
 
@@ -161,7 +186,7 @@ ${v ? `<p>${repNotified(v) ? `<span class="vok">✓ Εκπρόσωπος ενη�
 <datalist id="vLodges">${lodgesAll(true).map((l) => `<option value="${esc(l.number)} · ${esc(l.name)}">`).join('')}</datalist><small class="muted">Με την επιλογή συμπληρώνονται αριθμός, Επαρχία και τόπος.</small></div>
 <div class="full"><label>Τόπος</label><input name="location" id="vLoc" value="${val('location')}" placeholder="Τεκτονικόν Μέγαρον …"></div>
 <div><label>Επαρχιακή Μεγάλη Στοά</label><select name="province" id="vProv"><option value="">—</option>${[...provs, ...(x.province && !provs.includes(x.province) ? [x.province] : [])].map((p) => `<option${p === x.province ? ' selected' : ''}>${esc(p)}</option>`).join('')}</select></div>
-<div><label>Εκπρόσωπος</label><select name="rep_id"><option value="">— Χωρίς εκπρόσωπο —</option>${repsAll().map((r) => `<option value="${r.id}"${r.id === x.rep_id ? ' selected' : ''}>${esc(repLabel(r, rm))} — ${esc(r.office || '')}${r.year ? ' (' + esc(r.year) + ')' : ''}</option>`).join('')}</select></div>
+<div><label>Εκπρόσωπος</label><select name="rep_id"><option value="">— Χωρίς εκπρόσωπο —</option>${repOptions(x.rep_id, rm)}</select></div>
 <div class="full"><label>Σημειώσεις</label><input name="notes" value="${val('notes')}"></div></div>
 <div class="toolbar"><button class="btn primary">💾 Αποθήκευση</button>${v && v.rep_id ? `<a class="btn" href="#/visits/brief?ids=${v.id}">✉ Ενημέρωση εκπροσώπου</a>` : ''}<a class="btn" href="#/visits">Άκυρο</a>${v ? '<button type="button" class="btn danger" data-act="del">Διαγραφή</button>' : ''}</div></form>`,
     mount(el) {
@@ -386,6 +411,34 @@ async function repsFromEpeteirida() {
   return added;
 }
 
+// Πίνακας Μεγάλων Αξιωματικών → εκπρόσωποι (τρέχον αξίωμα + «Πρώην …»), ενημέρωση όσων υπάρχουν ήδη
+export async function importGrandOfficerReps(text) {
+  const rows = parsePasted(text).filter((r) => r.some((c) => String(c).trim()));
+  if (rows.length && /ονοματεπ/i.test(rows[0].join(' '))) rows.shift();
+  const items = [], bad = [];
+  for (const r of rows) {
+    const [full, grade, dec, year, cur] = r.map((x) => String(x ?? '').trim());
+    if (!full) continue;
+    const parts = full.replace(/\(.*?\)/g, ' ').trim().split(/\s+/);
+    const now = cur ? parseRank(cur, false) : null, was = grade ? parseRank(grade) : null;
+    if ((cur && !now) || (grade && !was)) bad.push(full);
+    const offices = [...new Set([now && now.office, was && was.office !== (now && now.office) && was.office].filter(Boolean))];
+    const dm = /(\d+)\s*\/\s*(\d{4})/.exec(cur || '');
+    items.push({ full, surname: parts[0], name: parts.slice(1).join(' '), office: offices.join(' · '), year: dm ? dm[2] : /^\d{4}$/.test(year) ? year : '' });
+  }
+  let added = 0, updated = 0;
+  await db.save(`Εκπρόσωποι: πίνακας Μεγάλων Αξιωματικών (${items.length})`, (tx) => {
+    added = updated = 0;
+    for (const x of items) {
+      const ex = tx.find('reps', (r) => fold(r.surname) === fold(x.surname) && fold(r.name).split(' ')[0] === fold(x.name).split(' ')[0]);
+      const mid = matchName(x.full);
+      if (ex) { tx.update('reps', ex.id, { office: x.office || ex.office, year: x.year || ex.year, member_id: ex.member_id || mid || null }); updated++; }
+      else { tx.insert('reps', { name: x.name, surname: x.surname, rep_rank: '', office: x.office, year: x.year, email: '', mobile: '', member_id: mid || null, notes: 'Πίνακας Μεγάλων Αξιωματικών', ext_id: '' }); added++; }
+    }
+  });
+  return { added, updated, bad };
+}
+
 // ---------------------------------------------------------------- εισαγωγή «Επιστολές Γραμματείας» (nglg-lodge-visits/1)
 export function importVisitsPayload(tx, data) {
   if (!data || data.format !== 'nglg-lodge-visits/1') throw new Error('Μη αναγνωρίσιμο αρχείο: αναμένεται εξαγωγή «nglg-lodge-visits/1».');
@@ -501,10 +554,15 @@ module({
     ...repRoutes, '/reps/ranks': ranksPage,
     '/reps/import': () => ({
       title: 'Επικόλληση εκπροσώπων',
-      html: `<h1>Επικόλληση πίνακα εκπροσώπων</h1><form class="card" id="rif"><p>Μία γραμμή ανά πρόσωπο, στήλες: Όνομα · Επώνυμο · Βαθμός · Αξίωμα · Email (προαιρετικό). Αντιγράψτε απευθείας από Excel/Word ή χωρίστε με « ; ».</p>
+      html: `<h1>Επικόλληση πίνακα εκπροσώπων</h1><form class="card" id="rif"><p>Επικολλήστε τον <b>πίνακα Μεγάλων Αξιωματικών</b> από Excel μαζί με τις επικεφαλίδες (Ονοματεπώνυμο · Βαθμός Μεγ. Αξιωματικού · Διάταγμα · Έτος · Εν ενεργεία αξίωμα): κάθε πρόσωπο γίνεται εκπρόσωπος με το τρέχον αξίωμά του (και τον βαθμό «Πρώην …»)· όσοι υπάρχουν ήδη ενημερώνονται.</p>
+<p class="muted">Ή μία γραμμή ανά πρόσωπο, στήλες: Όνομα · Επώνυμο · Βαθμός · Αξίωμα · Email (προαιρετικό), χωρισμένες με « ; ».</p>
 <textarea name="text" required></textarea><div class="toolbar"><button class="btn primary">Εισαγωγή</button><a class="btn" href="#/reps">Άκυρο</a></div></form>`,
       mount(el) {
         onSubmit(el.querySelector('#rif'), async (d, _, form) => {
+          if (/ονοματεπ/i.test(d.text.split('\n')[0]) || /\t.*\t.*\t.*\t/.test(d.text)) {
+            const r = await importGrandOfficerReps(d.text);
+            flash(`Εκπρόσωποι: ${r.added} νέοι, ${r.updated} ενημερώθηκαν${r.bad.length ? `· δεν αναγνωρίστηκαν: ${r.bad.join('· ')}` : ''}.`); go('/reps'); return;
+          }
           const ok = [], bad = [];
           for (const line of d.text.split('\n').map((x) => x.trim()).filter(Boolean)) {
             const p = line.split(/\t|;|\|/).map((x) => x.trim());

@@ -227,3 +227,4 @@ input[type=file]{max-width:100%;min-width:0}
 .portal-card{color:inherit;text-decoration:none}.portal-card:hover{border-color:#b18a43}.portal-card .pill{align-self:flex-start}
 .pill.bad{background:#fde2e2;color:#8a1111}
 .card.nocontact{border-color:#e7a1a1;background:#fff1f1;color:#8a1111;font-weight:600}
+.vrepsel{width:100%;margin-top:6px;font-size:.9rem;padding:4px 6px}
