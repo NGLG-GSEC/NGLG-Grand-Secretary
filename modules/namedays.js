@@ -70,6 +70,16 @@ export function coverage() {
   return { members: ms.length, ok, missing: Object.entries(miss).sort((a, b) => b[1] - a[1]) };
 }
 
+// Κενό διάστημα: ποια ονόματα εορτάζουν τότε (ώστε να φαίνεται ότι ο έλεγχος έγινε) και ποιοι είναι οι επόμενοι εορτάζοντες
+function emptyRange(frm, to) {
+  const d0 = parseIso(frm), d1 = parseIso(to), names = [];
+  for (const it of db.all('namedays')) for (let y = d0.getFullYear(); y <= d1.getFullYear(); y++) { const d = namedayIn(it, y); if (d && d >= d0 && d <= d1) names.push(`${label(it)} (${fmtDate(isoDate(d)).slice(0, 5)})`); }
+  const next = celebrants(addDays(to, 1), addDays(to, 120)).slice(0, 6);
+  return `<div class="card"><b>Κανένα ενεργό μέλος του Μητρώου δεν εορτάζει σε αυτό το διάστημα.</b>
+<p class="muted">Ονόματα που εορτάζουν τότε: ${esc([...new Set(names)].join(', ') || '—')}.</p>
+${next.length ? `<p>Επόμενοι εορτάζοντες: ${next.map((g) => `<a href="#/namedays?frm=${g.date}&to=${g.date}">${esc(fmtDate(g.date).slice(0, 5))} ${esc(g.label)} (${g.members.length})</a>`).join(' · ')}</p>` : ''}</div>`;
+}
+
 export function celebrants(frm, to) {
   const idx = namedayIndex();
   const d0 = parseIso(frm), d1 = parseIso(to), groups = {}, byM = lodgesByMember();
@@ -144,7 +154,7 @@ function listPage({ query }) {
       `<b>${esc(m.surname)}</b> ${esc(m.first_name)}${sent[`${m.id}|${g.date}`] ? ` <span class="vok">✓ Ευχές ${esc(fmtDate(sent[`${m.id}|${g.date}`]))}</span>` : ''}`,
       `<span class="muted">${esc(memberLodgesLine(m.lodges))}</span>`, esc(m.mobile || '—'), esc(greetEmail(m) || '—')]);
     return `${head}<div class="card" style="margin:8px 0"><h3 style="margin-top:0">${esc(g.label)} <small class="muted">${g.members.length} ${g.members.length === 1 ? 'μέλος' : 'μέλη'}${g.movable ? ' · κινητή εορτή' : ''}</small></h3>${table(['✓', 'Ονοματεπώνυμο', 'Στοές', 'Κινητό', 'Email'], rows)}</div>`;
-  }).join('') || '<div class="card">Κανένα μέλος δεν εορτάζει σε αυτό το διάστημα.</div>';
+  }).join('') || emptyRange(frm, to);
   return {
     title: 'Εορτολόγιο',
     html: `<h1>🎉 Εορτολόγιο</h1>${notice(query.msg)}${covHtml}<div class="toolbar"><a class="btn" href="#/namedays/report">Αναφορά ευχών σήμερα (ΜΔ)</a><button class="btn" data-act="xlsx">⬇ Excel εορταζόντων</button><a class="btn" href="#/namedays/calendar">Εορτολόγιο ονομάτων</a></div>

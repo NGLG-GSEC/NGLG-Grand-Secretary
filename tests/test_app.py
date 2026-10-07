@@ -793,3 +793,13 @@ def test_installation_69_moved_to_2027_in_existing_database(app):
     app.page.wait_for_selector('.dash')
     vs = [v for v in gh.read_json('data/visits.json') if v['lodge_number'] == '69']
     assert [(v['visit_date'], v['notes']) for v in vs] == [('2027-01-04', '')]
+
+
+def test_namedays_empty_range_explains(app):
+    app.connect_local()
+    add_member(app, surname='Εορτάζων', first='Δημήτριος', email='d@example.com', mobile='')
+    y = date.today().year
+    app.go(f'/namedays?frm={y}-10-07&to={y}-10-21')
+    t = app.text()
+    assert 'Κανένα ενεργό μέλος' in t and 'Λουκάς (18/10)' in t and 'Σέργιος (07/10)' in t
+    assert 'Επόμενοι εορτάζοντες: 26/10 Δημήτριος (1)' in t
