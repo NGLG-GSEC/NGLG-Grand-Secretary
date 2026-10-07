@@ -146,7 +146,7 @@ def test_visits_reps_and_mails(app):
     app.click('💾 Αποθήκευση')
     app.wait_saved()
     app.go('/visits')
-    app.click('✉ Ενημέρωση εκπροσώπου')
+    app.click('✉ Μόνο εκπρόσωπος')
     app.page.wait_for_selector('#cf')
     assert app.page.input_value('[name=to]') == 'rep@example.com'
     assert 'Λίαν Σεβάσμιε Αδελφέ' in app.page.input_value('[name=body]')
@@ -745,17 +745,21 @@ def test_visit_letter_and_email_to_province_and_grand_master(app):
     assert app.page.input_value('[name=notes]') == ''  # χωρίς πρόταση, μένει κενό
     rid = app.page.locator('[name=rep_id] option', has_text='Εκπρόσωπος').first.get_attribute('value')
     app.page.select_option('[name=rep_id]', rid)
-    app.click('✉ Email ΕπΜΓρ. & ΜΔ')
+    app.click('✉ Email ΕπΜΓρ. & Εκπροσώπου')
     app.page.wait_for_selector('#cf')
-    assert app.page.input_value('[name=to]') and app.page.input_value('[name=cc]') == 'gm@example.com'
+    to = app.page.input_value('[name=to]')
+    assert 'rep@example.com' in to and to.split(',')[0].strip() == 'secretary.pr.pwg.nglgreece@gmail.com' and app.page.input_value('[name=cc]') == 'gm@example.com'
+    assert 'Κοινοποιείται στον Λίαν Σεβάσμιος Αδ. Ιωάννης Εκπρόσωπος' in app.page.input_value('[name=body]')
     body = app.page.input_value('[name=body]')
     assert 'ΔΙΩΝΗ' in body and 'Λίαν Σεβάσμιος Αδ. Ιωάννης Εκπρόσωπος' in body
     vs = app.page.evaluate("async () => { const m = await import('./core/store.js'); return m.db.all('visits'); }")
     assert len(vs) == 1 and vs[0]['rep_id'] == int(rid) and vs[0]['location'] == 'Τεκτονικόν Μέγαρον Ιωαννίνων'
     app.go(f"/visits/edit/{vs[0]['id']}")
-    app.click('📄 Επιστολή προς ΕπΜΓρ. & ΜΔ')
+    app.click('📄 Επιστολή (αρ. πρωτοκόλλου)')
     app.page.wait_for_selector('#lf')
-    assert 'gm@example.com' in app.page.input_value('[name=recipient_email]')
+    em = app.page.input_value('[name=recipient_email]')
+    assert 'gm@example.com' in em and 'rep@example.com' in em
+    assert 'Εκπρόσωπος, Μέγας Καγκελάριος' in app.page.input_value('[name=recipient_name]')
     assert app.page.input_value('[name=recipient_name]').startswith('ΕπΜΓρ.')
     assert 'Εγκατάσταση Σεβασμίου' in app.page.input_value('[name=subject]') and 'Λίαν Σεβάσμιος Αδ. Ιωάννης Εκπρόσωπος' in app.page.input_value('[name=body]')
     assert 'Με Τεκτονικούς χαιρετισμούς' not in app.page.input_value('[name=body]')
@@ -898,3 +902,27 @@ def test_epeteirida_excel_file_and_active_officers_list(app, tmp_path):
     app.page.wait_for_selector('text=Εν ενεργεία Μεγάλοι Αξιωματικοί: 2')
     reps = {r['surname']: r for r in app.page.evaluate("async () => (await import('./core/store.js')).db.all('reps')")}
     assert reps['Νέος']['office'] == 'Πρώην Δεύτερος Μέγας Διάκονος'
+
+
+def test_visit_card_email_and_letter_buttons(app):
+    app.connect_local()
+    app.page.evaluate("async () => { const m = await import('./core/store.js'); await m.db.save('x', (tx) => { tx.replace('visits', []); tx.setting('gm_email', 'gm@example.com'); }); }")
+    app.go('/reps/new').fill(name='Πέτρος', surname='Αντιπρόσωπος', office='Μέγας Ευχέτης', email='rep2@example.com')
+    app.click('💾 Αποθήκευση')
+    app.wait_saved()
+    rid = app.page.evaluate("async () => (await import('./core/store.js')).db.all('reps').find((r) => r.surname === 'Αντιπρόσωπος').id")
+    d = (date.today() + timedelta(days=15)).isoformat()
+    app.page.evaluate(f"async () => {{ const m = await import('./core/store.js'); await m.db.save('x', (tx) => tx.insert('visits', {{ visit_date: '{d}', lodge: 'ΔΙΩΝΗ', lodge_number: '32', location: '', province: 'ΕπΜΣτ. Πελοποννήσου & Δυτικής Ελλάδας', rep_id: {rid}, notes: '' }})); }}")
+    app.go('/visits')
+    app.page.locator('.vcard a:has-text("📄 Επιστολή")').first.click()
+    app.page.wait_for_selector('#lf')
+    assert 'secretary.pr.pwg.nglgreece@gmail.com' in app.page.input_value('[name=recipient_email]') and 'rep2@example.com' in app.page.input_value('[name=recipient_email]')
+    app.click('Αποθήκευση & απόδοση')
+    app.page.wait_for_url('**/#/letters/1')
+    assert 'Αντιπρόσωπος' in app.text() and '20.542_' in app.text()
+    app.go('/visits')
+    app.page.locator('.vcard a:has-text("✉ Email ΕπΜΓρ. & Εκπροσώπου")').first.click()
+    app.page.wait_for_selector('#cf')
+    app.click('✓ Σημείωση ως σταλμένο')
+    app.page.wait_for_url('**/#/visits')
+    assert 'Εκπρόσωπος ενημερώθηκε' in app.text() and 'Επαρχία ενημερώθηκε' in app.text()
