@@ -89,12 +89,10 @@ export function repCandidates() {
   return Object.values(by).map((c) => ({ ...c, offices: sortBy(c.offices, (o) => (/^Πρώην /.test(o) ? 1 : 0), (o) => precedenceOf(o) ?? 999) }));
 }
 const candRep = (c) => ({ name: c.name, surname: c.surname, rep_rank: c.rank || '', office: c.offices.join(' · '), year: c.year, email: '', mobile: '', member_id: c.member_id, notes: 'Από την Επετηρίδα', ext_id: '' });
-// Θέση προβαδίσματος: του εν ενεργεία αξιώματος (αν υπάρχει), αλλιώς η καλύτερη «Πρώην»
-const curPrec = (r) => (isPast(r) ? repPrec(r) : precedenceOf(firstOffice(r)) ?? repPrec(r));
 // Επιλογή εκπροσώπου: ομάδες κατά τάξη προβαδίσματος — ΜΔ, εν ενεργεία, Πρώην, λοιποί
 function repOptions(sel, rm = rankmap()) {
-  const items = [...db.all('reps').map((r) => ({ value: String(r.id), r, prec: curPrec(r), past: isPast(r) })),
-    ...repCandidates().map((c) => { const r = candRep(c); return { value: 'e:' + c.key, r, prec: curPrec(r), past: isPast(r), ep: true }; })];
+  const items = [...db.all('reps').map((r) => ({ value: String(r.id), r, prec: repPrec(r), past: isPast(r) })),
+    ...repCandidates().map((c) => { const r = candRep(c); return { value: 'e:' + c.key, r, prec: repPrec(r), past: isPast(r), ep: true }; })];
   const lab = (it) => `${repLabel(it.r, rm)} — ${firstOffice(it.r) || ''}${it.ep ? ' (Επετηρίδα)' : ''}`;
   const groups = [['Μέγας Διδάσκαλος', (it) => it.prec === 1 && !it.past], ['Εν ενεργεία Μεγάλοι Αξιωματικοί', (it) => it.prec < 999 && !it.past], ['Πρώην Μεγάλοι Αξιωματικοί', (it) => it.prec < 999], ['Λοιποί εκπρόσωποι', () => true]];
   const used = new Set();
