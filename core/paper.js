@@ -33,7 +33,7 @@ export function letterPaper(x) {
   return `<article class="paper">${letterhead()}
 <div class="meta"><div>Αρ. Πρωτ.: <b class="official-number">${esc(x.protocol_no || 'θα δοθεί με την αποθήκευση')}</b></div><div>Ημερομηνία: <b class="official-number">${esc(fmtDate(x.letter_date))}</b></div></div>
 ${x.recipient_name ? `<p><b>Προς:</b> ${esc(x.recipient_name)}</p>` : ''}<p><b>Θέμα:</b> ${esc(x.subject)}</p>
-<div class="body">${linkify(x.body)}</div><p style="margin-top:10mm">${esc(db.setting('closing'))}</p>${signatureBlock(x.signer)}</article>`;
+<div class="body">${linkify(x.body)}</div><p style="margin-top:10mm">${esc(x.closing || db.setting('closing'))}</p>${signatureBlock(x.signer)}</article>`;
 }
 
 // Εκτύπωση: ο τίτλος της σελίδας γίνεται το όνομα του αρχείου PDF.

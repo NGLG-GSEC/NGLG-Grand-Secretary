@@ -971,3 +971,33 @@ def test_single_member_pool_identify_merge_and_relink(app):
     assert [x for x in st['reps'] if x['surname'] == 'Διπλός'][0]['member_id'] == m['id']
     app.go(f"/members/{m['id']}")
     assert 'Εκπρόσωπος ΜΔ: Μέγας Ευχέτης' in app.text() and 'Συγχωνεύθηκαν: Αρ. Μητρώου 80' in app.text()
+
+
+def test_grand_master_official_visit_letter_and_email(app):
+    app.connect_local()
+    app.page.evaluate("""async () => { const {db} = await import('./core/store.js');
+      await db.save('x', (tx) => { tx.replace('visits', []); tx.setting('gm_email', 'gm@example.com');
+        const l = tx.find('lodges', (x) => x.number === '32'); tx.update('lodges', l.id, { secretary_email: 'dioni.secretary@example.com', secretary: 'Αδ. Γραμματέας Δοκιμής' });
+        const gm = tx.find('reps', (r) => r.office === 'Μέγας Διδάσκαλος');
+        tx.insert('visits', { visit_date: '2027-10-16', lodge: 'ΔΙΩΝΗ', lodge_number: '32', location: '', province: 'ΕπΜΣτ. Πελοποννήσου & Δυτικής Ελλάδας', rep_id: gm.id, notes: 'Ώρα 19:30' }); }); }""")
+    app.go('/visits')
+    assert 'Επίσημη επίσκεψη ΜΔ' in app.text()
+    app.page.locator('.vcard a:has-text("✉ Email προς Στοά (Επίσημη Επίσκεψη)")').first.click()
+    app.page.wait_for_selector('#cf')
+    assert app.page.input_value('[name=to]') == 'dioni.secretary@example.com'
+    assert app.page.input_value('[name=cc]') == 'secretary.pr.pwg.nglgreece@gmail.com, gm@example.com'
+    assert app.page.input_value('[name=subject]') == 'Επίσημη Επίσκεψη ΜΔ εις την Στοάν «ΔΙΩΝΗ» υπ’ αριθμ. 32 το Σάββατο, 16 Οκτωβρίου 2027'
+    body = app.page.input_value('[name=body]')
+    for s in ['Αγαπητέ Αδελφέ Γραμματεύ,', 'θα πραγματοποιηθούν το Σάββατο, 16 Οκτωβρίου 2027 και ώρα 19:30, θα παραστεί επισήμως ο Μέγας Διδάσκαλος',
+              'Σεβασμιώτατος Αδελφός Ιωάννης Μπενετάτος', 'Κανόνα 144', 'Κατ’ εντολήν του Μεγάλου Διδασκάλου,\nΜε εκτίμηση και αδελφική αγάπη,', 'Ο Μέγας Γραμματέας']:
+        assert s in body, s
+    assert 'εκπροσωπ' not in body.lower()
+    app.go('/visits')
+    app.page.locator('.vcard a:has-text("📄 Επιστολή")').first.click()
+    app.page.wait_for_selector('#lf')
+    assert app.page.input_value('[name=recipient_name]') == 'τον Γραμματέα της Στοάς «ΔΙΩΝΗ» υπ’ αριθ. 32, Αδ. Γραμματέας Δοκιμής'
+    assert 'Κατ’ εντολήν του Μεγάλου Διδασκάλου,' in app.page.input_value('[name=body]') and 'Ο Μέγας Γραμματέας' not in app.page.input_value('[name=body]')
+    app.click('Αποθήκευση & απόδοση')
+    app.page.wait_for_url('**/#/letters/1')
+    paper = app.text('.paper')
+    assert 'Με εκτίμηση και αδελφική αγάπη,' in paper and 'Με αδελφικούς χαιρετισμούς' not in paper
