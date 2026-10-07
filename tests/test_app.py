@@ -648,3 +648,42 @@ def test_namedays_calendar_completed(app):
     assert 'Πρώτος' in t and 'Μητρώο: 4 ενεργά μέλη · 3 με γνωστή ονομαστική εορτή' in t and 'Ξενόφερτος 1' in t
     cel = app.page.evaluate(f"async () => {{ const n = await import('./modules/namedays.js'); return JSON.stringify(n.celebrants('{y}-01-01', '{y}-12-31')); }}")
     assert 'Δεύτερος' in cel and 'Τρίτος' in cel  # Κωνσταντίνου (21/5) και Πάσχα
+
+
+def test_letter_word_and_digital_form(app, tmp_path):
+    import zipfile
+    app.connect_local()
+    app.go('/letters/new').fill(recipient_name='ΕπΜΓρ. Δοκιμής', recipient_email='test@example.com', subject='Δοκιμή Word', body='Αγαπητοί Αδελφοί,\n\nΠρώτη παράγραφος.\n\nΔεύτερη & <τελευταία>.')
+    app.click('Αποθήκευση & απόδοση')
+    app.page.wait_for_url('**/#/letters/1')
+    with app.page.expect_download() as dl:
+        app.click('⬇ Word (επεξεργασία)')
+    f = tmp_path / 'l.docx'
+    dl.value.save_as(f)
+    assert dl.value.suggested_filename.endswith('Δοκιμή Word.docx')
+    z = zipfile.ZipFile(f)
+    doc = z.read('word/document.xml').decode()
+    assert 'Πρώτη παράγραφος.' in doc and 'Δεύτερη &amp; &lt;τελευταία&gt;.' in doc and 'Θέμα: Δοκιμή Word' in doc and 'Προς: ΕπΜΓρ. Δοκιμής' in doc
+    assert 'word/media/image1.png' in z.namelist() and 'word/media/image2.png' in z.namelist()  # θυρεός, υπογραφή
+    import xml.dom.minidom
+    for n in z.namelist():
+        if n.endswith('.xml') or n.endswith('.rels'):
+            xml.dom.minidom.parseString(z.read(n))
+    # Ψηφιακό Έντυπο με τα στοιχεία της επιστολής
+    app.click('🖋 Ψηφιακό Έντυπο')
+    app.page.wait_for_url('**/diatagma/')
+    app.page.wait_for_function("() => document.getElementById('subject').value === 'Δοκιμή Word'")
+    assert app.page.input_value('#doctype') == 'ΕΠΙΣΤΟΛΗ' and app.page.input_value('#mailto') == 'test@example.com'
+    assert 'Πρώτη παράγραφος.' in app.page.input_value('#p1') and app.page.input_value('#num').startswith('20.')
+    with app.page.expect_download() as dl2:
+        app.page.click('#bWord')
+    assert dl2.value.suggested_filename == 'ΕΠΙΣΤΟΛΗ - Δοκιμή Word.docx'
+    app.page.evaluate("() => { window.open = (u) => { window.__opened = u; return null; }; }")
+    app.page.click('#bMail')
+    u = app.page.evaluate('() => window.__opened')
+    assert 'authuser=grand.secretary%40nglgreece.gr' in u and 'test%40example.com' in u and 'su=%CE%95%CE%A0' in u
+    app.page.click('#bToApp')
+    app.page.wait_for_url('**/#/letters/new*')
+    app.page.wait_for_selector('#lf')
+    assert app.page.input_value('[name=subject]') == 'Δοκιμή Word' and app.page.input_value('[name=recipient_email]') == 'test@example.com'
+    app.errors.clear()

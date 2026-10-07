@@ -68,12 +68,14 @@
   }
   @media (max-width:900px){.grid{grid-template-columns:1fr}.preview-wrap{position:static}}
   @media (max-width:480px){.sheet{padding:12px 16px;margin:0}.row{grid-template-columns:1fr}}
+.applinks{margin-top:6px;font-size:14px}.applinks a{color:inherit}
 </style>
 </head>
 <body>
 <div class="sheet">
   <header>
     <h1>ΕΘΝΙΚΗ ΜΕΓΑΛΗ ΣΤΟΑ ΕΛΛΑΔΟΣ – ΨΗΦΙΑΚΟ ΕΝΤΥΠΟ ΕΠΕΞΕΡΓΑΣΙΑΣ</h1>
+    <nav class="applinks"><a href="../#/">🏛 Γραμματεία</a> · <a href="../#/letters/new">✉ Νέα Επιστολή</a> · <a href="../#/letters">Αρχείο Επιστολών</a> · <a href="../#/decrees/new">Νέο Διάταγμα</a></nav>
   </header>
 
   <div class="grid">
@@ -88,6 +90,7 @@
         <label for="place">Τόπος</label><input type="text" id="place" value="Εν Αθήναις">
         <label for="doctype">Τίτλος εγγράφου</label><input type="text" id="doctype" value="ΔΙΑΤΑΓΜΑ">
         <label for="subject">Θέμα</label><input type="text" id="subject" placeholder="π.χ. Ορισμός Αντιπροσώπου">
+        <label for="mailto">Email παραλήπτη (για αποστολή)</label><input type="text" id="mailto" inputmode="email" placeholder="π.χ. athens.secretary@nglgreece.gr — πολλά με κόμμα">
       </fieldset>
 
       <fieldset>
@@ -166,6 +169,12 @@
         <button class="b-pdf" id="bPdf">Τελικό PDF</button>
         <button class="b-clear" id="bClear">Καθαρισμός</button>
       </div>
+      <div class="btns">
+        <button class="b-gold" id="bWord" type="button">⬇ Word (επεξεργασία)</button>
+        <button class="b-pdf" id="bMail" type="button">✉ Αποστολή με Email</button>
+        <button class="b-clear" id="bToApp" type="button">→ Καταχώριση ως Επιστολή (αρ. πρωτοκόλλου)</button>
+      </div>
+      <div class="hint">«Αποστολή με Email»: κατεβαίνει το τελικό PDF και ανοίγει το Gmail (grand.secretary@) με παραλήπτη, θέμα και κείμενο — επισυνάψτε το PDF και πατήστε «Αποστολή».</div>
     </div>
   </div>
 
@@ -196,7 +205,7 @@
     get:(_,p)=>{ const v=ctxRef[p]; return typeof v==='function'?v.bind(ctxRef):v; },
     set:(_,p,v)=>{ ctxRef[p]=v; return true; }
   });
-  const FIELDS = ['num','date','place','doctype','subject','p0','p1','p2','greet','signer','sigtitle','admin','motto','ver','fmt','sigMode','sigTol','logoMode','logoTol'];
+  const FIELDS = ['num','date','place','doctype','subject','mailto','p0','p1','p2','greet','signer','sigtitle','admin','motto','ver','fmt','sigMode','sigTol','logoMode','logoTol'];
   const CHECKS = ['sigline','seal','showMotto','useSig'];
   const imgs = { logo:null, sig:null };   // processed (transparent) canvases
   const raw  = { logo:null, sig:null };   // original uploads
@@ -805,6 +814,11 @@
     await sealReady;
     await defaultSigReady; imgs.sig=defaultSig; thumb('sig');
     await restore();
+    // Στοιχεία από την εφαρμογή (Επιστολή → «Ψηφιακό Έντυπο»): μία φορά
+    try{
+      const pf=JSON.parse(localStorage.getItem('nglg-diatagma-prefill')||'null');
+      if(pf){ localStorage.removeItem('nglg-diatagma-prefill'); FIELDS.forEach(f=>{ if(pf[f]!=null) $(f).value=pf[f]; }); CHECKS.forEach(c=>{ if(pf[c]!=null) $(c).checked=!!pf[c]; }); currentId=null; status('Τα στοιχεία της επιστολής μεταφέρθηκαν στο έντυπο.'); }
+    }catch(_){}
     renderArchive();
     render();
     try{
@@ -814,6 +828,40 @@
     render();
   })();
 })();
+</script>
+<script type="module">
+  // Σύνδεση με την εφαρμογή: Word (.docx), Email (Gmail), καταχώριση ως Επιστολή
+  import { makeDocx, letterBlocks } from '../core/docx.js';
+  const $ = (id) => document.getElementById(id), v = (id) => ($(id).value || '').trim();
+  const ORG = 'Εθνική Μεγάλη Στοά της Ελλάδος', SENDER = 'grand.secretary@nglgreece.gr';
+  const MONTHS = ['Ιανουαρίου','Φεβρουαρίου','Μαρτίου','Απριλίου','Μαΐου','Ιουνίου','Ιουλίου','Αυγούστου','Σεπτεμβρίου','Οκτωβρίου','Νοεμβρίου','Δεκεμβρίου'];
+  const dateText = () => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v('date')); return m ? `${Number(m[3])} ${MONTHS[Number(m[2]) - 1]} ${m[1]}` : v('date'); };
+  const plain = (t) => t.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1 ($2)');
+  const name = () => ((v('doctype') || 'ΕΓΓΡΑΦΟ') + (v('subject') ? ' - ' + v('subject') : v('num') ? ' ' + v('num') : '')).replace(/[\/\\:*?"<>|\r\n\t]+/g, ' ').slice(0, 150);
+  const say = (t) => { $('status').textContent = t; };
+  $('bWord').onclick = async () => {
+    try {
+      const blocks = letterBlocks({ base: '../', org: ORG, founded: '1986', gmTitle: 'Μέγας Διδάσκαλος', gmName: 'Σεβτ. Αδ. Ιωάννης Μπενετάτος',
+        number: v('num'), date: dateText(), place: v('place'), title: v('doctype'), subject: v('subject'),
+        paragraphs: [{ text: plain(v('p0')), align: 'center', bold: true }, { text: plain(v('p1')) }, { text: plain(v('p2')), bold: true, italic: true }],
+        closing: v('greet'), signature: $('useSig').checked ? '../img/signature.png' : '', signer: v('signer'), signerTitle: v('sigtitle') });
+      const blob = await makeDocx(blocks, { title: v('subject') || v('doctype'), author: v('signer') });
+      const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: name() + '.docx' });
+      document.body.appendChild(a); a.click(); a.remove(); say('Λήψη: ' + name() + '.docx');
+    } catch (e) { say('Το Word δεν δημιουργήθηκε: ' + e.message); }
+  };
+  $('bMail').onclick = () => {
+    const body = [v('p0'), v('p1'), v('p2'), '', v('greet'), '', v('signer'), v('sigtitle'), ORG].map(plain).join('\n').replace(/\n{3,}/g, '\n\n').trim();
+    const subj = [v('doctype'), v('num') && 'υπ’ αριθμ. ' + v('num'), v('subject') && '– ' + v('subject')].filter(Boolean).join(' ');
+    const p = new URLSearchParams({ authuser: SENDER, view: 'cm', fs: '1', to: v('mailto').split(/[;,\s]+/).filter(Boolean).join(','), su: subj, body });
+    window.open('https://mail.google.com/mail/u/?' + p.toString().replace(/\+/g, '%20'), '_blank', 'noopener');
+    $('bPdf').click();
+    say('Κατέβηκε το PDF — επισυνάψτε το στο Gmail και πατήστε «Αποστολή».');
+  };
+  $('bToApp').onclick = () => {
+    const q = new URLSearchParams({ subject: v('subject'), body: [v('p0'), v('p1'), v('p2')].filter(Boolean).join('\n\n'), to_email: v('mailto') });
+    location.href = '../#/letters/new?' + q.toString();
+  };
 </script>
 </body>
 </html>

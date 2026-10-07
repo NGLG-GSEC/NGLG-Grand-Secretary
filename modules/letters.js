@@ -3,8 +3,9 @@
 import { db } from '../core/store.js';
 import { module, onSubmit, go, flash, bind, confirmDo, table, notice, actor, ACTORS } from '../core/app.js';
 import { crud } from '../core/crud.js';
-import { esc, today, fmtDate, matches, sortBy, safeFileName, EMAIL_RE, splitEmails } from '../core/util.js';
-import { letterPaper, printPaper } from '../core/paper.js';
+import { esc, today, fmtDate, matches, sortBy, safeFileName, EMAIL_RE, splitEmails, download } from '../core/util.js';
+import { letterPaper, printPaper, signerProfile, IMG } from '../core/paper.js';
+import { makeDocx, letterBlocks } from '../core/docx.js';
 import { mailButtons, senderBanner } from '../core/mail.js';
 import { attachPicker, contactItems } from '../core/pickers.js';
 import { nextProtocol, legacyDecreeLetterIds } from './protocol.js';
@@ -20,6 +21,25 @@ const STATUS = { draft: 'Πρόχειρη', ready: 'Έτοιμη' };
 const statusPill = (s) => `<span class="pill ${s === 'ready' ? 'ok' : 'warn'}">${STATUS[s] || esc(s)}</span>`;
 const fileName = (x) => safeFileName(`${x.protocol_no}${x.subject ? ' ' + x.subject : ''}`);
 
+// Word (.docx) για επεξεργασία, με το επιστολόχαρτο της ΕΜΣτΕ
+export async function letterDocx(x) {
+  const S = (k) => db.setting(k) || '', p = signerProfile(x.signer);
+  const blocks = letterBlocks({ org: S('organization_name'), founded: S('founded_year'), gmTitle: S('grand_master_title'), gmName: S('grand_master_name'),
+    number: x.protocol_no || '', date: fmtDate(x.letter_date || today()), place: 'Εν Αθήναις', to: x.recipient_name, subject: x.subject,
+    paragraphs: [{ text: x.body || '' }], closing: S('closing'), signature: p.img, signer: p.name, signerTitle: p.title });
+  download(fileName(x) + '.docx', await makeDocx(blocks, { title: x.subject, author: p.name }));
+}
+// Άνοιγμα στο Ψηφιακό Έντυπο (diatagma/) με τα στοιχεία της επιστολής
+export function openInDigitalForm(x) {
+  const p = signerProfile(x.signer);
+  try {
+    localStorage.setItem('nglg-diatagma-prefill', JSON.stringify({ num: x.protocol_no || '', date: x.letter_date || today(), place: 'Εν Αθήναις', doctype: 'ΕΠΙΣΤΟΛΗ', subject: x.subject || '',
+      p0: x.recipient_name ? `Προς: ${x.recipient_name}` : '', p1: x.body || '', p2: '', greet: db.setting('closing') || '', signer: p.name, sigtitle: p.title,
+      useSig: p.img === IMG.signature, mailto: x.recipient_email || '' }));
+  } catch { /* χωρίς localStorage: ανοίγει κενό */ }
+  location.href = 'diatagma/';
+}
+
 function letterForm(x, query = {}) {
   const tpl = templates();
   return `<form id="lf" class="grid card">
@@ -33,7 +53,7 @@ function letterForm(x, query = {}) {
 <div class="full"><label>Κείμενο</label><textarea name="body" required>${esc(x.body || '')}</textarea><small class="muted">Οι σύνδεσμοι (https://… ή www.…) μένουν ενεργοί στο τελικό έγγραφο.</small></div>
 <div><label>Κατάσταση</label><select name="status"><option value="draft"${x.status !== 'ready' ? ' selected' : ''}>Πρόχειρη</option><option value="ready"${x.status === 'ready' ? ' selected' : ''}>Έτοιμη</option></select></div>
 <div><label>Υπογράφων</label><select name="signer">${Object.entries(ACTORS).map(([k, v]) => `<option value="${k}"${(x.signer || actor()) === k ? ' selected' : ''}>${esc(v)}</option>`).join('')}</select></div>
-<div class="full toolbar"><button class="btn primary">💾 ${x.id ? 'Αποθήκευση' : 'Αποθήκευση & απόδοση αρ. πρωτοκόλλου'}</button><button type="button" class="btn" data-act="preview">👁 Προεπισκόπηση</button>
+<div class="full toolbar"><button class="btn primary">💾 ${x.id ? 'Αποθήκευση' : 'Αποθήκευση & απόδοση αρ. πρωτοκόλλου'}</button><button type="button" class="btn" data-act="preview">👁 Προεπισκόπηση</button><button type="button" class="btn" data-act="form">🖋 Ψηφιακό Έντυπο</button><button type="button" class="btn" data-act="word">⬇ Word</button>
 <a class="btn" href="${x.id ? '#/letters/' + x.id : '#/letters'}">Ακύρωση</a></div></form>
 <section id="pv" class="print-area" hidden></section>`;
 }
@@ -47,7 +67,8 @@ function mountLetterForm(el, x, isNew) {
     const t = db.get('letter_templates', e.target.value);
     if (t && (!f.body.value.trim() || confirmDo('Αντικατάσταση του κειμένου με το πρότυπο;'))) f.body.value = t.body;
   });
-  bind(el, { preview() {
+  const cur = () => ({ ...x, ...Object.fromEntries(new FormData(f)), letter_date: x.letter_date || today() });
+  bind(el, { form: () => openInDigitalForm(cur()), word: () => letterDocx(cur()), preview() {
     const d = Object.fromEntries(new FormData(f));
     const pv = el.querySelector('#pv');
     pv.innerHTML = letterPaper({ ...x, ...d, letter_date: x.letter_date || today() });
@@ -76,6 +97,7 @@ function viewLetter({ params }) {
     title: x.subject,
     html: `<section class="card send-panel noprint"><h3>Αποστολή & Αποθήκευση</h3>${senderBanner('official')}
 <div class="toolbar"><button class="btn primary" data-act="pdf">⬇ PDF / Εκτύπωση</button>${mailButtons({ to: x.recipient_email, subject: x.subject, body: x.body, kind: 'official' }, '✉ Αποστολή με Email')}
+<button class="btn" data-act="word">⬇ Word (επεξεργασία)</button><button class="btn" data-act="form">🖋 Ψηφιακό Έντυπο</button>
 <a class="btn" target="_blank" rel="noopener" href="${wa}">WhatsApp μήνυμα</a>${x.status === 'ready' ? '' : '<button class="btn" data-act="ready">Σήμανση ως έτοιμη</button>'}</div>
 <p class="send-help">Για συνημμένο PDF: πατήστε «PDF / Εκτύπωση» → «Αποθήκευση ως PDF» και επισυνάψτε το αρχείο στο email.</p></section>
 <div class="toolbar noprint"><a class="btn" href="#/letters/${x.id}/edit">Επεξεργασία</a><a class="btn" href="#/letters/new?copy_from=${x.id}">Νέα πάνω σε αυτή</a><a class="btn" href="#/letters">Αρχείο Επιστολών</a>
@@ -84,6 +106,8 @@ function viewLetter({ params }) {
     mount(el) {
       bind(el, {
         pdf: () => printPaper(fileName(x)),
+        word: () => letterDocx(x),
+        form: () => openInDigitalForm(x),
         async ready() { await db.save(`Επιστολή ${x.protocol_no}: έτοιμη`, (tx) => tx.update('letters', x.id, { status: 'ready' })); flash('Σημειώθηκε ως έτοιμη.'); go(`/letters/${x.id}`); },
         async del() {
           if (!confirmDo('Οριστική διαγραφή της επιστολής; Η ενέργεια δεν αναιρείται (μένει μόνο στο ιστορικό του GitHub).')) return;
@@ -121,6 +145,7 @@ module({
       if (query.copy_from) { const s = db.get('letters', query.copy_from); if (s) x = { ...x, template_id: s.template_id, subject: s.subject, body: s.body, recipient_name: s.recipient_name, recipient_email: s.recipient_email, recipient_member_id: s.recipient_member_id, source_letter_id: s.id }; }
       else if (query.template_id) { const t = db.get('letter_templates', query.template_id); if (t) x = { ...x, template_id: t.id, body: t.body }; }
       if (query.to_name || query.to_email) Object.assign(x, { recipient_name: query.to_name || '', recipient_email: query.to_email || '' });
+      if (query.subject || query.body) Object.assign(x, { subject: query.subject || '', body: query.body || '' });
       return { title: 'Νέα Επιστολή', html: `<h1>Νέα Επιστολή</h1><div class="card signer-card noprint"><b>Υπογράφων:</b> ${esc(ACTORS[actor()])} <a class="btn small" href="#/identity">Αλλαγή</a></div>${letterForm(x)}`, mount: (el) => mountLetterForm(el, x, true) };
     },
     '/letters/:id': viewLetter,

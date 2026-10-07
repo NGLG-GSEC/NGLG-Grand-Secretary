@@ -16,3 +16,6 @@ html = html.replace('<link rel="stylesheet" href="css/app.css">', f'<link rel="s
 html = html.replace('<script type="module" src="main.js"></script>', f'<script type="module" src="./main.js?v={v}"></script>')
 p.write_text(html, encoding='utf-8')
 print(f'stamped {len(imports)} files with v={v}')
+d = ROOT / 'diatagma' / 'index.html'
+if d.exists():
+    d.write_text(d.read_text(encoding='utf-8').replace("from '../core/docx.js'", f"from '../core/docx.js?v={v}'"), encoding='utf-8')
