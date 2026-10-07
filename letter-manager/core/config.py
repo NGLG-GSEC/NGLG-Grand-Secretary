@@ -43,7 +43,7 @@ PRIMARY_ADMIN_EMAIL=os.getenv('PRIMARY_ADMIN_EMAIL','').strip().lower()
 
 PRIMARY_ADMIN_PASSWORD_HASH=os.getenv('PRIMARY_ADMIN_PASSWORD_HASH','').strip().lower()
 
-AUTHORIZED_USER_EMAIL=os.getenv('AUTHORIZED_USER_EMAIL','christsagk@gmail.com').strip().lower()
+AUTHORIZED_USER_EMAIL=os.getenv('AUTHORIZED_USER_EMAIL','').strip().lower()
 
 AUTHORIZED_USER_PASSWORD_HASH=os.getenv('AUTHORIZED_USER_PASSWORD_HASH','').strip().lower()
 

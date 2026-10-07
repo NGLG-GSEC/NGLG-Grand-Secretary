@@ -184,7 +184,7 @@ export const DEC_BASIS = {
 };
 export const HON_ACC_BY_SHORT = {"Σεβτ. Αδ.": "Σεβασμιώτατον", "Πσεβ. Αδ.": "Πανσεβάσμιον", "ΛΣεβ. Αδ.": "Λίαν Σεβάσμιον", "Σεβ. Αδ.": "Σεβάσμιον"};
 export const HONORIFIC_OPTIONS = ["Σεβτ. Αδ.", "Πσεβ. Αδ.", "ΛΣεβ. Αδ.", "Σεβ. Αδ."];
-export const DEGREE_CC_DEFAULT = ["piraeus.secretary@nglgreece.gr", "athens.secretary@nglgreece.gr", "ionian.secretary@nglgreece.gr", "nglgr.prov.cent.north@gmail.com", "secretary.pr.pwg.nglgreece@gmail.com", "grand.secretary@dglcyprus.org", "dgsec@nglgreece.gr", "grand.chancellor@nglgreece.gr", "administration@nglgreece.gr", "grand-charity@nglgreece.gr", "i.benetatos@gmail.com", "christosdiavatis@gmail.com", "christsagk@gmail.com", "chatzidim.nik@gmail.com", "dskiad@gmail.com"];
+export const DEGREE_CC_DEFAULT = ["piraeus.secretary@nglgreece.gr", "athens.secretary@nglgreece.gr", "ionian.secretary@nglgreece.gr", "nglgr.prov.cent.north@gmail.com", "secretary.pr.pwg.nglgreece@gmail.com", "grand.secretary@dglcyprus.org", "dgsec@nglgreece.gr", "grand.chancellor@nglgreece.gr", "administration@nglgreece.gr", "grand-charity@nglgreece.gr"];
 export const AWARD_MAP = Object.fromEntries(AWARD_OFFICES);
 export const DEC_MAP = Object.fromEntries(DEC_OFFICES.map(([precedence, o, rule]) => {
   const f = OFFICE_FORMS[o] || [o.toUpperCase(), '', ''];

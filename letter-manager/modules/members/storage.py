@@ -3,7 +3,7 @@
 
 from io import BytesIO,StringIO
 
-import gzip,csv,unicodedata
+import gzip,csv,os,unicodedata
 
 from fastapi import UploadFile, File
 
@@ -13,7 +13,7 @@ from openpyxl.styles import Font, PatternFill, Alignment
 
 from openpyxl.utils import get_column_letter
 
-MEMBER_BACKUP_EMAIL='dskiad@gmail.com'
+MEMBER_BACKUP_EMAIL=os.getenv('MEMBER_BACKUP_EMAIL','')
 
 MEMBER_BACKUP_SUBJECT='ΑΠΟΡΡΗΤΟ ΑΡΧΕΙΟ ΕΠΑΦΩΝ ΕΜΤΣΕ ΠΡΟΣ ΔΙΑΓΡΑΦΗ'
 

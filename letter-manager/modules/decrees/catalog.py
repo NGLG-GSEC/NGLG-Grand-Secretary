@@ -5,8 +5,7 @@
 DEGREE_CC=[
 'piraeus.secretary@nglgreece.gr','athens.secretary@nglgreece.gr','ionian.secretary@nglgreece.gr',
 'nglgr.prov.cent.north@gmail.com','secretary.pr.pwg.nglgreece@gmail.com','grand.secretary@dglcyprus.org',
-'dgsec@nglgreece.gr','grand.chancellor@nglgreece.gr','administration@nglgreece.gr','grand-charity@nglgreece.gr',
-'i.benetatos@gmail.com','christosdiavatis@gmail.com','christsagk@gmail.com','chatzidim.nik@gmail.com','dskiad@gmail.com']
+'dgsec@nglgreece.gr','grand.chancellor@nglgreece.gr','administration@nglgreece.gr','grand-charity@nglgreece.gr']
 
 DEC_OFFICES=[
 (2,'Αντικαταστάτης Μέγας Διδάσκαλος','16'),(5,'Αναπληρωτής Μέγας Διδάσκαλος','18'),

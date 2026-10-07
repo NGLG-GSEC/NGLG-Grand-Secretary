@@ -726,6 +726,7 @@ def test_grand_officers_as_representatives_assigned_per_installation(app):
 
 def test_visit_letter_and_email_to_province_and_grand_master(app):
     app.connect_local()
+    app.page.evaluate("async () => { const m = await import('./core/store.js'); await m.db.save('x', (tx) => tx.setting('gm_email', 'gm@example.com')); }")
     app.page.evaluate("async () => { const m = await import('./core/store.js'); await m.db.save('x', (tx) => tx.replace('visits', [])); }")
     app.go('/reps/new').fill(name='Ιωάννης', surname='Εκπρόσωπος', office='Μέγας Καγκελάριος', email='rep@example.com')
     app.click('💾 Αποθήκευση')
@@ -746,7 +747,7 @@ def test_visit_letter_and_email_to_province_and_grand_master(app):
     app.page.select_option('[name=rep_id]', rid)
     app.click('✉ Email ΕπΜΓρ. & ΜΔ')
     app.page.wait_for_selector('#cf')
-    assert app.page.input_value('[name=to]') and app.page.input_value('[name=cc]') == 'i.benetatos@gmail.com'
+    assert app.page.input_value('[name=to]') and app.page.input_value('[name=cc]') == 'gm@example.com'
     body = app.page.input_value('[name=body]')
     assert 'ΔΙΩΝΗ' in body and 'Λίαν Σεβάσμιος Αδ. Ιωάννης Εκπρόσωπος' in body
     vs = app.page.evaluate("async () => { const m = await import('./core/store.js'); return m.db.all('visits'); }")
@@ -754,7 +755,7 @@ def test_visit_letter_and_email_to_province_and_grand_master(app):
     app.go(f"/visits/edit/{vs[0]['id']}")
     app.click('📄 Επιστολή προς ΕπΜΓρ. & ΜΔ')
     app.page.wait_for_selector('#lf')
-    assert 'i.benetatos@gmail.com' in app.page.input_value('[name=recipient_email]')
+    assert 'gm@example.com' in app.page.input_value('[name=recipient_email]')
     assert app.page.input_value('[name=recipient_name]').startswith('ΕπΜΓρ.')
     assert 'Εγκατάσταση Σεβασμίου' in app.page.input_value('[name=subject]') and 'Λίαν Σεβάσμιος Αδ. Ιωάννης Εκπρόσωπος' in app.page.input_value('[name=body]')
     assert 'Με Τεκτονικούς χαιρετισμούς' not in app.page.input_value('[name=body]')
