@@ -25,7 +25,7 @@ The way in to the work of the Secretariat. Everything opens at one address: the 
 | **Ψηφιακή Μεγάλη Γραμματεία** | root of this repository (`index.html`, `core/`, `modules/`) — guide and code map in [`docs/ΕΦΑΡΜΟΓΗ.md`](docs/ΕΦΑΡΜΟΓΗ.md) | one app for the whole Secretariat: letters & decrees with protocol numbers, lodge visits & Grand Master's representatives, name days & greetings, Grand Master's projects, directory of provinces & lodges, member registry, Epeteirida |
 | **Ψηφιακό Έντυπο Διατάγματος** | `diatagma/` in this repository | decree form with live preview, PNG / A4 PDF export, automatic background removal for emblem and signature |
 | Registration forms | [`dskiad/nglg-registration-forms`](https://github.com/dskiad/nglg-registration-forms) | the register, with the live forms linked from it |
-| Τεκτονικές Ομιλίες | [`dskiad/nglg-tektonikes-omilies`](https://github.com/dskiad/nglg-tektonikes-omilies) | [the library](https://dskiad.github.io/nglg-tektonikes-omilies/) |
+| Τεκτονικές Ομιλίες | [`NGLG-GSEC/nglg-tektonikes-omilies`](https://github.com/NGLG-GSEC/nglg-tektonikes-omilies) | [library.nglgreece.org](https://library.nglgreece.org/) |
 | Bear Bell Ritual | [`dskiad/bear-bell-ritual`](https://github.com/dskiad/bear-bell-ritual) | restricted application |
 
 ## Παλιά έκδοση (letter-manager, Render)
