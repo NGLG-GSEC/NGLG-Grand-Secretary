@@ -36,6 +36,40 @@ ${x.recipient_name ? `<p><b>Προς:</b> ${esc(x.recipient_name)}</p>` : ''}<p>
 <div class="body">${linkify(x.body)}</div><p style="margin-top:10mm">${esc(x.closing || db.setting('closing'))}</p>${signatureBlock(x.signer)}</article>`;
 }
 
+// Μία σελίδα Α4: Επιστολή/Διάταγμα που ξεπερνά τη σελίδα σμικρύνεται ομοιόμορφα (ίδια διάταξη, ίδιες αλλαγές γραμμής)
+// ώστε οθόνη, εκτύπωση και PDF να δείχνουν πάντα το ίδιο ένα φύλλο. Οι αναφορές (.report) μένουν πολυσέλιδες.
+const A4_PX = (293 * 96) / 25.4; // ύψος Α4 με μικρό περιθώριο ασφαλείας
+const DOC = '.paper:not(.report)';
+export function fitPaper(p, a4 = false) {
+  if (!p || p.classList.contains('report')) return 1;
+  p.style.zoom = '1'; p.classList.toggle('a4', a4);
+  const mh = p.style.minHeight; p.style.minHeight = '0';
+  const h = p.scrollHeight; p.style.minHeight = mh;
+  const s = h ? Math.min(1, A4_PX / h) : 1;
+  p.style.zoom = '';
+  const base = parseFloat(getComputedStyle(p).zoom) || 1; // π.χ. ζωντανή προεπισκόπηση σε σμίκρυνση
+  p.style.zoom = String(+(base * s).toFixed(4));
+  p.dataset.fit = String(+s.toFixed(4));
+  return s;
+}
+const screenA4 = (p) => window.innerWidth >= 800 || !!p.closest('.dec-live');
+export function fitPapers(root = document, print = false) {
+  for (const p of root.querySelectorAll(DOC)) {
+    if (print || screenA4(p)) fitPaper(p, print);
+    else { p.classList.remove('a4'); p.style.zoom = ''; delete p.dataset.fit; }
+  }
+}
+if (typeof document !== 'undefined') {
+  let t = 0;
+  const later = () => { cancelAnimationFrame(t); t = requestAnimationFrame(() => fitPapers()); };
+  new MutationObserver((ms) => { if (ms.some((m) => [...m.addedNodes].some((n) => n.nodeType === 1 && (n.matches(DOC) || n.querySelector?.(DOC))))) later(); })
+    .observe(document.documentElement, { childList: true, subtree: true });
+  document.addEventListener('load', (e) => { if (e.target.tagName === 'IMG' && e.target.closest(DOC)) later(); }, true);
+  addEventListener('resize', later);
+  addEventListener('beforeprint', () => fitPapers(document, true));
+  addEventListener('afterprint', () => fitPapers());
+}
+
 // Εκτύπωση: ο τίτλος της σελίδας γίνεται το όνομα του αρχείου PDF.
 export function printPaper(fileName) {
   const old = document.title;

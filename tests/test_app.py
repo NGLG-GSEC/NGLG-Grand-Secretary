@@ -1144,3 +1144,36 @@ def test_letter_recipient_gets_member_title(app):
     assert app.page.input_value('[name=recipient_email]') == 'aris@example.com'
     app.pick('#rcptPick', 'Απλοδοκιμ')
     assert app.page.input_value('[name=recipient_name]') == 'Αδ. Βασίλειος Απλοδοκιμάκης'
+
+
+def test_long_letter_prints_on_one_page(app):
+    app.connect_local()
+    long_body = '\n\n'.join(f'Παράγραφος {i}. ' + 'Κείμενο δοκιμής για μεγάλη επιστολή που ξεπερνά τη σελίδα. ' * 6 for i in range(1, 16))
+    app.page.evaluate("""async (b) => { const {db} = await import('./core/store.js');
+      await db.save('x', (tx) => tx.insert('letters', { protocol_seq: 20999, protocol_no: '20999', letter_date: '2026-10-08', subject: 'Μεγάλη', body: b, status: 'draft', signer: 'dimitrios' })); }""", long_body)
+    lid = app.page.evaluate("async () => { const {db} = await import('./core/store.js'); return db.all('letters').at(-1).id; }")
+    app.go(f'/letters/{lid}')
+    app.page.wait_for_function("() => document.querySelector('.print-area .paper')?.dataset.fit")
+    fit = float(app.page.evaluate("() => document.querySelector('.print-area .paper').dataset.fit"))
+    assert 0.3 < fit < 1, fit
+    app.page.emulate_media(media='print')
+    app.page.evaluate("() => dispatchEvent(new Event('beforeprint'))")  # όπως ο browser πριν την εκτύπωση
+    pdf = app.page.pdf(format='A4', print_background=True)
+    assert pdf.count(b'/Type /Page\n') + pdf.count(b'/Type /Page ') + pdf.count(b'/Type/Page') + pdf.count(b'/Type /Page/') == 1, pdf.count(b'/Page')
+    # από κινητό: ίδια μία σελίδα
+    app.page.emulate_media(media='screen')
+    app.page.set_viewport_size({'width': 390, 'height': 800})
+    app.page.reload()
+    app.page.wait_for_selector('.print-area .paper')
+    app.page.wait_for_timeout(300)
+    app.page.emulate_media(media='print')
+    app.page.evaluate("() => dispatchEvent(new Event('beforeprint'))")
+    pdf = app.page.pdf(format='A4', print_background=True)
+    assert pdf.count(b'/Type /Page\n') + pdf.count(b'/Type /Page ') + pdf.count(b'/Type/Page') == 1
+    app.page.emulate_media(media='screen')
+    app.page.set_viewport_size({'width': 1280, 'height': 900})
+    # PDF για το Drive: μία σελίδα
+    n = app.page.evaluate("""async () => { const {paperPdf} = await import('./core/pdf.js');
+      const b = await paperPdf(document.querySelector('.print-area .paper')); const t = new TextDecoder('latin1').decode(await b.arrayBuffer());
+      return (t.match(/\\/Type \\/Page[^s]/g) || []).length; }""")
+    assert n == 1, n
