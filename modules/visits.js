@@ -6,6 +6,7 @@ import { module, onSubmit, go, flash, bind, confirmDo, table, notice, toast } fr
 import { crud } from '../core/crud.js';
 import { esc, fold, today, fmtDate, dayStr, parseIso, sortBy, download, EMAIL_RE, splitEmails, grUpper, DAYS, isoDate, parsePasted, readXlsx } from '../core/util.js';
 import { senderBanner, copyText } from '../core/mail.js';
+import { bccWithout } from '../core/gmail.js';
 import { reportPaper, printPaper } from '../core/paper.js';
 import { attachPicker, contactItems, memberItems, noContact } from '../core/pickers.js';
 import { provincialChoices, provinceByShort, provinceRoles } from './provinces.js';
@@ -21,7 +22,7 @@ const REP_DEFAULT_RANKS = { 'Μέγας Διδάσκαλος': 3, 'Αναπλη�
   'Πρώτος Μέγας Επόπτης': 2, 'Δεύτερος Μέγας Επόπτης': 2, 'Μέγας Καγκελάριος': 1, 'Αναπληρωτής Μέγας Καγκελάριος': 1, 'Μέγας Γραμματέας': 1, 'Αναπληρωτής Μέγας Γραμματέας': 1, 'Μέγας Ευχέτης': 1,
   'Μέγας Τελετάρχης': 1, 'Μέγας Επόπτης Έργων': 1, 'Μέγας Ξιφοφόρος': 1, 'Μέγας Επιθεωρητής': 1, 'Πρόεδρος Συμβουλίου Μεγάλης Φιλανθρωπίας': 1, 'Πρόεδρος Μεγάλης Φιλανθρωπίας': 1 };
 const PUB_SUBJECT = 'Ενημέρωση Εκπροσώπησης ΜΔ στις Εγκαταστάσεις Σεβασμίων Σ. Στοών της Επαρχίας σας';
-db.defaultSettings({ gm_email: '', visits_signer_name: 'Πσεβ. Αδ. Δημήτριος Σκιαδόπουλος', visits_signer_title: 'Μέγας Γραμματεύς', visits_rankmap: '{}' });
+db.defaultSettings({ visit_bcc: '', gm_email: '', visits_signer_name: 'Πσεβ. Αδ. Δημήτριος Σκιαδόπουλος', visits_signer_title: 'Μέγας Γραμματεύς', visits_rankmap: '{}' });
 
 // Εφάπαξ: Πίνακας Εγκαταστάσεων Σεβασμίων 2026–2027 (seed/installations-2026-2027.json)· ό,τι υπάρχει ήδη (ίδια Στοά, ίδια ημερομηνία) δεν διπλασιάζεται.
 db.migrate('installations-2026-2027', async (tx) => {
@@ -368,15 +369,15 @@ function parseVisitLine(line) {
 }
 
 // Σύνθεση email: ο χρήστης βλέπει/διορθώνει, ανοίγει στο Gmail και σημειώνει «στάλθηκε».
-function composePage(title, msg, { onSent, hint = '', attach = null, back = '#/visits', kind = 'general' }) {
+function composePage(title, msg, { onSent, hint = '', attach = null, back = '#/visits', kind = 'general', visit = null }) {
   return {
     title,
-    html: `<p><a href="${back}">← Επιστροφή</a></p><h1>${esc(title)}</h1>${senderBanner(kind)}${hint ? `<div class="card">${esc(hint)}</div>` : ''}
+    html: `<p><a href="${back}">← Επιστροφή</a></p><h1>${esc(title)}</h1>${senderBanner(kind)}${hint ? `<div class="card">${esc(hint)}</div>` : ''}${visit ? '<div class="mailsheet"></div><p class="muted">Παρακάτω μπορείτε να διορθώσετε παραλήπτες, θέμα και κείμενο πριν το άνοιγμα στο Gmail.</p>' : ''}
 <form class="card" id="cf"><label>🔎 Παραλήπτης από τον Κατάλογο</label><input id="cPick" placeholder="Επαρχία, Στοά, μέλος…" autocomplete="off">
 <label style="margin-top:10px">Προς</label><input name="to" value="${esc(msg.to)}" required><label style="margin-top:10px">Κοινοποίηση (Cc)</label><input name="cc" value="${esc(msg.cc || '')}" placeholder="προαιρετικό"><label style="margin-top:10px">Κρυφή κοινοποίηση (Bcc)</label><input name="bcc" value="${esc(msg.bcc || '')}" placeholder="προαιρετικό">
 <label style="margin-top:10px">Θέμα</label><input name="subject" value="${esc(msg.subject)}" required><label style="margin-top:10px">Κείμενο</label><textarea name="body" style="min-height:340px">${esc(msg.body)}</textarea>
 ${attach ? `<p><button type="button" class="btn" data-act="ics">📅 Λήψη ${esc(attach.name)} (πρόσκληση ημερολογίου)</button> <small class="muted">Επισυνάψτε το στο email.</small></p>` : ''}
-<div class="toolbar" style="margin-top:10px"><button type="button" class="btn primary" data-act="gmail">✉ Άνοιγμα στο Gmail</button><button type="button" class="btn" data-act="device">📱 Εφαρμογή email</button><button type="button" class="btn" data-act="copy">📋 Αντιγραφή κειμένου</button>
+<div class="toolbar" style="margin-top:10px"><button type="button" class="btn${visit ? '' : ' primary'}" data-act="gmail">✉ ${visit ? 'Gmail χωρίς συνημμένο' : 'Άνοιγμα στο Gmail'}</button><button type="button" class="btn" data-act="device">📱 Εφαρμογή email</button><button type="button" class="btn" data-act="copy">📋 Αντιγραφή κειμένου</button>
 <button class="btn">✓ Σημείωση ως σταλμένο</button></div><small class="muted">Πολλοί παραλήπτες: χωρίστε με κόμμα. Μετά την αποστολή πατήστε «Σημείωση ως σταλμένο».</small></form>`,
     async mount(el) {
       const f = el.querySelector('#cf');
@@ -389,6 +390,13 @@ ${attach ? `<p><button type="button" class="btn" data-act="ics">📅 Λήψη ${
         async copy() { await copyText(f.body.value); toast('Το κείμενο αντιγράφηκε.'); },
         ics: () => download(attach.name, attach.data, 'text/calendar'),
       });
+      if (visit) {
+        const { mailSheet } = await import('../core/gmail.js'), L = await import('./letters.js');
+        const lt = () => sortBy(db.all('letters').filter((l) => l.visit_id === visit.id && l.status === 'ready'), (l) => -(l.protocol_seq || 0))[0];
+        const sheet = mailSheet(el, { kind, getMsg: cur, pdfName: lt() ? L.letterFileName(lt()) : 'Επιστολή Επίσκεψης (αρ. πρωτοκόλλου)',
+          getPdf: async () => L.letterPdf(await L.ensureVisitLetter(visit)) });
+        let t = 0; f.addEventListener('input', () => { clearTimeout(t); t = setTimeout(sheet.render, 400); });
+      }
       onSubmit(f, async () => { await onSent(cur()); });
     },
   };
@@ -434,10 +442,11 @@ function notifyPage({ query }) {
   const v = db.get('visits', ids(query.ids)[0]);
   if (!v) return '<h1>Δεν βρέθηκε η επίσκεψη</h1>';
   const g = visitRecipients(v), back = query.back === 'list' ? '#/visits' : `#/visits/edit/${v.id}`;
-  return composePage(g.gm ? 'Επίσημη Επίσκεψη του Μεγάλου Διδασκάλου' : 'Εκπροσώπηση του Μεγάλου Διδασκάλου', { to: g.to, cc: g.cc, subject: visitSubject(v), body: visitBody(v) }, {
+  return composePage(g.gm ? 'Επίσημη Επίσκεψη του Μεγάλου Διδασκάλου' : 'Εκπροσώπηση του Μεγάλου Διδασκάλου', { to: g.to, cc: g.cc, bcc: bccWithout(db.setting('visit_bcc') || '', g.to, g.cc), subject: visitSubject(v), body: visitBody(v) }, {
+    visit: v, kind: 'general',
     hint: [!g.to && g.r && !g.gm && 'Η Επαρχία δεν έχει email ΕπΜΓρ. (Μητρώα → Επαρχιακές Μεγάλες Στοές) — συμπληρώστε το εδώ.', (!g.r || g.gm) && !g.lodgeMail && 'Η Στοά δεν έχει email (Συμβολικές Στοές → email Στοάς ή Γραμματέα): το email πηγαίνει στον ΕπΜΓρ. — ή συμπληρώστε εδώ το email της Στοάς.',
       g.r && !g.gm && !g.repEmail && `Ο εκπρόσωπος ${g.r.surname} ${g.r.name} δεν έχει email — συμπληρώστε το εδώ.`, !g.r && 'Δεν έχει οριστεί εκπρόσωπος.'].filter(Boolean).join(' '),
-    back, kind: 'official', attach: { name: `episkepsi-${v.lodge_number || 'stoa'}.ics`, data: icsFor([v]) },
+    back, attach: { name: `episkepsi-${v.lodge_number || 'stoa'}.ics`, data: icsFor([v]) },
     onSent: async () => { await markVisits([v.id], 'prov'); if (g.r && !g.gm) await markVisits([v.id], 'rep', g.r.id); flash((g.r && !g.gm ? 'Σημειώθηκε η ενημέρωση ΕπΜΓρ. και εκπροσώπου' : 'Σημειώθηκε η ενημέρωση της Στοάς') + (g.r && !g.gm ? '.' : '.')); go(back.slice(1)); },
   });
 }

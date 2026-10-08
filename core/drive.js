@@ -12,22 +12,24 @@ export const folderId = () => { const v = String(db.setting('drive_folder_id') |
 export const folderUrl = () => `https://drive.google.com/drive/folders/${folderId()}`;
 export const driveReady = () => !!String(db.setting('google_client_id') || '').trim();
 
-let token = null, expires = 0;
-async function getToken(interactive = true) {
-  if (token && Date.now() < expires - 60000) return token;
-  if (!interactive) return null;
+// Σύνδεση Google (Google Identity Services): ένα κλειδί ανά δικαίωμα (Drive, Gmail)· hint = ο λογαριασμός που προτείνεται
+const tokens = {};
+export async function googleToken(scope = SCOPE, hint = '') {
+  const k = scope + '|' + hint, t = tokens[k];
+  if (t && Date.now() < t.expires - 60000) return t.token;
   const clientId = String(db.setting('google_client_id') || '').trim();
-  if (!clientId) throw new Error('Δεν έχει οριστεί το Google Client ID (Ρυθμίσεις → Google Drive).');
+  if (!clientId) throw new Error('Δεν έχει οριστεί το Google Client ID (Ρυθμίσεις → Google).');
   if (!(window.google && window.google.accounts && window.google.accounts.oauth2)) {
     await new Promise((ok, bad) => { const s = Object.assign(document.createElement('script'), { src: 'https://accounts.google.com/gsi/client', onload: ok, onerror: () => bad(new Error('Δεν φορτώθηκε η σύνδεση Google.')) }); document.head.appendChild(s); });
   }
   return new Promise((ok, bad) => {
-    const c = window.google.accounts.oauth2.initTokenClient({ client_id: clientId, scope: SCOPE, callback: (r) => {
-      if (r && r.access_token) { token = r.access_token; expires = Date.now() + (Number(r.expires_in) || 3600) * 1000; ok(token); } else bad(new Error('Η σύνδεση με το Google δεν ολοκληρώθηκε.'));
+    const c = window.google.accounts.oauth2.initTokenClient({ client_id: clientId, scope, ...(hint ? { hint } : {}), callback: (r) => {
+      if (r && r.access_token) { tokens[k] = { token: r.access_token, expires: Date.now() + (Number(r.expires_in) || 3600) * 1000 }; ok(r.access_token); } else bad(new Error('Η σύνδεση με το Google δεν ολοκληρώθηκε.'));
     }, error_callback: (e) => bad(new Error('Google: ' + ((e && e.type) || 'ακύρωση'))) });
     c.requestAccessToken({ prompt: '' });
   });
 }
+const getToken = () => googleToken(SCOPE);
 
 async function api(path, opts = {}) {
   const t = await getToken();

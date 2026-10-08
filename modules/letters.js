@@ -4,10 +4,11 @@ import { db } from '../core/store.js';
 import { module, onSubmit, go, flash, bind, confirmDo, table, notice, actor, ACTORS } from '../core/app.js';
 import { crud } from '../core/crud.js';
 import { esc, today, fmtDate, matches, sortBy, safeFileName, EMAIL_RE, splitEmails, download } from '../core/util.js';
-import { letterPaper, printPaper, signerProfile, IMG } from '../core/paper.js';
+import { letterPaper, printPaper, signerProfile, IMG, fitPaper } from '../core/paper.js';
 import { makeDocx, letterBlocks } from '../core/docx.js';
 import { docTitle, driveBox, saveDocToDrive } from '../core/drive.js';
 import { mailButtons, senderBanner } from '../core/mail.js';
+import { mailSheet, bccWithout } from '../core/gmail.js';
 import { attachPicker, contactItems } from '../core/pickers.js';
 import { nextProtocol, legacyDecreeLetterIds } from './protocol.js';
 import { lodgesAll, lodgeByNumber } from './lodges.js';
@@ -151,7 +152,7 @@ function mountLetterForm(el, x, isNew) {
     const row = { subject: d.subject.trim(), body: d.body.trim(), template_id: d.template_id ? Number(d.template_id) : null, recipient_name: d.recipient_name.trim(),
       recipient_email: emails.join(', '), recipient_member_id: d.recipient_member_id ? Number(d.recipient_member_id) : null, cc_name: String(d.cc_name || '').trim(), closing: String(d.closing || '').trim(), category: LETTER_CATEGORIES[d.category] ? d.category : 'ΕΠΙΣΤΟΛΗ', status: d.status, signer: d.signer };
     const id = await db.save(isNew ? `Νέα Επιστολή: ${row.subject}` : `Επιστολή ${x.protocol_no || x.id}: ενημέρωση`, (tx) => {
-      const r = isNew ? tx.insert('letters', { ...row, letter_date: today(), source_letter_id: x.source_letter_id || null }) : tx.update('letters', x.id, row);
+      const r = isNew ? tx.insert('letters', { ...row, letter_date: today(), source_letter_id: x.source_letter_id || null, visit_id: x.visit_id || null }) : tx.update('letters', x.id, row);
       if (row.status === 'ready') assignProtocol(tx, r.id);
       return r.id;
     });
@@ -160,21 +161,51 @@ function mountLetterForm(el, x, isNew) {
   });
 }
 
+// Αποστολή: λογαριασμός και Bcc — οι Επιστολές Επισκέψεων από τα γενικά εξερχόμενα (info@) με το Bcc των Επισκέψεων
+const mailKind = (x) => (category(x) === 'ΕΠΙΣΚΕΨΗ' ? 'general' : 'official');
+const mailBcc = (x, to = '', cc = '') => (category(x) === 'ΕΠΙΣΚΕΨΗ' ? bccWithout(db.setting('visit_bcc') || '', to, cc) : '');
+// PDF μιας επιστολής (χωρίς να είναι ανοιχτή στην οθόνη)
+export const letterFileName = (x) => fileName(x);
+export async function letterPdf(x) {
+  const { paperPdf } = await import('../core/pdf.js');
+  const host = Object.assign(document.createElement('div'), { className: 'print-area', innerHTML: letterPaper(x) });
+  Object.assign(host.style, { position: 'fixed', left: '-10000px', top: '0' });
+  document.body.appendChild(host);
+  try { const p = host.querySelector('.paper'); fitPaper(p); return { blob: await paperPdf(p, { title: fileName(x) }), name: fileName(x) + '.pdf' }; }
+  finally { host.remove(); }
+}
+// Η επιστολή μιας Επίσκεψης (Έτοιμη, με αρ. πρωτοκόλλου)· αν δεν υπάρχει, καταχωρίζεται τώρα
+export async function ensureVisitLetter(v) {
+  const has = sortBy(db.all('letters').filter((l) => l.visit_id === v.id && l.status === 'ready'), (l) => -(l.protocol_seq || 0))[0];
+  if (has) return has;
+  if (!confirmDo('Για να επισυναφθεί το PDF, η επιστολή της Επίσκεψης θα καταχωριστεί ως «Έτοιμη» με αριθμό πρωτοκόλλου. Συνέχεια;')) throw new Error('Ακυρώθηκε.');
+  const q = provinceLetter(v);
+  const id = await db.save(`Νέα Επιστολή: ${q.subject}`, (tx) => {
+    const r = tx.insert('letters', { subject: q.subject, body: q.body, template_id: q.template_id ? Number(q.template_id) : null, recipient_name: q.to_name, recipient_email: q.to_email,
+      recipient_member_id: null, cc_name: q.cc_name || '', closing: q.closing || '', category: q.category || 'ΕΠΙΣΚΕΨΗ', status: 'ready', signer: actor(), letter_date: today(), visit_id: v.id });
+    assignProtocol(tx, r.id);
+    return r.id;
+  });
+  return db.get('letters', id);
+}
+
 function viewLetter({ params }) {
   const x = db.get('letters', params.id);
   if (!x) return '<h1>Δεν βρέθηκε η επιστολή</h1>';
   const wa = 'https://wa.me/?text=' + encodeURIComponent(`Παρακαλώ να ελέγξετε το email σας και στα spam.\n\n${db.setting('organization_name')}\nΑρ. Πρωτ.: ${x.protocol_no}\nΘέμα: ${x.subject}`);
   return {
     title: x.subject,
-    html: `<section class="card send-panel noprint"><h3>Αποστολή & Αποθήκευση</h3>${senderBanner('official')}
-<div class="toolbar"><button class="btn primary" data-act="pdf">⬇ PDF / Εκτύπωση</button>${mailButtons({ to: x.recipient_email, subject: x.subject, body: x.body, kind: 'official' }, '✉ Αποστολή με Email')}
+    html: `<section class="card send-panel noprint"><h3>Αποστολή & Αποθήκευση</h3>${senderBanner(mailKind(x))}
+<div class="toolbar"><button class="btn primary" data-act="pdf">⬇ PDF / Εκτύπωση</button>${mailButtons({ to: x.recipient_email, bcc: mailBcc(x, x.recipient_email), subject: x.subject, body: x.body, kind: mailKind(x) }, '✉ Αποστολή με Email')}
 <button class="btn" data-act="word">⬇ Word (επεξεργασία)</button><button class="btn" data-act="form">🖋 Ψηφιακό Έντυπο</button>
 <a class="btn" target="_blank" rel="noopener" href="${wa}">WhatsApp μήνυμα</a>${x.status === 'ready' ? '' : '<button class="btn primary" data-act="ready">✅ Έτοιμη: απόδοση αρ. πρωτοκόλλου</button>'}</div>
-<p class="send-help">Για συνημμένο PDF: πατήστε «PDF / Εκτύπωση» → «Αποθήκευση ως PDF» και επισυνάψτε το αρχείο στο email.</p>${driveBox(x, fileName(x))}</section>
+${x.status === 'ready' ? '<div class="mailsheet"></div>' : '<p class="send-help">Για αποστολή με συνημμένο PDF ορίστε πρώτα την επιστολή «✅ Έτοιμη» (αριθμός πρωτοκόλλου).</p>'}${driveBox(x, fileName(x))}</section>
 <div class="toolbar noprint"><a class="btn" href="#/letters/${x.id}/edit">Επεξεργασία</a><a class="btn" href="#/letters/new?copy_from=${x.id}">Νέα πάνω σε αυτή</a><a class="btn" href="#/letters">Αρχείο Επιστολών</a>
 <button class="btn danger" data-act="del">Διαγραφή</button> ${statusPill(x.status)}</div>
 <div class="print-area">${letterPaper(x)}</div>`,
     mount(el) {
+      if (x.status === 'ready') mailSheet(el, { kind: mailKind(x), pdfName: fileName(x), getMsg: () => ({ to: x.recipient_email, cc: '', bcc: mailBcc(x, x.recipient_email), subject: x.subject, body: x.body }),
+        getPdf: async () => ({ blob: await (await import('../core/pdf.js')).paperPdf(el.querySelector('.print-area .paper'), { title: fileName(x) }), name: fileName(x) + '.pdf' }) });
       bind(el, {
         pdf: () => printPaper(fileName(x)),
         word: () => letterDocx(x),
@@ -228,6 +259,7 @@ module({
       if (query.subject || query.body) Object.assign(x, { subject: query.subject || '', body: query.body || '' });
       if (query.closing) x.closing = query.closing;
       if (query.cc_name) x.cc_name = query.cc_name;
+      if (query.visit_id) x.visit_id = Number(query.visit_id);
       if (LETTER_CATEGORIES[query.category]) x.category = query.category;
       return { title: 'Νέα Επιστολή', html: `<h1>Νέα Επιστολή</h1><div class="card signer-card noprint"><b>Υπογράφων:</b> ${esc(ACTORS[actor()])} <a class="btn small" href="#/identity">Αλλαγή</a></div>${letterForm(x, query)}`, mount: (el) => mountLetterForm(el, x, true) };
     },

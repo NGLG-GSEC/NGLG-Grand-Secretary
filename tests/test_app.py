@@ -1247,3 +1247,46 @@ def test_old_visit_letter_link_uses_representation_template(app):
     body = app.page.input_value('[name=body]')
     assert body.startswith('Αγαπητέ Αδ. Γραμματεύ,') and 'ΕπΜΓρ' not in body and 'Πανσεβάσμιος Αδ. Αθανάσιος Νικολαΐδης, Βοηθός Μέγας Διδάσκαλος.' in body, body
     assert 'Εκπροσώπηση του Μεγάλου Διδασκάλου' in app.page.locator('#tplSel option:checked').inner_text()
+
+
+def test_visit_email_gmail_draft_with_pdf_and_bcc(app):
+    drafts = []
+
+    def gmail(route, request):
+        drafts.append({'auth': request.headers.get('authorization'), 'json': json.loads(request.post_data or '{}')})
+        return route.fulfill(json={'id': 'r-1', 'message': {'id': 'abc123'}})
+    app.page.route('https://accounts.google.com/gsi/client', lambda r: r.fulfill(body=GSI_FAKE, content_type='text/javascript'))
+    app.page.route('https://gmail.googleapis.com/**', gmail)
+    app.page.context.route('https://mail.google.com/**', lambda r: r.fulfill(body='gmail', content_type='text/html'))
+    app.page.on('dialog', lambda d: d.accept())
+    app.connect_local()
+    app.page.evaluate("""async () => { const {db} = await import('./core/store.js');
+      await db.save('x', (tx) => { tx.replace('visits', []); tx.setting('gm_email', 'gm@example.com'); tx.setting('google_client_id', 'test.apps.googleusercontent.com');
+        tx.setting('visit_bcc', 'Α Β <b1@example.com>, rep@example.com, b2@example.com');
+        const r = tx.insert('reps', { surname: 'Νικολαΐδης', name: 'Αθανάσιος', office: 'Βοηθός Μέγας Διδάσκαλος', rep_rank: 'Πανσεβάσμιος Αδ.', email: 'rep@example.com' });
+        tx.insert('visits', { visit_date: '2099-10-09', lodge: 'ΔΙΩΝΗ', lodge_number: '32', location: '', province: 'ΕπΜΣτ. Πελοποννήσου & Δυτικής Ελλάδας', rep_id: r.id, notes: '' }); }); }""")
+    app.go('/visits')
+    app.page.locator('.vcard a:has-text("✉ Email προς Στοά (Εκπροσώπηση)")').first.click()
+    app.page.wait_for_selector('.mailsheet .ms-head')
+    assert app.page.input_value('[name=bcc]') == 'b1@example.com, b2@example.com'  # χωρίς τον εκπρόσωπο (ήδη σε Κοιν.)
+    assert 'info@nglgreece.gr' in app.text('.mailsheet')
+    with app.page.expect_popup() as pop:
+        app.page.locator('[data-ms=go]').click()
+    app.page.wait_for_selector('text=Πρόχειρα', timeout=30000)
+    assert len(drafts) == 1 and drafts[0]['auth'] == 'Bearer g-token'
+    raw = drafts[0]['json']['message']['raw']
+    mime = base64.urlsafe_b64decode(raw + '=' * (-len(raw) % 4)).decode()
+    assert 'From: info@nglgreece.gr' in mime and 'To: secretary.pr.pwg.nglgreece@gmail.com' in mime
+    assert 'Cc: rep@example.com, gm@example.com' in mime and 'Bcc: b1@example.com, b2@example.com' in mime
+    assert 'Content-Type: application/pdf' in mime and "filename*=UTF-8''20545%20-%20%CE%95%CE%A0%CE%99%CE%A3%CE%9A%CE%95%CE%A8%CE%97" in mime
+    pdf_b64 = mime.split("filename*=UTF-8''")[1].split('\r\n\r\n', 1)[1].split('\r\n--')[0].replace('\r\n', '')
+    assert base64.b64decode(pdf_b64)[:4] == b'%PDF'
+    pop.value.wait_for_url('**/mail.google.com/**')
+    assert pop.value.url.startswith('https://mail.google.com/mail/u/info%40nglgreece.gr/#drafts?compose=abc123'), pop.value.url
+    # η επιστολή της Επίσκεψης καταχωρίστηκε Έτοιμη με αρ. πρωτοκόλλου
+    ls = app.page.evaluate("async () => (await import('./core/store.js')).db.all('letters')")
+    assert len(ls) == 1 and ls[0]['status'] == 'ready' and ls[0]['protocol_seq'] == 20545 and ls[0]['visit_id']
+    # στην προβολή της επιστολής: ίδια καρτέλα Gmail
+    app.go(f"/letters/{ls[0]['id']}")
+    app.page.wait_for_selector('.mailsheet .ms-head')
+    assert 'b1@example.com' in app.text('.mailsheet')
