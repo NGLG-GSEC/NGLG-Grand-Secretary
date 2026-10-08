@@ -749,13 +749,17 @@ def test_visit_letter_and_email_to_province_and_grand_master(app):
     assert app.page.input_value('[name=notes]') == ''  # χωρίς πρόταση, μένει κενό
     rid = app.page.locator('[name=rep_id] option', has_text='Εκπρόσωπος').first.get_attribute('value')
     app.page.select_option('[name=rep_id]', rid)
-    app.click('✉ Email ΕπΜΓρ. & Εκπροσώπου')
+    app.click('✉ Email προς Στοά')
     app.page.wait_for_selector('#cf')
-    to = app.page.input_value('[name=to]')
-    assert 'rep@example.com' in to and to.split(',')[0].strip() == 'secretary.pr.pwg.nglgreece@gmail.com' and app.page.input_value('[name=cc]') == 'gm@example.com'
-    assert 'Κοινοποιείται στον Λίαν Σεβάσμιος Αδ. Ιωάννης Εκπρόσωπος' in app.page.input_value('[name=body]')
+    # Εκπροσώπηση: προς τον Γραμματέα της Στοάς· κοιν. ΕπΜΓρ., εκπρόσωπος, ΜΔ — από το πρότυπο «Εκπροσώπηση του Μεγάλου Διδασκάλου»
+    # η Στοά εδώ δεν έχει email → Προς τον ΕπΜΓρ.
+    assert app.page.input_value('[name=to]') == 'secretary.pr.pwg.nglgreece@gmail.com'
+    assert app.page.input_value('[name=cc]') == 'gm@example.com, rep@example.com'
     body = app.page.input_value('[name=body]')
-    assert 'ΔΙΩΝΗ' in body and 'Λίαν Σεβάσμιος Αδ. Ιωάννης Εκπρόσωπος' in body
+    assert body.startswith('Αγαπητέ Αδ. Γραμματεύ,') and 'Στοάς ΔΙΩΝΗ υπ’ αρ. 32,' in body and 'ο εκπρόσωπος του Μεγάλου Διδασκάλου της Εθνικής Μεγάλης Στοάς της Ελλάδος, Λίαν Σεβάσμιος Αδ. Ιωάννης Εκπρόσωπος, Μέγας Καγκελάριος.' in body, body
+    assert 'Κανόνα 123' in body and 'Κανόνα 144' in body and '{' not in body and 'την την' not in body
+    assert 'Αγαπητέ Αδελφέ ΕπΜΓρ' not in body and 'Κοινοποιείται στον' not in body
+    assert app.page.input_value('[name=subject]').startswith('Εκπροσώπηση ΜΔ εις την Στοάν «ΔΙΩΝΗ» υπ’ αριθμ. 32 ')
     vs = app.page.evaluate("async () => { const m = await import('./core/store.js'); return m.db.all('visits'); }")
     assert len(vs) == 1 and vs[0]['rep_id'] == int(rid) and vs[0]['location'] == 'Τεκτονικόν Μέγαρον Ιωαννίνων'
     app.go(f"/visits/edit/{vs[0]['id']}")
@@ -763,10 +767,10 @@ def test_visit_letter_and_email_to_province_and_grand_master(app):
     app.page.wait_for_selector('#lf')
     em = app.page.input_value('[name=recipient_email]')
     assert 'gm@example.com' in em and 'rep@example.com' in em
-    assert 'Εκπρόσωπος, Μέγας Καγκελάριος' in app.page.input_value('[name=recipient_name]')
-    assert app.page.input_value('[name=recipient_name]').startswith('ΕπΜΓρ.')
-    assert 'Εγκατάσταση Σεβασμίου' in app.page.input_value('[name=subject]') and 'Λίαν Σεβάσμιος Αδ. Ιωάννης Εκπρόσωπος' in app.page.input_value('[name=body]')
-    assert 'Με Τεκτονικούς χαιρετισμούς' not in app.page.input_value('[name=body]')
+    assert app.page.input_value('[name=recipient_name]').startswith('τον Γραμματέα της Στοάς «ΔΙΩΝΗ» υπ’ αριθ. 32')
+    assert 'Εκπροσώπηση του Μεγάλου Διδασκάλου' in app.page.locator('#tplSel option:checked').inner_text()
+    assert 'Λίαν Σεβάσμιος Αδ. Ιωάννης Εκπρόσωπος' in app.page.input_value('[name=body]')
+    assert app.page.input_value('[name=closing]') == 'Με εκτίμηση και αδελφική αγάπη,'
 
 
 def test_province_summary_and_lodges_without_installation_date(app):
@@ -925,11 +929,11 @@ def test_visit_card_email_and_letter_buttons(app):
     app.page.wait_for_url('**/#/letters/1')
     assert 'Αντιπρόσωπος' in app.text() and '20545' in app.text()
     app.go('/visits')
-    app.page.locator('.vcard a:has-text("✉ Email ΕπΜΓρ. & Εκπροσώπου")').first.click()
+    app.page.locator('.vcard a:has-text("✉ Email προς Στοά (Εκπροσώπηση)")').first.click()
     app.page.wait_for_selector('#cf')
     app.click('✓ Σημείωση ως σταλμένο')
     app.page.wait_for_url('**/#/visits')
-    assert 'Εκπρόσωπος ενημερώθηκε' in app.text() and 'Επαρχία ενημερώθηκε' in app.text()
+    assert 'Εκπρόσωπος ενημερώθηκε' in app.text() and 'Στοά ενημερώθηκε' in app.text()
 
 
 def test_single_member_pool_identify_merge_and_relink(app):
@@ -1214,8 +1218,10 @@ def test_template_representative_field_and_day_article(app):
         tx.insert('letter_templates', { name: 'Εκπροσώπηση', active: 1, body: 'Κατ’ εντολήν του Μεγάλου Διδασκάλου, κατά τις εργασίες της Στοάς {Στοά} υπ’ αρ. {Αρ. Στοάς}, την  {ημέρα}, {ημερομηνία}, θα παραστεί επισήμως ο εκπρόσωπος του Μεγάλου Διδασκάλου, {Εκπρόσωπος}.' }); }); }""")
     app.go('/templates/new')
     assert '{Εκπρόσωπος} = ο Εκπρόσωπος της Επίσκεψης' in app.text()
+    app.go('/templates')
+    assert app.page.locator('table th').first.inner_text().strip() == 'Αρ.'
     app.go('/letters/new')
-    app.page.select_option('#tplSel', label='Εκπροσώπηση')
+    app.page.select_option('#tplSel', label=app.page.locator('#tplSel option', has_text='. Εκπροσώπηση').last.inner_text())
     # Στοά + ημερομηνία → βρίσκει την Επίσκεψη και τον Εκπρόσωπό της
     app.page.fill('#fillLodge', '32 · ΔΙΩΝΗ'); app.page.dispatch_event('#fillLodge', 'change')
     app.page.fill('#fillDate', '2099-10-09'); app.page.dispatch_event('#fillDate', 'change')
