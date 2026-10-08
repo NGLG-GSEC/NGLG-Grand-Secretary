@@ -1339,3 +1339,20 @@ def test_epeteirida_table_import_filters_edit_and_member(app):
     app.go('/letters/new')
     app.pick('#rcptPick', 'Δοκιμαστ')
     assert app.page.input_value('[name=recipient_name]') == 'Πσεβ. Αδ. Βασίλειος Δοκιμαστής'
+
+
+def test_rep_title_from_epeteirida_and_rep_label(app):
+    app.connect_local()
+    app.page.evaluate("""async () => { const {db} = await import('./core/store.js');
+      await db.save('x', (tx) => { tx.replace('visits', []);
+        const m = tx.insert('member_registry', { surname: 'Χατζηδοκιμίου', first_name: 'Νικόλαος', email: 'nik@example.com', active: 1 });
+        tx.insert('epeteirida', { aa: 1, active: 1, title: 'Αναπληρωτής Μέγας Γραμματεύς', honorific: 'Λίαν Σεβάσμιος', full_name: 'Χατζηδοκιμίου Νικόλαος', rank: 'Πρώην Μέγας Γραμματεύς', decree_no: 475, decree_year: 2025, member_id: m.id });
+        const r = tx.insert('reps', { surname: 'Χατζηδοκιμίου', name: 'Νικόλαος', office: 'Αναπληρωτής Μέγας Γραμματεύς', rep_rank: 'Σεβάσμιος Αδ.', member_id: m.id });
+        tx.insert('visits', { visit_date: '2099-10-09', lodge: 'ΔΙΩΝΗ', lodge_number: '32', location: '', province: 'ΕπΜΣτ. Πελοποννήσου & Δυτικής Ελλάδας', rep_id: r.id, notes: '' }); }); }""")
+    app.go('/visits')
+    assert app.page.locator('.vcard label.vreplabel').first.inner_text().strip() == 'ΕΚΠΡΟΣΩΠΟΣ'
+    app.page.locator('.vcard a:has-text("📄 Επιστολή")').first.click()
+    app.page.wait_for_selector('#lf')
+    assert 'Λίαν Σεβάσμιος Αδ. Νικόλαος Χατζηδοκιμίου, Αναπληρωτής Μέγας Γραμματεύς' in app.page.input_value('[name=body]')
+    assert app.page.input_value('[name=cc_name]').startswith('Λίαν Σεβάσμιος Αδ. Νικόλαος Χατζηδοκιμίου')
+    assert 'Σεβάσμιος Αδ. Νικόλαος' not in app.page.input_value('[name=body]').replace('Λίαν Σεβάσμιος Αδ. Νικόλαος', '')

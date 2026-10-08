@@ -103,6 +103,9 @@ export function celebrants(frm, to) {
 // Προσφώνηση: από τον υψηλότερο βαθμό (εκπρόσωπος, Επετηρίδα, Σεβάσμιος Στοάς)
 const HON_K = { 'Σεβ. Αδ.': 0, 'ΛΣεβ. Αδ.': 1, 'Λίαν Σεβ. Αδ.': 1, 'Πσεβ. Αδ.': 2, 'Σεβτ. Αδ.': 3 };
 function rankIdx(m) {
+  // Η Προσφώνηση στην Επετηρίδα είναι η επίσημη πηγή· αλλιώς από εκπροσώπους, αξιώματα, Σεβάσμιο Στοάς
+  const ep = epeteiridaOf(m.id).map((r) => honorificLevel(r.honorific)).filter((h) => h != null);
+  if (ep.length) return Math.max(...ep);
   let k = -1;
   const ids = new Set((person(m.id) || { ids: [m.id] }).ids); // όλες οι εγγραφές του ίδιου προσώπου
   for (const r of db.all('reps').filter((r) => ids.has(r.member_id))) { const rk = repRank(r); if (REP_RANKS.includes(rk)) k = Math.max(k, REP_RANKS.indexOf(rk)); }
@@ -110,7 +113,7 @@ function rankIdx(m) {
     k = Math.max(k, 0); const rk = repRank({ office: o.office || '' }); if (rk) k = Math.max(k, REP_RANKS.indexOf(rk));
     if (HON_K[o.honorific] != null) k = Math.max(k, HON_K[o.honorific]);
   }
-  for (const r of epeteiridaOf(m.id)) { const h = honorificLevel(r.honorific); if (h != null) k = Math.max(k, h); } // Προσφώνηση στην Επετηρίδα
+
   const names = [foldName(`${m.first_name} ${m.surname}`), foldName(`${m.surname} ${m.first_name}`)];
   if (db.all('lodges').some((l) => l.master && names.includes(foldName(l.master)))) k = Math.max(k, 0);
   return k;

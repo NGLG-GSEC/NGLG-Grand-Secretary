@@ -14,6 +14,7 @@ import { lodgesAll, lodgeNoKey, lodgeByNumber, cleanLodgeName } from './lodges.j
 import { DEC_MAP, precedenceOf } from './decree-catalog.js';
 import { contactOf, person, canonicalId, identify } from '../core/people.js';
 import { fillContext, fillPlaceholders, lodgeRecipients, repRecipients, gmVisitTemplate, repVisitTemplate, gmName, GM_VISIT, REP_VISIT, setRepInfo } from './letter-fill.js';
+import { epeteiridaOf, honorificLevel } from './epeteirida-table.js';
 import { parseRank, matchName, isCurrentRecord, hasActiveList, importEpeteiridaAny, hasEpeteirida } from './epeteirida-import.js';
 
 const MONTHS = ['Ιανουάριος', 'Φεβρουάριος', 'Μάρτιος', 'Απρίλιος', 'Μάιος', 'Ιούνιος', 'Ιούλιος', 'Αύγουστος', 'Σεπτέμβριος', 'Οκτώβριος', 'Νοέμβριος', 'Δεκέμβριος'];
@@ -46,6 +47,10 @@ db.migrate('installation-69-2027', (tx) => {
 });
 
 // Εφάπαξ: ο Μέγας Διδάσκαλος στους εκπροσώπους (για να ορίζεται και ο ίδιος σε μια Εγκατάσταση)
+// Ο αποθηκευμένος βαθμός κάθε εκπροσώπου ευθυγραμμίζεται με την Προσφώνηση της Επετηρίδας (εμφανίζεται και στη λίστα Εκπροσώπων)
+db.migrate('reps-rank-from-epeteirida-2026-10', (tx) => {
+  for (const r of tx.all('reps')) { const k = repRank(r); if (k && k !== r.rep_rank && r.member_id && epeteiridaOf(r.member_id).length) tx.update('reps', r.id, { rep_rank: k }); }
+});
 db.migrate('reps-grand-master-2026-10', (tx) => {
   if (tx.all('reps').some((r) => baseOffices(r).includes('Μέγας Διδάσκαλος') && !isPast(r))) return;
   const full = String(tx.setting('grand_master_name') || 'Σεβτ. Αδ. Ιωάννης Μπενετάτος').replace(/^.*?Αδ\.\s*/, '').trim().split(/\s+/);
@@ -59,8 +64,13 @@ const repMap = () => Object.fromEntries(db.all('reps').map((r) => [r.id, r]));
 const signature = () => `Με Τεκτονικούς χαιρετισμούς,\n\n${db.setting('visits_signer_name') || ''}\n${db.setting('visits_signer_title') || ''}`.trim();
 const rankmap = () => { try { return JSON.parse(db.setting('visits_rankmap') || '{}'); } catch { return {}; } };
 const baseOffices = (r) => String(r.office || '').split(' · ').map((o) => o.replace(/\s*\(\d{4}\)\s*$/, '').replace(/^Πρώην\s+/, '').trim()).filter(Boolean);
+// Βαθμός (τίτλος) εκπροσώπου: πρώτα η Προσφώνηση του μέλους στην Επετηρίδα (επίσημη πηγή, π.χ. Πρώην Μέγας Γραμματεύς →
+// «Λίαν Σεβάσμιος»)· αλλιώς ό,τι δόθηκε στον εκπρόσωπο ή, τέλος, ο βαθμός από τα αξιώματά του
 export function repRank(r, rm = rankmap()) {
   if (!r) return '';
+  const mid = r.member_id || (r.surname && r.id ? identify({ surname: r.surname, first_name: r.name }) : null);
+  const ep = (mid ? epeteiridaOf(mid) : []).map((e) => honorificLevel(e.honorific)).filter((h) => h != null);
+  if (ep.length) return REP_RANKS[Math.max(...ep)];
   if (REP_RANKS.includes(r.rep_rank)) return r.rep_rank;
   const os = baseOffices(r);
   return os.length ? REP_RANKS[Math.max(...os.map((o) => rm[o] ?? REP_DEFAULT_RANKS[o] ?? HON_IDX[(DEC_MAP[o] || {}).hon_short] ?? EXTRA_RANKS[o] ?? 0))] : '';
@@ -236,7 +246,7 @@ function visitCard(v, reps, opts = '') {
 <div><div class="vlodge"><a href="#/visits/edit/${v.id}">${esc(v.lodge)}</a>${v.lodge_number ? `<span class="no">Αρ. ${esc(v.lodge_number)}</span>` : ''}</div><div class="vmeta">${esc(dayStr(v.visit_date))} · ${esc(v.location || 'Τόπος —')}</div>
 ${v.notes ? `<div class="vnote">${esc(v.notes)}</div>` : ''}${v.province ? `<span class="vchip">${esc(v.province)}</span>` : ''}${p && p.email ? ` <span class="vmeta">${esc(p.email)}</span>` : ''}${brief || oks ? `<div>${brief} ${oks}</div>` : ''}</div>
 <div class="vrep">${r ? `<b>${esc(repLabel(r))}</b><div class="vmeta">${esc(r.office || '')}</div>` : '<span class="vwarn">Χωρίς εκπρόσωπο</span>'}
-${v.visit_date >= today() ? `<select class="vrepsel" data-id="${v.id}" aria-label="Εκπρόσωπος ΜΔ"><option value="">${r ? '— Αφαίρεση εκπροσώπου —' : '+ Ορισμός ΜΔ / εκπροσώπου…'}</option>${opts.replace(`value="${v.rep_id}"`, `value="${v.rep_id}" selected`)}</select>` : ''}</div></div>`;
+${v.visit_date >= today() ? `<label class="vreplabel" for="vrep${v.id}">ΕΚΠΡΟΣΩΠΟΣ</label><select class="vrepsel" id="vrep${v.id}" data-id="${v.id}" aria-label="ΕΚΠΡΟΣΩΠΟΣ"><option value="">${r ? '— Αφαίρεση εκπροσώπου —' : '+ Ορισμός ΜΔ / εκπροσώπου…'}</option>${opts.replace(`value="${v.rep_id}"`, `value="${v.rep_id}" selected`)}</select>` : ''}</div></div>`;
 }
 
 function visitsPage({ query }) {

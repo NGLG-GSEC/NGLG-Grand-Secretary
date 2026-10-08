@@ -36,10 +36,17 @@ const num = (v) => { const s = clean(v); return /^\d+$/.test(s) ? Number(s) : s 
 
 export const epeteiridaAll = () => db.all('epeteirida');
 // Οι εγγραφές ενός προσώπου (όλες οι εγγραφές του στο Μητρώο)· πρώτη η «κύρια» (με ανώτατο αξίωμα και διάταγμα)
+let memo = { head: undefined, map: null };
+function byPerson() {
+  if (memo.map && memo.head === db.head) return memo.map;
+  const m = new Map();
+  for (const r of epeteiridaAll()) if (r.member_id) { const k = canonicalId(r.member_id); (m.get(k) || m.set(k, []).get(k)).push(r); }
+  memo = { head: db.head, map: m };
+  return m;
+}
 export function epeteiridaOf(memberId) {
   if (!memberId) return [];
-  const ids = new Set((person(memberId) || { ids: [Number(memberId)] }).ids);
-  return sortBy(epeteiridaAll().filter((r) => r.member_id && ids.has(Number(r.member_id))), (r) => (r.rank ? 0 : 1), (r) => -(Number(r.decree_year) || 0), 'aa');
+  return sortBy(byPerson().get(canonicalId(memberId)) || [], (r) => (r.rank ? 0 : 1), (r) => -(Number(r.decree_year) || 0), 'aa');
 }
 // «Πρώην Πρώτος Μέγας Επόπτης — Διάταγμα 414/2024»
 export function highestOfficeText(memberId) {

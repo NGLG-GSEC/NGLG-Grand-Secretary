@@ -269,3 +269,4 @@ input[type=file]{max-width:100%;min-width:0}
 .ep-grid .ep-link{min-width:160px}
 .ep-member label{font-size:.8em;color:#6b7790;display:block}
 @media screen and (max-width:800px){.ep-wrap{max-height:none}.ep-fgrid{grid-template-columns:1fr 1fr}}
+.vreplabel{display:block;font-size:.75em;font-weight:700;letter-spacing:.06em;color:#1d2f5e;margin:6px 0 2px}
