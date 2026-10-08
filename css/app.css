@@ -41,6 +41,7 @@ label{display:block;font-weight:bold;color:#123b7a;margin-bottom:5px}
 input,select,textarea{width:100%;padding:10px;border:1px solid #bdc8d8;border-radius:8px;font:inherit;background:#fff}
 textarea{min-height:260px}
 .card{background:#fff;border:1px solid #d8deea;border-radius:12px;padding:18px;margin:16px 0}
+.fill-box{margin:4px 0;border-left:4px solid #b18a43;background:#fbf8f1}.fill-box .grid{margin-top:8px}.fill-box p{margin:6px 0 0}
 table{width:100%;border-collapse:collapse;background:#fff}
 th,td{padding:10px;border-bottom:1px solid #d8deea;text-align:left;vertical-align:top}
 th{background:#eef3fa;color:#123b7a}

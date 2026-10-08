@@ -988,10 +988,10 @@ def test_grand_master_official_visit_letter_and_email(app):
     assert app.page.input_value('[name=cc]') == 'secretary.pr.pwg.nglgreece@gmail.com, gm@example.com'
     assert app.page.input_value('[name=subject]') == 'Επίσημη Επίσκεψη ΜΔ εις την Στοάν «ΔΙΩΝΗ» υπ’ αριθμ. 32 το Σάββατο, 16 Οκτωβρίου 2027'
     body = app.page.input_value('[name=body]')
-    for s in ['Αγαπητέ Αδελφέ Γραμματεύ,', 'θα πραγματοποιηθούν το Σάββατο, 16 Οκτωβρίου 2027 και ώρα 19:30, θα παραστεί επισήμως ο Μέγας Διδάσκαλος',
-              'Σεβασμιώτατος Αδελφός Ιωάννης Μπενετάτος', 'Κανόνα 144', 'Κατ’ εντολήν του Μεγάλου Διδασκάλου,\nΜε εκτίμηση και αδελφική αγάπη,', 'Ο Μέγας Γραμματέας']:
+    for s in ['Αγαπητέ Αδ. Γραμματεύ,', 'εργασίες της Στοάς «ΔΙΩΝΗ» υπ’ αρ. 32, το Σάββατο, 16 Οκτωβρίου 2027, και ώρα συμφώνως με την πρόσκλησή σας, θα παραστεί επισήμως ο Μέγας Διδάσκαλος',
+              'Σεβασμιώτατος Αδ. Ιωάννης Μπενετάτος.', 'Κανόνα 122', 'Κανόνα 144', 'Παρακαλούμε για την επιβεβαίωση λήψεως της παρούσης.', 'Κατ’ εντολήν του Μεγάλου Διδασκάλου,\nΜε εκτίμηση και αδελφική αγάπη,', 'Ο Μέγας Γραμματέας']:
         assert s in body, s
-    assert 'εκπροσωπ' not in body.lower()
+    assert 'εκπροσωπ' not in body.lower() and '{' not in body
     app.go('/visits')
     app.page.locator('.vcard a:has-text("📄 Επιστολή")').first.click()
     app.page.wait_for_selector('#lf')
@@ -1001,6 +1001,42 @@ def test_grand_master_official_visit_letter_and_email(app):
     app.page.wait_for_url('**/#/letters/1')
     paper = app.text('.paper')
     assert 'Με εκτίμηση και αδελφική αγάπη,' in paper and 'Με αδελφικούς χαιρετισμούς' not in paper
+
+
+def test_smart_template_gm_visit_filled_from_database(app):
+    app.connect_local()
+    app.page.evaluate("""async () => { const {db} = await import('./core/store.js');
+      await db.save('x', (tx) => { tx.replace('visits', []); tx.setting('gm_email', 'gm@example.com');
+        const l = tx.find('lodges', (x) => x.number === '32'); tx.update('lodges', l.id, { secretary_email: 'dioni.secretary@example.com', secretary: '' });
+        tx.insert('visits', { visit_date: '2099-03-17', lodge: 'ΔΙΩΝΗ', lodge_number: '32', location: '', province: 'ΕπΜΣτ. Πελοποννήσου & Δυτικής Ελλάδας', rep_id: null, notes: '' }); }); }""")
+    tpl = app.page.evaluate("""async () => { const {db} = await import('./core/store.js'); return db.all('letter_templates').filter((t) => t.key === 'gm-visit'); }""")
+    assert len(tpl) == 1 and '{Στοά}' in tpl[0]['body'] and '{ημερομηνία}' in tpl[0]['body'] and tpl[0]['name'] == 'Επίσημη επίσκεψη του Μεγάλου Διδασκάλου'
+    app.go('/templates')
+    assert '⚙ από τη βάση' in app.text()
+    app.go('/letters/new')
+    assert app.page.locator('#fillBox').is_hidden()
+    app.page.select_option('#tplSel', str(tpl[0]['id']))
+    assert app.page.locator('#fillBox').is_visible()
+    assert '{Στοά}' in app.page.input_value('[name=body]')  # ακόμη χωρίς στοιχεία
+    # από Επίσκεψη
+    app.page.select_option('#fillVisit', label='17/03/2099 — «ΔΙΩΝΗ» αρ. 32')
+    body = app.page.input_value('[name=body]')
+    assert 'της Στοάς «ΔΙΩΝΗ» υπ’ αρ. 32, την Τρίτη, 17 Μαρτίου 2099, και ώρα' in body and '{' not in body, body
+    assert app.page.input_value('[name=subject]') == 'Επίσημη Επίσκεψη ΜΔ εις την Στοάν «ΔΙΩΝΗ» υπ’ αριθμ. 32 την Τρίτη, 17 Μαρτίου 2099'
+    assert app.page.input_value('[name=recipient_email]') == 'dioni.secretary@example.com, secretary.pr.pwg.nglgreece@gmail.com, gm@example.com'
+    assert app.page.input_value('[name=recipient_name]') == 'τον Γραμματέα της Στοάς «ΔΙΩΝΗ» υπ’ αριθ. 32'
+    assert app.page.input_value('[name=closing]') == 'Με εκτίμηση και αδελφική αγάπη,' and app.page.input_value('[name=category]') == 'ΕΠΙΣΚΕΨΗ'
+    # από Στοά + ημερομηνία (Σάββατο → «το Σάββατο»)
+    app.page.fill('#fillLodge', '1 · ΠΑΛΑΙΩΝ ΠΑΤΡΩΝ ΓΕΡΜΑΝΟΣ')
+    app.page.dispatch_event('#fillLodge', 'change')
+    app.page.fill('#fillDate', '2099-03-21')
+    app.page.dispatch_event('#fillDate', 'change')
+    body = app.page.input_value('[name=body]')
+    assert '«ΠΑΛΑΙΩΝ ΠΑΤΡΩΝ ΓΕΡΜΑΝΟΣ» υπ’ αρ. 1, το Σάββατο, 21 Μαρτίου 2099,' in body, body
+    assert app.page.input_value('#fillVisit') == ''
+    app.click('Αποθήκευση & απόδοση')
+    app.page.wait_for_url('**/#/letters/*')
+    assert 'ΕΠΙΣΚΕΨΗ' in app.page.evaluate("""async () => { const {db} = await import('./core/store.js'); return db.all('letters').at(-1).category; }""")
 
 
 def test_invite_link_login_with_email_and_password(app, browser, base_url):

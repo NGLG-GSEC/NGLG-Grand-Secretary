@@ -10,12 +10,15 @@ import { docTitle, driveBox, saveDocToDrive } from '../core/drive.js';
 import { mailButtons, senderBanner } from '../core/mail.js';
 import { attachPicker, contactItems } from '../core/pickers.js';
 import { nextProtocol, legacyDecreeLetterIds } from './protocol.js';
+import { lodgesAll, lodgeByNumber } from './lodges.js';
+import { PLACEHOLDERS, hasPlaceholders, fillPlaceholders, fillContext, lodgeRecipients, missingPlaceholders, GM_VISIT, dayWithArticle, dateWords } from './letter-fill.js';
 
 const TEMPLATE_SEED = [['Ελεύθερη επιστολή', ''], ['Επίσκεψη ΜΔ', 'Αγαπητοί Αδελφοί,\n\n[Κορμός επιστολής επίσκεψης Μεγάλου Διδασκάλου]'], ['Επίσκεψη ΜΔ με εκπρόσωπο', 'Αγαπητοί Αδελφοί,\n\n[Κορμός επιστολής επίσκεψης με εκπρόσωπο]'],
   ['Συλλυπητήρια', 'Αγαπητοί Αδελφοί,\n\n[Εγκεκριμένο πρότυπο συλλυπητηρίων]'], ['Συγχαρητήρια', 'Αγαπητοί Αδελφοί,\n\n[Εγκεκριμένο πρότυπο συγχαρητηρίων]'], ['Ευχαριστήρια', 'Αγαπητοί Αδελφοί,\n\n[Εγκεκριμένο πρότυπο ευχαριστηρίων]'],
   ['Πρόσκληση', 'Αγαπητοί Αδελφοί,\n\n[Εγκεκριμένο πρότυπο πρόσκλησης]'], ['Ανακοίνωση', 'Αγαπητοί Αδελφοί,\n\n[Εγκεκριμένο πρότυπο ανακοίνωσης]']];
 db.seed('letter_templates', () => TEMPLATE_SEED.map(([name, body], i) => ({ id: i + 1, name, body, active: 1 })));
 
+const PH_HELP = 'Πεδία που συμπληρώνονται από τη βάση: ' + PLACEHOLDERS.map(([k, d]) => `{${k}} = ${d}`).join(' · ');
 const templates = () => sortBy(db.all('letter_templates').filter((t) => t.active && t.name !== 'ΔΙΑΤΑΓΜΑΤΑ'), 'name');
 export const lettersAll = () => { const dec = legacyDecreeLetterIds(); return db.all('letters').filter((l) => !dec.has(l.id)); };
 const STATUS = { draft: 'Πρόχειρη', ready: 'Έτοιμη' };
@@ -45,11 +48,25 @@ export function openInDigitalForm(x) {
   location.href = 'diatagma/';
 }
 
+// Πλαίσιο «Συμπλήρωση από τη βάση» για πρότυπα με πεδία {…}: από Επίσκεψη ή από Στοά + ημερομηνία
+const upcomingVisits = () => sortBy(db.all('visits').filter((v) => v.visit_date >= today()), 'visit_date');
+const visitLabel = (v) => `${fmtDate(v.visit_date)} — «${v.lodge || ''}»${v.lodge_number ? ' αρ. ' + v.lodge_number : ''}`;
+function fillPanel(x, query) {
+  const t = x.template_id ? db.get('letter_templates', x.template_id) : null, show = !!t && hasPlaceholders([t.body, t.subject].join(' '));
+  const sel = Number(query.visit_id) || 0, sv = sel ? db.get('visits', sel) : null, vs = [...(sv && sv.visit_date < today() ? [sv] : []), ...upcomingVisits()];
+  return `<div class="full card fill-box" id="fillBox"${show ? '' : ' hidden'}><b>⚙ Συμπλήρωση από τη βάση</b> <small class="muted">— τα πεδία του προτύπου (${PLACEHOLDERS.map(([k]) => '{' + esc(k) + '}').join(', ')}) γεμίζουν αυτόματα.</small>
+<div class="grid"><div class="full"><label>Από Επίσκεψη (επόμενες)</label><select id="fillVisit"><option value="">— ή επιλέξτε Στοά και ημερομηνία παρακάτω —</option>${vs.map((v) => `<option value="${v.id}"${v.id === sel ? ' selected' : ''}>${esc(visitLabel(v))}</option>`).join('')}</select></div>
+<div><label>Στοά</label><input id="fillLodge" list="fillLodges" placeholder="αριθμός ή όνομα" autocomplete="off"><datalist id="fillLodges">${lodgesAll(true).map((l) => `<option value="${esc(l.number)} · ${esc(l.name)}">`).join('')}</datalist></div>
+<div><label>Ημερομηνία εργασιών</label><input id="fillDate" type="date"></div></div>
+<p class="muted" id="fillState"></p></div>`;
+}
+
 function letterForm(x, query = {}) {
   const tpl = templates();
   return `<form id="lf" class="grid card">
 <div><label>Πρότυπο / Περίπτωση</label><select name="template_id" id="tplSel"><option value="">— Επιλογή —</option>${tpl.map((t) => `<option value="${t.id}"${Number(x.template_id) === t.id ? ' selected' : ''}>${esc(t.name)}</option>`).join('')}</select></div>
 <div><label>Ημερομηνία</label><input value="${esc(fmtDate(x.letter_date || today()))}" disabled></div>
+${fillPanel(x, query)}
 <div class="full"><label>🔎 Παραλήπτης από τον Κατάλογο / Μητρώο</label><input id="rcptPick" placeholder="Επαρχία, Στοά, ΕπΜΔ, όνομα μέλους…" autocomplete="off"></div>
 <input type="hidden" name="recipient_member_id" value="${esc(x.recipient_member_id || '')}"><input type="hidden" name="closing" value="${esc(x.closing || '')}"><input type="hidden" name="category" value="${esc(category(x))}">
 <div><label>Παραλήπτης («Προς»)</label><input name="recipient_name" value="${esc(x.recipient_name || '')}"></div>
@@ -68,10 +85,40 @@ function mountLetterForm(el, x, isNew) {
   attachPicker(el.querySelector('#rcptPick'), contactItems, (c) => {
     f.recipient_name.value = c.name || ''; f.recipient_email.value = c.email || ''; f.recipient_member_id.value = c.member_id || '';
   });
+  // Πρότυπο + στοιχεία από τη βάση → κείμενο, θέμα, παραλήπτες
+  const box = el.querySelector('#fillBox'), fv = el.querySelector('#fillVisit'), fl = el.querySelector('#fillLodge'), fd = el.querySelector('#fillDate'), state = el.querySelector('#fillState');
+  let tpl = x.template_id ? db.get('letter_templates', x.template_id) : null, auto = { body: f.body.value, subject: f.subject.value };
+  const ctx = () => {
+    const v = fv.value ? db.get('visits', fv.value) : null;
+    if (v) return fillContext({ visit: v });
+    const no = String(fl.value).split('·')[0].trim(), l = no ? lodgeByNumber(no) : null;
+    return fillContext({ lodge_number: l ? l.number : '', date: fd.value });
+  };
+  const apply = (force) => {
+    if (!tpl) return;
+    const c = ctx(), body = fillPlaceholders(tpl.body, c), subject = tpl.subject ? fillPlaceholders(tpl.subject, c) : f.subject.value;
+    const edited = (f.body.value.trim() && f.body.value !== auto.body) || (f.subject.value.trim() && f.subject.value !== auto.subject);
+    if (!force && edited && !confirmDo('Αντικατάσταση του κειμένου με το πρότυπο συμπληρωμένο από τη βάση;')) return;
+    f.body.value = body; f.subject.value = subject; auto = { body, subject };
+    if (tpl.closing) f.closing.value = tpl.closing;
+    if (LETTER_CATEGORIES[tpl.category]) f.category.value = tpl.category;
+    if (c.lodge && (tpl.key === GM_VISIT.key || !f.recipient_email.value.trim())) {
+      const r = lodgeRecipients(c);
+      f.recipient_name.value = r.toName; f.recipient_email.value = [r.to, r.cc].filter(Boolean).join(', '); f.recipient_member_id.value = '';
+    }
+    const miss = missingPlaceholders(body + ' ' + subject);
+    state.innerHTML = c.lodge ? `✓ Στοά «${esc(c.lodge)}»${c.lodge_number ? ' αρ. ' + esc(c.lodge_number) : ''}${c.date ? ` · ${esc(dayWithArticle(c.date))}, ${esc(dateWords(c.date))}` : ''}`
+      + (miss.length ? ` — <span class="warn">λείπουν: ${miss.map((k) => '{' + esc(k) + '}').join(', ')}</span>` : '')
+      + (tpl.key === GM_VISIT.key && c.lodge && !lodgeRecipients(c).lodgeMail ? ' — <span class="warn">η Στοά δεν έχει email (Συμβολικές Στοές)</span>' : '') : 'Επιλέξτε Επίσκεψη ή Στοά και ημερομηνία.';
+  };
   el.querySelector('#tplSel').addEventListener('change', (e) => {
-    const t = db.get('letter_templates', e.target.value);
-    if (t && (!f.body.value.trim() || confirmDo('Αντικατάσταση του κειμένου με το πρότυπο;'))) f.body.value = t.body;
+    tpl = db.get('letter_templates', e.target.value);
+    box.hidden = !(tpl && hasPlaceholders([tpl.body, tpl.subject].join(' ')));
+    if (tpl) apply(false);
   });
+  fv.addEventListener('change', () => { if (fv.value) { fl.value = ''; fd.value = ''; } apply(true); });
+  for (const i of [fl, fd]) i.addEventListener('change', () => { fv.value = ''; apply(true); });
+  if (tpl && !box.hidden && (fv.value || !f.body.value.trim() || hasPlaceholders(f.body.value))) apply(true);
   const cur = () => ({ ...x, ...Object.fromEntries(new FormData(f)), letter_date: x.letter_date || today() });
   bind(el, { form: () => openInDigitalForm(cur()), word: () => letterDocx(cur()), preview() {
     const d = Object.fromEntries(new FormData(f));
@@ -153,12 +200,13 @@ module({
     '/letters/new': ({ query }) => {
       let x = { status: 'draft', signer: actor() };
       if (query.copy_from) { const s = db.get('letters', query.copy_from); if (s) x = { ...x, template_id: s.template_id, subject: s.subject, body: s.body, recipient_name: s.recipient_name, recipient_email: s.recipient_email, recipient_member_id: s.recipient_member_id, closing: s.closing || '', category: s.category || 'ΕΠΙΣΤΟΛΗ', source_letter_id: s.id }; }
-      else if (query.template_id) { const t = db.get('letter_templates', query.template_id); if (t) x = { ...x, template_id: t.id, body: t.body }; }
+      else if (query.template_id) { const t = db.get('letter_templates', query.template_id); if (t) x = { ...x, template_id: t.id, body: t.body, subject: t.subject || '', closing: t.closing || '', category: t.category || 'ΕΠΙΣΤΟΛΗ' }; }
+      if (query.template_id && !x.template_id && db.get('letter_templates', query.template_id)) x.template_id = Number(query.template_id);
       if (query.to_name || query.to_email) Object.assign(x, { recipient_name: query.to_name || '', recipient_email: query.to_email || '' });
       if (query.subject || query.body) Object.assign(x, { subject: query.subject || '', body: query.body || '' });
       if (query.closing) x.closing = query.closing;
       if (LETTER_CATEGORIES[query.category]) x.category = query.category;
-      return { title: 'Νέα Επιστολή', html: `<h1>Νέα Επιστολή</h1><div class="card signer-card noprint"><b>Υπογράφων:</b> ${esc(ACTORS[actor()])} <a class="btn small" href="#/identity">Αλλαγή</a></div>${letterForm(x)}`, mount: (el) => mountLetterForm(el, x, true) };
+      return { title: 'Νέα Επιστολή', html: `<h1>Νέα Επιστολή</h1><div class="card signer-card noprint"><b>Υπογράφων:</b> ${esc(ACTORS[actor()])} <a class="btn small" href="#/identity">Αλλαγή</a></div>${letterForm(x, query)}`, mount: (el) => mountLetterForm(el, x, true) };
     },
     '/letters/:id': viewLetter,
     '/letters/:id/edit': ({ params }) => {
@@ -168,11 +216,13 @@ module({
     },
     ...crud({
       table: 'letter_templates', base: '/templates', title: 'Πρότυπα Επιστολών', one: 'Πρότυπο', name: (t) => t.name,
-      fields: [{ k: 'name', label: 'Όνομα', required: true, full: true }, { k: 'body', label: 'Κορμός επιστολής', type: 'textarea', full: true }, { k: 'active', label: 'Ενεργό', type: 'select', options: [[1, 'Ναι'], [0, 'Όχι']] }],
+      fields: [{ k: 'name', label: 'Όνομα', required: true, full: true }, { k: 'subject', label: 'Θέμα (προαιρετικό)', full: true, help: PH_HELP },
+        { k: 'body', label: 'Κορμός επιστολής', type: 'textarea', full: true, help: PH_HELP }, { k: 'closing', label: 'Αποφώνηση (προαιρετική)', placeholder: 'π.χ. Με εκτίμηση και αδελφική αγάπη,' },
+        { k: 'category', label: 'Κατηγορία πρωτοκόλλου', type: 'select', options: Object.entries(LETTER_CATEGORIES).map(([k]) => [k, k]) }, { k: 'active', label: 'Ενεργό', type: 'select', options: [[1, 'Ναι'], [0, 'Όχι']] }],
       defaults: { active: 1 },
       sort: (xs) => sortBy(xs.filter((t) => t.name !== 'ΔΙΑΤΑΓΜΑΤΑ'), 'name'),
       validate: (d) => ({ ...d, active: Number(d.active) ? 1 : 0 }),
-      columns: [{ label: 'Όνομα', v: (t) => `<b>${esc(t.name)}</b>` }, { label: 'Κορμός', v: (t) => `<small class="muted">${esc(String(t.body || '').slice(0, 120))}</small>` }, { label: 'Ενεργό', v: (t) => (t.active ? '✓' : '—') }],
+      columns: [{ label: 'Όνομα', v: (t) => `<b>${esc(t.name)}</b>${hasPlaceholders([t.body, t.subject].join(' ')) ? ' <span class="pill ok">⚙ από τη βάση</span>' : ''}` }, { label: 'Κορμός', v: (t) => `<small class="muted">${esc(String(t.body || '').slice(0, 120))}</small>` }, { label: 'Ενεργό', v: (t) => (t.active ? '✓' : '—') }],
     }),
   },
   tile: { order: 10, render: () => {

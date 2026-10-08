@@ -12,6 +12,7 @@ import { provincialChoices, provinceByShort, provinceRoles } from './provinces.j
 import { lodgesAll, lodgeNoKey, lodgeByNumber, cleanLodgeName } from './lodges.js';
 import { DEC_MAP, precedenceOf } from './decree-catalog.js';
 import { contactOf, person, canonicalId, identify } from '../core/people.js';
+import { fillContext, fillPlaceholders, lodgeRecipients, gmVisitTemplate, gmName, GM_VISIT } from './letter-fill.js';
 import { parseRank, matchName, isCurrentRecord, hasActiveList, importEpeteiridaAny, hasEpeteirida } from './epeteirida-import.js';
 
 const MONTHS = ['Ιανουάριος', 'Φεβρουάριος', 'Μάρτιος', 'Απρίλιος', 'Μάιος', 'Ιούνιος', 'Ιούλιος', 'Αύγουστος', 'Σεπτέμβριος', 'Οκτώβριος', 'Νοέμβριος', 'Δεκέμβριος'];
@@ -416,29 +417,16 @@ const oneSubject = (v) => (isGM(repOf(v)) ? gmSubject(v) : `Εκπροσώπησ
 // ---- Επίσημη επίσκεψη του ίδιου του Μεγάλου Διδασκάλου (όχι εκπροσώπηση)
 const repOf = (v) => (v && v.rep_id ? db.get('reps', v.rep_id) : null);
 export const isGM = (r) => !!r && !isPast(r) && baseOffices(r).includes('Μέγας Διδάσκαλος');
-const MONTHS_GEN = ['Ιανουαρίου', 'Φεβρουαρίου', 'Μαρτίου', 'Απριλίου', 'Μαΐου', 'Ιουνίου', 'Ιουλίου', 'Αυγούστου', 'Σεπτεμβρίου', 'Οκτωβρίου', 'Νοεμβρίου', 'Δεκεμβρίου'];
-const longDate = (iso) => { const d = parseIso(iso), day = DAYS[d.getDay()]; return `${day === 'Σάββατο' ? 'το' : 'την'} ${day}, ${d.getDate()} ${MONTHS_GEN[d.getMonth()]} ${d.getFullYear()}`; };
-const visitTime = (v) => (/(?:Ώρα|ώρα)\s*:?\s*(\d{1,2}[:.]\d{2})/.exec(v.notes || '') || [])[1] || '';
-const lodgeNo = (v) => (v.lodge_number ? ` υπ’ αριθμ. ${v.lodge_number}` : '');
-const gmSubject = (v) => `Επίσημη Επίσκεψη ΜΔ εις την Στοάν «${v.lodge}»${lodgeNo(v)} ${longDate(v.visit_date)}`;
-const gmName = () => String(db.setting('grand_master_name') || 'Σεβτ. Αδ. Ιωάννης Μπενετάτος').replace(/^.*?Αδ\.\s*/, '').trim();
-const GM_CLOSING = 'Με εκτίμηση και αδελφική αγάπη,';
+// Κείμενο και θέμα από το πρότυπο «Επίσημη επίσκεψη του Μεγάλου Διδασκάλου» (Πρότυπα Επιστολών), με Στοά/ημέρα/ημερομηνία από την Επίσκεψη
+const gmCtx = (v) => fillContext({ visit: v });
+const gmSubject = (v) => fillPlaceholders(gmVisitTemplate().subject || GM_VISIT.subject, gmCtx(v));
+const gmClosing = () => gmVisitTemplate().closing || GM_VISIT.closing;
 function gmBody(v, withSignature = true) {
-  const t = visitTime(v);
-  let b = `Αγαπητέ Αδελφέ Γραμματεύ,\n\nΣας γνωρίζουμε ότι κατά τις προσεχείς εργασίες της υμετέρας Στοάς, οι οποίες θα πραγματοποιηθούν ${longDate(v.visit_date)} και ώρα ${t || '……'}, θα παραστεί επισήμως ο Μέγας Διδάσκαλος της Εθνικής Μεγάλης Στοάς της Ελλάδος, Σεβασμιώτατος Αδελφός ${gmName()}.`
-    + '\n\nΠαρακαλείσθε όπως ενημερώσετε εγκαίρως τον Σεβάσμιο Διδάσκαλο της Στοάς, καθώς και τον Τελετάρχη, προκειμένου να γίνουν όλες οι προσήκουσες προετοιμασίες και να τηρηθούν τα προβλεπόμενα για την υποδοχή και παρουσία του Μεγάλου Διδασκάλου.'
-    + '\n\nΗ επίσημη παρουσία του Μεγάλου Διδασκάλου δέον όπως καταχωρηθεί στα Πρακτικά των εργασιών της Στοάς, σύμφωνα με τον Κανόνα 144 του Συντάγματος της Ε.Μ.Σ.τ.Ε.'
-    + '\n\nΚατ’ εντολήν του Μεγάλου Διδασκάλου,';
-  if (withSignature) b += `\n${GM_CLOSING}\n\nΟ ${db.setting('grand_secretary_title') || 'Μέγας Γραμματέας'}\n${db.setting('grand_secretary_name') || ''}`;
+  let b = fillPlaceholders(gmVisitTemplate().body, gmCtx(v));
+  if (withSignature) b += `\n${gmClosing()}\n\nΟ ${db.setting('grand_secretary_title') || 'Μέγας Γραμματέας'}\n${db.setting('grand_secretary_name') || ''}`;
   return b;
 }
-// Παραλήπτες επίσημης επίσκεψης: Γραμματέας της Στοάς (Προς)· ΕπΜΓρ. και ΜΔ (Κοιν.)
-function gmRecipients(v) {
-  const l = v.lodge_number ? lodgeByNumber(v.lodge_number) : null, p = provinceByShort(v.province || ''), gs = p ? provinceRoles(p)[1] : null;
-  const lodgeMail = l ? (String(l.secretary_email || '').trim() || String(l.email || '').trim()) : '';
-  return { lodgeMail, to: lodgeMail, toName: `τον Γραμματέα της Στοάς «${v.lodge}»${v.lodge_number ? ` υπ’ αριθ. ${v.lodge_number}` : ''}${l && l.secretary ? `, ${l.secretary}` : ''}`,
-    cc: [gs ? gs.email : '', String(db.setting('gm_email') || '').trim()].filter(Boolean).join(', ') };
-}
+const gmRecipients = (v) => lodgeRecipients(gmCtx(v));
 // Κείμενο για Επαρχία και εκπρόσωπο μαζί
 function jointMail(v, withSignature = true) {
   const { p, r } = provinceRecipients(v);
@@ -452,7 +440,7 @@ function notifyPage({ query }) {
   if (isGM(repOf(v))) {
     const g = gmRecipients(v), back = query.back === 'list' ? '#/visits' : `#/visits/edit/${v.id}`;
     return composePage('Επίσημη Επίσκεψη του Μεγάλου Διδασκάλου', { to: g.to, cc: g.cc, subject: gmSubject(v), body: gmBody(v) }, {
-      hint: [!g.lodgeMail && 'Η Στοά δεν έχει email (Συμβολικές Στοές → email Στοάς ή Γραμματέα) — συμπληρώστε το εδώ.', !visitTime(v) && 'Δεν έχει δηλωθεί ώρα (σημειώσεις της επίσκεψης, π.χ. «Ώρα 19:30») — συμπληρώστε την στο κείμενο.'].filter(Boolean).join(' '),
+      hint: [!g.lodgeMail && 'Η Στοά δεν έχει email (Συμβολικές Στοές → email Στοάς ή Γραμματέα) — συμπληρώστε το εδώ.'].filter(Boolean).join(' '),
       back, kind: 'official', attach: { name: `episkepsi-md-${v.lodge_number || 'stoa'}.ics`, data: icsFor([v]) },
       onSent: async () => { await markVisits([v.id], 'prov'); flash('Σημειώθηκε η ενημέρωση για την επίσημη επίσκεψη.'); go(back.slice(1)); },
     });
@@ -467,7 +455,7 @@ function notifyPage({ query }) {
 }
 // Επιστολή (με αριθμό πρωτοκόλλου) — παράμετροι για τη «Νέα Επιστολή»: Προς ΕπΜΓρ. και εκπρόσωπο, email και του ΜΔ
 export function provinceLetter(v) {
-  if (isGM(repOf(v))) { const g = gmRecipients(v); return { to_name: g.toName, to_email: [g.to, g.cc].filter(Boolean).join(', '), subject: gmSubject(v), body: gmBody(v, false), closing: GM_CLOSING, category: 'ΕΠΙΣΚΕΨΗ' }; }
+  if (isGM(repOf(v))) { const g = gmRecipients(v); return { to_name: g.toName, to_email: [g.to, g.cc].filter(Boolean).join(', '), subject: gmSubject(v), body: gmBody(v, false), closing: gmClosing(), category: 'ΕΠΙΣΚΕΨΗ', template_id: gmVisitTemplate().id || '', visit_id: v.id }; }
   const { to, toName, cc } = provinceRecipients(v);
   return { to_name: toName, to_email: [to, cc].filter(Boolean).join(', '), subject: oneSubject(v), body: jointMail(v, false), category: 'ΕΠΙΣΚΕΨΗ' };
 }
