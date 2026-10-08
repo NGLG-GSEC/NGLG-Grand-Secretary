@@ -1290,3 +1290,52 @@ def test_visit_email_gmail_draft_with_pdf_and_bcc(app):
     app.go(f"/letters/{ls[0]['id']}")
     app.page.wait_for_selector('.mailsheet .ms-head')
     assert 'b1@example.com' in app.text('.mailsheet')
+
+
+EP_TSV = '\n'.join([
+    'Α/Α\tΕΝΕΡΓΟΣ\tΤίτλος αξιώματος κατά το Σύνταγμα\tΠροσφώνηση\tΟνοματεπώνυμο\tΑνώτατο αξίωμα / βαθμός\tΕΠΑΡΧΙΑ / ΣΤΟΑ Μ ΕΠΙΜ\tΑρ. διατάγματος ανώτατου αξιώματος\tΈτος ανώτατου βαθμού\tΤΜΔ\tΔΙΑΤΑΓΜΑ ΤΜΔ -ΕΤΟΣ\tΕν ενεργεία αξίωμα / διάταγμα',
+    '1\tΝΑΙ\tΜέγας Ευχέτης\tΛίαν Σεβάσμιος\tΕπετηριδάκης Αλέξιος\tΜέγας Ευχέτης\t\t502\t2026\t\t\tΜέγας Ευχέτης 502/2026',
+    '2\tΟΧΙ\tΠρώην Πρώτος Μέγας Επόπτης\tΠανσεβάσμιος\tΔοκιμαστής Βασίλειος\tΠρώην Πρώτος Μέγας Επόπτης\tΑΘΗΝΩΝ\t414\t2024\tΤΜΔ\t\t',
+    '3\tΟΧΙ\tΠρώην Μέγας Ξιφοφόρος\tΛίαν Σεβάσμιος\tΆγνωστος Ξένος\tΠρώην Μέγας Ξιφοφόρος\t\t362\t2021\t\t\t',
+])
+
+
+def test_epeteirida_table_import_filters_edit_and_member(app):
+    app.connect_local()
+    mid = app.page.evaluate("""async () => { const {db} = await import('./core/store.js');
+      return db.save('x', (tx) => { tx.insert('member_registry', { surname: 'Επετηριδάκης', first_name: 'Αλέξιος', active: 1 });
+        return tx.insert('member_registry', { surname: 'Δοκιμαστής', first_name: 'Βασίλειος', email: 'dok@example.com', active: 1 }).id; }); }""")
+    app.go('/epeteirida/pinakas')
+    app.page.locator('summary:has-text("Εισαγωγή / αντικατάσταση")').click()
+    app.page.fill('#epimp2 [name=paste]', EP_TSV)
+    app.page.locator('#epimp2 button').click()
+    app.page.wait_for_selector('text=3 εγγραφές · 2 συνδέθηκαν')
+    assert 'Εμφανίζονται 3 από 3 · 2 συνδεδεμένοι' in app.text('#epcount')
+    # δυναμικά φίλτρα: Ενεργός = ΝΑΙ, μετά αναζήτηση
+    app.page.select_option('[data-s=active]', '1')
+    assert 'Εμφανίζονται 1 από 3' in app.text('#epcount') and 'Επετηριδάκης' in app.text('#epg')
+    app.page.click('[data-act=reset]')
+    app.page.fill('[data-f=q]', '414')
+    assert 'Εμφανίζονται 1 από 3' in app.text('#epcount') and 'Δοκιμαστής' in app.text('#epg')
+    app.page.click('[data-act=reset]')
+    app.page.select_option('[data-s=linked]', '0')
+    assert 'Άγνωστος' in app.text('#epg') and 'Εμφανίζονται 1 από 3' in app.text('#epcount')
+    app.page.click('[data-act=reset]')
+    # επεξεργασία κελιού και αποθήκευση
+    cell = app.page.locator('tr:has-text("Δοκιμαστής") [data-e=current]')
+    cell.click(); cell.type('Μέγας Γραμματεύς 513/2026'); cell.press('Enter')
+    assert app.page.locator('[data-act=save]').inner_text().strip() == '💾 Αποθήκευση αλλαγών (1)'
+    app.page.click('[data-act=save]')
+    app.page.wait_for_selector('text=Αποθηκεύτηκαν 1 αλλαγές')
+    rows = app.page.evaluate("async () => (await import('./core/store.js')).db.all('epeteirida')")
+    r = [x for x in rows if x['full_name'] == 'Δοκιμαστής Βασίλειος'][0]
+    assert r['current'] == 'Μέγας Γραμματεύς 513/2026' and r['member_id'] == mid and r['tmd'] == 1 and r['decree_no'] == 414
+    # στο μέλος: ανώτατο αξίωμα και διάταγμα· στη λίστα του Μητρώου· τίτλος «Πσεβ. Αδ.»
+    app.go(f'/members/{mid}')
+    t = app.text('.ep-member')
+    assert 'Πρώην Πρώτος Μέγας Επόπτης' in t and '414/2024' in t and 'Πανσεβάσμιος' in t
+    app.go('/members?q=Δοκιμαστής&field=surname')
+    assert 'Πρώην Πρώτος Μέγας Επόπτης — Διάταγμα 414/2024' in app.text()
+    app.go('/letters/new')
+    app.pick('#rcptPick', 'Δοκιμαστ')
+    assert app.page.input_value('[name=recipient_name]') == 'Πσεβ. Αδ. Βασίλειος Δοκιμαστής'

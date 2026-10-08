@@ -8,7 +8,7 @@ import { importVisitsPayload, importVisitsMessage } from './visits.js';
 import { applyMemberItems } from './members.js';
 
 export const TABLES = {
-  member_registry: ['Μητρώο Μελών', 'Μέλη', '#/members/{id}'], member_lodges: ['Στοές των μελών', 'Μέλη'], member_degrees_offices: ['Επετηρίδα (αξιώματα)', 'Μέλη'],
+  member_registry: ['Μητρώο Μελών', 'Μέλη', '#/members/{id}'], member_lodges: ['Στοές των μελών', 'Μέλη'], member_degrees_offices: ['Ιστορικό αξιωμάτων (Διατάγματα)', 'Μέλη'], epeteirida: ['Επετηρίδα', 'Μέλη'],
   lodges: ['Συμβολικές Στοές', 'Στοές & Επαρχίες', '#/lodges/edit/{id}'], grand_lodges: ['Επαρχιακές Μεγάλες Στοές', 'Στοές & Επαρχίες', '#/provinces/edit/{id}'],
   letters: ['Επιστολές', 'Πρωτόκολλο', '#/letters/{id}'], decree_documents: ['Διατάγματα', 'Πρωτόκολλο', '#/decrees/{id}'], letter_templates: ['Πρότυπα επιστολών', 'Πρωτόκολλο', '#/templates/edit/{id}'],
   reps: ['Εκπρόσωποι ΜΔ', 'Εργασίες ΜΔ', '#/reps/edit/{id}'], visits: ['Επισκέψεις Στοών', 'Εργασίες ΜΔ', '#/visits/edit/{id}'], namedays: ['Εορτολόγιο ονομάτων', 'Εργασίες ΜΔ', '#/namedays/calendar/edit/{id}'],

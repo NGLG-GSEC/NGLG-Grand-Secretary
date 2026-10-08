@@ -253,3 +253,19 @@ input[type=file]{max-width:100%;min-width:0}
 .mchip.att{background:#fdecea;color:#a3261b}
 .mailsheet .ms-acts{margin-top:10px}.mailsheet .btn.big{width:100%;min-height:48px;font-size:1.05em}
 .mailsheet .ms-state{margin-top:8px}.mailsheet .ms-ok{background:#eef8f0;border-radius:10px;padding:10px;margin-bottom:8px;color:#1d5e2f}
+/* Επετηρίδα (πίνακας) */
+.ep-fgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px 12px;align-items:end}
+.ep-fgrid label{display:flex;flex-direction:column;gap:4px;font-size:.85em;color:#4a5670}.ep-fgrid .ep-q{grid-column:1/-1}
+.ep-fgrid .ep-reset{display:flex;align-items:end}
+.ep-wrap{overflow:auto;max-height:72vh;padding:0}
+.ep-grid{border-collapse:separate;border-spacing:0;font-size:.9em;min-width:1500px;width:100%}
+.ep-grid th{position:sticky;top:0;background:#1d2f5e;color:#fff;cursor:pointer;user-select:none;white-space:nowrap;padding:8px 6px;z-index:1;font-weight:600}
+.ep-grid td{border-bottom:1px solid #eef1f6;padding:5px 6px;vertical-align:top}
+.ep-grid td[contenteditable]:focus{outline:2px solid #b18a43;background:#fffdf5}
+.ep-grid tr.dirty td{background:#fff8e6}
+.ep-grid select{padding:2px 4px;min-height:0;font-size:.95em}
+.ep-grid .c-aa{width:44px;text-align:right}.ep-grid .c-full_name{font-weight:600;min-width:170px}.ep-grid .c-member{white-space:nowrap}
+.ep-grid .lnk{border:0;background:none;cursor:pointer;color:#a3261b;padding:0 4px}
+.ep-grid .ep-link{min-width:160px}
+.ep-member label{font-size:.8em;color:#6b7790;display:block}
+@media screen and (max-width:800px){.ep-wrap{max-height:none}.ep-fgrid{grid-template-columns:1fr 1fr}}

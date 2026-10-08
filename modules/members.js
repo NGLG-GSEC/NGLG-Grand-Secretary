@@ -6,6 +6,7 @@ import { module, onSubmit, go, flash, bind, confirmDo, table, notice, pager, toa
 import { esc, fold, sortBy, readXlsx, XLSX, parsePasted } from '../core/util.js';
 import { lodgeNoKey, lodgesAll } from './lodges.js';
 import { noContact, NO_CONTACT } from '../core/pickers.js';
+import { epeteiridaOf, highestOfficeText } from './epeteirida-table.js';
 import { identify, canonicalId, person, digits10, sameNameGroups } from '../core/people.js';
 
 const PAGE = 100;
@@ -102,6 +103,19 @@ function setMemberLodges(tx, mid, lodges) {
 }
 const parseLodges = (v) => String(v || '').split('\n').filter((x) => x.trim()).map((line, i) => { const p = line.split('|').map((x) => x.trim()); while (p.length < 3) p.push(''); return { seq: i + 1, name: p[0], number: p[1], status: p.slice(2).join(' | ').trim() }; });
 
+// Επετηρίδα του μέλους (από τον πίνακα «Επετηρίδα»): ανώτατο αξίωμα, διάταγμα, τίτλος
+function epCard(m) {
+  const rs = epeteiridaOf(m.id);
+  if (!rs.length) return '';
+  const r = rs[0], d = r.decree_no ? `${r.decree_no}${r.decree_year ? '/' + r.decree_year : ''}` : r.decree_year || '—';
+  return `<div class="card ep-member"><h2 style="margin-top:0">📜 Επετηρίδα</h2><div class="grid">
+<div><label>Ανώτατο αξίωμα / βαθμός</label><b>${esc(r.rank || '—')}</b></div><div><label>Διάταγμα ανώτατου αξιώματος</label><b class="official-number">${esc(d)}</b></div>
+<div><label>Τίτλος αξιώματος κατά το Σύνταγμα</label>${esc(r.title || '—')} ${Number(r.active) ? '<span class="pill ok">Ενεργός</span>' : ''}</div><div><label>Προσφώνηση</label>${esc(r.honorific || '—')}</div>
+${r.current ? `<div class="full"><label>Εν ενεργεία αξίωμα / διάταγμα</label>${esc(r.current)}</div>` : ''}${Number(r.tmd) ? `<div><label>ΤΜΔ</label>ΝΑΙ ${esc(r.tmd_decree || '')}</div>` : ''}
+${r.province ? `<div><label>Επαρχία / Στοά</label>${esc(r.province)}</div>` : ''}</div>
+${rs.length > 1 ? `<p class="muted">Και: ${rs.slice(1).map((x) => esc(x.title || x.rank)).join(' · ')}</p>` : ''}<p><a href="#/epeteirida/pinakas">Άνοιγμα της Επετηρίδας →</a></p></div>`;
+}
+
 // ---------------------------------------------------------------- σελίδες
 function listPage({ query }) {
   const field = HINTS[query.field] ? query.field : 'surname', q = String(query.q || '').trim(), pg = Math.max(1, Number(query.p) || 1);
@@ -114,7 +128,7 @@ function listPage({ query }) {
     const ls = byM[x.id] || [];
     const lod = ls.slice(0, 3).map((l) => hl(`${l.lodge_name} ${l.lodge_number}`.trim(), lq, field === 'lodge' || field === 'all')).join('<br>') + (ls.length > 3 ? `<br><small>+${ls.length - 3} ακόμη</small>` : '');
     return [`<b>${x.id}</b>`, H(x.registry_no ?? '', 'all'), H(x.surname, 'surname') + extra(x, 'surname_variants', 'surname'), H(x.first_name, 'first_name') + extra(x, 'first_name_variants', 'first_name'),
-      noContact(x) ? '<span class="muted">⛔</span>' : H(x.email, 'email') + extra(x, 'other_emails', 'email'), noContact(x) ? '<span class="muted">⛔</span>' : H(x.mobile, 'mobile') + extra(x, 'other_mobiles', 'mobile'), esc(x.degree), lod, noContact(x) ? `<span class="pill bad" title="${NO_CONTACT}">⛔ Διαγραμμένος</span>` : x.active ? 'ΝΑΙ' : 'ΟΧΙ', `<a class="btn small" href="#/members/${x.id}">Επεξεργασία</a>`];
+      noContact(x) ? '<span class="muted">⛔</span>' : H(x.email, 'email') + extra(x, 'other_emails', 'email'), noContact(x) ? '<span class="muted">⛔</span>' : H(x.mobile, 'mobile') + extra(x, 'other_mobiles', 'mobile'), esc(x.degree), `<small>${esc(highestOfficeText(x.id))}</small>`, lod, noContact(x) ? `<span class="pill bad" title="${NO_CONTACT}">⛔ Διαγραμμένος</span>` : x.active ? 'ΝΑΙ' : 'ΟΧΙ', `<a class="btn small" href="#/members/${x.id}">Επεξεργασία</a>`];
   });
   const [qlabel, ph, itype] = HINTS[field];
   const flabel = Object.fromEntries(MEMBER_FIELDS)[field];
@@ -128,7 +142,7 @@ ${MEMBER_FIELDS.map(([k, v]) => `<label class="chip"><input type="radio" name="f
 <div><label for="msq" id="msqlabel">2. ${esc(qlabel)}</label><input id="msq" name="q" value="${esc(q)}" autofocus autocomplete="off" type="${itype}" placeholder="${esc(ph)}"${field === 'lodge' ? ' list="lodgelist"' : ''}>
 <datalist id="lodgelist">${lodgesAll().map((l) => `<option value="${esc(l.number)} · ${esc(l.name)}">`).join('')}</datalist></div>
 <div class="msbtns"><button class="btn primary">Αναζήτηση</button>${q ? '<a class="btn" href="#/members">Καθαρισμός</a>' : ''}</div></form><p class="msresult">${summary}</p></div>
-${table(['ID', 'Αρ. Μητρώου', 'Επώνυμο', 'Όνομα', 'Email', 'Κινητό', 'Βαθμός', 'Στοές', 'Ενεργός', 'Ενέργειες'], rows, q ? `Δεν βρέθηκε μέλος για «${q}» σε: ${flabel}. Δοκιμάστε «Όλα» ή λιγότερες λέξεις.` : 'Δεν υπάρχουν εγγραφές.')}
+${table(['ID', 'Αρ. Μητρώου', 'Επώνυμο', 'Όνομα', 'Email', 'Κινητό', 'Βαθμός', 'Ανώτατο αξίωμα (Επετηρίδα)', 'Στοές', 'Ενεργός', 'Ενέργειες'], rows, q ? `Δεν βρέθηκε μέλος για «${q}» σε: ${flabel}. Δοκιμάστε «Όλα» ή λιγότερες λέξεις.` : 'Δεν υπάρχουν εγγραφές.')}
 ${pager(xs.length, pg, PAGE, mk)}
 <details class="card fold"><summary><b>Εισαγωγή μελών από Excel (Προσθήκη / Γενική Αντικατάσταση)</b></summary><form id="imp" style="margin-top:10px">
 <p class="muted">Δεκτά: το αρχείο-πηγή του Μητρώου (Member_ID, Surname, First_Name, …, Lodge_1, Number_1, Status_1, …) ή το Excel που κατεβάζει η εφαρμογή.</p>
@@ -181,7 +195,7 @@ ${f('email', 'Κύριο Email', 'inputmode="email"')}${f('other_emails', 'Άλ�
 <div class="full"><label>Πρόσθετες Στοές / παλαιά πληροφορία</label><textarea name="additional_lodges" class="short">${esc(x.additional_lodges || '')}</textarea></div>
 <div class="full"><label>Στοές</label><textarea name="lodges_text" class="short" placeholder="Μία Στοά ανά γραμμή: ΟΝΟΜΑ | ΑΡΙΘΜΟΣ | ΚΑΤΑΣΤΑΣΗ">${esc(lodgesText(ls))}</textarea><small class="muted">Παράδειγμα: ΠΑΡΘΕΝΩΝ | 3 | 1. ΤΑΚΤΙΚΟ</small></div></div>
 <div class="toolbar"><button class="btn primary">💾 Αποθήκευση</button><a class="btn" href="#/members">Ακύρωση</a>${m && !noContact(m) ? `<a class="btn" href="#/letters/new?to_name=${encodeURIComponent(`${m.first_name} ${m.surname}`)}&to_email=${encodeURIComponent(m.email || '')}">✉ Επιστολή</a>` : ''}${m ? '<button type="button" class="btn danger" data-act="del">Διαγραφή</button>' : ''}</div></form>
-${offices.length ? `<h2>Επετηρίδα</h2>${table(['Έτος', 'Αξίωμα / Τίτλος', 'Διάταγμα'], offices.map((o) => [esc(o.decree_year), esc(o.office), o.decree_id ? `<a href="#/decrees/${o.decree_id}">${esc(o.decree_no)}/${esc(o.decree_year)}</a>` : esc(o.decree_no ? `${o.decree_no}/${o.decree_year}` : '')]))}` : ''}`,
+${m ? epCard(m) : ''}${offices.length ? `<h2>Ιστορικό αξιωμάτων (Διατάγματα)</h2>${table(['Έτος', 'Αξίωμα / Τίτλος', 'Διάταγμα'], offices.map((o) => [esc(o.decree_year), esc(o.office), o.decree_id ? `<a href="#/decrees/${o.decree_id}">${esc(o.decree_no)}/${esc(o.decree_year)}</a>` : esc(o.decree_no ? `${o.decree_no}/${o.decree_year}` : '')]))}` : ''}`,
     mount(el) {
       onSubmit(el.querySelector('#mf'), async (d) => {
         const rn = String(d.registry_no || '').trim();
@@ -340,7 +354,7 @@ export function mergeMembers(tx, mainId, otherIds) {
     const k = lodgeNoKey(l.lodge_number) + '|' + l.member_status;
     if (have.has(k)) tx.remove('member_lodges', l.id); else { have.add(k); tx.update('member_lodges', l.id, { member_id: main.id, seq: ++seq }); }
   }
-  for (const [t, k] of [['member_degrees_offices', 'member_id'], ['reps', 'member_id'], ['greetings_log', 'member_id'], ['project_members', 'member_id'], ['project_units', 'leader_member_id'], ['letters', 'recipient_member_id']]) {
+  for (const [t, k] of [['member_degrees_offices', 'member_id'], ['epeteirida', 'member_id'], ['reps', 'member_id'], ['greetings_log', 'member_id'], ['project_members', 'member_id'], ['project_units', 'leader_member_id'], ['letters', 'recipient_member_id']]) {
     for (const x of tx.all(t)) if (ids.has(x[k])) tx.update(t, x.id, { [k]: main.id });
   }
   for (const d of tx.all('decree_documents')) {

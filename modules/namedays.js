@@ -8,6 +8,7 @@ import { senderBanner, gmailUrl, copyHtml, mailButtons } from '../core/mail.js';
 import { reportPaper, printPaper } from '../core/paper.js';
 import { noContact, setMemberTitle } from '../core/pickers.js';
 import { person } from '../core/people.js';
+import { epeteiridaOf, honorificLevel } from './epeteirida-table.js';
 import { lodgesByMember, memberLodgesLine } from './members.js';
 import { lodgeByNumber } from './lodges.js';
 import { provinceByShort, provinceRoles, provincesAll } from './provinces.js';
@@ -109,6 +110,7 @@ function rankIdx(m) {
     k = Math.max(k, 0); const rk = repRank({ office: o.office || '' }); if (rk) k = Math.max(k, REP_RANKS.indexOf(rk));
     if (HON_K[o.honorific] != null) k = Math.max(k, HON_K[o.honorific]);
   }
+  for (const r of epeteiridaOf(m.id)) { const h = honorificLevel(r.honorific); if (h != null) k = Math.max(k, h); } // Προσφώνηση στην Επετηρίδα
   const names = [foldName(`${m.first_name} ${m.surname}`), foldName(`${m.surname} ${m.first_name}`)];
   if (db.all('lodges').some((l) => l.master && names.includes(foldName(l.master)))) k = Math.max(k, 0);
   return k;

@@ -12,6 +12,7 @@ import './modules/lodges.js';
 import './modules/directory.js';
 import './modules/visits.js';
 import './modules/namedays.js';
+import './modules/epeteirida-table.js';
 import './modules/projects.js';
 import './modules/database.js';
 import './modules/settings.js';
