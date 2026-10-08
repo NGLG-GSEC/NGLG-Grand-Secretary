@@ -1202,3 +1202,24 @@ def test_protocol_only_when_letter_is_ready(app):
     assert 'Αρ. Πρωτ.: 20546' in app.text()
     seqs = app.page.evaluate("async () => { const {db} = await import('./core/store.js'); return db.all('letters').map((l) => l.protocol_seq); }")
     assert seqs == [20546, 20545], seqs
+
+
+def test_template_representative_field_and_day_article(app):
+    app.connect_local()
+    app.page.evaluate("""async () => { const {db} = await import('./core/store.js');
+      await db.save('x', (tx) => { tx.replace('visits', []);
+        const l = tx.find('lodges', (x) => x.number === '32'); tx.update('lodges', l.id, { secretary_email: 'dioni.secretary@example.com' });
+        const r = tx.insert('reps', { surname: 'Νικολαΐδης', name: 'Αθανάσιος', office: 'Βοηθός Μέγας Διδάσκαλος', rep_rank: 'Πανσεβάσμιος Αδ.', email: 'rep@example.com' });
+        tx.insert('visits', { visit_date: '2099-10-09', lodge: 'ΔΙΩΝΗ', lodge_number: '32', location: '', province: 'ΕπΜΣτ. Πελοποννήσου & Δυτικής Ελλάδας', rep_id: r.id, notes: '' });
+        tx.insert('letter_templates', { name: 'Εκπροσώπηση', active: 1, body: 'Κατ’ εντολήν του Μεγάλου Διδασκάλου, κατά τις εργασίες της Στοάς {Στοά} υπ’ αρ. {Αρ. Στοάς}, την  {ημέρα}, {ημερομηνία}, θα παραστεί επισήμως ο εκπρόσωπος του Μεγάλου Διδασκάλου, {Εκπρόσωπος}.' }); }); }""")
+    app.go('/templates/new')
+    assert '{Εκπρόσωπος} = ο Εκπρόσωπος της Επίσκεψης' in app.text()
+    app.go('/letters/new')
+    app.page.select_option('#tplSel', label='Εκπροσώπηση')
+    # Στοά + ημερομηνία → βρίσκει την Επίσκεψη και τον Εκπρόσωπό της
+    app.page.fill('#fillLodge', '32 · ΔΙΩΝΗ'); app.page.dispatch_event('#fillLodge', 'change')
+    app.page.fill('#fillDate', '2099-10-09'); app.page.dispatch_event('#fillDate', 'change')
+    body = app.page.input_value('[name=body]')
+    assert 'υπ’ αρ. 32, την Παρασκευή, 9 Οκτωβρίου 2099, θα παραστεί' in body, body
+    assert 'Μεγάλου Διδασκάλου, Πανσεβάσμιος Αδ. Αθανάσιος Νικολαΐδης, Βοηθός Μέγας Διδάσκαλος.' in body, body
+    assert 'rep@example.com' in app.page.input_value('[name=recipient_email]')

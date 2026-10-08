@@ -12,7 +12,7 @@ import { provincialChoices, provinceByShort, provinceRoles } from './provinces.j
 import { lodgesAll, lodgeNoKey, lodgeByNumber, cleanLodgeName } from './lodges.js';
 import { DEC_MAP, precedenceOf } from './decree-catalog.js';
 import { contactOf, person, canonicalId, identify } from '../core/people.js';
-import { fillContext, fillPlaceholders, lodgeRecipients, gmVisitTemplate, gmName, GM_VISIT } from './letter-fill.js';
+import { fillContext, fillPlaceholders, lodgeRecipients, gmVisitTemplate, gmName, GM_VISIT, setRepInfo } from './letter-fill.js';
 import { parseRank, matchName, isCurrentRecord, hasActiveList, importEpeteiridaAny, hasEpeteirida } from './epeteirida-import.js';
 
 const MONTHS = ['Ιανουάριος', 'Φεβρουάριος', 'Μάρτιος', 'Απρίλιος', 'Μάιος', 'Ιούνιος', 'Ιούλιος', 'Αύγουστος', 'Σεπτέμβριος', 'Οκτώβριος', 'Νοέμβριος', 'Δεκέμβριος'];
@@ -129,6 +129,7 @@ const firstOffice = (r) => String((r || {}).office || '').split(' · ')[0].repla
 const isPast = (r) => String(r.office || '').startsWith('Πρώην');
 export const repLabel = (r, rm) => (r ? [repRank(r, rm), r.surname, r.name].filter(Boolean).join(' ') : '');
 const repFull = (r) => { const o = firstOffice(r); return `${repRank(r) || 'Αδ.'} ${r.name || ''} ${r.surname || ''}${o ? ', ' + o : ''}`; };
+setRepInfo((id) => { const r = db.get('reps', id); return r ? { text: repFull(r), email: repContact(r)[0] || '' } : null; });
 const repVocative = (r) => (repRank(r) || 'Αγαπητός Αδ.').replace(/ος Αδ\.$/, 'ε Αδελφέ');
 // Επικοινωνία εκπροσώπου: ό,τι έχει δοθεί ειδικά στον εκπρόσωπο, αλλιώς από το Μητρώο Μελών (όλες οι εγγραφές του προσώπου)
 function repContact(r) {
@@ -311,7 +312,7 @@ ${v ? `<p>${repNotified(v) ? `<span class="vok">✓ Εκπρόσωπος ενη�
 <datalist id="vLodges">${lodgesAll(true).map((l) => `<option value="${esc(l.number)} · ${esc(l.name)}">`).join('')}</datalist><small class="muted">Με την επιλογή συμπληρώνονται αριθμός, Επαρχία και τόπος.</small></div>
 <div class="full"><label>Τόπος</label><input name="location" id="vLoc" value="${val('location')}" placeholder="${esc(placeSuggestion(x) || 'Τεκτονικόν Μέγαρον …')}"${placeSuggestion(x) ? ` data-suggest="${esc(placeSuggestion(x))}"` : ''}></div>
 <div><label>Επαρχιακή Μεγάλη Στοά</label><select name="province" id="vProv"><option value="">—</option>${[...provs, ...(x.province && !provs.includes(x.province) ? [x.province] : [])].map((p) => `<option${p === x.province ? ' selected' : ''}>${esc(p)}</option>`).join('')}</select></div>
-<div class="full"><label>Εκπρόσωπος ΜΔ (ο Μέγας Διδάσκαλος ή εκπρόσωπός του)</label><input id="repQ" type="search" placeholder="🔎 Αναζήτηση ονοματεπωνύμου ή αξιώματος…" autocomplete="off" style="margin-bottom:6px"><select name="rep_id" id="repSel"><option value="">— Χωρίς εκπρόσωπο —</option>${repOptions(x.rep_id, rm)}</select><div id="repInfo">${repDetails(x.rep_id)}</div>${hasEpeteirida() ? '' : '<small class="muted">Για να εμφανιστούν όλοι οι Μεγάλοι Αξιωματικοί: <a href="#/epeteirida?imp=1">Επετηρίδα → Εισαγωγή</a> (αρχείο Excel ή κατάλογος εν ενεργεία).</small>'}</div>
+<div class="full"><label>ΕΚΠΡΟΣΩΠΟΣ <small class="muted">— ο Μέγας Διδάσκαλος ή εκπρόσωπός του· στις Επιστολές: πεδίο {Εκπρόσωπος}</small></label><input id="repQ" type="search" placeholder="🔎 Αναζήτηση ονοματεπωνύμου ή αξιώματος…" autocomplete="off" style="margin-bottom:6px"><select name="rep_id" id="repSel"><option value="">— Χωρίς εκπρόσωπο —</option>${repOptions(x.rep_id, rm)}</select><div id="repInfo">${repDetails(x.rep_id)}</div>${hasEpeteirida() ? '' : '<small class="muted">Για να εμφανιστούν όλοι οι Μεγάλοι Αξιωματικοί: <a href="#/epeteirida?imp=1">Επετηρίδα → Εισαγωγή</a> (αρχείο Excel ή κατάλογος εν ενεργεία).</small>'}</div>
 <div class="full"><label>Σημειώσεις</label><input name="notes" value="${val('notes')}"></div></div>
 <div class="toolbar"><button class="btn primary">💾 Αποθήκευση</button><button class="btn" data-next="brief">✉ Ενημέρωση εκπροσώπου</button>
 <button class="btn" data-next="notify">✉ Email ΕπΜΓρ. & Εκπροσώπου</button><button class="btn" data-next="letter">📄 Επιστολή (αρ. πρωτοκόλλου)</button><a class="btn" href="#/visits">Άκυρο</a>${v ? '<button type="button" class="btn danger" data-act="del">Διαγραφή</button>' : ''}</div></form>`,

@@ -1,4 +1,4 @@
-// Έξυπνα πρότυπα επιστολών: πεδία σε άγκιστρα ({Στοά}, {Αρ. Στοάς}, {ημέρα}, {ημερομηνία}, {Μέγας Διδάσκαλος})
+// Έξυπνα πρότυπα επιστολών: πεδία σε άγκιστρα ({Στοά}, {Αρ. Στοάς}, {ημέρα}, {ημερομηνία}, {Μέγας Διδάσκαλος}, {Εκπρόσωπος})
 // συμπληρώνονται από τη βάση — Στοά από τις Συμβολικές Στοές, ημέρα/ημερομηνία από την Επίσκεψη (ή όποια δοθεί).
 import { db } from '../core/store.js';
 import { parseIso, DAYS } from '../core/util.js';
@@ -20,19 +20,27 @@ export const PLACEHOLDERS = [
   ['ημέρα', 'ημέρα με άρθρο, π.χ. «το Σάββατο», «την Τρίτη»', (c) => dayWithArticle(c.date)],
   ['ημερομηνία', 'π.χ. «16 Οκτωβρίου 2027»', (c) => dateWords(c.date)],
   ['Μέγας Διδάσκαλος', 'όνομα του Μεγάλου Διδασκάλου (Ρυθμίσεις)', () => gmName()],
+  ['Εκπρόσωπος', 'ο Εκπρόσωπος της Επίσκεψης με τίτλο και αξίωμα, π.χ. «Πανσεβάσμιος Αδ. Αθανάσιος Νικολαΐδης, Βοηθός Μέγας Διδάσκαλος»', (c) => c.rep],
 ];
+// Ο Εκπρόσωπος (κείμενο, email) — ορίζεται από τις Επισκέψεις, που γνωρίζουν τίτλους και αξιώματα
+let repInfo = () => null;
+export const setRepInfo = (fn) => { repInfo = fn; };
 const RE = /\{([^{}\n]{1,30})\}/g;
 const FN = new Map(PLACEHOLDERS.map(([k, , f]) => [k.toLowerCase(), f]));
 export const hasPlaceholders = (s) => [...String(s || '').matchAll(RE)].some((m) => FN.has(m[1].trim().toLowerCase()));
 // Ό,τι δεν είναι γνωστό μένει ως {πεδίο}, ώστε να φαίνεται τι λείπει
-export const fillPlaceholders = (s, ctx = {}) => String(s || '').replace(RE, (all, k) => { const f = FN.get(k.trim().toLowerCase()); const v = f ? f(ctx) : ''; return v ? String(v) : all; });
+// Το {ημέρα} φέρει ήδη άρθρο: «την {ημέρα}» / «το {ημέρα}» δεν γίνεται «την την Τρίτη»
+const DAY_ART = /(?<!\p{L})(?:[Ττ]ην|[Ττ]η|[Ττ]ο)\s+(\{\s*ημέρα\s*\})/gu;
+export const fillPlaceholders = (s, ctx = {}) => String(s || '').replace(DAY_ART, '$1').replace(RE, (all, k) => { const f = FN.get(k.trim().toLowerCase()); const v = f ? f(ctx) : ''; return v ? String(v) : all; });
 export const missingPlaceholders = (s) => [...new Set([...String(s || '').matchAll(RE)].map((m) => m[1].trim()).filter((k) => FN.has(k.toLowerCase())))];
 
 // Στοιχεία από Επίσκεψη ή από Στοά + ημερομηνία
+// (Στοά + ημερομηνία: αν υπάρχει Επίσκεψη εκείνη την ημέρα, λαμβάνεται και ο Εκπρόσωπός της)
 export function fillContext({ visit, lodge_number, date } = {}) {
-  const no = visit ? visit.lodge_number : lodge_number, l = no ? lodgeByNumber(no) : null;
+  if (!visit && lodge_number && date) visit = db.all('visits').find((v) => String(v.lodge_number) === String(lodge_number) && v.visit_date === date) || null;
+  const no = visit ? visit.lodge_number : lodge_number, l = no ? lodgeByNumber(no) : null, r = visit && visit.rep_id ? repInfo(visit.rep_id) : null;
   return { lodge: (visit && visit.lodge) || (l && l.name) || '', lodge_number: no ? String(no) : '', date: (visit && visit.visit_date) || date || '',
-    province: (visit && visit.province) || (l && l.provincial) || '', lodgeRec: l };
+    province: (visit && visit.province) || (l && l.provincial) || '', lodgeRec: l, rep: r ? r.text : '', repEmail: r ? r.email : '' };
 }
 // Γραμματέας με τον τίτλο του, όταν ταυτοποιείται στο Μητρώο (π.χ. «Αδ. Νικόλαος Παπαδόπουλος»)
 const secretaryName = (s) => { if (/Αδ\./.test(s)) return s; const id = identify({ full_name: s }), m = id && db.get('member_registry', id); return m ? titledName(m) : s; };

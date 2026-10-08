@@ -94,7 +94,7 @@ function mountLetterForm(el, x, isNew) {
   });
   // Πρότυπο + στοιχεία από τη βάση → κείμενο, θέμα, παραλήπτες
   const box = el.querySelector('#fillBox'), fv = el.querySelector('#fillVisit'), fl = el.querySelector('#fillLodge'), fd = el.querySelector('#fillDate'), state = el.querySelector('#fillState');
-  let tpl = x.template_id ? db.get('letter_templates', x.template_id) : null, auto = { body: f.body.value, subject: f.subject.value };
+  let tpl = x.template_id ? db.get('letter_templates', x.template_id) : null, auto = { body: f.body.value, subject: f.subject.value }, autoRcpt = null;
   const ctx = () => {
     const v = fv.value ? db.get('visits', fv.value) : null;
     if (v) return fillContext({ visit: v });
@@ -109,12 +109,13 @@ function mountLetterForm(el, x, isNew) {
     f.body.value = body; f.subject.value = subject; auto = { body, subject };
     if (tpl.closing) f.closing.value = tpl.closing;
     if (LETTER_CATEGORIES[tpl.category]) f.category.value = tpl.category;
-    if (c.lodge && (tpl.key === GM_VISIT.key || !f.recipient_email.value.trim())) {
+    if (c.lodge && (tpl.key === GM_VISIT.key || !f.recipient_email.value.trim() || f.recipient_email.value === autoRcpt)) {
       const r = lodgeRecipients(c);
-      f.recipient_name.value = r.toName; f.recipient_email.value = [r.to, r.cc].filter(Boolean).join(', '); f.recipient_member_id.value = '';
+      const repMail = c.repEmail && /\{\s*Εκπρόσωπος\s*\}/.test(tpl.body + (tpl.subject || '')) ? c.repEmail : '';
+      f.recipient_name.value = r.toName; f.recipient_email.value = [...new Set([r.to, r.cc, repMail].join(', ').split(/\s*,\s*/).filter(Boolean))].join(', '); f.recipient_member_id.value = ''; autoRcpt = f.recipient_email.value;
     }
     const miss = missingPlaceholders(body + ' ' + subject);
-    state.innerHTML = c.lodge ? `✓ Στοά «${esc(c.lodge)}»${c.lodge_number ? ' αρ. ' + esc(c.lodge_number) : ''}${c.date ? ` · ${esc(dayWithArticle(c.date))}, ${esc(dateWords(c.date))}` : ''}`
+    state.innerHTML = c.lodge ? `✓ Στοά «${esc(c.lodge)}»${c.lodge_number ? ' αρ. ' + esc(c.lodge_number) : ''}${c.date ? ` · ${esc(dayWithArticle(c.date))}, ${esc(dateWords(c.date))}` : ''}${c.rep ? ` · Εκπρόσωπος: ${esc(c.rep)}` : ''}`
       + (miss.length ? ` — <span class="warn">λείπουν: ${miss.map((k) => '{' + esc(k) + '}').join(', ')}</span>` : '')
       + (tpl.key === GM_VISIT.key && c.lodge && !lodgeRecipients(c).lodgeMail ? ' — <span class="warn">η Στοά δεν έχει email (Συμβολικές Στοές)</span>' : '') : 'Επιλέξτε Επίσκεψη ή Στοά και ημερομηνία.';
   };
