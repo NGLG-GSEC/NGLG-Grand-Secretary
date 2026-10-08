@@ -718,11 +718,12 @@ def test_grand_officers_as_representatives_assigned_per_installation(app):
     app.go('/visits')
     sel = app.page.locator('.vrepsel').first
     labels = sel.locator('option').all_inner_texts()
-    assert labels[1].startswith('Μπενετάτος Ιωάννης — Μέγας Διδάσκαλος · Σεβτ.')
-    assert labels[2].startswith('Υπόδειγμα Στυλιανός — Πρόεδρος του Συμβουλίου Γενικών Υποθέσεων · Πρώην Μέγας Διδάσκαλος · Σεβτ.')  # Πρώην ΜΔ: 3ος στην τάξη προβαδίσματος
-    assert labels[3].startswith('Πρότυπος Δημήτριος — Πρώτος Μέγας Επόπτης · Πσεβ.') and labels[4].startswith('Τεστάκης Άγγελος — Αναπληρωτής Μέγας Τελετάρχης · Πρώην Δεύτερος Μέγας Επόπτης · Πσεβ.')
+    assert labels[1].startswith('ΟΥΔΕΙΣ')  # ο ΜΔ δεν έστειλε κανέναν: πάνω από τον ΜΔ
+    assert labels[2].startswith('Μπενετάτος Ιωάννης — Μέγας Διδάσκαλος · Σεβτ.')
+    assert labels[3].startswith('Υπόδειγμα Στυλιανός — Πρόεδρος του Συμβουλίου Γενικών Υποθέσεων · Πρώην Μέγας Διδάσκαλος · Σεβτ.')  # Πρώην ΜΔ: 3ος στην τάξη προβαδίσματος
+    assert labels[4].startswith('Πρότυπος Δημήτριος — Πρώτος Μέγας Επόπτης · Πσεβ.') and labels[5].startswith('Τεστάκης Άγγελος — Αναπληρωτής Μέγας Τελετάρχης · Πρώην Δεύτερος Μέγας Επόπτης · Πσεβ.')
     vid = sel.get_attribute('data-id')
-    sel.select_option(label=labels[1])
+    sel.select_option(label=labels[2])
     app.page.wait_for_selector('text=Ορίστηκε: Σεβασμιώτατος Αδ. Μπενετάτος')
     v = app.page.evaluate(f"async () => {{ const m = await import('./core/store.js'); return m.db.get('visits', {vid}); }}")
     assert v['rep_id'] == by['Μπενετάτος']['id']
