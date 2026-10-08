@@ -70,6 +70,9 @@ def test_decree_epeteirida_and_members(app):
     app.pick('.registry-search', 'Παπαδ')
     app.click('Έκδοση Διατάγματος')
     app.page.wait_for_url('**/#/decrees/1')
+    assert 'θα δοθεί όταν οριστεί «Έτοιμο»' in app.text()  # πρόχειρο: χωρίς αριθμό πρωτοκόλλου
+    app.click('✅ Έτοιμο: απόδοση αρ. πρωτοκόλλου')
+    app.page.wait_for_selector('text=πήρε αριθμό πρωτοκόλλου')
     t = app.text()
     assert 'υπ’ αριθμ. 513/' in t and 'Αρ. Πρωτ.: 20546' in t  # ενιαίο πρωτόκολλο με τις Επιστολές
     body = app.text('.decbody')
@@ -1113,6 +1116,8 @@ def test_letter_and_decree_saved_to_drive_word_and_pdf(app):
     app.pick('.registry-search', 'Παπαδ')
     app.click('Έκδοση Διατάγματος')
     app.page.wait_for_url('**/#/decrees/1')
+    app.click('✅ Έτοιμο: απόδοση αρ. πρωτοκόλλου')
+    app.page.wait_for_selector('text=πήρε αριθμό πρωτοκόλλου')
     app.page.locator('[data-act=drive]').click()
     app.page.wait_for_selector('text=✓ Στο Drive', timeout=30000)
     y = date.today().year
@@ -1177,3 +1182,23 @@ def test_long_letter_prints_on_one_page(app):
       const b = await paperPdf(document.querySelector('.print-area .paper')); const t = new TextDecoder('latin1').decode(await b.arrayBuffer());
       return (t.match(/\\/Type \\/Page[^s]/g) || []).length; }""")
     assert n == 1, n
+
+
+def test_protocol_only_when_letter_is_ready(app):
+    app.connect_local()
+    app.go('/letters/new')
+    app.fill(subject='Πρόχειρη Α', body='Κείμενο')
+    app.click('💾 Αποθήκευση')
+    app.page.wait_for_url('**/#/letters/1')
+    assert 'θα δοθεί όταν οριστεί «Έτοιμη»' in app.text()
+    app.go('/letters/new')
+    app.fill(subject='Δεύτερη', body='Κείμενο')
+    app.click('Αποθήκευση & απόδοση')
+    app.page.wait_for_url('**/#/letters/2')
+    assert 'Αρ. Πρωτ.: 20545' in app.text()  # η πρόχειρη δεν δέσμευσε αριθμό
+    app.go('/letters/1')
+    app.click('✅ Έτοιμη: απόδοση αρ. πρωτοκόλλου')
+    app.page.wait_for_selector('text=πήρε αριθμό πρωτοκόλλου')
+    assert 'Αρ. Πρωτ.: 20546' in app.text()
+    seqs = app.page.evaluate("async () => { const {db} = await import('./core/store.js'); return db.all('letters').map((l) => l.protocol_seq); }")
+    assert seqs == [20546, 20545], seqs

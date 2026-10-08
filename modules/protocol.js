@@ -29,3 +29,8 @@ export function protocolBook() {
 }
 // Παλαιά Διατάγματα που είχαν αποθηκευτεί ως επιστολές (πίνακας decrees) — κρύβονται από τις Επιστολές.
 export const legacyDecreeLetterIds = () => new Set(db.all('decrees').map((d) => Number(d.letter_id)));
+
+// Οι πρόχειρες Επιστολές/Διατάγματα δεν κρατούν αριθμό πρωτοκόλλου (δίνεται όταν οριστούν «Έτοιμα»)
+db.migrate('protocol-ready-only-2026-10', (tx) => {
+  for (const t of ['letters', 'decree_documents']) for (const r of tx.all(t)) if (r.status !== 'ready' && r.protocol_seq) tx.update(t, r.id, { protocol_seq: null, protocol_year: null, protocol_no: '' });
+});

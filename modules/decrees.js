@@ -223,7 +223,7 @@ function mountDecreeForm(el, d, m0) {
         appointments: JSON.stringify(people), recipient_name: people.map((a) => a.full_name).join(', '), recipient_email: [...new Set(people.map((a) => a.email.toLowerCase()))].join(', ') };
       let r;
       if (d) r = tx.update('decree_documents', d.id, row);
-      else { const p = nextProtocol(tx, 'Διάταγμα', matter); r = tx.insert('decree_documents', { ...row, status: 'draft', protocol_seq: p.seq, protocol_no: p.no }); }
+      else r = tx.insert('decree_documents', { ...row, status: 'draft' }); // αρ. πρωτοκόλλου μόνο όταν οριστεί «Έτοιμο»
       if (service) tx.remove('member_degrees_offices', (o) => o.decree_id === r.id); else syncOffices(tx, r);
       return r.id;
     });
@@ -240,8 +240,8 @@ function viewDecree({ params }) {
     title: d.subject,
     html: `<section class="card send-panel noprint"><h3>Διάταγμα — Αποστολή & Αποθήκευση</h3>${senderBanner('official')}
 <div class="toolbar"><button class="btn primary" data-act="pdf">⬇ PDF / Εκτύπωση</button>${mailButtons({ to, cc: db.setting('decree_cc'), subject: d.subject, body: d.body, kind: 'official' }, '✉ Αποστολή με Email')}
-<a class="btn" target="_blank" rel="noopener" href="${wa}">WhatsApp μήνυμα</a>${d.status === 'ready' ? '' : '<button class="btn" data-act="ready">Σήμανση ως έτοιμο</button>'}</div>
-<p class="send-help">Αρ. Πρωτ.: <b>${esc(d.protocol_no || '—')}</b> · Κοινοποίηση: ${esc(db.setting('decree_cc'))} (αλλαγή στις Ρυθμίσεις).</p>${driveBox(d, fileName(d))}
+<a class="btn" target="_blank" rel="noopener" href="${wa}">WhatsApp μήνυμα</a>${d.status === 'ready' ? '' : '<button class="btn primary" data-act="ready">✅ Έτοιμο: απόδοση αρ. πρωτοκόλλου</button>'}</div>
+<p class="send-help">Αρ. Πρωτ.: <b>${esc(d.protocol_no || 'θα δοθεί όταν οριστεί «Έτοιμο»')}</b> · Κοινοποίηση: ${esc(db.setting('decree_cc'))} (αλλαγή στις Ρυθμίσεις).</p>${driveBox(d, fileName(d))}
 <div class="toolbar"><button class="btn" data-act="word">⬇ Word</button></div></section>
 <div class="toolbar noprint"><a class="btn" href="#/decrees/${d.id}/edit">Επεξεργασία Διατάγματος</a><a class="btn" href="#/decrees/new?copy_from=${d.id}">Νέο πάνω σε αυτό</a><a class="btn" href="#/decrees">Αρχείο Διαταγμάτων</a>
 <button class="btn danger" data-act="del">Διαγραφή</button></div><div class="print-area">${decreePaper(d)}</div>`,
@@ -250,7 +250,10 @@ function viewDecree({ params }) {
         pdf: () => printPaper(fileName(d)),
         async word() { download(fileName(d) + '.docx', await decreeDocxBlob(d)); },
         async drive() { await saveDocToDrive('decree_documents', d.id, fileName(d), await decreeDocxBlob(d), el.querySelector('.print-area .paper')); flash('Αποθηκεύτηκε στο Drive (Word + PDF).'); go(`/decrees/${d.id}`); },
-        async ready() { await db.save(`Διάταγμα ${decreeNo(d)}: έτοιμο`, (tx) => tx.update('decree_documents', d.id, { status: 'ready' })); flash('Σημειώθηκε ως έτοιμο.'); go(`/decrees/${d.id}`); },
+        async ready() {
+          await db.save(`Διάταγμα ${decreeNo(d)}: έτοιμο`, (tx) => { const p = d.protocol_seq ? null : nextProtocol(tx); tx.update('decree_documents', d.id, { status: 'ready', ...(p ? { protocol_seq: p.seq, protocol_year: p.year, protocol_no: p.no } : {}) }); });
+          flash('Το Διάταγμα είναι έτοιμο και πήρε αριθμό πρωτοκόλλου.'); go(`/decrees/${d.id}`);
+        },
         async del() {
           if (!confirmDo('Οριστική διαγραφή του Διατάγματος;')) return;
           await db.save(`Διαγραφή Διατάγματος ${decreeNo(d)}`, (tx) => { tx.remove('member_degrees_offices', (o) => o.decree_id === d.id); tx.remove('decree_documents', d.id); });

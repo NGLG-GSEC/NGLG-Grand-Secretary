@@ -26,6 +26,13 @@ const statusPill = (s) => `<span class="pill ${s === 'ready' ? 'ok' : 'warn'}">$
 // Όνομα αρχείου (PDF, Word, Drive): «20545 - ΕΠΙΣΤΟΛΗ Θέμα» — κατηγορία ΕΠΙΣΤΟΛΗ ή ΕΠΙΣΚΕΨΗ
 export const LETTER_CATEGORIES = { ΕΠΙΣΤΟΛΗ: 'Επιστολή', ΕΠΙΣΚΕΨΗ: 'Επίσκεψη' };
 const category = (x) => (LETTER_CATEGORIES[x.category] ? x.category : 'ΕΠΙΣΤΟΛΗ');
+// Ο αριθμός πρωτοκόλλου δίνεται μόνο όταν η επιστολή οριστεί «Έτοιμη»· οι πρόχειρες δεν δεσμεύουν αριθμό.
+function assignProtocol(tx, id) {
+  const r = tx.get('letters', id);
+  if (!r || r.protocol_seq) return r;
+  const p = nextProtocol(tx);
+  return tx.update('letters', id, { protocol_seq: p.seq, protocol_year: p.year, protocol_no: p.no, letter_date: today() });
+}
 const fileName = (x) => (x.protocol_seq ? docTitle(x.protocol_seq, category(x), x.subject) : safeFileName(`${category(x)} ${x.subject || ''}`));
 
 // Word (.docx) για επεξεργασία, με το επιστολόχαρτο της ΕΜΣτΕ
@@ -75,7 +82,7 @@ ${fillPanel(x, query)}
 <div class="full"><label>Κείμενο</label><textarea name="body" required>${esc(x.body || '')}</textarea><small class="muted">Οι σύνδεσμοι (https://… ή www.…) μένουν ενεργοί στο τελικό έγγραφο.</small></div>
 <div><label>Κατάσταση</label><select name="status"><option value="draft"${x.status !== 'ready' ? ' selected' : ''}>Πρόχειρη</option><option value="ready"${x.status === 'ready' ? ' selected' : ''}>Έτοιμη</option></select></div>
 <div><label>Υπογράφων</label><select name="signer">${Object.entries(ACTORS).map(([k, v]) => `<option value="${k}"${(x.signer || actor()) === k ? ' selected' : ''}>${esc(v)}</option>`).join('')}</select></div>
-<div class="full toolbar"><button class="btn primary">💾 ${x.id ? 'Αποθήκευση' : 'Αποθήκευση & απόδοση αρ. πρωτοκόλλου'}</button><button type="button" class="btn" data-act="preview">👁 Προεπισκόπηση</button><button type="button" class="btn" data-act="form">🖋 Ψηφιακό Έντυπο</button><button type="button" class="btn" data-act="word">⬇ Word</button>
+<div class="full toolbar"><button class="btn${x.protocol_seq ? ' primary' : ''}">💾 Αποθήκευση</button>${x.protocol_seq ? '' : '<button type="button" class="btn primary" data-act="ready">✅ Έτοιμη: Αποθήκευση & απόδοση αρ. πρωτοκόλλου</button>'}<button type="button" class="btn" data-act="preview">👁 Προεπισκόπηση</button><button type="button" class="btn" data-act="form">🖋 Ψηφιακό Έντυπο</button><button type="button" class="btn" data-act="word">⬇ Word</button>
 <a class="btn" href="${x.id ? '#/letters/' + x.id : '#/letters'}">Ακύρωση</a></div></form>
 <section id="pv" class="print-area" hidden></section>`;
 }
@@ -120,7 +127,7 @@ function mountLetterForm(el, x, isNew) {
   for (const i of [fl, fd]) i.addEventListener('change', () => { fv.value = ''; apply(true); });
   if (tpl && !box.hidden && (fv.value || !f.body.value.trim() || hasPlaceholders(f.body.value))) apply(true);
   const cur = () => ({ ...x, ...Object.fromEntries(new FormData(f)), letter_date: x.letter_date || today() });
-  bind(el, { form: () => openInDigitalForm(cur()), word: () => letterDocx(cur()), preview() {
+  bind(el, { ready() { f.status.value = 'ready'; f.requestSubmit(); }, form: () => openInDigitalForm(cur()), word: () => letterDocx(cur()), preview() {
     const d = Object.fromEntries(new FormData(f));
     const pv = el.querySelector('#pv');
     pv.innerHTML = letterPaper({ ...x, ...d, letter_date: x.letter_date || today() });
@@ -131,12 +138,12 @@ function mountLetterForm(el, x, isNew) {
     if (bad.length) throw new Error('Μη έγκυρο email: ' + bad.join(', '));
     const row = { subject: d.subject.trim(), body: d.body.trim(), template_id: d.template_id ? Number(d.template_id) : null, recipient_name: d.recipient_name.trim(),
       recipient_email: emails.join(', '), recipient_member_id: d.recipient_member_id ? Number(d.recipient_member_id) : null, closing: String(d.closing || '').trim(), category: LETTER_CATEGORIES[d.category] ? d.category : 'ΕΠΙΣΤΟΛΗ', status: d.status, signer: d.signer };
-    const id = await db.save(isNew ? `Νέα Επιστολή: ${row.subject}` : `Επιστολή ${x.protocol_no}: ενημέρωση`, (tx) => {
-      if (!isNew) return tx.update('letters', x.id, row).id;
-      const p = nextProtocol(tx, LETTER_CATEGORIES[category(row)], row.subject);
-      return tx.insert('letters', { ...row, protocol_seq: p.seq, protocol_year: p.year, protocol_no: p.no, letter_date: today(), source_letter_id: x.source_letter_id || null }).id;
+    const id = await db.save(isNew ? `Νέα Επιστολή: ${row.subject}` : `Επιστολή ${x.protocol_no || x.id}: ενημέρωση`, (tx) => {
+      const r = isNew ? tx.insert('letters', { ...row, letter_date: today(), source_letter_id: x.source_letter_id || null }) : tx.update('letters', x.id, row);
+      if (row.status === 'ready') assignProtocol(tx, r.id);
+      return r.id;
     });
-    flash(isNew ? 'Η επιστολή καταχωρίστηκε.' : 'Αποθηκεύτηκε.');
+    flash(d.status === 'ready' ? 'Η επιστολή είναι έτοιμη και πήρε αριθμό πρωτοκόλλου.' : isNew ? 'Η επιστολή αποθηκεύτηκε ως πρόχειρη (χωρίς αριθμό πρωτοκόλλου).' : 'Αποθηκεύτηκε.');
     go(`/letters/${id}`);
   });
 }
@@ -150,7 +157,7 @@ function viewLetter({ params }) {
     html: `<section class="card send-panel noprint"><h3>Αποστολή & Αποθήκευση</h3>${senderBanner('official')}
 <div class="toolbar"><button class="btn primary" data-act="pdf">⬇ PDF / Εκτύπωση</button>${mailButtons({ to: x.recipient_email, subject: x.subject, body: x.body, kind: 'official' }, '✉ Αποστολή με Email')}
 <button class="btn" data-act="word">⬇ Word (επεξεργασία)</button><button class="btn" data-act="form">🖋 Ψηφιακό Έντυπο</button>
-<a class="btn" target="_blank" rel="noopener" href="${wa}">WhatsApp μήνυμα</a>${x.status === 'ready' ? '' : '<button class="btn" data-act="ready">Σήμανση ως έτοιμη</button>'}</div>
+<a class="btn" target="_blank" rel="noopener" href="${wa}">WhatsApp μήνυμα</a>${x.status === 'ready' ? '' : '<button class="btn primary" data-act="ready">✅ Έτοιμη: απόδοση αρ. πρωτοκόλλου</button>'}</div>
 <p class="send-help">Για συνημμένο PDF: πατήστε «PDF / Εκτύπωση» → «Αποθήκευση ως PDF» και επισυνάψτε το αρχείο στο email.</p>${driveBox(x, fileName(x))}</section>
 <div class="toolbar noprint"><a class="btn" href="#/letters/${x.id}/edit">Επεξεργασία</a><a class="btn" href="#/letters/new?copy_from=${x.id}">Νέα πάνω σε αυτή</a><a class="btn" href="#/letters">Αρχείο Επιστολών</a>
 <button class="btn danger" data-act="del">Διαγραφή</button> ${statusPill(x.status)}</div>
@@ -165,7 +172,7 @@ function viewLetter({ params }) {
           catch (e) { b.disabled = false; b.textContent = '☁ Αποθήκευση στο Drive (Word + PDF)'; throw e; }
         },
         form: () => openInDigitalForm(x),
-        async ready() { await db.save(`Επιστολή ${x.protocol_no}: έτοιμη`, (tx) => tx.update('letters', x.id, { status: 'ready' })); flash('Σημειώθηκε ως έτοιμη.'); go(`/letters/${x.id}`); },
+        async ready() { await db.save(`Επιστολή ${x.subject}: έτοιμη`, (tx) => { tx.update('letters', x.id, { status: 'ready' }); assignProtocol(tx, x.id); }); flash('Η επιστολή είναι έτοιμη και πήρε αριθμό πρωτοκόλλου.'); go(`/letters/${x.id}`); },
         async del() {
           if (!confirmDo('Οριστική διαγραφή της επιστολής; Η ενέργεια δεν αναιρείται (μένει μόνο στο ιστορικό του GitHub).')) return;
           await db.save(`Διαγραφή επιστολής ${x.protocol_no}`, (tx) => { tx.remove('letters', x.id); for (const l of tx.all('letters')) if (l.source_letter_id === x.id) tx.update('letters', l.id, { source_letter_id: null }); });
