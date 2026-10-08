@@ -467,9 +467,9 @@ function notifyPage({ query }) {
 }
 // Επιστολή (με αριθμό πρωτοκόλλου) — παράμετροι για τη «Νέα Επιστολή»: Προς ΕπΜΓρ. και εκπρόσωπο, email και του ΜΔ
 export function provinceLetter(v) {
-  if (isGM(repOf(v))) { const g = gmRecipients(v); return { to_name: g.toName, to_email: [g.to, g.cc].filter(Boolean).join(', '), subject: gmSubject(v), body: gmBody(v, false), closing: GM_CLOSING }; }
+  if (isGM(repOf(v))) { const g = gmRecipients(v); return { to_name: g.toName, to_email: [g.to, g.cc].filter(Boolean).join(', '), subject: gmSubject(v), body: gmBody(v, false), closing: GM_CLOSING, category: 'ΕΠΙΣΚΕΨΗ' }; }
   const { to, toName, cc } = provinceRecipients(v);
-  return { to_name: toName, to_email: [to, cc].filter(Boolean).join(', '), subject: oneSubject(v), body: jointMail(v, false) };
+  return { to_name: toName, to_email: [to, cc].filter(Boolean).join(', '), subject: oneSubject(v), body: jointMail(v, false), category: 'ΕΠΙΣΚΕΨΗ' };
 }
 
 const pubRows = (prov, frm, to) => visitsAll().filter((v) => v.province === prov && (!frm || v.visit_date >= frm) && (!to || v.visit_date <= to));

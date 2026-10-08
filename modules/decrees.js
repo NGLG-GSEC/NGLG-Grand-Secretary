@@ -2,7 +2,9 @@
 // πρωτοκόλλου), επίσημο έντυπο, PDF/εκτύπωση, αποστολή, αρχείο. Κάθε Διάταγμα ενημερώνει αυτόματα την Επετηρίδα.
 import { db } from '../core/store.js';
 import { module, onSubmit, go, flash, bind, confirmDo, table, notice } from '../core/app.js';
-import { esc, today, fmtDate, matches, sortBy, safeFileName, parseIso, MONTHS_GEN } from '../core/util.js';
+import { esc, today, fmtDate, matches, sortBy, safeFileName, parseIso, MONTHS_GEN, download } from '../core/util.js';
+import { makeDocx, letterBlocks } from '../core/docx.js';
+import { docTitle, driveBox, saveDocToDrive } from '../core/drive.js';
 import { letterhead, IMG, printPaper } from '../core/paper.js';
 import { mailButtons, senderBanner } from '../core/mail.js';
 import { attachPicker, memberItems } from '../core/pickers.js';
@@ -60,7 +62,16 @@ const meta = (d) => {
 };
 const apps = (d) => { try { return typeof d.appointments === 'string' ? JSON.parse(d.appointments || '[]') : d.appointments || []; } catch { return []; } };
 const decreeNo = (d) => `${d.decree_no}/${d.decree_year}`;
-const fileName = (d) => safeFileName(`ΔΙΑΤΑΓΜΑ-${d.decree_no}-${d.decree_year}${d.matter ? '-' + d.matter : ''}`);
+const fileName = (d) => (d.protocol_seq ? docTitle(d.protocol_seq, 'ΔΙΑΤΑΓΜΑ', `${decreeNo(d)} ${d.matter || ''}`) : safeFileName(`ΔΙΑΤΑΓΜΑ ${decreeNo(d)} ${d.matter || ''}`));
+// Word του Διατάγματος (με επιστολόχαρτο), για το Drive
+async function decreeDocxBlob(d) {
+  const S = (k) => db.setting(k) || '';
+  const blocks = letterBlocks({ org: S('organization_name'), founded: S('founded_year'), gmTitle: S('grand_master_title'), gmName: S('grand_master_name'),
+    number: d.protocol_no || '', date: fmtDate(d.decree_date), place: 'Εν Αθήναις', title: `ΔΙΑΤΑΓΜΑ υπ’ αριθμ. ${decreeNo(d)}`,
+    paragraphs: String(d.body || '').split(/\n\s*\n/).map((t) => ({ text: t.trim(), align: 'center', bold: /^(ΗΜΕΙΣ|ΔΙΟΡΙΖΟΜΕΝ|ΑΠΟΝΕΜΕΙ|ΕΥΑΡΕΣΤΟΥΜΕΘΑ)/.test(t.trim()) })),
+    signature: IMG.signature, signer: 'Δημήτριος Σκιαδόπουλος', signerTitle: 'Ο ΜΕΓΑΣ ΓΡΑΜΜΑΤΕΑΣ' });
+  return makeDocx(blocks, { title: d.subject, author: 'Μεγάλη Γραμματεία' });
+}
 const nextDecreeNo = (tx) => Math.max(tx.all('decree_documents').reduce((m, d) => Math.max(m, Number(d.decree_no) || 0), 0) + 1, Number(db.setting('decree_first_no')) || 513);
 
 export function decreePaper(d) {
@@ -230,12 +241,15 @@ function viewDecree({ params }) {
     html: `<section class="card send-panel noprint"><h3>Διάταγμα — Αποστολή & Αποθήκευση</h3>${senderBanner('official')}
 <div class="toolbar"><button class="btn primary" data-act="pdf">⬇ PDF / Εκτύπωση</button>${mailButtons({ to, cc: db.setting('decree_cc'), subject: d.subject, body: d.body, kind: 'official' }, '✉ Αποστολή με Email')}
 <a class="btn" target="_blank" rel="noopener" href="${wa}">WhatsApp μήνυμα</a>${d.status === 'ready' ? '' : '<button class="btn" data-act="ready">Σήμανση ως έτοιμο</button>'}</div>
-<p class="send-help">Αρ. Πρωτ.: <b>${esc(d.protocol_no || '—')}</b> · Κοινοποίηση: ${esc(db.setting('decree_cc'))} (αλλαγή στις Ρυθμίσεις).</p></section>
+<p class="send-help">Αρ. Πρωτ.: <b>${esc(d.protocol_no || '—')}</b> · Κοινοποίηση: ${esc(db.setting('decree_cc'))} (αλλαγή στις Ρυθμίσεις).</p>${driveBox(d, fileName(d))}
+<div class="toolbar"><button class="btn" data-act="word">⬇ Word</button></div></section>
 <div class="toolbar noprint"><a class="btn" href="#/decrees/${d.id}/edit">Επεξεργασία Διατάγματος</a><a class="btn" href="#/decrees/new?copy_from=${d.id}">Νέο πάνω σε αυτό</a><a class="btn" href="#/decrees">Αρχείο Διαταγμάτων</a>
 <button class="btn danger" data-act="del">Διαγραφή</button></div><div class="print-area">${decreePaper(d)}</div>`,
     mount(el) {
       bind(el, {
         pdf: () => printPaper(fileName(d)),
+        async word() { download(fileName(d) + '.docx', await decreeDocxBlob(d)); },
+        async drive() { await saveDocToDrive('decree_documents', d.id, fileName(d), await decreeDocxBlob(d), el.querySelector('.print-area .paper')); flash('Αποθηκεύτηκε στο Drive (Word + PDF).'); go(`/decrees/${d.id}`); },
         async ready() { await db.save(`Διάταγμα ${decreeNo(d)}: έτοιμο`, (tx) => tx.update('decree_documents', d.id, { status: 'ready' })); flash('Σημειώθηκε ως έτοιμο.'); go(`/decrees/${d.id}`); },
         async del() {
           if (!confirmDo('Οριστική διαγραφή του Διατάγματος;')) return;

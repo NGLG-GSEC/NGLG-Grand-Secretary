@@ -36,7 +36,7 @@ def test_letters_protocol_and_print(app):
     app.click('Αποθήκευση & απόδοση')
     app.page.wait_for_url('**/#/letters/1')
     t = app.text()
-    assert '20.542_' in t and 'Επιστολή_Δοκιμαστική επιστολή' in t and 'ΕπΜΓρ. Επαρχιακής Μεγάλης Στοάς Αθηνών' in t
+    assert '20.545_' in t and 'Επιστολή_Δοκιμαστική επιστολή' in t and 'ΕπΜΓρ. Επαρχιακής Μεγάλης Στοάς Αθηνών' in t
     assert app.page.locator('.paper a[href="https://www.nglgreece.gr"]').count() == 1
     href = app.page.locator('a:has-text("Άνοιγμα στο Gmail"), a:has-text("Αποστολή με Email")').first.get_attribute('href')
     assert 'authuser=grand.secretary%40nglgreece.gr' in href and 'athens.secretary%40nglgreece.gr' in href
@@ -44,7 +44,7 @@ def test_letters_protocol_and_print(app):
     app.go('/letters/new?copy_from=1')
     app.click('Αποθήκευση & απόδοση')
     app.page.wait_for_url('**/#/letters/2')
-    assert '20.543_' in app.text()
+    assert '20.546_' in app.text()
     # PDF (εκτύπωση): μόνο το έντυπο, μία σελίδα Α4
     app.page.emulate_media(media='print')
     pdf = app.page.pdf(format='A4', print_background=True)
@@ -70,7 +70,7 @@ def test_decree_epeteirida_and_members(app):
     app.click('Έκδοση Διατάγματος')
     app.page.wait_for_url('**/#/decrees/1')
     t = app.text()
-    assert 'υπ’ αριθμ. 513/' in t and '20.543_' in t  # ενιαίο πρωτόκολλο με τις Επιστολές
+    assert 'υπ’ αριθμ. 513/' in t and '20.546_' in t  # ενιαίο πρωτόκολλο με τις Επιστολές
     body = app.text('.decbody')
     for s in ['ΔΙΟΡΙΖΟΜΕΝ', 'ΜΕΓΑΝ ΓΡΑΜΜΑΤΕΑ', 'τον Λίαν Σεβάσμιον Αδελφόν', 'Γεώργιον Παπαδόπουλον', 'λαβόντες υπ’ όψιν τον Κανόνα 22']:
         assert s in body, s
@@ -304,15 +304,15 @@ def test_github_storage_and_concurrent_edits(app):
     app.click('Αποθήκευση & απόδοση')
     app.page.wait_for_url('**/#/letters/1')
     letters = gh.read_json('data/letters.json')
-    assert letters[0]['protocol_no'].startswith('20.542_') and gh.commits[gh.ref]['message'].startswith('Νέα Επιστολή')
+    assert letters[0]['protocol_no'].startswith('20.545_') and gh.commits[gh.ref]['message'].startswith('Νέα Επιστολή')
     # Ο Νικόλαος (άλλη συσκευή) καταχωρίζει επιστολή στο μεταξύ
-    other = letters + [{**letters[0], 'id': 2, 'protocol_seq': 20543, 'protocol_no': '20.543_26_Επιστολή_Από τον Νικόλαο', 'subject': 'Από τον Νικόλαο'}]
+    other = letters + [{**letters[0], 'id': 2, 'protocol_seq': 20546, 'protocol_no': '20.546_26_Επιστολή_Από τον Νικόλαο', 'subject': 'Από τον Νικόλαο'}]
     gh.external_commit('data/letters.json', '[\n' + ',\n'.join(json.dumps(r, ensure_ascii=False) for r in other) + '\n]\n')
     app.go('/letters/new').fill(subject='Δεύτερη του Δημήτρη', body='y')
     app.click('Αποθήκευση & απόδοση')
     app.page.wait_for_url('**/#/letters/3')
     nos = [l['protocol_no'][:7] for l in gh.read_json('data/letters.json')]
-    assert nos == ['20.542_', '20.543_', '20.544_'], nos  # χωρίς διπλό αριθμό, χωρίς απώλεια της αλλαγής του άλλου
+    assert nos == ['20.545_', '20.546_', '20.547_'], nos  # χωρίς διπλό αριθμό, χωρίς απώλεια της αλλαγής του άλλου
     # ξαναφόρτωση: τα δεδομένα έρχονται από το GitHub
     app.page.reload()
     app.page.wait_for_selector('main h1')
@@ -919,7 +919,7 @@ def test_visit_card_email_and_letter_buttons(app):
     assert 'secretary.pr.pwg.nglgreece@gmail.com' in app.page.input_value('[name=recipient_email]') and 'rep2@example.com' in app.page.input_value('[name=recipient_email]')
     app.click('Αποθήκευση & απόδοση')
     app.page.wait_for_url('**/#/letters/1')
-    assert 'Αντιπρόσωπος' in app.text() and '20.542_' in app.text()
+    assert 'Αντιπρόσωπος' in app.text() and '20.545_' in app.text()
     app.go('/visits')
     app.page.locator('.vcard a:has-text("✉ Email ΕπΜΓρ. & Εκπροσώπου")').first.click()
     app.page.wait_for_selector('#cf')
@@ -1041,3 +1041,54 @@ def test_invite_link_login_with_email_and_password(app, browser, base_url):
     p2.wait_for_selector('#lgForm')
     assert not errs, errs
     ctx.close()
+
+
+GSI_FAKE = """window.google = { accounts: { oauth2: { initTokenClient: (o) => ({ requestAccessToken: () => setTimeout(() => o.callback({ access_token: 'g-token', expires_in: 3600 }), 10) }) } } };"""
+
+
+def test_letter_and_decree_saved_to_drive_word_and_pdf(app):
+    uploads = []
+
+    def gapi(route, request):
+        if request.method == 'GET':
+            return route.fulfill(json={'files': []})
+        body = request.post_data_buffer or b''
+        name = re.search(rb'"name":"([^"]+)"', body).group(1).decode()
+        uploads.append({'name': name, 'auth': request.headers.get('authorization'), 'pdf': b'%PDF' in body, 'docx': b'PK' in body, 'parents': b'1kKR7v86jjs5QJE9-K5uUebvS6nZd9J03' in body})
+        return route.fulfill(json={'id': f'f{len(uploads)}', 'webViewLink': f'https://drive.google.com/file/d/f{len(uploads)}/view'})
+    app.page.route('https://accounts.google.com/gsi/client', lambda r: r.fulfill(body=GSI_FAKE, content_type='text/javascript'))
+    app.page.route('https://www.googleapis.com/**', gapi)
+    app.connect_local()
+    app.page.evaluate("async () => { const {db} = await import('./core/store.js'); await db.save('x', (tx) => tx.setting('google_client_id', 'test.apps.googleusercontent.com')); }")
+    add_member(app)
+    app.go('/letters/new').fill(recipient_name='ΕπΜΓρ. Δοκιμής', recipient_email='t@example.com', subject='Πρόσκληση σε σύσκεψη', body='Κείμενο.')
+    app.click('Αποθήκευση & απόδοση')
+    app.page.wait_for_url('**/#/letters/1')
+    assert '20.545_' in app.text() and '«20545 - ΕΠΙΣΤΟΛΗ Πρόσκληση σε σύσκεψη»' in app.text()
+    app.page.locator('[data-act=drive]').click()
+    app.page.wait_for_selector('text=✓ Στο Drive', timeout=30000)
+    assert [u['name'] for u in uploads] == ['20545 - ΕΠΙΣΤΟΛΗ Πρόσκληση σε σύσκεψη.docx', '20545 - ΕΠΙΣΤΟΛΗ Πρόσκληση σε σύσκεψη.pdf']
+    assert all(u['auth'] == 'Bearer g-token' and u['parents'] for u in uploads) and uploads[0]['docx'] and uploads[1]['pdf']
+    # Διάταγμα: ίδιο πρωτόκολλο, κατηγορία ΔΙΑΤΑΓΜΑ
+    app.go('/decrees/new')
+    app.fill(matter='διορισμού Μεγάλων Αξιωματικών')
+    app.page.select_option('#dOffice', 'Μέγας Γραμματεύς')
+    app.pick('.registry-search', 'Παπαδ')
+    app.click('Έκδοση Διατάγματος')
+    app.page.wait_for_url('**/#/decrees/1')
+    app.page.locator('[data-act=drive]').click()
+    app.page.wait_for_selector('text=✓ Στο Drive', timeout=30000)
+    y = date.today().year
+    assert uploads[2]['name'] == f'20546 - ΔΙΑΤΑΓΜΑ 513-{y} διορισμού Μεγάλων Αξιωματικών.docx' or uploads[2]['name'].startswith('20546 - ΔΙΑΤΑΓΜΑ 513')
+    assert uploads[3]['name'].endswith('.pdf') and uploads[3]['pdf']
+    # Επιστολή από Επίσκεψη → κατηγορία ΕΠΙΣΚΕΨΗ
+    app.go('/visits')
+    rid = app.page.evaluate("async () => (await import('./core/store.js')).db.all('reps')[0].id")
+    vid = app.page.evaluate("async () => (await import('./core/store.js')).db.all('visits').find((v) => v.visit_date >= '2026-10-08').id")
+    app.page.evaluate(f"async () => {{ const {{db}} = await import('./core/store.js'); await db.save('x', (tx) => tx.update('visits', {vid}, {{ rep_id: {rid} }})); }}")
+    app.go('/visits')
+    app.page.locator('.vcard a:has-text("📄 Επιστολή")').first.click()
+    app.page.wait_for_selector('#lf')
+    app.click('Αποθήκευση & απόδοση')
+    app.page.wait_for_url('**/#/letters/2')
+    assert '20.547_26_Επίσκεψη_' in app.text() and '«20547 - ΕΠΙΣΚΕΨΗ ' in app.text()

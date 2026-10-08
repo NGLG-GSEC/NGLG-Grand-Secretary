@@ -13,6 +13,7 @@ const GROUPS = [
   ['✉ Λογαριασμοί αποστολής', [['mail_from_official', 'Επιστολές & Διατάγματα', 'email'], ['mail_from_general', 'Γενικά εξερχόμενα (επισκέψεις, ευχές, αναφορές)', 'email']]],
   ['Αρίθμηση', [['protocol_start', 'Πρώτος αριθμός πρωτοκόλλου (αν δεν υπάρχει μεγαλύτερος)', 'int'], ['decree_first_no', 'Πρώτος αριθμός Διατάγματος (αν δεν υπάρχει μεγαλύτερος)', 'int']]],
   ['Διατάγματα', [['decree_cc', 'Κοινοποίηση (Cc) κάθε Διατάγματος', 'emails']]],
+  ['☁ Google Drive (αποθήκευση Word + PDF)', [['drive_folder_id', 'Φάκελος Drive (σύνδεσμος ή ID)'], ['google_client_id', 'Google OAuth Client ID (βλ. οδηγίες στις Ρυθμίσεις → Google Drive)']]],
   ['Επισκέψεις & Ευχές', [['gm_email', 'Email Μεγάλου Διδασκάλου (κοινοποίηση στις ενημερώσεις Εγκαταστάσεων)', 'emails'], ['visits_signer_name', 'Υπογραφή email: όνομα'], ['visits_signer_title', 'Υπογραφή email: τίτλος'], ['greet_bcc_self', 'Ευχές: κρυφή κοινοποίηση και σε (προαιρετικό)', 'emails']]],
 ];
 
@@ -25,6 +26,13 @@ ${t === 'emails' ? `<textarea name="${k}" class="short">${esc(db.setting(k) || '
 <div class="toolbar"><button class="btn primary">💾 Αποθήκευση ρυθμίσεων</button></div></form>
 <div class="card"><h2 style="margin-top:0">Σύνδεση δεδομένων</h2><p>Τα δεδομένα φυλάσσονται: <b>${esc(b.kind === 'github' ? 'ιδιωτικό αποθετήριο GitHub ' + b.label : 'μόνο σε αυτόν τον browser (δοκιμή)')}</b>.</p>
 <div class="toolbar">${historyLink()}<button class="btn" data-act="backup">⬇ Αντίγραφο</button>${isSealed() ? '<button class="btn" data-act="lock">🔒 Έξοδος</button>' : ''}<button class="btn danger" data-act="logout">Αποσύνδεση από αυτή τη συσκευή</button></div></div>
+<details class="card fold"><summary><b>☁ Οδηγίες: σύνδεση με το Google Drive (μία φορά, περίπου 5 λεπτά)</b></summary><ol class="steps">
+<li>Ανοίξτε <a href="https://console.cloud.google.com/apis/library/drive.googleapis.com" target="_blank" rel="noopener">Google Cloud → Google Drive API</a> με τον λογαριασμό της Μεγάλης Γραμματείας και πατήστε «Enable».</li>
+<li><a href="https://console.cloud.google.com/apis/credentials/consent" target="_blank" rel="noopener">OAuth consent screen</a>: τύπος «Internal» (αν υπάρχει Google Workspace) ή «External» και προσθέστε τους χρήστες στα «Test users».</li>
+<li><a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">Credentials</a> → «Create credentials» → «OAuth client ID» → τύπος «Web application» → στο «Authorized JavaScript origins» προσθέστε <code>${esc(location.origin)}</code> → «Create».</li>
+<li>Αντιγράψτε το «Client ID» (τελειώνει σε <code>.apps.googleusercontent.com</code>) στο πεδίο «Google OAuth Client ID» παραπάνω και πατήστε «Αποθήκευση ρυθμίσεων».</li>
+<li>Την πρώτη φορά που θα πατήσετε «☁ Αποθήκευση στο Drive», το Google θα ζητήσει να επιλέξετε λογαριασμό και να επιτρέψετε την πρόσβαση στο Drive.</li></ol>
+<p class="muted">Ο λογαριασμός Google που συνδέεται πρέπει να έχει δικαίωμα επεξεργασίας στον φάκελο.</p></details>
 <div class="card"><h2 style="margin-top:0">👤 Πρόσκληση χρήστη (είσοδος με email και κωδικό)</h2>
 <p class="muted">Δημιουργεί <b>προσωπικό σύνδεσμο</b> για έναν χρήστη. Ο χρήστης ανοίγει τον σύνδεσμο, γράφει email και κωδικό και μπαίνει στην εφαρμογή·
 στη συσκευή του μπαίνει στο εξής με email και κωδικό. Ο σύνδεσμος περιέχει την πρόσβαση κλειδωμένη με τον κωδικό — δεν δημοσιεύεται πουθενά.

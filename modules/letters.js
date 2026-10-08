@@ -6,6 +6,7 @@ import { crud } from '../core/crud.js';
 import { esc, today, fmtDate, matches, sortBy, safeFileName, EMAIL_RE, splitEmails, download } from '../core/util.js';
 import { letterPaper, printPaper, signerProfile, IMG } from '../core/paper.js';
 import { makeDocx, letterBlocks } from '../core/docx.js';
+import { docTitle, driveBox, saveDocToDrive } from '../core/drive.js';
 import { mailButtons, senderBanner } from '../core/mail.js';
 import { attachPicker, contactItems } from '../core/pickers.js';
 import { nextProtocol, legacyDecreeLetterIds } from './protocol.js';
@@ -19,16 +20,20 @@ const templates = () => sortBy(db.all('letter_templates').filter((t) => t.active
 export const lettersAll = () => { const dec = legacyDecreeLetterIds(); return db.all('letters').filter((l) => !dec.has(l.id)); };
 const STATUS = { draft: 'Πρόχειρη', ready: 'Έτοιμη' };
 const statusPill = (s) => `<span class="pill ${s === 'ready' ? 'ok' : 'warn'}">${STATUS[s] || esc(s)}</span>`;
-const fileName = (x) => safeFileName(`${x.protocol_no}${x.subject ? ' ' + x.subject : ''}`);
+// Όνομα αρχείου (PDF, Word, Drive): «20545 - ΕΠΙΣΤΟΛΗ Θέμα» — κατηγορία ΕΠΙΣΤΟΛΗ ή ΕΠΙΣΚΕΨΗ
+export const LETTER_CATEGORIES = { ΕΠΙΣΤΟΛΗ: 'Επιστολή', ΕΠΙΣΚΕΨΗ: 'Επίσκεψη' };
+const category = (x) => (LETTER_CATEGORIES[x.category] ? x.category : 'ΕΠΙΣΤΟΛΗ');
+const fileName = (x) => (x.protocol_seq ? docTitle(x.protocol_seq, category(x), x.subject) : safeFileName(`${category(x)} ${x.subject || ''}`));
 
 // Word (.docx) για επεξεργασία, με το επιστολόχαρτο της ΕΜΣτΕ
-export async function letterDocx(x) {
+export async function letterDocxBlob(x) {
   const S = (k) => db.setting(k) || '', p = signerProfile(x.signer);
   const blocks = letterBlocks({ org: S('organization_name'), founded: S('founded_year'), gmTitle: S('grand_master_title'), gmName: S('grand_master_name'),
     number: x.protocol_no || '', date: fmtDate(x.letter_date || today()), place: 'Εν Αθήναις', to: x.recipient_name, subject: x.subject,
     paragraphs: [{ text: x.body || '' }], closing: x.closing || S('closing'), signature: p.img, signer: p.name, signerTitle: p.title });
-  download(fileName(x) + '.docx', await makeDocx(blocks, { title: x.subject, author: p.name }));
+  return makeDocx(blocks, { title: x.subject, author: p.name });
 }
+export async function letterDocx(x) { download(fileName(x) + '.docx', await letterDocxBlob(x)); }
 // Άνοιγμα στο Ψηφιακό Έντυπο (diatagma/) με τα στοιχεία της επιστολής
 export function openInDigitalForm(x) {
   const p = signerProfile(x.signer);
@@ -46,7 +51,7 @@ function letterForm(x, query = {}) {
 <div><label>Πρότυπο / Περίπτωση</label><select name="template_id" id="tplSel"><option value="">— Επιλογή —</option>${tpl.map((t) => `<option value="${t.id}"${Number(x.template_id) === t.id ? ' selected' : ''}>${esc(t.name)}</option>`).join('')}</select></div>
 <div><label>Ημερομηνία</label><input value="${esc(fmtDate(x.letter_date || today()))}" disabled></div>
 <div class="full"><label>🔎 Παραλήπτης από τον Κατάλογο / Μητρώο</label><input id="rcptPick" placeholder="Επαρχία, Στοά, ΕπΜΔ, όνομα μέλους…" autocomplete="off"></div>
-<input type="hidden" name="recipient_member_id" value="${esc(x.recipient_member_id || '')}"><input type="hidden" name="closing" value="${esc(x.closing || '')}">
+<input type="hidden" name="recipient_member_id" value="${esc(x.recipient_member_id || '')}"><input type="hidden" name="closing" value="${esc(x.closing || '')}"><input type="hidden" name="category" value="${esc(category(x))}">
 <div><label>Παραλήπτης («Προς»)</label><input name="recipient_name" value="${esc(x.recipient_name || '')}"></div>
 <div><label>Email παραλήπτη</label><input name="recipient_email" value="${esc(x.recipient_email || '')}" inputmode="email" placeholder="πολλά με κόμμα"></div>
 <div class="full"><label>Θέμα</label><input name="subject" value="${esc(x.subject || '')}" required></div>
@@ -78,10 +83,10 @@ function mountLetterForm(el, x, isNew) {
     const emails = splitEmails(d.recipient_email), bad = emails.filter((e) => !EMAIL_RE.test(e));
     if (bad.length) throw new Error('Μη έγκυρο email: ' + bad.join(', '));
     const row = { subject: d.subject.trim(), body: d.body.trim(), template_id: d.template_id ? Number(d.template_id) : null, recipient_name: d.recipient_name.trim(),
-      recipient_email: emails.join(', '), recipient_member_id: d.recipient_member_id ? Number(d.recipient_member_id) : null, closing: String(d.closing || '').trim(), status: d.status, signer: d.signer };
+      recipient_email: emails.join(', '), recipient_member_id: d.recipient_member_id ? Number(d.recipient_member_id) : null, closing: String(d.closing || '').trim(), category: LETTER_CATEGORIES[d.category] ? d.category : 'ΕΠΙΣΤΟΛΗ', status: d.status, signer: d.signer };
     const id = await db.save(isNew ? `Νέα Επιστολή: ${row.subject}` : `Επιστολή ${x.protocol_no}: ενημέρωση`, (tx) => {
       if (!isNew) return tx.update('letters', x.id, row).id;
-      const p = nextProtocol(tx, 'Επιστολή', row.subject);
+      const p = nextProtocol(tx, LETTER_CATEGORIES[category(row)], row.subject);
       return tx.insert('letters', { ...row, protocol_seq: p.seq, protocol_year: p.year, protocol_no: p.no, letter_date: today(), source_letter_id: x.source_letter_id || null }).id;
     });
     flash(isNew ? 'Η επιστολή καταχωρίστηκε.' : 'Αποθηκεύτηκε.');
@@ -99,7 +104,7 @@ function viewLetter({ params }) {
 <div class="toolbar"><button class="btn primary" data-act="pdf">⬇ PDF / Εκτύπωση</button>${mailButtons({ to: x.recipient_email, subject: x.subject, body: x.body, kind: 'official' }, '✉ Αποστολή με Email')}
 <button class="btn" data-act="word">⬇ Word (επεξεργασία)</button><button class="btn" data-act="form">🖋 Ψηφιακό Έντυπο</button>
 <a class="btn" target="_blank" rel="noopener" href="${wa}">WhatsApp μήνυμα</a>${x.status === 'ready' ? '' : '<button class="btn" data-act="ready">Σήμανση ως έτοιμη</button>'}</div>
-<p class="send-help">Για συνημμένο PDF: πατήστε «PDF / Εκτύπωση» → «Αποθήκευση ως PDF» και επισυνάψτε το αρχείο στο email.</p></section>
+<p class="send-help">Για συνημμένο PDF: πατήστε «PDF / Εκτύπωση» → «Αποθήκευση ως PDF» και επισυνάψτε το αρχείο στο email.</p>${driveBox(x, fileName(x))}</section>
 <div class="toolbar noprint"><a class="btn" href="#/letters/${x.id}/edit">Επεξεργασία</a><a class="btn" href="#/letters/new?copy_from=${x.id}">Νέα πάνω σε αυτή</a><a class="btn" href="#/letters">Αρχείο Επιστολών</a>
 <button class="btn danger" data-act="del">Διαγραφή</button> ${statusPill(x.status)}</div>
 <div class="print-area">${letterPaper(x)}</div>`,
@@ -107,6 +112,11 @@ function viewLetter({ params }) {
       bind(el, {
         pdf: () => printPaper(fileName(x)),
         word: () => letterDocx(x),
+        async drive(_, b) {
+          b.disabled = true; b.textContent = '☁ Αποθήκευση…';
+          try { await saveDocToDrive('letters', x.id, fileName(x), await letterDocxBlob(x), el.querySelector('.print-area .paper')); flash('Αποθηκεύτηκε στο Drive (Word + PDF).'); go(`/letters/${x.id}`); }
+          catch (e) { b.disabled = false; b.textContent = '☁ Αποθήκευση στο Drive (Word + PDF)'; throw e; }
+        },
         form: () => openInDigitalForm(x),
         async ready() { await db.save(`Επιστολή ${x.protocol_no}: έτοιμη`, (tx) => tx.update('letters', x.id, { status: 'ready' })); flash('Σημειώθηκε ως έτοιμη.'); go(`/letters/${x.id}`); },
         async del() {
@@ -142,11 +152,12 @@ module({
     '/letters': archive,
     '/letters/new': ({ query }) => {
       let x = { status: 'draft', signer: actor() };
-      if (query.copy_from) { const s = db.get('letters', query.copy_from); if (s) x = { ...x, template_id: s.template_id, subject: s.subject, body: s.body, recipient_name: s.recipient_name, recipient_email: s.recipient_email, recipient_member_id: s.recipient_member_id, closing: s.closing || '', source_letter_id: s.id }; }
+      if (query.copy_from) { const s = db.get('letters', query.copy_from); if (s) x = { ...x, template_id: s.template_id, subject: s.subject, body: s.body, recipient_name: s.recipient_name, recipient_email: s.recipient_email, recipient_member_id: s.recipient_member_id, closing: s.closing || '', category: s.category || 'ΕΠΙΣΤΟΛΗ', source_letter_id: s.id }; }
       else if (query.template_id) { const t = db.get('letter_templates', query.template_id); if (t) x = { ...x, template_id: t.id, body: t.body }; }
       if (query.to_name || query.to_email) Object.assign(x, { recipient_name: query.to_name || '', recipient_email: query.to_email || '' });
       if (query.subject || query.body) Object.assign(x, { subject: query.subject || '', body: query.body || '' });
       if (query.closing) x.closing = query.closing;
+      if (LETTER_CATEGORIES[query.category]) x.category = query.category;
       return { title: 'Νέα Επιστολή', html: `<h1>Νέα Επιστολή</h1><div class="card signer-card noprint"><b>Υπογράφων:</b> ${esc(ACTORS[actor()])} <a class="btn small" href="#/identity">Αλλαγή</a></div>${letterForm(x)}`, mount: (el) => mountLetterForm(el, x, true) };
     },
     '/letters/:id': viewLetter,

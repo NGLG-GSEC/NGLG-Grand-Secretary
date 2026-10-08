@@ -3,7 +3,7 @@
 // οπότε δύο ταυτόχρονες αποθηκεύσεις δεν παίρνουν ποτέ τον ίδιο αριθμό.
 import { db } from '../core/store.js';
 
-export const PROTOCOL_START_DEFAULT = 20542;
+export const PROTOCOL_START_DEFAULT = 20545;
 db.defaultSettings({ protocol_start: String(PROTOCOL_START_DEFAULT) });
 
 export const protocolTopic = (t) => String(t || '').replace(/[\\/:*?"<>|\r\n\t]+/g, ' ').replace(/\s+/g, ' ').replace(/^[ ._-]+|[ ._-]+$/g, '').slice(0, 60).trim() || 'Χωρίς θέμα';
