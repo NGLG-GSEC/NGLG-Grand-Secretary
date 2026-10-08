@@ -44,6 +44,13 @@ export function fillContext({ visit, lodge_number, date } = {}) {
 }
 // Γραμματέας με τον τίτλο του, όταν ταυτοποιείται στο Μητρώο (π.χ. «Αδ. Νικόλαος Παπαδόπουλος»)
 const secretaryName = (s) => { if (/Αδ\./.test(s)) return s; const id = identify({ full_name: s }), m = id && db.get('member_registry', id); return m ? titledName(m) : s; };
+// Εκπροσώπηση: Προς τον ΕπΜΓρ. της Επαρχίας· Κοιν. ο Εκπρόσωπος (όνομα, αξίωμα και email του στο έντυπο)· email και στον ΜΔ
+export function repRecipients(c) {
+  const p = provinceByShort(c.province || ''), gs = p ? provinceRoles(p)[1] : null, to = gs ? gs.email : '';
+  const gm = String(db.setting('gm_email') || '').trim();
+  return { to, toName: gs ? gs.addressee : (p || {}).full_title || c.province || '', ccName: [c.rep, c.repEmail].filter(Boolean).join('\n'),
+    cc: [...new Set([c.repEmail, gm].filter((e) => e && e !== to))].join(', ') };
+}
 // Γραμματέας της Στοάς (Προς)· Επαρχιακός Μέγας Γραμματέας και ΜΔ (Κοιν.)
 export function lodgeRecipients(c) {
   const l = c.lodgeRec, p = provinceByShort(c.province || ''), gs = p ? provinceRoles(p)[1] : null;

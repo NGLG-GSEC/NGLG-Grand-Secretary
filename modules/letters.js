@@ -12,7 +12,7 @@ import { attachPicker, contactItems } from '../core/pickers.js';
 import { nextProtocol, legacyDecreeLetterIds } from './protocol.js';
 import { lodgesAll, lodgeByNumber } from './lodges.js';
 import { provinceLetter } from './visits.js';
-import { PLACEHOLDERS, hasPlaceholders, fillPlaceholders, fillContext, lodgeRecipients, missingPlaceholders, GM_VISIT, dayWithArticle, dateWords } from './letter-fill.js';
+import { PLACEHOLDERS, hasPlaceholders, fillPlaceholders, fillContext, lodgeRecipients, missingPlaceholders, GM_VISIT, REP_VISIT, repRecipients, dayWithArticle, dateWords } from './letter-fill.js';
 
 const TEMPLATE_SEED = [['Ελεύθερη επιστολή', ''], ['Επίσκεψη ΜΔ', 'Αγαπητοί Αδελφοί,\n\n[Κορμός επιστολής επίσκεψης Μεγάλου Διδασκάλου]'], ['Επίσκεψη ΜΔ με εκπρόσωπο', 'Αγαπητοί Αδελφοί,\n\n[Κορμός επιστολής επίσκεψης με εκπρόσωπο]'],
   ['Συλλυπητήρια', 'Αγαπητοί Αδελφοί,\n\n[Εγκεκριμένο πρότυπο συλλυπητηρίων]'], ['Συγχαρητήρια', 'Αγαπητοί Αδελφοί,\n\n[Εγκεκριμένο πρότυπο συγχαρητηρίων]'], ['Ευχαριστήρια', 'Αγαπητοί Αδελφοί,\n\n[Εγκεκριμένο πρότυπο ευχαριστηρίων]'],
@@ -40,7 +40,7 @@ const fileName = (x) => (x.protocol_seq ? docTitle(x.protocol_seq, category(x), 
 export async function letterDocxBlob(x) {
   const S = (k) => db.setting(k) || '', p = signerProfile(x.signer);
   const blocks = letterBlocks({ org: S('organization_name'), founded: S('founded_year'), gmTitle: S('grand_master_title'), gmName: S('grand_master_name'),
-    number: x.protocol_seq ? String(x.protocol_seq) : (x.protocol_no || ''), date: fmtDate(x.letter_date || today()), place: 'Εν Αθήναις', to: x.recipient_name, subject: x.subject,
+    number: x.protocol_seq ? String(x.protocol_seq) : (x.protocol_no || ''), date: fmtDate(x.letter_date || today()), place: 'Εν Αθήναις', to: x.recipient_name, cc: x.cc_name || '', subject: x.subject,
     paragraphs: [{ text: x.body || '' }], closing: x.closing || S('closing'), signature: p.img, signer: p.name, signerTitle: p.title });
   return makeDocx(blocks, { title: x.subject, author: p.name });
 }
@@ -50,7 +50,7 @@ export function openInDigitalForm(x) {
   const p = signerProfile(x.signer);
   try {
     localStorage.setItem('nglg-diatagma-prefill', JSON.stringify({ num: x.protocol_seq ? String(x.protocol_seq) : (x.protocol_no || ''), date: x.letter_date || today(), place: 'Εν Αθήναις', doctype: 'ΕΠΙΣΤΟΛΗ', subject: x.subject || '',
-      p0: x.recipient_name ? `Προς: ${x.recipient_name}` : '', p1: x.body || '', p2: '', greet: x.closing || db.setting('closing') || '', signer: p.name, sigtitle: p.title,
+      p0: [x.recipient_name && `Προς: ${x.recipient_name}`, x.cc_name && `Κοιν.: ${x.cc_name}`].filter(Boolean).join('\n'), p1: x.body || '', p2: '', greet: x.closing || db.setting('closing') || '', signer: p.name, sigtitle: p.title,
       useSig: p.img === IMG.signature, mailto: x.recipient_email || '' }));
   } catch { /* χωρίς localStorage: ανοίγει κενό */ }
   location.href = 'diatagma/';
@@ -85,6 +85,7 @@ ${fillPanel(x, query)}
 <input type="hidden" name="recipient_member_id" value="${esc(x.recipient_member_id || '')}"><input type="hidden" name="closing" value="${esc(x.closing || '')}"><input type="hidden" name="category" value="${esc(category(x))}">
 <div><label>Παραλήπτης («Προς»)</label><input name="recipient_name" value="${esc(x.recipient_name || '')}"></div>
 <div><label>Email παραλήπτη</label><input name="recipient_email" value="${esc(x.recipient_email || '')}" inputmode="email" placeholder="πολλά με κόμμα"></div>
+<div class="full"><label>Κοιν. (στο έντυπο, κάτω από το «Προς»)</label><textarea name="cc_name" rows="2" style="min-height:0">${esc(x.cc_name || '')}</textarea></div>
 <div class="full"><label>Θέμα</label><input name="subject" value="${esc(x.subject || '')}" required></div>
 <div class="full"><label>Κείμενο</label><textarea name="body" required>${esc(x.body || '')}</textarea><small class="muted">Οι σύνδεσμοι (https://… ή www.…) μένουν ενεργοί στο τελικό έγγραφο.</small></div>
 <div><label>Κατάσταση</label><select name="status"><option value="draft"${x.status !== 'ready' ? ' selected' : ''}>Πρόχειρη</option><option value="ready"${x.status === 'ready' ? ' selected' : ''}>Έτοιμη</option></select></div>
@@ -116,7 +117,10 @@ function mountLetterForm(el, x, isNew) {
     f.body.value = body; f.subject.value = subject; auto = { body, subject };
     if (tpl.closing) f.closing.value = tpl.closing;
     if (LETTER_CATEGORIES[tpl.category]) f.category.value = tpl.category;
-    if (c.lodge && (tpl.key === GM_VISIT.key || !f.recipient_email.value.trim() || f.recipient_email.value === autoRcpt)) {
+    if (tpl.key === REP_VISIT.key && c.rep) {
+      const r = repRecipients(c);
+      f.recipient_name.value = r.toName; f.recipient_email.value = [r.to, r.cc].filter(Boolean).join(', '); f.cc_name.value = r.ccName; f.recipient_member_id.value = ''; autoRcpt = f.recipient_email.value;
+    } else if (c.lodge && (tpl.key === GM_VISIT.key || !f.recipient_email.value.trim() || f.recipient_email.value === autoRcpt)) {
       const r = lodgeRecipients(c);
       const repMail = c.repEmail && /\{\s*Εκπρόσωπος\s*\}/.test(tpl.body + (tpl.subject || '')) ? c.repEmail : '';
       f.recipient_name.value = r.toName; f.recipient_email.value = [...new Set([r.to, r.cc, repMail].join(', ').split(/\s*,\s*/).filter(Boolean))].join(', '); f.recipient_member_id.value = ''; autoRcpt = f.recipient_email.value;
@@ -145,7 +149,7 @@ function mountLetterForm(el, x, isNew) {
     const emails = splitEmails(d.recipient_email), bad = emails.filter((e) => !EMAIL_RE.test(e));
     if (bad.length) throw new Error('Μη έγκυρο email: ' + bad.join(', '));
     const row = { subject: d.subject.trim(), body: d.body.trim(), template_id: d.template_id ? Number(d.template_id) : null, recipient_name: d.recipient_name.trim(),
-      recipient_email: emails.join(', '), recipient_member_id: d.recipient_member_id ? Number(d.recipient_member_id) : null, closing: String(d.closing || '').trim(), category: LETTER_CATEGORIES[d.category] ? d.category : 'ΕΠΙΣΤΟΛΗ', status: d.status, signer: d.signer };
+      recipient_email: emails.join(', '), recipient_member_id: d.recipient_member_id ? Number(d.recipient_member_id) : null, cc_name: String(d.cc_name || '').trim(), closing: String(d.closing || '').trim(), category: LETTER_CATEGORIES[d.category] ? d.category : 'ΕΠΙΣΤΟΛΗ', status: d.status, signer: d.signer };
     const id = await db.save(isNew ? `Νέα Επιστολή: ${row.subject}` : `Επιστολή ${x.protocol_no || x.id}: ενημέρωση`, (tx) => {
       const r = isNew ? tx.insert('letters', { ...row, letter_date: today(), source_letter_id: x.source_letter_id || null }) : tx.update('letters', x.id, row);
       if (row.status === 'ready') assignProtocol(tx, r.id);
@@ -217,12 +221,13 @@ module({
       const vis = visitOf(query);
       if (vis) query = { ...query, ...provinceLetter(vis) };
       let x = { status: 'draft', signer: actor() };
-      if (query.copy_from) { const s = db.get('letters', query.copy_from); if (s) x = { ...x, template_id: s.template_id, subject: s.subject, body: s.body, recipient_name: s.recipient_name, recipient_email: s.recipient_email, recipient_member_id: s.recipient_member_id, closing: s.closing || '', category: s.category || 'ΕΠΙΣΤΟΛΗ', source_letter_id: s.id }; }
+      if (query.copy_from) { const s = db.get('letters', query.copy_from); if (s) x = { ...x, template_id: s.template_id, subject: s.subject, body: s.body, recipient_name: s.recipient_name, recipient_email: s.recipient_email, recipient_member_id: s.recipient_member_id, cc_name: s.cc_name || '', closing: s.closing || '', category: s.category || 'ΕΠΙΣΤΟΛΗ', source_letter_id: s.id }; }
       else if (query.template_id) { const t = db.get('letter_templates', query.template_id); if (t) x = { ...x, template_id: t.id, body: t.body, subject: t.subject || '', closing: t.closing || '', category: t.category || 'ΕΠΙΣΤΟΛΗ' }; }
       if (query.template_id && !x.template_id && db.get('letter_templates', query.template_id)) x.template_id = Number(query.template_id);
       if (query.to_name || query.to_email) Object.assign(x, { recipient_name: query.to_name || '', recipient_email: query.to_email || '' });
       if (query.subject || query.body) Object.assign(x, { subject: query.subject || '', body: query.body || '' });
       if (query.closing) x.closing = query.closing;
+      if (query.cc_name) x.cc_name = query.cc_name;
       if (LETTER_CATEGORIES[query.category]) x.category = query.category;
       return { title: 'Νέα Επιστολή', html: `<h1>Νέα Επιστολή</h1><div class="card signer-card noprint"><b>Υπογράφων:</b> ${esc(ACTORS[actor()])} <a class="btn small" href="#/identity">Αλλαγή</a></div>${letterForm(x, query)}`, mount: (el) => mountLetterForm(el, x, true) };
     },

@@ -72,14 +72,15 @@ export async function makeDocx(blocks, { title = '', author = '' } = {}) {
 }
 
 // Επιστολόχαρτο ΕΜΣτΕ: κεφαλίδα + στοιχεία + κείμενο + κλείσιμο/υπογραφή
-export function letterBlocks({ base = '', org, founded, gmTitle, gmName, number, date, place, title, to, subject, paragraphs = [], closing, signature, signer, signerTitle }) {
+export function letterBlocks({ base = '', org, founded, gmTitle, gmName, number, date, place, title, to, cc, subject, paragraphs = [], closing, signature, signer, signerTitle }) {
   const B = [{ img: base + 'img/header_emblem.png', width: 3.2 }, { text: org, align: 'center', bold: true, size: 15, color: '1D2F5E', after: 0 }];
   if (founded) B.push({ text: `Έτος Ιδρύσεως ${founded}`, align: 'center', size: 10, color: 'B18A43', after: 0 });
   if (gmTitle || gmName) B.push({ text: [gmTitle, gmName].filter(Boolean).join('\n'), align: 'center', size: 10, after: 0 });
   B.push({ text: '', rule: true, after: 12 });
   B.push({ text: [number && `Αρ. Πρωτ.: ${number}`, [place, date].filter(Boolean).join(', ')].filter(Boolean).join('\n'), align: 'right', size: 11, after: 12 });
   if (title) B.push({ text: title, align: 'center', bold: true, size: 14, after: 10 });
-  if (to) B.push({ text: `Προς: ${to}`, bold: true, after: 6 });
+  if (to) B.push({ text: `Προς: ${to}`, bold: true, after: cc ? 2 : 6 });
+  if (cc) B.push({ text: `Κοιν.: ${cc}`, bold: true, after: 6 });
   if (subject) B.push({ text: `Θέμα: ${subject}`, bold: true, after: 12 });
   for (const p of paragraphs) if (String(p.text || '').trim()) for (const t of String(p.text).split(/\n\s*\n/)) B.push({ align: 'both', after: 8, ...p, text: t.trim() });
   if (closing) B.push({ text: closing, before: 14, after: 6 });

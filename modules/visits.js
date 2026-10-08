@@ -12,7 +12,7 @@ import { provincialChoices, provinceByShort, provinceRoles } from './provinces.j
 import { lodgesAll, lodgeNoKey, lodgeByNumber, cleanLodgeName } from './lodges.js';
 import { DEC_MAP, precedenceOf } from './decree-catalog.js';
 import { contactOf, person, canonicalId, identify } from '../core/people.js';
-import { fillContext, fillPlaceholders, lodgeRecipients, gmVisitTemplate, repVisitTemplate, gmName, GM_VISIT, REP_VISIT, setRepInfo } from './letter-fill.js';
+import { fillContext, fillPlaceholders, lodgeRecipients, repRecipients, gmVisitTemplate, repVisitTemplate, gmName, GM_VISIT, REP_VISIT, setRepInfo } from './letter-fill.js';
 import { parseRank, matchName, isCurrentRecord, hasActiveList, importEpeteiridaAny, hasEpeteirida } from './epeteirida-import.js';
 
 const MONTHS = ['Ιανουάριος', 'Φεβρουάριος', 'Μάρτιος', 'Απρίλιος', 'Μάιος', 'Ιούνιος', 'Ιούλιος', 'Αύγουστος', 'Σεπτέμβριος', 'Οκτώβριος', 'Νοέμβριος', 'Δεκέμβριος'];
@@ -226,7 +226,7 @@ function provinceMail(p, rows, missing) {
 // ---------------------------------------------------------------- σελίδες
 function visitCard(v, reps, opts = '') {
   const d = parseIso(v.visit_date), r = reps[v.rep_id], p = provinceByShort(v.province || '');
-  const oks = (repNotified(v) ? `<span class="vok">✓ Εκπρόσωπος ενημερώθηκε ${esc(fmtDate(v.rep_notified_at))}</span>` : '') + (provNotified(v) ? `<span class="vok">✓ Στοά ενημερώθηκε ${esc(fmtDate(v.prov_notified_at))}</span>` : '');
+  const oks = (repNotified(v) ? `<span class="vok">✓ Εκπρόσωπος ενημερώθηκε ${esc(fmtDate(v.rep_notified_at))}</span>` : '') + (provNotified(v) ? `<span class="vok">✓ ${r && !isGM(r) ? 'ΕπΜΓρ.' : 'Στοά'} ενημερώθηκε ${esc(fmtDate(v.prov_notified_at))}</span>` : '');
   const brief = r && isGM(r) ? `<span class="pill ok">Επίσημη επίσκεψη ΜΔ</span> <a class="btn small${provNotified(v) ? '' : ' primary'}" href="#/visits/notify?ids=${v.id}&back=list">✉ Email προς Στοά (Επίσημη Επίσκεψη)</a>
 <a class="btn small" href="#/letters/new?${new URLSearchParams(provinceLetter(v))}">📄 Επιστολή</a>` : r ? `<a class="btn small${repNotified(v) && provNotified(v) ? '' : ' primary'}" href="#/visits/notify?ids=${v.id}&back=list">✉ Email προς Στοά (Εκπροσώπηση)</a>
 <a class="btn small" href="#/letters/new?${new URLSearchParams(provinceLetter(v))}">📄 Επιστολή</a>
@@ -422,7 +422,9 @@ function visitBody(v, withSignature = true) {
 }
 // Προς: Γραμματέας της Στοάς· Κοιν.: ΕπΜΓρ., ο Εκπρόσωπος (αν δεν είναι ο ΜΔ) και ο ΜΔ
 function visitRecipients(v) {
-  const c = visitCtx(v), g = lodgeRecipients(c), r = repOf(v), gm = isGM(r), [repEmail] = r && !gm ? repContact(r) : [''];
+  const c = visitCtx(v), r = repOf(v), gm = isGM(r);
+  if (r && !gm) { const g = repRecipients(c); return { ...g, r, gm, repEmail: c.repEmail || '' }; }
+  const g = lodgeRecipients(c), repEmail = '';
   const all = [...new Set([g.cc, repEmail].join(', ').split(/\s*,\s*/).filter(Boolean))];
   // Στοά χωρίς email: Προς τον ΕπΜΓρ. (να τη διαβιβάσει), οι υπόλοιποι σε κοινοποίηση
   const to = g.to || all.shift() || '';
@@ -433,16 +435,16 @@ function notifyPage({ query }) {
   if (!v) return '<h1>Δεν βρέθηκε η επίσκεψη</h1>';
   const g = visitRecipients(v), back = query.back === 'list' ? '#/visits' : `#/visits/edit/${v.id}`;
   return composePage(g.gm ? 'Επίσημη Επίσκεψη του Μεγάλου Διδασκάλου' : 'Εκπροσώπηση του Μεγάλου Διδασκάλου', { to: g.to, cc: g.cc, subject: visitSubject(v), body: visitBody(v) }, {
-    hint: [!g.lodgeMail && 'Η Στοά δεν έχει email (Συμβολικές Στοές → email Στοάς ή Γραμματέα): το email πηγαίνει στον ΕπΜΓρ. — ή συμπληρώστε εδώ το email της Στοάς.',
+    hint: [!g.to && g.r && !g.gm && 'Η Επαρχία δεν έχει email ΕπΜΓρ. (Μητρώα → Επαρχιακές Μεγάλες Στοές) — συμπληρώστε το εδώ.', (!g.r || g.gm) && !g.lodgeMail && 'Η Στοά δεν έχει email (Συμβολικές Στοές → email Στοάς ή Γραμματέα): το email πηγαίνει στον ΕπΜΓρ. — ή συμπληρώστε εδώ το email της Στοάς.',
       g.r && !g.gm && !g.repEmail && `Ο εκπρόσωπος ${g.r.surname} ${g.r.name} δεν έχει email — συμπληρώστε το εδώ.`, !g.r && 'Δεν έχει οριστεί εκπρόσωπος.'].filter(Boolean).join(' '),
     back, kind: 'official', attach: { name: `episkepsi-${v.lodge_number || 'stoa'}.ics`, data: icsFor([v]) },
-    onSent: async () => { await markVisits([v.id], 'prov'); if (g.r && !g.gm) await markVisits([v.id], 'rep', g.r.id); flash('Σημειώθηκε η ενημέρωση της Στοάς' + (g.r && !g.gm ? ' και του εκπροσώπου.' : '.')); go(back.slice(1)); },
+    onSent: async () => { await markVisits([v.id], 'prov'); if (g.r && !g.gm) await markVisits([v.id], 'rep', g.r.id); flash((g.r && !g.gm ? 'Σημειώθηκε η ενημέρωση ΕπΜΓρ. και εκπροσώπου' : 'Σημειώθηκε η ενημέρωση της Στοάς') + (g.r && !g.gm ? '.' : '.')); go(back.slice(1)); },
   });
 }
 // Επιστολή (αρ. πρωτοκόλλου μόλις οριστεί «Έτοιμη») — παράμετροι για τη «Νέα Επιστολή»
 export function provinceLetter(v) {
   const g = visitRecipients(v), t = visitTpl(v);
-  return { to_name: g.toName, to_email: [g.to, g.cc].filter(Boolean).join(', '), subject: visitSubject(v), body: visitBody(v, false), closing: visitClosing(v), category: 'ΕΠΙΣΚΕΨΗ', template_id: t.id || '', visit_id: v.id };
+  return { to_name: g.toName, to_email: [g.to, g.cc].filter(Boolean).join(', '), subject: visitSubject(v), body: visitBody(v, false), closing: visitClosing(v), category: 'ΕΠΙΣΚΕΨΗ', template_id: t.id || '', visit_id: v.id, cc_name: g.ccName || '' };
 }
 
 const pubRows = (prov, frm, to) => visitsAll().filter((v) => v.province === prov && (!frm || v.visit_date >= frm) && (!to || v.visit_date <= to));

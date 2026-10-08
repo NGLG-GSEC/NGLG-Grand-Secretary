@@ -752,9 +752,9 @@ def test_visit_letter_and_email_to_province_and_grand_master(app):
     app.click('✉ Email προς Στοά')
     app.page.wait_for_selector('#cf')
     # Εκπροσώπηση: προς τον Γραμματέα της Στοάς· κοιν. ΕπΜΓρ., εκπρόσωπος, ΜΔ — από το πρότυπο «Εκπροσώπηση του Μεγάλου Διδασκάλου»
-    # η Στοά εδώ δεν έχει email → Προς τον ΕπΜΓρ.
+    # Εκπροσώπηση: Προς τον ΕπΜΓρ.· κοιν. Εκπρόσωπος και ΜΔ
     assert app.page.input_value('[name=to]') == 'secretary.pr.pwg.nglgreece@gmail.com'
-    assert app.page.input_value('[name=cc]') == 'gm@example.com, rep@example.com'
+    assert app.page.input_value('[name=cc]') == 'rep@example.com, gm@example.com'
     body = app.page.input_value('[name=body]')
     assert body.startswith('Αγαπητέ Αδ. Γραμματεύ,') and 'Στοάς ΔΙΩΝΗ υπ’ αρ. 32,' in body and 'ο εκπρόσωπος του Μεγάλου Διδασκάλου της Εθνικής Μεγάλης Στοάς της Ελλάδος, Λίαν Σεβάσμιος Αδ. Ιωάννης Εκπρόσωπος, Μέγας Καγκελάριος.' in body, body
     assert 'Κανόνα 123' in body and 'Κανόνα 144' in body and '{' not in body and 'την την' not in body
@@ -767,7 +767,10 @@ def test_visit_letter_and_email_to_province_and_grand_master(app):
     app.page.wait_for_selector('#lf')
     em = app.page.input_value('[name=recipient_email]')
     assert 'gm@example.com' in em and 'rep@example.com' in em
-    assert app.page.input_value('[name=recipient_name]').startswith('τον Γραμματέα της Στοάς «ΔΙΩΝΗ» υπ’ αριθ. 32')
+    assert app.page.input_value('[name=recipient_name]').startswith('ΕπΜΓρ.')
+    assert app.page.input_value('[name=cc_name]') == 'Λίαν Σεβάσμιος Αδ. Ιωάννης Εκπρόσωπος, Μέγας Καγκελάριος\nrep@example.com'
+    app.click('👁 Προεπισκόπηση')
+    assert 'Κοιν.: Λίαν Σεβάσμιος Αδ. Ιωάννης Εκπρόσωπος, Μέγας Καγκελάριος\nrep@example.com' in app.text('#pv .paper')
     assert 'Εκπροσώπηση του Μεγάλου Διδασκάλου' in app.page.locator('#tplSel option:checked').inner_text()
     assert 'Λίαν Σεβάσμιος Αδ. Ιωάννης Εκπρόσωπος' in app.page.input_value('[name=body]')
     assert app.page.input_value('[name=closing]') == 'Με εκτίμηση και αδελφική αγάπη,'
@@ -933,7 +936,7 @@ def test_visit_card_email_and_letter_buttons(app):
     app.page.wait_for_selector('#cf')
     app.click('✓ Σημείωση ως σταλμένο')
     app.page.wait_for_url('**/#/visits')
-    assert 'Εκπρόσωπος ενημερώθηκε' in app.text() and 'Στοά ενημερώθηκε' in app.text()
+    assert 'Εκπρόσωπος ενημερώθηκε' in app.text() and 'ΕπΜΓρ. ενημερώθηκε' in app.text()
 
 
 def test_single_member_pool_identify_merge_and_relink(app):
