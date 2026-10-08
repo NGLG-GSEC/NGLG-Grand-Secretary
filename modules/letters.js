@@ -32,7 +32,7 @@ const fileName = (x) => (x.protocol_seq ? docTitle(x.protocol_seq, category(x), 
 export async function letterDocxBlob(x) {
   const S = (k) => db.setting(k) || '', p = signerProfile(x.signer);
   const blocks = letterBlocks({ org: S('organization_name'), founded: S('founded_year'), gmTitle: S('grand_master_title'), gmName: S('grand_master_name'),
-    number: x.protocol_no || '', date: fmtDate(x.letter_date || today()), place: 'Εν Αθήναις', to: x.recipient_name, subject: x.subject,
+    number: x.protocol_seq ? String(x.protocol_seq) : (x.protocol_no || ''), date: fmtDate(x.letter_date || today()), place: 'Εν Αθήναις', to: x.recipient_name, subject: x.subject,
     paragraphs: [{ text: x.body || '' }], closing: x.closing || S('closing'), signature: p.img, signer: p.name, signerTitle: p.title });
   return makeDocx(blocks, { title: x.subject, author: p.name });
 }
@@ -41,7 +41,7 @@ export async function letterDocx(x) { download(fileName(x) + '.docx', await lett
 export function openInDigitalForm(x) {
   const p = signerProfile(x.signer);
   try {
-    localStorage.setItem('nglg-diatagma-prefill', JSON.stringify({ num: x.protocol_no || '', date: x.letter_date || today(), place: 'Εν Αθήναις', doctype: 'ΕΠΙΣΤΟΛΗ', subject: x.subject || '',
+    localStorage.setItem('nglg-diatagma-prefill', JSON.stringify({ num: x.protocol_seq ? String(x.protocol_seq) : (x.protocol_no || ''), date: x.letter_date || today(), place: 'Εν Αθήναις', doctype: 'ΕΠΙΣΤΟΛΗ', subject: x.subject || '',
       p0: x.recipient_name ? `Προς: ${x.recipient_name}` : '', p1: x.body || '', p2: '', greet: x.closing || db.setting('closing') || '', signer: p.name, sigtitle: p.title,
       useSig: p.img === IMG.signature, mailto: x.recipient_email || '' }));
   } catch { /* χωρίς localStorage: ανοίγει κενό */ }

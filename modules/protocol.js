@@ -1,4 +1,4 @@
-// Αριθμός Πρωτοκόλλου — ενιαία συνεχής αρίθμηση Επιστολών & Διαταγμάτων, π.χ. 20.542_26_Επιστολή_Θέμα.
+// Αριθμός Πρωτοκόλλου — ενιαία συνεχής αρίθμηση Επιστολών & Διαταγμάτων, π.χ. 20545.
 // Δεν μηδενίζει ανά έτος· ξεκινά από τη ρύθμιση «protocol_start». Υπολογίζεται μέσα στην αποθήκευση (συναλλαγή),
 // οπότε δύο ταυτόχρονες αποθηκεύσεις δεν παίρνουν ποτέ τον ίδιο αριθμό.
 import { db } from '../core/store.js';
@@ -13,8 +13,12 @@ export function nextProtocol(tx, category = 'Επιστολή', topic = '') {
   const max = (t) => tx.all(t).reduce((m, r) => Math.max(m, Number(r.protocol_seq) || 0), 0);
   const n = Math.max(start - 1, max('letters'), max('decree_documents')) + 1;
   const y = new Date().getFullYear();
-  return { seq: n, year: y, no: n.toLocaleString('de-DE') + `_${String(y % 100).padStart(2, '0')}_${category}_${protocolTopic(topic)}` };
+  return { seq: n, year: y, no: String(n) };
 }
+// Ο αριθμός πρωτοκόλλου στο έγγραφο είναι μόνο ο αριθμός (π.χ. 20545)· η κατηγορία και το θέμα μπαίνουν μόνο στο όνομα αρχείου.
+db.migrate('protocol-number-only-2026-10', (tx) => {
+  for (const t of ['letters', 'decree_documents']) for (const r of tx.all(t)) if (r.protocol_seq && r.protocol_no !== String(r.protocol_seq)) tx.update(t, r.id, { protocol_no: String(r.protocol_seq) });
+});
 
 export function protocolBook() {
   const rows = [

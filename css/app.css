@@ -56,6 +56,7 @@ th{background:#eef3fa;color:#123b7a}
 .meta{display:flex;justify-content:space-between}
 .official-number{font-variant-numeric:lining-nums;-moz-font-feature-settings:"lnum" 1;-webkit-font-feature-settings:"lnum" 1;font-feature-settings:"lnum" 1}
 .body{font-size:11.5pt;line-height:1.5;white-space:pre-wrap;margin-top:6mm}
+.paper .body{text-align:justify;text-justify:inter-word;width:100%}
 .body a{color:#123b7a;text-decoration:underline;word-break:break-word}
 .preview-actions{display:flex;gap:8px;flex-wrap:wrap}
 .preview-card{display:none;margin-top:18px}

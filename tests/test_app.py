@@ -36,7 +36,8 @@ def test_letters_protocol_and_print(app):
     app.click('Αποθήκευση & απόδοση')
     app.page.wait_for_url('**/#/letters/1')
     t = app.text()
-    assert '20.545_' in t and 'Επιστολή_Δοκιμαστική επιστολή' in t and 'ΕπΜΓρ. Επαρχιακής Μεγάλης Στοάς Αθηνών' in t
+    assert 'Αρ. Πρωτ.: 20545' in t and '20.545' not in t and 'ΕπΜΓρ. Επαρχιακής Μεγάλης Στοάς Αθηνών' in t
+    assert app.page.evaluate("() => getComputedStyle(document.querySelector('.paper .body')).textAlign") == 'justify'
     assert app.page.locator('.paper a[href="https://www.nglgreece.gr"]').count() == 1
     href = app.page.locator('a:has-text("Άνοιγμα στο Gmail"), a:has-text("Αποστολή με Email")').first.get_attribute('href')
     assert 'authuser=grand.secretary%40nglgreece.gr' in href and 'athens.secretary%40nglgreece.gr' in href
@@ -44,7 +45,7 @@ def test_letters_protocol_and_print(app):
     app.go('/letters/new?copy_from=1')
     app.click('Αποθήκευση & απόδοση')
     app.page.wait_for_url('**/#/letters/2')
-    assert '20.546_' in app.text()
+    assert '20546' in app.text()
     # PDF (εκτύπωση): μόνο το έντυπο, μία σελίδα Α4
     app.page.emulate_media(media='print')
     pdf = app.page.pdf(format='A4', print_background=True)
@@ -70,7 +71,7 @@ def test_decree_epeteirida_and_members(app):
     app.click('Έκδοση Διατάγματος')
     app.page.wait_for_url('**/#/decrees/1')
     t = app.text()
-    assert 'υπ’ αριθμ. 513/' in t and '20.546_' in t  # ενιαίο πρωτόκολλο με τις Επιστολές
+    assert 'υπ’ αριθμ. 513/' in t and 'Αρ. Πρωτ.: 20546' in t  # ενιαίο πρωτόκολλο με τις Επιστολές
     body = app.text('.decbody')
     for s in ['ΔΙΟΡΙΖΟΜΕΝ', 'ΜΕΓΑΝ ΓΡΑΜΜΑΤΕΑ', 'τον Λίαν Σεβάσμιον Αδελφόν', 'Γεώργιον Παπαδόπουλον', 'λαβόντες υπ’ όψιν τον Κανόνα 22']:
         assert s in body, s
@@ -223,9 +224,9 @@ def test_settings_and_database(app):
     app.go('/letters/new').fill(subject='Θέμα', body='Κείμενο')
     app.click('Αποθήκευση & απόδοση')
     app.page.wait_for_url('**/#/letters/1')
-    assert '30.000_' in app.text() and 'Με εγκάρδιους αδελφικούς χαιρετισμούς,' in app.text()
+    assert 'Αρ. Πρωτ.: 30000' in app.text() and 'Με εγκάρδιους αδελφικούς χαιρετισμούς,' in app.text()
     app.go('/database/protocol')
-    assert '30.000_' in app.text()
+    assert '30000\tΕπιστολή' in app.text()
     app.go('/database/lodges?q=paix')
     assert 'LA PAIX' in app.text()
     app.go('/database/lodges/3').fill(notes='σημείωση από τη Βάση')
@@ -264,7 +265,7 @@ def test_import_old_backup_and_visits_payload(app, tmp_path):
     app.go('/letters/new').fill(subject='Μετά τη μεταφορά', body='x')
     app.click('Αποθήκευση & απόδοση')
     app.page.wait_for_selector('.paper')
-    assert '20.601_' in app.text()  # η αρίθμηση συνεχίζει από τα παλιά
+    assert 'Αρ. Πρωτ.: 20601' in app.text()  # η αρίθμηση συνεχίζει από τα παλιά
     app.go('/members?field=all&q=Παλαιός')
     assert 'Βρέθηκε 1 μέλος' in app.text() and 'ΑΚΡΟΠΟΛΙΣ' in app.text()
     app.go('/projects/1')
@@ -304,15 +305,15 @@ def test_github_storage_and_concurrent_edits(app):
     app.click('Αποθήκευση & απόδοση')
     app.page.wait_for_url('**/#/letters/1')
     letters = gh.read_json('data/letters.json')
-    assert letters[0]['protocol_no'].startswith('20.545_') and gh.commits[gh.ref]['message'].startswith('Νέα Επιστολή')
+    assert letters[0]['protocol_no'] == '20545' and gh.commits[gh.ref]['message'].startswith('Νέα Επιστολή')
     # Ο Νικόλαος (άλλη συσκευή) καταχωρίζει επιστολή στο μεταξύ
-    other = letters + [{**letters[0], 'id': 2, 'protocol_seq': 20546, 'protocol_no': '20.546_26_Επιστολή_Από τον Νικόλαο', 'subject': 'Από τον Νικόλαο'}]
+    other = letters + [{**letters[0], 'id': 2, 'protocol_seq': 20546, 'protocol_no': '20546', 'subject': 'Από τον Νικόλαο'}]
     gh.external_commit('data/letters.json', '[\n' + ',\n'.join(json.dumps(r, ensure_ascii=False) for r in other) + '\n]\n')
     app.go('/letters/new').fill(subject='Δεύτερη του Δημήτρη', body='y')
     app.click('Αποθήκευση & απόδοση')
     app.page.wait_for_url('**/#/letters/3')
     nos = [l['protocol_no'][:7] for l in gh.read_json('data/letters.json')]
-    assert nos == ['20.545_', '20.546_', '20.547_'], nos  # χωρίς διπλό αριθμό, χωρίς απώλεια της αλλαγής του άλλου
+    assert nos == ['20545', '20546', '20547'], nos  # χωρίς διπλό αριθμό, χωρίς απώλεια της αλλαγής του άλλου
     # ξαναφόρτωση: τα δεδομένα έρχονται από το GitHub
     app.page.reload()
     app.page.wait_for_selector('main h1')
@@ -674,7 +675,7 @@ def test_letter_word_and_digital_form(app, tmp_path):
     app.page.wait_for_url('**/diatagma/')
     app.page.wait_for_function("() => document.getElementById('subject').value === 'Δοκιμή Word'")
     assert app.page.input_value('#doctype') == 'ΕΠΙΣΤΟΛΗ' and app.page.input_value('#mailto') == 'test@example.com'
-    assert 'Πρώτη παράγραφος.' in app.page.input_value('#p1') and app.page.input_value('#num').startswith('20.')
+    assert 'Πρώτη παράγραφος.' in app.page.input_value('#p1') and app.page.input_value('#num') == '20545'
     with app.page.expect_download() as dl2:
         app.page.click('#bWord')
     assert dl2.value.suggested_filename == 'ΕΠΙΣΤΟΛΗ - Δοκιμή Word.docx'
@@ -919,7 +920,7 @@ def test_visit_card_email_and_letter_buttons(app):
     assert 'secretary.pr.pwg.nglgreece@gmail.com' in app.page.input_value('[name=recipient_email]') and 'rep2@example.com' in app.page.input_value('[name=recipient_email]')
     app.click('Αποθήκευση & απόδοση')
     app.page.wait_for_url('**/#/letters/1')
-    assert 'Αντιπρόσωπος' in app.text() and '20.545_' in app.text()
+    assert 'Αντιπρόσωπος' in app.text() and '20545' in app.text()
     app.go('/visits')
     app.page.locator('.vcard a:has-text("✉ Email ΕπΜΓρ. & Εκπροσώπου")').first.click()
     app.page.wait_for_selector('#cf')
@@ -1100,7 +1101,7 @@ def test_letter_and_decree_saved_to_drive_word_and_pdf(app):
     app.go('/letters/new').fill(recipient_name='ΕπΜΓρ. Δοκιμής', recipient_email='t@example.com', subject='Πρόσκληση σε σύσκεψη', body='Κείμενο.')
     app.click('Αποθήκευση & απόδοση')
     app.page.wait_for_url('**/#/letters/1')
-    assert '20.545_' in app.text() and '«20545 - ΕΠΙΣΤΟΛΗ Πρόσκληση σε σύσκεψη»' in app.text()
+    assert '20545' in app.text() and '«20545 - ΕΠΙΣΤΟΛΗ Πρόσκληση σε σύσκεψη»' in app.text()
     app.page.locator('[data-act=drive]').click()
     app.page.wait_for_selector('text=✓ Στο Drive', timeout=30000)
     assert [u['name'] for u in uploads] == ['20545 - ΕΠΙΣΤΟΛΗ Πρόσκληση σε σύσκεψη.docx', '20545 - ΕΠΙΣΤΟΛΗ Πρόσκληση σε σύσκεψη.pdf']
@@ -1127,4 +1128,4 @@ def test_letter_and_decree_saved_to_drive_word_and_pdf(app):
     app.page.wait_for_selector('#lf')
     app.click('Αποθήκευση & απόδοση')
     app.page.wait_for_url('**/#/letters/2')
-    assert '20.547_26_Επίσκεψη_' in app.text() and '«20547 - ΕΠΙΣΚΕΨΗ ' in app.text()
+    assert '20547' in app.text() and '«20547 - ΕΠΙΣΚΕΨΗ ' in app.text()
