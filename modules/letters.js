@@ -11,6 +11,7 @@ import { mailButtons, senderBanner } from '../core/mail.js';
 import { attachPicker, contactItems } from '../core/pickers.js';
 import { nextProtocol, legacyDecreeLetterIds } from './protocol.js';
 import { lodgesAll, lodgeByNumber } from './lodges.js';
+import { provinceLetter } from './visits.js';
 import { PLACEHOLDERS, hasPlaceholders, fillPlaceholders, fillContext, lodgeRecipients, missingPlaceholders, GM_VISIT, dayWithArticle, dateWords } from './letter-fill.js';
 
 const TEMPLATE_SEED = [['Ελεύθερη επιστολή', ''], ['Επίσκεψη ΜΔ', 'Αγαπητοί Αδελφοί,\n\n[Κορμός επιστολής επίσκεψης Μεγάλου Διδασκάλου]'], ['Επίσκεψη ΜΔ με εκπρόσωπο', 'Αγαπητοί Αδελφοί,\n\n[Κορμός επιστολής επίσκεψης με εκπρόσωπο]'],
@@ -55,6 +56,12 @@ export function openInDigitalForm(x) {
   location.href = 'diatagma/';
 }
 
+function visitOf(q) {
+  if (q.visit_id) return db.get('visits', q.visit_id);
+  if (!/θα εκπροσωπήσουν οι κάτωθι|Κοινοποιείται στον/.test(q.body || '') && !/^Εκπροσώπηση ΜΔ — Εγκατάσταση/.test(q.subject || '')) return null;
+  const m = /Αρ\. (\S+) — \S+ (\d{2})\/(\d{2})\/(\d{4})/.exec(q.subject || '');
+  return m ? db.all('visits').find((v) => String(v.lodge_number) === m[1] && v.visit_date === `${m[4]}-${m[3]}-${m[2]}`) || null : null;
+}
 // Πλαίσιο «Συμπλήρωση από τη βάση» για πρότυπα με πεδία {…}: από Επίσκεψη ή από Στοά + ημερομηνία
 const upcomingVisits = () => sortBy(db.all('visits').filter((v) => v.visit_date >= today()), 'visit_date');
 const visitLabel = (v) => `${fmtDate(v.visit_date)} — «${v.lodge || ''}»${v.lodge_number ? ' αρ. ' + v.lodge_number : ''}`;
@@ -206,6 +213,9 @@ module({
   routes: {
     '/letters': archive,
     '/letters/new': ({ query }) => {
+      // Επιστολή Επίσκεψης: πάντα από το τρέχον πρότυπο (και από παλιούς συνδέσμους με το παλιό κείμενο προς τον ΕπΜΓρ.)
+      const vis = visitOf(query);
+      if (vis) query = { ...query, ...provinceLetter(vis) };
       let x = { status: 'draft', signer: actor() };
       if (query.copy_from) { const s = db.get('letters', query.copy_from); if (s) x = { ...x, template_id: s.template_id, subject: s.subject, body: s.body, recipient_name: s.recipient_name, recipient_email: s.recipient_email, recipient_member_id: s.recipient_member_id, closing: s.closing || '', category: s.category || 'ΕΠΙΣΤΟΛΗ', source_letter_id: s.id }; }
       else if (query.template_id) { const t = db.get('letter_templates', query.template_id); if (t) x = { ...x, template_id: t.id, body: t.body, subject: t.subject || '', closing: t.closing || '', category: t.category || 'ΕΠΙΣΤΟΛΗ' }; }

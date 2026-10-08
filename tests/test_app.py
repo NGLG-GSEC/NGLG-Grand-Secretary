@@ -1229,3 +1229,18 @@ def test_template_representative_field_and_day_article(app):
     assert 'υπ’ αρ. 32, την Παρασκευή, 9 Οκτωβρίου 2099, θα παραστεί' in body, body
     assert 'Μεγάλου Διδασκάλου, Πανσεβάσμιος Αδ. Αθανάσιος Νικολαΐδης, Βοηθός Μέγας Διδάσκαλος.' in body, body
     assert 'rep@example.com' in app.page.input_value('[name=recipient_email]')
+
+
+def test_old_visit_letter_link_uses_representation_template(app):
+    app.connect_local()
+    app.page.evaluate("""async () => { const {db} = await import('./core/store.js');
+      await db.save('x', (tx) => { tx.replace('visits', []);
+        const r = tx.insert('reps', { surname: 'Νικολαΐδης', name: 'Αθανάσιος', office: 'Βοηθός Μέγας Διδάσκαλος', rep_rank: 'Πανσεβάσμιος Αδ.', email: 'rep@example.com' });
+        tx.insert('visits', { visit_date: '2099-10-09', lodge: 'ΔΙΩΝΗ', lodge_number: '32', location: '', province: 'ΕπΜΣτ. Πελοποννήσου & Δυτικής Ελλάδας', rep_id: r.id, notes: '' }); }); }""")
+    from urllib.parse import urlencode
+    q = urlencode({'to_name': 'ΕπΜΓρ. · Χ', 'subject': 'Εκπροσώπηση ΜΔ — Εγκατάσταση Σεβασμίου Σ.Σ. «ΔΙΩΝΗ» Αρ. 32 — Παρασκευή 09/10/2099',
+                   'body': 'Αγαπητέ Αδελφέ ΕπΜΓρ.,\n\nΣας γνωρίζουμε ότι … θα εκπροσωπήσουν οι κάτωθι Αδελφοί:\n\nΚοινοποιείται στον …', 'category': 'ΕΠΙΣΚΕΨΗ'})
+    app.go('/letters/new?' + q)
+    body = app.page.input_value('[name=body]')
+    assert body.startswith('Αγαπητέ Αδ. Γραμματεύ,') and 'ΕπΜΓρ' not in body and 'Πανσεβάσμιος Αδ. Αθανάσιος Νικολαΐδης, Βοηθός Μέγας Διδάσκαλος.' in body, body
+    assert 'Εκπροσώπηση του Μεγάλου Διδασκάλου' in app.page.locator('#tplSel option:checked').inner_text()

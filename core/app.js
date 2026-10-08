@@ -168,10 +168,29 @@ function acceptSuggestion(el) {
   return true;
 }
 
+// Νέα έκδοση της εφαρμογής (δημοσίευση στο GitHub Pages): καρτέλες ανοιχτές από πριν φορτώνουν τη νέα στην επόμενη μετάβαση,
+// ώστε κανείς να μη δουλεύει με παλιό κώδικα (π.χ. παλιά κείμενα επιστολών).
+const APP_VERSION = document.querySelector('meta[name="app-version"]')?.content || '';
+let verChecked = 0, newer = false;
+async function checkVersion() {
+  if (!APP_VERSION || newer || Date.now() - verChecked < 60000) return;
+  verChecked = Date.now();
+  try {
+    const html = await (await fetch('index.html', { cache: 'no-store' })).text();
+    const v = (/name="app-version" content="([^"]+)"/.exec(html) || [])[1];
+    if (v && v !== APP_VERSION) newer = true;
+  } catch { /* εκτός σύνδεσης */ }
+}
+function onHash() {
+  if (newer) { location.reload(); return; }
+  render(); checkVersion();
+}
+
 export function start() {
   document.addEventListener('keydown', (e) => { if (e.key === 'Tab' && !e.shiftKey && !e.altKey && !e.ctrlKey) acceptSuggestion(e.target); });
   document.addEventListener('dblclick', (e) => acceptSuggestion(e.target));
-  window.addEventListener('hashchange', render);
+  window.addEventListener('hashchange', onHash);
+  checkVersion(); addEventListener('focus', checkVersion);
   db.on((ev) => {
     const p = document.getElementById('syncPill');
     if (ev.type === 'busy' && p) { p.hidden = !ev.busy; }
