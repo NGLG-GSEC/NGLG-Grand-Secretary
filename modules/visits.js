@@ -127,7 +127,8 @@ function repOptions(sel, rm = rankmap()) {
     xs.forEach((it) => used.add(it.value));
     return xs.length ? `<optgroup label="${esc(g)}">${xs.map((it) => `<option value="${esc(it.value)}"${String(sel) === it.value ? ' selected' : ''}>${esc(lab(it))}</option>`).join('')}</optgroup>` : '';
   }).join('');
-  return html || '<option value="" disabled>Δεν υπάρχουν υποψήφιοι — Εκπρόσωποι → «Επικόλληση πίνακα» ή Επετηρίδα → «Εισαγωγή»</option>';
+  const none = `<optgroup label="Χωρίς εκπρόσωπο"><option value="${NOBODY}"${String(sel) === String(NOBODY) ? ' selected' : ''}>ΟΥΔΕΙΣ — ο Μέγας Διδάσκαλος δεν έστειλε κανέναν</option></optgroup>`;
+  return none + (html || '<option value="" disabled>Δεν υπάρχουν υποψήφιοι — Εκπρόσωποι → «Επικόλληση πίνακα» ή Επετηρίδα → «Εισαγωγή»</option>');
 }
 // Τιμή επιλογής → id εκπροσώπου (μέσα σε συναλλαγή)· υποψήφιος της Επετηρίδας καταχωρείται πρώτα στους «Εκπροσώπους»
 function repIdIn(tx, value, cands) {
@@ -136,6 +137,9 @@ function repIdIn(tx, value, cands) {
   const c = cands.find((x) => 'e:' + x.key === value);
   return c ? tx.insert('reps', candRep(c)).id : null;
 }
+// «ΟΥΔΕΙΣ»: ο Μέγας Διδάσκαλος δεν έστειλε κανέναν εκπρόσωπο (ειδική τιμή rep_id)
+const NOBODY = -1;
+const isNobody = (v) => !!v && Number(v.rep_id) === NOBODY;
 const firstOffice = (r) => String((r || {}).office || '').split(' · ')[0].replace(/\s*\(\d{4}\)\s*$/, '');
 const isPast = (r) => String(r.office || '').startsWith('Πρώην');
 export const repLabel = (r, rm) => (r ? [repRank(r, rm), r.surname, r.name].filter(Boolean).join(' ') : '');
@@ -226,10 +230,10 @@ ${o.prov !== '—' ? `<p class="noprint"><a class="btn small" href="#/visits/pub
 }
 function provinceMail(p, rows, missing) {
   const reps = repMap();
-  const lines = rows.map((v, i) => `${i + 1}. ${dayStr(v.visit_date)} — ${lodgeRef(v)}${v.location ? ' — ' + v.location : ''}` + (isGM(reps[v.rep_id]) ? '\n   Επίσημη επίσκεψη του Μεγάλου Διδασκάλου, Σεβασμιωτάτου Αδελφού ' + gmName() : '\n   Εκπρόσωπος ΜΔ: ' + (reps[v.rep_id] ? repFull(reps[v.rep_id]) : 'θα οριστεί και θα σας γνωστοποιηθεί'))).join('\n\n');
+  const lines = rows.map((v, i) => `${i + 1}. ${dayStr(v.visit_date)} — ${lodgeRef(v)}${v.location ? ' — ' + v.location : ''}` + (isGM(reps[v.rep_id]) ? '\n   Επίσημη επίσκεψη του Μεγάλου Διδασκάλου, Σεβασμιωτάτου Αδελφού ' + gmName() : '\n   Εκπρόσωπος ΜΔ: ' + (reps[v.rep_id] ? repFull(reps[v.rep_id]) : isNobody(v) ? 'ΟΥΔΕΙΣ' : 'θα οριστεί και θα σας γνωστοποιηθεί'))).join('\n\n');
   const t = provTitle(p), full = (p || {}).full_title || '';
   let out = `Αγαπητέ Αδελφέ${t ? ' ' + t : ''},\n\nΣας γνωρίζουμε ότι στις Εγκαταστάσεις των Σεβασμίων Διδασκάλων των Σεβαστών Στοών της Επαρχίας σας${full ? ` (${full})` : ''} τον Μεγάλο Διδάσκαλο θα εκπροσωπήσουν οι κάτωθι Αδελφοί:\n\n${lines}\n`;
-  if (rows.some((v) => !reps[v.rep_id])) out += '\nΓια τις Εγκαταστάσεις όπου δεν έχει ακόμη οριστεί εκπρόσωπος θα ακολουθήσει νεότερη ενημέρωση.\n';
+  if (rows.some((v) => !reps[v.rep_id] && !isNobody(v))) out += '\nΓια τις Εγκαταστάσεις όπου δεν έχει ακόμη οριστεί εκπρόσωπος θα ακολουθήσει νεότερη ενημέρωση.\n';
   if (missing.length) out += '\nΔεν μας έχει ακόμη γνωστοποιηθεί η ημερομηνία Εγκατάστασης για τις Σεβαστές Στοές: ' + missing.map((l) => `«${l.name}» Αρ. ${l.number}`).join(', ') + '. Παρακαλούμε όπως μας τη γνωστοποιήσετε.\n';
   return out + `\nΠαρακαλούμε όπως ενημερώσετε σχετικά τις Σεβαστές Στοές.\n\n${signature()}`;
 }
@@ -245,21 +249,21 @@ function visitCard(v, reps, opts = '') {
   return `<div class="vcard${v.visit_date < today() ? ' past' : ''}"><div class="vdate"><b>${d ? d.getDate() : ''}</b><small>${d ? DAYS[d.getDay()].slice(0, 3) : ''}</small></div>
 <div><div class="vlodge"><a href="#/visits/edit/${v.id}">${esc(v.lodge)}</a>${v.lodge_number ? `<span class="no">Αρ. ${esc(v.lodge_number)}</span>` : ''}</div><div class="vmeta">${esc(dayStr(v.visit_date))} · ${esc(v.location || 'Τόπος —')}</div>
 ${v.notes ? `<div class="vnote">${esc(v.notes)}</div>` : ''}${v.province ? `<span class="vchip">${esc(v.province)}</span>` : ''}${p && p.email ? ` <span class="vmeta">${esc(p.email)}</span>` : ''}${brief || oks ? `<div>${brief} ${oks}</div>` : ''}</div>
-<div class="vrep">${r ? `<b>${esc(repLabel(r))}</b><div class="vmeta">${esc(r.office || '')}</div>` : '<span class="vwarn">Χωρίς εκπρόσωπο</span>'}
-${v.visit_date >= today() ? `<label class="vreplabel" for="vrep${v.id}">ΕΚΠΡΟΣΩΠΟΣ</label><select class="vrepsel" id="vrep${v.id}" data-id="${v.id}" aria-label="ΕΚΠΡΟΣΩΠΟΣ"><option value="">${r ? '— Αφαίρεση εκπροσώπου —' : '+ Ορισμός ΜΔ / εκπροσώπου…'}</option>${opts.replace(`value="${v.rep_id}"`, `value="${v.rep_id}" selected`)}</select>` : ''}</div></div>`;
+<div class="vrep">${r ? `<b>${esc(repLabel(r))}</b><div class="vmeta">${esc(r.office || '')}</div>` : isNobody(v) ? '<b>ΟΥΔΕΙΣ</b><div class="vmeta">Ο Μέγας Διδάσκαλος δεν έστειλε κανέναν</div>' : '<span class="vwarn">Χωρίς εκπρόσωπο</span>'}
+${v.visit_date >= today() ? `<label class="vreplabel" for="vrep${v.id}">ΕΚΠΡΟΣΩΠΟΣ</label><select class="vrepsel" id="vrep${v.id}" data-id="${v.id}" aria-label="ΕΚΠΡΟΣΩΠΟΣ"><option value="">${r || isNobody(v) ? '— Αφαίρεση εκπροσώπου —' : '+ Ορισμός ΜΔ / εκπροσώπου…'}</option>${opts.replace(`value="${v.rep_id}"`, `value="${v.rep_id}" selected`)}</select>` : ''}</div></div>`;
 }
 
 function visitsPage({ query }) {
   const t = today(), vs = visitsAll(), reps = repMap(), rm = rankmap(), up = vs.filter((v) => v.visit_date >= t);
-  const unas = up.filter((v) => !reps[v.rep_id]).length, tobrief = up.filter((v) => reps[v.rep_id] && !repNotified(v)).length, ql = fold(query.q || '');
+  const unas = up.filter((v) => !reps[v.rep_id] && !isNobody(v)).length, tobrief = up.filter((v) => reps[v.rep_id] && !repNotified(v)).length, ql = fold(query.q || '');
   const lst = vs.filter((v) => {
     if (!query.past && v.visit_date < t) return false;
     if (query.prov && v.province !== query.prov) return false;
-    if (query.rep === '__none' && reps[v.rep_id]) return false;
+    if (query.rep === '__none' && (reps[v.rep_id] || isNobody(v))) return false;
     if (query.rep && query.rep !== '__none' && String(v.rep_id || '') !== query.rep) return false;
     if (query.notif === 'rep' && !(reps[v.rep_id] && !repNotified(v))) return false;
     if (query.notif === 'prov' && provNotified(v)) return false;
-    return !ql || fold([v.lodge, v.lodge_number, v.location, v.province, repLabel(reps[v.rep_id], rm)].join(' ')).includes(ql);
+    return !ql || fold([v.lodge, v.lodge_number, v.location, v.province, repLabel(reps[v.rep_id], rm), isNobody(v) ? 'ΟΥΔΕΙΣ' : ''].join(' ')).includes(ql);
   });
   const groups = {}, opts = repOptions(null, rm);
   for (const v of lst) (groups[v.visit_date.slice(0, 7)] ||= []).push(v);
@@ -349,7 +353,7 @@ ${v ? `<p>${repNotified(v) ? `<span class="vok">✓ Εκπρόσωπος ενη�
         const l = row.lodge_number && lodgeByNumber(row.lodge_number);
         if (l) { row.province ||= l.provincial || ''; row.location ||= l.meeting_place || ''; }
         const next = sub && sub.dataset.next;
-        if (next === 'brief' && !row.rep_id) throw new Error('Ορίστε πρώτα εκπρόσωπο.');
+        if (next === 'brief' && (!row.rep_id || Number(row.rep_id) === NOBODY)) throw new Error('Ορίστε πρώτα εκπρόσωπο.');
         const cands = repCandidates();
         const id = await db.save(v ? 'Επίσκεψη: ενημέρωση' : 'Νέα επίσκεψη', (tx) => { row.rep_id = repIdIn(tx, row.rep_id, cands); return (v ? tx.update('visits', v.id, row) : tx.insert('visits', row)).id; });
         flash('Η επίσκεψη αποθηκεύτηκε.');
@@ -482,7 +486,7 @@ function publishPage({ query }) {
 <div class="card"><p style="margin-top:0">${p && p.email ? `Προς: ${esc(provTitle(p) || 'Γραμματεία')} — <b>${esc(p.email)}</b>` : 'Η Επαρχία δεν έχει email Γραμματείας (Μητρώα → Επαρχιακές Μεγάλες Στοές).'}</p>
 <p>${rows.length} ${rows.length === 1 ? 'Εγκατάσταση' : 'Εγκαταστάσεις'} · ${miss.length} Στοές χωρίς ημερομηνία</p>
 ${table(['Ημερομηνία', 'Στοά', 'Τόπος', 'Εκπρόσωπος ΜΔ'], rows.map((v) => [esc(dayStr(v.visit_date)), `${esc(v.lodge)} ${v.lodge_number ? 'Αρ. ' + esc(v.lodge_number) : ''}`, esc(v.location || '—'),
-  (reps[v.rep_id] ? esc(repFull(reps[v.rep_id])) : '<span class="vwarn">Δεν έχει οριστεί</span>') + (repNotified(v) ? ' <span class="vok">✓ ενημ.</span>' : '') + (provNotified(v) ? ' <span class="vok">✓ Επαρχία</span>' : '')]), 'Δεν υπάρχουν Εγκαταστάσεις σε αυτό το διάστημα.')}
+  (reps[v.rep_id] ? esc(repFull(reps[v.rep_id])) : isNobody(v) ? '<b>ΟΥΔΕΙΣ</b>' : '<span class="vwarn">Δεν έχει οριστεί</span>') + (repNotified(v) ? ' <span class="vok">✓ ενημ.</span>' : '') + (provNotified(v) ? ' <span class="vok">✓ Επαρχία</span>' : '')]), 'Δεν υπάρχουν Εγκαταστάσεις σε αυτό το διάστημα.')}
 <div class="toolbar"><a class="btn primary" href="#/visits/publish/compose?${qs}">Email προς Επαρχιακό Γραμματέα</a></div></div>
 <div class="card"><h3 style="margin-top:0">Ενημέρωση εκπροσώπων</h3><p class="muted">Ένα email ανά εκπρόσωπο με όλες τις Εγκαταστάσεις του στο διάστημα και πρόσκληση ημερολογίου.</p>
 ${repRows.length ? table(['Εκπρόσωπος', 'Εγκαταστάσεις', 'Email', 'Ενέργειες'], repRows) : '<p>Δεν έχουν οριστεί εκπρόσωποι σε αυτό το διάστημα.</p>'}</div>`,
@@ -506,7 +510,7 @@ function reportPage({ query }) {
   const tbl = `<table><thead><tr><th>Ημερομηνία</th><th>Στοά</th><th>Τόπος · Επαρχία</th><th>Εκπρόσωπος</th></tr></thead><tbody>${Object.entries(groups).map(([k, items]) => `<tr><td colspan="4" style="background:#e7ecf8;color:#1f3f8f;font-weight:bold">${esc(grUpper(monthTitle(k)))} · ${items.length}</td></tr>` + items.map((v) => {
     const r = reps[v.rep_id];
     return `<tr><td>${esc(dayStr(v.visit_date))}</td><td><b>${esc(v.lodge)}</b>${v.lodge_number ? ' Αρ. ' + esc(v.lodge_number) : ''}${v.notes ? `<br><small class="muted">${esc(v.notes)}</small>` : ''}</td><td>${esc(v.location || '—')}<br><small class="muted">${esc(v.province || '')}</small></td>
-<td>${r ? esc(repLabel(r)) + (firstOffice(r) ? `<br><small class="muted">${esc(firstOffice(r))}</small>` : '') : '<span class="vwarn">Δεν έχει οριστεί</span>'}</td></tr>`; }).join('')).join('') || '<tr><td colspan="4">Καμία επίσκεψη στο διάστημα αυτό.</td></tr>'}</tbody></table>`;
+<td>${r ? esc(repLabel(r)) + (firstOffice(r) ? `<br><small class="muted">${esc(firstOffice(r))}</small>` : '') : isNobody(v) ? '<b>ΟΥΔΕΙΣ</b>' : '<span class="vwarn">Δεν έχει οριστεί</span>'}</td></tr>`; }).join('')).join('') || '<tr><td colspan="4">Καμία επίσκεψη στο διάστημα αυτό.</td></tr>'}</tbody></table>`;
   const rng = (frm ? 'Από ' + fmtDate(frm) : 'Όλες οι ημερομηνίες') + (to ? ' έως ' + fmtDate(to) : '') + ' · ' + (prov || 'Όλες οι Επαρχίες') + ` · ${rows.length} επισκέψεις`;
   return {
     title: 'Αναφορά επισκέψεων',
@@ -790,7 +794,7 @@ module({
   },
   tile: { order: 30, render: () => {
     const t = today(), up = db.all('visits').filter((v) => v.visit_date >= t), reps = repMap();
-    const unas = up.filter((v) => !reps[v.rep_id]).length, tob = up.filter((v) => reps[v.rep_id] && !repNotified(v)).length;
+    const unas = up.filter((v) => !reps[v.rep_id] && !isNobody(v)).length, tob = up.filter((v) => reps[v.rep_id] && !repNotified(v)).length;
     return `<div class="dtile"><h3><a href="#/visits">Επισκέψεις Στοών</a></h3><div class="big">${up.length} προσεχείς</div>${unas ? `<div class="warn">${unas} χωρίς εκπρόσωπο</div>` : ''}${tob ? `<div class="warn">${tob} εκπρόσωποι προς ενημέρωση</div>` : ''}
 <div class="acts"><a class="btn primary" href="#/visits">Επισκέψεις</a><a class="btn" href="#/visits/new">+ Νέα</a><a class="btn" href="#/visits/publish">Ενημέρωση Επαρχίας</a></div></div>`;
   } },
