@@ -4,6 +4,8 @@ import { db } from '../core/store.js';
 import { parseIso, DAYS } from '../core/util.js';
 import { lodgeByNumber } from './lodges.js';
 import { provinceByShort, provinceRoles } from './provinces.js';
+import { identify } from '../core/people.js';
+import { titledName } from '../core/pickers.js';
 
 export const MONTHS_GEN = ['Ιανουαρίου', 'Φεβρουαρίου', 'Μαρτίου', 'Απριλίου', 'Μαΐου', 'Ιουνίου', 'Ιουλίου', 'Αυγούστου', 'Σεπτεμβρίου', 'Οκτωβρίου', 'Νοεμβρίου', 'Δεκεμβρίου'];
 // «το Σάββατο» / «την Τρίτη»
@@ -32,11 +34,13 @@ export function fillContext({ visit, lodge_number, date } = {}) {
   return { lodge: (visit && visit.lodge) || (l && l.name) || '', lodge_number: no ? String(no) : '', date: (visit && visit.visit_date) || date || '',
     province: (visit && visit.province) || (l && l.provincial) || '', lodgeRec: l };
 }
+// Γραμματέας με τον τίτλο του, όταν ταυτοποιείται στο Μητρώο (π.χ. «Αδ. Νικόλαος Παπαδόπουλος»)
+const secretaryName = (s) => { if (/Αδ\./.test(s)) return s; const id = identify({ full_name: s }), m = id && db.get('member_registry', id); return m ? titledName(m) : s; };
 // Γραμματέας της Στοάς (Προς)· Επαρχιακός Μέγας Γραμματέας και ΜΔ (Κοιν.)
 export function lodgeRecipients(c) {
   const l = c.lodgeRec, p = provinceByShort(c.province || ''), gs = p ? provinceRoles(p)[1] : null;
   const lodgeMail = l ? (String(l.secretary_email || '').trim() || String(l.email || '').trim()) : '';
-  return { lodgeMail, to: lodgeMail, toName: `τον Γραμματέα της Στοάς «${c.lodge}»${c.lodge_number ? ` υπ’ αριθ. ${c.lodge_number}` : ''}${l && l.secretary ? `, ${l.secretary}` : ''}`,
+  return { lodgeMail, to: lodgeMail, toName: `τον Γραμματέα της Στοάς «${c.lodge}»${c.lodge_number ? ` υπ’ αριθ. ${c.lodge_number}` : ''}${l && l.secretary ? `, ${secretaryName(l.secretary)}` : ''}`,
     cc: [gs ? gs.email : '', String(db.setting('gm_email') || '').trim()].filter(Boolean).join(', ') };
 }
 

@@ -35,6 +35,12 @@ export function attachPicker(input, items, onPick) {
 
 export const memberItems = (q) => searchMembers(q).map((m) => ({ label: memberName(m), sub: [m.degree, m.email, m.mobile, memberLodges(m.id).map((l) => `${l.lodge_name} ${l.lodge_number}`).join(', ')].filter(Boolean).join(' · '), value: m }));
 
+// Τίτλος μέλους (π.χ. «Πσεβ. Αδ.») — ορίζεται από τις Ευχές/Εορτολόγιο, που γνωρίζουν αξιώματα και Επετηρίδα
+let titleFn = () => '';
+export const setMemberTitle = (fn) => { titleFn = fn; };
+export const memberTitle = (m) => (m ? titleFn(m) || '' : '');
+export const titledName = (m) => [memberTitle(m), `${m.first_name || ''} ${m.surname || ''}`.trim()].filter(Boolean).join(' ');
+
 // Όλες οι επαφές για παραλήπτες: Επαρχίες (Γραμματεία, ΕπΜΔ, ΕπΜΓρ.), Στοές, μέλη
 let contactSources = [];
 export const addContactSource = (fn) => contactSources.push(fn);
@@ -42,6 +48,6 @@ export function contactItems(q) {
   if (!q || q.length < 2) return [];
   const out = [];
   for (const src of contactSources) for (const c of src()) if (matches(q, c.name, c.email, c.sub)) out.push({ label: c.name, sub: [c.sub, c.email].filter(Boolean).join(' · '), value: c });
-  for (const m of searchMembers(q, 8)) out.push({ label: memberName(m), sub: ['Μέλος', m.email].filter(Boolean).join(' · '), value: { name: `${m.first_name} ${m.surname}`.trim(), email: m.email || '', member_id: m.id } });
+  for (const m of searchMembers(q, 8)) out.push({ label: memberName(m), sub: ['Μέλος', m.email].filter(Boolean).join(' · '), value: { name: titledName(m), email: m.email || '', member_id: m.id } });
   return out.slice(0, 20);
 }

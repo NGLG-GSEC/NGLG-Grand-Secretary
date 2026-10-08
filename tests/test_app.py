@@ -1129,3 +1129,18 @@ def test_letter_and_decree_saved_to_drive_word_and_pdf(app):
     app.click('Αποθήκευση & απόδοση')
     app.page.wait_for_url('**/#/letters/2')
     assert '20547' in app.text() and '«20547 - ΕΠΙΣΚΕΨΗ ' in app.text()
+
+
+def test_letter_recipient_gets_member_title(app):
+    app.connect_local()
+    app.page.evaluate("""async () => { const {db} = await import('./core/store.js');
+      await db.save('x', (tx) => {
+        const a = tx.insert('member_registry', { surname: 'Τιτλοδοκιμάκης', first_name: 'Αριστείδης', email: 'aris@example.com', active: 1 });
+        tx.insert('member_degrees_offices', { member_id: a.id, full_name: 'Τιτλοδοκιμάκης Αριστείδης', office: 'Πρώην Μέγας Ξιφήρης', honorific: 'Πσεβ. Αδ.', decree_year: 2019 });
+        tx.insert('member_registry', { surname: 'Απλοδοκιμάκης', first_name: 'Βασίλειος', email: 'vas@example.com', active: 1 }); }); }""")
+    app.go('/letters/new')
+    app.pick('#rcptPick', 'Τιτλοδοκιμ')
+    assert app.page.input_value('[name=recipient_name]') == 'Πσεβ. Αδ. Αριστείδης Τιτλοδοκιμάκης'
+    assert app.page.input_value('[name=recipient_email]') == 'aris@example.com'
+    app.pick('#rcptPick', 'Απλοδοκιμ')
+    assert app.page.input_value('[name=recipient_name]') == 'Αδ. Βασίλειος Απλοδοκιμάκης'
