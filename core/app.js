@@ -121,11 +121,13 @@ function wireNav(root) {
 }
 
 let renderSeq = 0;
+// Συνδεδεμένη συσκευή με email + κωδικό, αλλά χωρίς ενεργή συνεδρία → σελίδα εισόδου
+const sealedPending = () => { try { return JSON.parse(localStorage.getItem('nglg-connection') || 'null')?.kind === 'sealed'; } catch { return false; } };
 export async function render() {
   const seq = ++renderSeq;
   const { path, query } = parseHash();
   const root = document.getElementById('app');
-  if (!db.backend && path !== '/connect' && path !== '/portal') { location.hash = '#/connect'; return; }
+  if (!db.backend && path !== '/connect' && path !== '/portal' && path !== '/login') { location.hash = sealedPending() ? '#/login' : '#/connect'; return; }
   let r = null, params = {};
   for (const x of routes) { const m = x.re.exec(path); if (m) { r = x; x.keys.forEach((k, i) => (params[k] = decodeURIComponent(m[i + 1]))); break; } }
   let out;

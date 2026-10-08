@@ -1001,3 +1001,43 @@ def test_grand_master_official_visit_letter_and_email(app):
     app.page.wait_for_url('**/#/letters/1')
     paper = app.text('.paper')
     assert 'Με εκτίμηση και αδελφική αγάπη,' in paper and 'Με αδελφικούς χαιρετισμούς' not in paper
+
+
+def test_invite_link_login_with_email_and_password(app, browser, base_url):
+    gh = MockGitHub()
+    connect_github(app, gh)
+    app.page.wait_for_selector('.dash')
+    app.go('/settings')
+    app.page.fill('#invForm [name=email]', 'User@Example.com')
+    app.page.fill('#invForm [name=password]', 'Dokimi-2026x')
+    app.page.fill('#invForm [name=password2]', 'Dokimi-2026x')
+    app.page.locator('#invForm button').click()
+    app.page.wait_for_selector('#invLink', timeout=20000)
+    link = app.page.input_value('#invLink')
+    assert '#/login?invite=' in link and 'good-token' not in link
+    # ο χρήστης σε δική του συσκευή
+    ctx = browser.new_context()
+    p = ctx.new_page()
+    errs = []
+    p.on('pageerror', lambda e: errs.append(str(e)))
+    p.route('https://api.github.com/**', gh.handle)
+    p.goto(link.replace(link.split('#')[0], base_url))
+    p.wait_for_selector('#lgForm')
+    assert p.input_value('[name=email]') == 'user@example.com'
+    p.fill('[name=password]', 'λάθος-κωδικός1')
+    p.locator('#lgForm button').click()
+    p.wait_for_selector('text=Λάθος email ή κωδικός', timeout=20000)
+    p.fill('[name=password]', 'Dokimi-2026x')
+    p.locator('#lgForm button').click()
+    p.wait_for_selector('.dash', timeout=20000)
+    stored = p.evaluate('() => JSON.stringify(localStorage)')
+    assert 'good-token' not in stored  # το κλειδί μένει μόνο κλειδωμένο στη συσκευή
+    p.reload()
+    p.wait_for_selector('.dash', timeout=20000)  # ίδια συνεδρία
+    # νέα καρτέλα/άνοιγμα browser: ζητά ξανά email + κωδικό
+    p2 = ctx.new_page()
+    p2.route('https://api.github.com/**', gh.handle)
+    p2.goto(base_url + '#/members')
+    p2.wait_for_selector('#lgForm')
+    assert not errs, errs
+    ctx.close()

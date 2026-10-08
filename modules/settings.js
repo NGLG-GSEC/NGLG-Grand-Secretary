@@ -1,9 +1,10 @@
 // Ρυθμίσεις (στοιχεία εντύπων, λογαριασμοί αποστολής, αρίθμηση, κοινοποιήσεις) και Έλεγχος εφαρμογής.
 import { db } from '../core/store.js';
-import { module, onSubmit, go, flash, bind, modules, allRoutes, confirmDo, table } from '../core/app.js';
+import { module, onSubmit, go, flash, bind, modules, allRoutes, confirmDo, table, toast } from '../core/app.js';
 import { esc, EMAIL_RE, splitEmails } from '../core/util.js';
 import { MAIL_SENDERS } from '../core/mail.js';
-import { disconnect } from '../core/connect.js';
+import { disconnect, makeInvite, isSealed, lockSession } from '../core/connect.js';
+import { copyText } from '../core/mail.js';
 import { historyLink, exportAll } from './database.js';
 
 const GROUPS = [
@@ -23,7 +24,17 @@ function settingsPage() {
 ${t === 'emails' ? `<textarea name="${k}" class="short">${esc(db.setting(k) || '')}</textarea>` : `<input name="${k}" value="${esc(db.setting(k) ?? '')}"${t === 'int' ? ' inputmode="numeric"' : t === 'email' ? ' inputmode="email"' : ''}>`}</div>`).join('')}</div></div>`).join('')}
 <div class="toolbar"><button class="btn primary">💾 Αποθήκευση ρυθμίσεων</button></div></form>
 <div class="card"><h2 style="margin-top:0">Σύνδεση δεδομένων</h2><p>Τα δεδομένα φυλάσσονται: <b>${esc(b.kind === 'github' ? 'ιδιωτικό αποθετήριο GitHub ' + b.label : 'μόνο σε αυτόν τον browser (δοκιμή)')}</b>.</p>
-<div class="toolbar">${historyLink()}<button class="btn" data-act="backup">⬇ Αντίγραφο</button><button class="btn danger" data-act="logout">Αποσύνδεση από αυτή τη συσκευή</button></div></div>`,
+<div class="toolbar">${historyLink()}<button class="btn" data-act="backup">⬇ Αντίγραφο</button>${isSealed() ? '<button class="btn" data-act="lock">🔒 Έξοδος</button>' : ''}<button class="btn danger" data-act="logout">Αποσύνδεση από αυτή τη συσκευή</button></div></div>
+<div class="card"><h2 style="margin-top:0">👤 Πρόσκληση χρήστη (είσοδος με email και κωδικό)</h2>
+<p class="muted">Δημιουργεί <b>προσωπικό σύνδεσμο</b> για έναν χρήστη. Ο χρήστης ανοίγει τον σύνδεσμο, γράφει email και κωδικό και μπαίνει στην εφαρμογή·
+στη συσκευή του μπαίνει στο εξής με email και κωδικό. Ο σύνδεσμος περιέχει την πρόσβαση κλειδωμένη με τον κωδικό — δεν δημοσιεύεται πουθενά.
+Στείλτε τον σύνδεσμο μόνο στον χρήστη και τον κωδικό χωριστά (π.χ. τηλεφωνικά).</p>
+<form id="invForm"><div class="grid"><div><label>Email χρήστη</label><input name="email" type="email" required></div><div></div>
+<div><label>Κωδικός (τουλάχιστον 10 χαρακτήρες, γράμματα και αριθμοί)</label><input name="password" type="password" autocomplete="new-password" required></div>
+<div><label>Επανάληψη κωδικού</label><input name="password2" type="password" autocomplete="new-password" required></div>
+<div class="full"><label>Κωδικός πρόσβασης GitHub (token) του χρήστη — συνιστάται ξεχωριστός για κάθε χρήστη</label><input name="token" type="password" autocomplete="off" placeholder="κενό = ο κωδικός πρόσβασης αυτής της συσκευής">
+<small class="muted">Ξεχωριστός token ανά χρήστη ανακαλείται χωρίς να επηρεάζει τους άλλους: <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">νέος token</a> → μόνο το αποθετήριο δεδομένων → Contents: Read and write.</small></div></div>
+<div class="toolbar" style="margin-top:10px"><button class="btn primary">Δημιουργία συνδέσμου</button></div></form><div id="invOut"></div></div>`,
     mount(el) {
       onSubmit(el.querySelector('#sf'), async (d) => {
         for (const [, fs] of GROUPS) for (const [k, l, t] of fs) {
@@ -35,7 +46,15 @@ ${t === 'emails' ? `<textarea name="${k}" class="short">${esc(db.setting(k) || '
         await db.save('Ρυθμίσεις', (tx) => { for (const [, fs] of GROUPS) for (const [k, , t] of fs) { let v = String(d[k] ?? '').trim(); if (t === 'emails') v = splitEmails(v).join(', '); if (v || t === 'emails') tx.setting(k, v || (MAIL_SENDERS[k] || {}).def || ''); } });
         flash('Οι ρυθμίσεις αποθηκεύτηκαν.'); go('/settings');
       });
-      bind(el, { backup: exportAll, logout() { if (confirmDo('Αποσύνδεση από αυτή τη συσκευή; (Τα δεδομένα μένουν ασφαλή στο GitHub.)')) disconnect(); } });
+      onSubmit(el.querySelector('#invForm'), async (d) => {
+        if (d.password !== d.password2) throw new Error('Οι δύο κωδικοί δεν ταιριάζουν.');
+        const link = await makeInvite({ email: d.email, password: d.password, token: d.token });
+        el.querySelector('#invForm').reset();
+        el.querySelector('#invOut').innerHTML = `<label style="margin-top:12px">Προσωπικός σύνδεσμος για ${esc(d.email)}</label><textarea class="short" readonly id="invLink">${esc(link)}</textarea>
+<div class="toolbar"><button type="button" class="btn" id="invCopy">📋 Αντιγραφή συνδέσμου</button></div>`;
+        el.querySelector('#invCopy').onclick = async () => { await copyText(link); toast('Ο σύνδεσμος αντιγράφηκε.'); };
+      });
+      bind(el, { lock: lockSession, backup: exportAll, logout() { if (confirmDo('Αποσύνδεση από αυτή τη συσκευή; (Τα δεδομένα μένουν ασφαλή στο GitHub.)')) disconnect(); } });
     },
   };
 }
