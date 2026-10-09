@@ -250,7 +250,7 @@ function visitCard(v, reps, opts = '') {
 <div><div class="vlodge"><a href="#/visits/edit/${v.id}">${esc(v.lodge)}</a>${v.lodge_number ? `<span class="no">Αρ. ${esc(v.lodge_number)}</span>` : ''}</div><div class="vmeta">${esc(dayStr(v.visit_date))} · ${esc(v.location || 'Τόπος —')}</div>
 ${v.notes ? `<div class="vnote">${esc(v.notes)}</div>` : ''}${v.province ? `<span class="vchip">${esc(v.province)}</span>` : ''}${p && p.email ? ` <span class="vmeta">${esc(p.email)}</span>` : ''}${brief || oks ? `<div>${brief} ${oks}</div>` : ''}</div>
 <div class="vrep">${r ? `<b>${esc(repLabel(r))}</b><div class="vmeta">${esc(r.office || '')}</div>` : isNobody(v) ? '<b>ΟΥΔΕΙΣ</b><div class="vmeta">Ο Μέγας Διδάσκαλος δεν έστειλε κανέναν</div>' : '<span class="vwarn">Χωρίς εκπρόσωπο</span>'}
-${v.visit_date >= today() ? `<label class="vreplabel" for="vrep${v.id}">ΕΚΠΡΟΣΩΠΟΣ</label><select class="vrepsel" id="vrep${v.id}" data-id="${v.id}" aria-label="ΕΚΠΡΟΣΩΠΟΣ"><option value="">${r || isNobody(v) ? '— Αφαίρεση εκπροσώπου —' : '+ Ορισμός ΜΔ / εκπροσώπου…'}</option>${opts.replace(`value="${v.rep_id}"`, `value="${v.rep_id}" selected`)}</select>` : ''}</div></div>`;
+${v.visit_date >= today() ? `<label class="vreplabel" for="vrep${v.id}">ΕΚΠΡΟΣΩΠΟΣ</label><select class="vrepsel${isNobody(v) ? ' nobody' : ''}" id="vrep${v.id}" data-id="${v.id}" aria-label="ΕΚΠΡΟΣΩΠΟΣ"><option value="">${r || isNobody(v) ? '— Αφαίρεση εκπροσώπου —' : '+ Ορισμός ΜΔ / εκπροσώπου…'}</option>${opts.replace(`value="${v.rep_id}"`, `value="${v.rep_id}" selected`)}</select>` : ''}</div></div>`;
 }
 
 function visitsPage({ query }) {
@@ -294,6 +294,7 @@ ${table(['Επαρχία', 'Ενεργές Στοές', 'Δήλωσαν ημερ
         try { const r = await importEpeteiridaAny({ file: ef.files[0] }); flash(r.message); go('/visits'); } catch (e) { toast(e.message || String(e), 'error'); }
       });
       el.querySelectorAll('.vrepsel').forEach((s) => s.addEventListener('change', async () => {
+        s.classList.toggle('nobody', s.value === String(NOBODY));
         const id = Number(s.dataset.id), v = db.get('visits', id), cands = repCandidates();
         let rid = null;
         try { await db.save(`Επίσκεψη ${v ? v.lodge : id}: εκπρόσωπος`, (tx) => { rid = repIdIn(tx, s.value, cands); tx.update('visits', id, { rep_id: rid }); }); }
@@ -327,13 +328,13 @@ ${v ? `<p>${repNotified(v) ? `<span class="vok">✓ Εκπρόσωπος ενη�
 <datalist id="vLodges">${lodgesAll(true).map((l) => `<option value="${esc(l.number)} · ${esc(l.name)}">`).join('')}</datalist><small class="muted">Με την επιλογή συμπληρώνονται αριθμός, Επαρχία και τόπος.</small></div>
 <div class="full"><label>Τόπος</label><input name="location" id="vLoc" value="${val('location')}" placeholder="${esc(placeSuggestion(x) || 'Τεκτονικόν Μέγαρον …')}"${placeSuggestion(x) ? ` data-suggest="${esc(placeSuggestion(x))}"` : ''}></div>
 <div><label>Επαρχιακή Μεγάλη Στοά</label><select name="province" id="vProv"><option value="">—</option>${[...provs, ...(x.province && !provs.includes(x.province) ? [x.province] : [])].map((p) => `<option${p === x.province ? ' selected' : ''}>${esc(p)}</option>`).join('')}</select></div>
-<div class="full"><label>ΕΚΠΡΟΣΩΠΟΣ <small class="muted">— ο Μέγας Διδάσκαλος ή εκπρόσωπός του· στις Επιστολές: πεδίο {Εκπρόσωπος}</small></label><input id="repQ" type="search" placeholder="🔎 Αναζήτηση ονοματεπωνύμου ή αξιώματος…" autocomplete="off" style="margin-bottom:6px"><select name="rep_id" id="repSel"><option value="">— Χωρίς εκπρόσωπο —</option>${repOptions(x.rep_id, rm)}</select><div id="repInfo">${repDetails(x.rep_id)}</div>${hasEpeteirida() ? '' : '<small class="muted">Για να εμφανιστούν όλοι οι Μεγάλοι Αξιωματικοί: <a href="#/epeteirida?imp=1">Επετηρίδα → Εισαγωγή</a> (αρχείο Excel ή κατάλογος εν ενεργεία).</small>'}</div>
+<div class="full"><label>ΕΚΠΡΟΣΩΠΟΣ <small class="muted">— ο Μέγας Διδάσκαλος ή εκπρόσωπός του· στις Επιστολές: πεδίο {Εκπρόσωπος}</small></label><input id="repQ" type="search" placeholder="🔎 Αναζήτηση ονοματεπωνύμου ή αξιώματος…" autocomplete="off" style="margin-bottom:6px"><select name="rep_id" id="repSel"${Number(x.rep_id) === NOBODY ? ' class="nobody"' : ''}><option value="">— Χωρίς εκπρόσωπο —</option>${repOptions(x.rep_id, rm)}</select><div id="repInfo">${repDetails(x.rep_id)}</div>${hasEpeteirida() ? '' : '<small class="muted">Για να εμφανιστούν όλοι οι Μεγάλοι Αξιωματικοί: <a href="#/epeteirida?imp=1">Επετηρίδα → Εισαγωγή</a> (αρχείο Excel ή κατάλογος εν ενεργεία).</small>'}</div>
 <div class="full"><label>Σημειώσεις</label><input name="notes" value="${val('notes')}"></div></div>
 <div class="toolbar"><button class="btn primary">💾 Αποθήκευση</button><button class="btn" data-next="brief">✉ Ενημέρωση εκπροσώπου</button>
 <button class="btn" data-next="notify">✉ Email προς Στοά</button><button class="btn" data-next="letter">📄 Επιστολή (αρ. πρωτοκόλλου)</button><a class="btn" href="#/visits">Άκυρο</a>${v ? '<button type="button" class="btn danger" data-act="del">Διαγραφή</button>' : ''}</div></form>`,
     mount(el) {
       const RS = el.querySelector('#repSel'), RQ = el.querySelector('#repQ');
-      RS.addEventListener('change', () => { el.querySelector('#repInfo').innerHTML = repDetails(RS.value); });
+      RS.addEventListener('change', () => { el.querySelector('#repInfo').innerHTML = repDetails(RS.value); RS.classList.toggle('nobody', RS.value === String(NOBODY)); });
       RQ.addEventListener('input', () => {
         const q = fold(RQ.value.trim());
         RS.querySelectorAll('option').forEach((o) => { if (o.value) o.hidden = !!q && !fold(o.textContent).includes(q); });

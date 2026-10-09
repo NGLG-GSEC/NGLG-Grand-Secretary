@@ -233,6 +233,7 @@ input[type=file]{max-width:100%;min-width:0}
 .pill.bad{background:#fde2e2;color:#8a1111}
 .card.nocontact{border-color:#e7a1a1;background:#fff1f1;color:#8a1111;font-weight:600}
 .vrepsel{width:100%;margin-top:6px;font-size:.9rem;padding:4px 6px}
+.vrepsel.nobody,#repSel.nobody{background:#c62828;color:#fff;font-weight:bold}
 .vsum summary{cursor:pointer}.bar{display:inline-block;width:70px;height:7px;background:#e7ecf3;border-radius:4px;vertical-align:middle;margin-left:6px;overflow:hidden}.bar i{display:block;height:100%;background:#b18a43}
 .btn.warnbtn{border-color:#e0b25a;background:#fff6e2;color:#7a5200}
 @media screen and (max-width:600px){.sigrow{gap:4mm;flex-wrap:wrap}.seal-img,.seal canvas{width:32mm;height:32mm}.paper{max-width:100%}}
