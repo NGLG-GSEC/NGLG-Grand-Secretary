@@ -1,0 +1,141 @@
+/* ============================================================================
+   Portal chrome — shared by every page of the Chancery sites: the bar at the
+   top, the switch between the two offices, and the cards of a menu.
+
+   An identical copy of this file lives in each office's repository, so a site
+   carries its own styling and nothing is fetched across sites.
+   ========================================================================= */
+
+:root{
+  --bg:#0a0a0b;
+  --surface:#151516;
+  --surface-2:#1c1c1e;
+  --stitch:#2c2c2e;
+  --steel:#b9bec7;
+  --gold:#ad8a4e;
+  --gold-bright:#cba867;
+  --bone:#e9e6dd;
+  --bone-dim:#a9a69c;
+  --crimson:#9e1b1f;
+  --ink:#2F5496;              /* the blue of the source document */
+
+  /* A3 portrait — the size of the source document. */
+  --page-w:11.6963in;
+  --page-h:16.5in;
+}
+*{box-sizing:border-box;}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--bone);
+  font-family:'EB Garamond','Times New Roman',serif;
+  font-size:17px;
+  line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+}
+a{color:inherit;}
+
+/* ---------- 1. application chrome ---------------------------------------- */
+
+.top{
+  position:sticky; top:0; z-index:50;
+  display:flex; align-items:center; justify-content:space-between; gap:20px;
+  padding:14px 26px;
+  background:rgba(10,10,11,.94);
+  border-bottom:1px solid var(--stitch);
+  backdrop-filter:blur(8px);
+}
+.top h1{
+  margin:0;
+  font-family:'Cinzel',serif; font-weight:700;
+  font-size:16px; letter-spacing:.12em; text-transform:uppercase; color:var(--bone);
+}
+.top .sub{
+  display:block; margin-top:3px;
+  font-family:'Oswald',sans-serif; font-size:11px; letter-spacing:.22em;
+  text-transform:uppercase; color:var(--gold-bright);
+}
+.top .back{
+  display:inline-block; margin-bottom:4px;
+  font-family:'Oswald',sans-serif; font-size:11px; letter-spacing:.18em;
+  text-transform:uppercase; color:var(--bone-dim); text-decoration:none;
+}
+.top .back:hover{color:var(--gold-bright);}
+.actions{display:flex; gap:10px; flex-wrap:wrap;}
+.btn{
+  font-family:'Oswald',sans-serif; letter-spacing:.14em; text-transform:uppercase; font-size:12px;
+  padding:11px 20px; border:1px solid var(--gold); color:var(--bone);
+  background:transparent; cursor:pointer; transition:.15s; text-decoration:none;
+  display:inline-block;
+}
+.btn:hover{background:var(--gold); color:#111;}
+.btn.solid{background:var(--crimson); border-color:var(--crimson); color:#fff;}
+.btn.solid:hover{background:#c22a2a; border-color:#c22a2a;}
+.btn[disabled]{opacity:.55; cursor:progress;}
+
+
+/* ---------- the switch between the two offices --------------------------- */
+
+.offices{display:flex; gap:2px; margin-top:8px;}
+.offices a{
+  font-family:'Oswald',sans-serif; font-size:11px; letter-spacing:.16em;
+  text-transform:uppercase; text-decoration:none; color:var(--bone-dim);
+  padding:5px 12px 5px 0; border-bottom:2px solid transparent;
+}
+.offices a:hover{color:var(--bone);}
+.offices a[aria-current="page"]{color:var(--gold-bright); border-color:var(--gold);}
+.offices em{font-style:normal; color:var(--steel); opacity:.7;}
+
+/* ---------- the menu ------------------------------------------------------ */
+
+.menu-wrap{max-width:1000px; margin:0 auto; padding:34px 26px 60px;}
+.menu-wrap .lede{
+  margin:0 0 30px; max-width:64ch; color:var(--bone-dim); font-size:18px;
+}
+.menu-group{
+  margin:0 0 14px;
+  font-family:'Oswald',sans-serif; font-size:11.5px; letter-spacing:.24em;
+  text-transform:uppercase; color:var(--gold-bright);
+}
+.doc-grid{
+  display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr));
+  gap:16px; margin-bottom:36px;
+}
+.doc-card{
+  display:block; text-decoration:none;
+  position:relative; overflow:hidden;
+  background:linear-gradient(180deg,var(--surface),var(--surface-2));
+  border:1px solid var(--stitch);
+  outline:1px solid rgba(185,190,199,.12);
+  outline-offset:-5px;
+  padding:22px 22px 20px;
+  transition:.15s;
+}
+.doc-card:hover{border-color:var(--gold); outline-color:rgba(173,138,78,.35);}
+.doc-card h3{
+  margin:0 0 8px;
+  font-family:'Cinzel',serif; font-size:17px; letter-spacing:.04em; color:var(--bone);
+}
+.doc-card p{margin:0; font-size:15px; color:var(--bone-dim); line-height:1.5;}
+.doc-card .tag{
+  display:inline-block; margin-bottom:12px;
+  font-family:'Oswald',sans-serif; font-size:10px; letter-spacing:.2em;
+  text-transform:uppercase; color:var(--gold-bright);
+  border:1px solid rgba(173,138,78,.45); padding:3px 9px;
+}
+.doc-card.soon{opacity:.62; cursor:default;}
+.doc-card.soon:hover{border-color:var(--stitch); outline-color:rgba(185,190,199,.12);}
+.doc-card.soon .tag{color:var(--steel); border-color:rgba(185,190,199,.3);}
+
+
+/* ---------- a card that leaves the site ---------------------------------- */
+
+.doc-card.away h3::after{
+  content:" ↗"; font-size:13px; color:var(--gold); vertical-align:2px;
+}
+.doc-card .tag.private{color:var(--steel); border-color:rgba(185,190,199,.3);}
+.doc-card .where{
+  display:block; margin-top:12px;
+  font-family:'Oswald',sans-serif; font-size:10.5px; letter-spacing:.13em;
+  text-transform:uppercase; color:var(--bone-dim);
+}

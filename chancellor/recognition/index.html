@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NGLG</title>
+<style>
+  :root{
+    --navy:#0F1530; --navy-2:#1B2456; --gold:#C9A227; --gold-lt:#E8CE7A;
+    --paper:#FBF9F3; --ink:#20212a; --muted:#6b6b76; --line:#E2DCC8;
+    --serif:"Cambria","Iowan Old Style","Georgia",serif;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Calibri,Roboto,Arial,sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0; font-family:var(--sans); background:var(--paper); color:var(--ink);
+       min-height:100vh; display:flex; align-items:center; justify-content:center; padding:32px;}
+  .card{max-width:760px; width:100%;}
+  h1{font-family:var(--serif); font-size:clamp(28px,5vw,42px); margin:0 0 6px; color:var(--navy);
+     letter-spacing:.02em;}
+  .rule{height:3px; width:72px; background:var(--gold); margin:14px 0 22px;}
+  p.lede{color:var(--muted); font-size:15px; line-height:1.6; margin:0 0 30px;}
+  .grid{display:grid; gap:16px; grid-template-columns:repeat(auto-fit,minmax(260px,1fr));}
+  a.tile{display:block; text-decoration:none; color:inherit; background:#fff;
+         border:1px solid var(--line); border-radius:10px; padding:22px 20px; transition:.15s;}
+  a.tile:hover{border-color:var(--gold); box-shadow:0 6px 20px rgba(15,21,48,.10); transform:translateY(-2px);}
+  a.tile .tag{font-size:11px; font-weight:700; letter-spacing:.09em; text-transform:uppercase; color:var(--gold);}
+  a.tile h2{font-family:var(--serif); font-size:20px; margin:8px 0 6px; color:var(--navy);}
+  a.tile span{font-size:13.5px; color:var(--muted); line-height:1.55;}
+  footer{margin-top:34px; font-size:12px; color:var(--muted);}
+</style>
+</head>
+<body>
+<div class="card">
+  <p style="margin:0 0 10px;font-size:12px;letter-spacing:.09em;text-transform:uppercase"><a href="../index.html" style="color:#6b6b76;text-decoration:none">&larr; Grand Chancellor</a></p>
+  <h1>NGLG Recognition</h1>
+  <div class="rule"></div>
+  <p class="lede">The page builder and the current published edition.</p>
+  <div class="grid">
+    <a class="tile" href="builder.html">
+      <div class="tag">Tool</div>
+      <h2>Recognition Builder</h2>
+      <span>Compose and export recognition pages.</span>
+    </a>
+    <a class="tile" href="regularity-2026august.html">
+      <div class="tag">Preview &middot; August 2026</div>
+      <h2>NGLG Regularity.0</h2>
+      <span>The rendered edition, read-only.</span>
+    </a>
+  </div>
+  <footer>Static site &middot; served via GitHub Pages</footer>
+</div>
+</body>
+</html>
