@@ -1,0 +1,181 @@
+/* ============================================================================
+   GC DOC — the document machinery: the form panel beside the sheet, the sheet
+   itself at its real size, and the layout of a patent.
+
+   The chrome around it (the top bar, the menus) is in portal.css, which every
+   page loads first.
+   ========================================================================= */
+
+main{
+  display:grid;
+  grid-template-columns:390px minmax(0,1fr);
+  gap:26px;
+  padding:26px;
+  align-items:start;
+}
+@media (max-width:1080px){ main{grid-template-columns:1fr;} }
+
+.panel{
+  position:sticky; top:96px;
+  background:linear-gradient(180deg,var(--surface),var(--surface-2));
+  border:1px solid var(--stitch);
+  outline:1px solid rgba(185,190,199,.12);
+  outline-offset:-5px;
+  padding:24px;
+}
+@media (max-width:1080px){ .panel{position:static;} }
+.panel h2{
+  margin:0 0 4px;
+  font-family:'Cinzel',serif; font-size:15px; letter-spacing:.1em; text-transform:uppercase;
+}
+.panel .hint{margin:0 0 20px; font-size:14px; color:var(--bone-dim); font-style:italic;}
+.field{margin-bottom:16px;}
+.field .history-pick{
+  display:block; width:100%; margin-top:6px; padding:6px 10px;
+  background:#0f0f10; border:1px solid var(--stitch); color:var(--bone-dim);
+  font-family:'Oswald',sans-serif; font-size:11px; letter-spacing:.05em;
+  border-radius:2px;
+}
+.field .history-pick:focus{outline:none; border-color:var(--gold);}
+.field label{
+  display:block; margin-bottom:6px;
+  font-family:'Oswald',sans-serif; font-size:11px; letter-spacing:.2em;
+  text-transform:uppercase; color:var(--gold-bright);
+}
+.field label i{
+  font-family:'EB Garamond',serif; font-style:italic; letter-spacing:.02em;
+  font-size:13px; text-transform:none; color:var(--bone-dim);
+}
+.field input,.field textarea,.field select{
+  width:100%; padding:10px 12px;
+  background:#0f0f10; border:1px solid var(--stitch); color:var(--bone);
+  font-family:'EB Garamond',serif; font-size:16px; line-height:1.45;
+  border-radius:2px;
+}
+.field textarea{resize:vertical; min-height:76px;}
+.field input:focus,.field textarea:focus,.field select:focus{outline:none; border-color:var(--gold); background:#121213;}
+.row{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
+.divider{border:0; border-top:1px solid var(--stitch); margin:22px 0 18px;}
+.note{font-size:13.5px; color:var(--bone-dim); line-height:1.55;}
+.note b{color:var(--bone); font-weight:600;}
+.status{margin-top:14px; font-size:13.5px; color:var(--gold-bright); min-height:1.2em;}
+
+/* ---------- 2. the sheet -------------------------------------------------- */
+
+.stage{display:flex; justify-content:center;}
+.scaler{position:relative;}
+.paper{
+  position:relative;
+  width:var(--page-w); height:var(--page-h);
+  background:#fff; color:#000;
+  overflow:hidden;
+  transform-origin:top left;
+  box-shadow:0 24px 70px rgba(0,0,0,.6);
+}
+.paper img{display:block; position:absolute;}
+
+/* ---------- 3. the patent ------------------------------------------------- */
+
+.art-header{left:0.8047in; top:0.1887in; width:9.9740in; height:4.4914in;}
+.art-frame{
+  left:0.5534in; top:4.6801in; width:10.6867in; height:11.6116in;
+
+  /* Widen the chain collar so its medallion columns clear the text —
+     the color artwork's clear window is narrower than the old line-art's,
+     so the copy was overlapping the left/right columns. Edit these two
+     to retune: scale-x pushes the left/right columns outward (>1 wider,
+     <1 narrower); scale-y stretches the top/bottom rows the same way.
+     Anchored at top-center so the top edge stays put against the header
+     and the extra width comes out evenly on the left and right. */
+  --frame-scale-x:1.10;
+  --frame-scale-y:1;
+  transform:scaleX(var(--frame-scale-x)) scaleY(var(--frame-scale-y));
+  transform-origin:50% 0%;
+}
+.art-seal{left:4.6554in; top:13.9998in; width:2.2188in; height:2.2398in; z-index:3;}
+
+.body-copy{
+  /* The clear window inside the chain collar — measured off the artwork:
+     6.28in to 12.73in down the sheet. The copy is centred in it and, like
+     PowerPoint's "shrink text on overflow", scales down (--k) when a long
+     rank or Grand Lodge name needs more room.
+
+     Left/width pulled in ~0.5in per side (was 1.85in/8.00in) from the
+     color chain's own clear window, which is narrower than the old
+     line-art's even with --frame-scale-x widening the columns above —
+     the frame can't scale much past that without its edges clipping the
+     page, so this closes the rest of the gap so text never sits under
+     the medallions. */
+  position:absolute;
+  left:2.35in; top:6.28in; width:7.00in; height:6.45in;
+  display:flex; flex-direction:column; justify-content:center;
+  z-index:2;
+  --k:1;
+}
+.body-copy p{margin:0;}
+/* A line hidden by data-show (e.g. HONORARY vs APPOINTED wording) takes no
+   space, so the flex column above simply recentres what's left — the rest
+   of the copy moves up to close the gap on its own. */
+.body-copy p[hidden]{display:none;}
+
+.script{
+  font-family:'Great Vibes','Segoe Script',cursive;
+  font-weight:700; line-height:1.2;
+}
+.roman{
+  font-family:'Palatino Linotype','Book Antiqua',Palatino,'URW Palladio L','TeX Gyre Pagella','EB Garamond',Georgia,serif;
+  font-weight:700; line-height:1.22;
+}
+
+.lead{font-size:calc(32pt * var(--k)); text-align:left;}
+.dropcap{
+  position:static !important;
+  float:left;
+  width:calc(1.3728in * var(--k)); height:auto;
+  margin:-0.02in 0.05in -0.08in 0;
+}
+.hisrank{
+  clear:both;
+  margin-top:.85em !important;
+  font-style:italic; font-size:calc(22pt * var(--k));
+  text-align:center;
+}
+.name,.rank,.lodge{
+  font-family:'Cinzel Decorative','Cinzel',serif;
+  font-weight:700; font-size:calc(23pt * var(--k)); line-height:1.18;
+  color:var(--ink); text-align:center;
+}
+.connector{
+  font-style:italic; font-size:calc(21pt * var(--k));
+  text-align:center;
+}
+.name{margin-top:1.05em !important;}
+.connector.appointed{margin-top:.34em !important;}
+.rank{margin-top:.5em !important;}
+.connector.ofthe{margin-top:.34em !important;}
+.connector.honorary-tail{margin-top:.34em !important;}
+.lodge{margin-top:.2em !important;}
+.testimony{font-size:calc(31pt * var(--k)); text-align:center;}
+.testimony.first{margin-top:.75em !important;}
+.testimony.date{margin-top:.38em !important;}
+
+.sig{position:absolute; z-index:3; text-align:center;}
+.sig .sig-img{position:static !important; margin:0 auto;}
+.sig .rule{border-top:0.75pt dashed #000; width:100%; margin:0.06in auto 0.07in;}
+.sig p{margin:0; font-size:14pt; line-height:1.35;}
+.sig-left{left:0.7546in; top:14.1554in; width:3.1253in;}
+.sig-left .sig-img{width:2.6561in; height:0.6447in;}
+.sig-right{left:7.9724in; top:13.8480in; width:3.1253in;}
+.sig-right .sig-img{width:2.5866in; height:1.0118in;}
+
+/* ---------- print --------------------------------------------------------- */
+
+@media print{
+  @page{ size:11.6963in 16.5in; margin:0; }
+  body{background:#fff;}
+  .top,.panel,.status{display:none !important;}
+  main{display:block; padding:0;}
+  .stage{display:block;}
+  .scaler{width:auto !important; height:auto !important;}
+  .paper{transform:none !important; box-shadow:none; margin:0;}
+}

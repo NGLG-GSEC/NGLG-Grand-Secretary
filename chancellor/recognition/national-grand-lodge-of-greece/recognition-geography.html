@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Globe of Amity — National Grand Lodge of Greece</title>
+<style>
+  :root{--gold:#d6ae5c;--gold-lt:#f0d9a0}
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;overflow:hidden;background:#04091a;
+    font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;color:#e9dfc6}
+  #scene{position:fixed;inset:0}
+  header{position:fixed;top:0;left:0;right:0;padding:14px 16px 10px;text-align:center;
+    background:linear-gradient(#04091acc,#04091a00);pointer-events:none;z-index:2}
+  header h1{margin:0;font-size:clamp(13px,3vw,19px);letter-spacing:.24em;text-transform:uppercase;color:var(--gold-lt)}
+  header p{margin:5px 0 0;font-size:11.5px;letter-spacing:.16em;color:#8fa2c4;text-transform:uppercase}
+  #readout{position:fixed;left:0;right:0;bottom:76px;text-align:center;padding:0 18px;z-index:2;pointer-events:none}
+  #readout .name{display:inline-block;max-width:640px;background:#08132ee6;border:1px solid #3d5388;
+    border-radius:3px;padding:9px 16px;font-size:14px;line-height:1.35}
+  #readout .grp{display:block;font-size:10.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--gold);margin-bottom:3px}
+  #bar{position:fixed;left:0;right:0;bottom:0;z-index:3;display:flex;gap:8px;justify-content:center;
+    flex-wrap:wrap;padding:12px 14px 16px;background:linear-gradient(#04091a00,#04091ae6 40%)}
+  input,button{font:inherit;font-size:13px;background:#0b1730;color:#e9dfc6;border:1px solid #34497a;
+    border-radius:3px;padding:9px 13px}
+  button{letter-spacing:.1em;text-transform:uppercase;cursor:pointer;color:var(--gold-lt)}
+  button:hover{background:#16265180}
+  input{min-width:190px}
+  #status{position:fixed;bottom:54px;left:0;right:0;text-align:center;font-size:11px;color:#6f83a8;
+    letter-spacing:.1em;z-index:2;pointer-events:none}
+</style>
+</head>
+<body>
+<div id="scene"></div>
+<div id="err" style="position:fixed;inset:auto 12px 12px 12px;z-index:9;display:none;
+  background:#2a0f16;border:1px solid #7d2b3a;border-radius:3px;padding:10px 12px;
+  font-size:12px;line-height:1.4;color:#f3d9d9"></div>
+<header>
+  <h1>Globe of Amity</h1>
+  <p>National Grand Lodge of Greece &middot; 102 mutual recognitions</p>
+</header>
+<div id="readout"><span class="name" id="nameBox"><span class="grp" id="grpBox">Touch a marker</span>Drag to turn the earth &middot; pinch or scroll to zoom</span></div>
+<div id="status">Drawing the continents…</div>
+<div id="bar">
+  <input id="find" placeholder="Find a Grand Lodge" autocomplete="off">
+  <button id="spin">Pause spin</button>
+  <button id="shot">Save image</button>
+</div>
+
+<script>
+window.onerror = function(m){
+  var e = document.getElementById('err');
+  if(e){ e.style.display='block'; e.textContent = m; }
+};
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js"></script>
+<script>
+/* group, name, lat, lon */
+const DATA = [
+["Europe","Grand Lodge Of Ireland",53.35,-6.26],
+["Europe","Grand Lodge Of Scotland",55.95,-3.19],
+["Europe","Regular Grand Lodge Of Italy",41.90,12.50],
+["Europe","Grand Lodge Of Estonia",59.44,24.75],
+["Europe","Grand Lodge Of Latvia",56.95,24.11],
+["Europe","National Regular Grand Lodge Of The Principality Of Monaco",43.73,7.42],
+["Europe","Grand Lodge of Albania",41.33,19.82],
+["Europe","Grand Lodge Of Georgia",41.72,44.78],
+["Africa","Grand Lodge Of A.F.&A.M., Republic Of Liberia",6.30,-10.80],
+["Africa","Grand Lodge Of South Africa",-26.20,28.05],
+["Africa","Grande Loge De Côte D'Ivoire",5.35,-4.03],
+["Africa","Grand Lodge Of Congo",-4.26,15.28],
+["Africa","Grand Lodge Of Ghana",5.60,-0.19],
+["Africa","Grand Lodge Of Nigeria",9.06,7.49],
+["Africa","Grand Lodge Of Burkina Faso",12.37,-1.52],
+["Africa","Grande Loge Nationale Malienne",12.64,-8.00],
+["Africa","Grand Lodge of Niger",13.51,2.13],
+["Africa","Grand Lodge of Benin",6.37,2.42],
+["Africa","National Grand Lodge of Guinea",9.64,-13.58],
+["Africa","La Grande Loge du Gabon",0.42,9.47],
+["Africa","Grande Loge Nationale Togolaise",6.17,1.23],
+["Asia","Grand Lodge of Kazakhstan",51.16,71.47],
+["Asia","Gran Logia Soberana Del Archipielago Filipino",14.60,120.98],
+["North America","Prince Hall Grand Lodge, Province Of Ontario",43.65,-79.38],
+["North America","Prince Hall Grand Lodge Of Ohio",39.96,-83.00],
+["North America","Prince Hall Grand Lodge Of North Carolina",35.78,-78.64],
+["North America","Prince Hall Grand Lodge, Jurisdiction Of Pennsylvania",39.95,-75.17],
+["North America","Prince Hall Grand Lodge F.&A.M. Of Michigan",42.33,-83.05],
+["North America","Prince Hall Grand Lodge, F.&A.M., Jurisdiction Of Massachusetts",42.36,-71.06],
+["North America","Prince Hall Grand Lodge F.&A.M. Of Maryland & Its Jurisdiction",39.29,-76.61],
+["North America","Prince Hall Grand Lodge Of Connecticut",41.76,-72.68],
+["North America","Prince Hall Grand Lodge Of Alaska",61.22,-149.90],
+["North America","Prince Hall Grand Lodge, F.&A.M. Of Washington & Jurisdiction",47.61,-122.33],
+["North America","Prince Hall Grand Lodge Of The District Of Columbia",38.90,-77.04],
+["Central America","Grand Lodge Of Belize",17.50,-88.20],
+["Central America","Grand Lodge Of Guatemala",14.63,-90.51],
+["Central America","Grand Lodge Of Cuscatlan Of El Salvador",13.69,-89.19],
+["Central America","Sovereign Grand Symbolic Lodge Of Nicaragua",12.13,-86.25],
+["Central America","Grand Lodge Of Honduras",14.08,-87.21],
+["Mexico","The 'Lázaro Cárdenas' Grand Lodge Of Michoacán",19.70,-101.19],
+["Mexico","Grand Lodge Of The State Of 'El Potosí', A.F.&A.M.",22.15,-100.98],
+["Mexico","The Grand Lodge, A.F.&A.M., Of Sinaloa",24.80,-107.39],
+["Mexico","Gran Logia 'Benito Juárez' Del Estado De Coahuila",25.42,-101.00],
+["Mexico","Gran Logia Del Estado 'Andrés Quintana Roo'",18.50,-88.30],
+["Mexico","Gran Logia Del Estado De Querétaro",20.59,-100.39],
+["Mexico","Gran Logia Unida La Oriental Peninsular",20.97,-89.62],
+["Mexico","Gran Logia Campeche",19.85,-90.53],
+["Mexico","Gran Logia Del Estado Restauración De Tabasco",17.99,-92.93],
+["Mexico","Gran Logia Del Estado De Morelos",18.92,-99.23],
+["Mexico","Gran Logia Del Estado De Hidalgo, R.E.A.A.",20.12,-98.73],
+["Mexico","Gran Logia Del Estado De Querétaro De AA∴LL∴ Y AA∴MM∴",20.68,-100.28],
+["Mexico","Gran Logia Del Estado De Hidalgo",20.02,-98.85],
+["Mexico","Gran Logia Del Estado De Guanajuato",21.02,-101.26],
+["Mexico","Gran Logia Del Estado De Tlaxcala",19.32,-98.24],
+["Mexico","Gran Logia De Tamaulipas",23.74,-99.14],
+["Mexico","Gran Logia Del Estado 'Baja California'",32.53,-117.02],
+["Mexico","Gran Logia Del Estado De México",19.29,-99.65],
+["Caribbean","Prince Hall Grand Lodge Of The Caribbean",18.34,-64.93],
+["Caribbean","Grand Lodge Of Puerto Rico",18.47,-66.11],
+["Caribbean","Grand Lodge Of Dominican Republic",18.49,-69.93],
+["Brazil","Grande Oriente Do Pará — GOPARÁ",-1.46,-48.49],
+["Brazil","Grande Oriente Paulista — GOP-SP",-23.55,-46.63],
+["Brazil","Grande Oriente Do Rio Grande Do Sul — GORGS",-30.03,-51.23],
+["Brazil","Grande Oriente De Minas Gerais — GOMG",-19.92,-43.94],
+["Brazil","Grande Oriente Amazonense — GOA",-3.12,-60.02],
+["Brazil","Grande Oriente Do Estado De Mato Grosso — GOEMT",-15.60,-56.10],
+["Brazil","Grande Oriente Do Rio De Janeiro — GORJ",-22.91,-43.17],
+["Brazil","Grande Oriente De Goiás — GOG",-16.68,-49.25],
+["Brazil","Grande Oriente Maçônico Do Distrito Federal — GOMDF",-15.79,-47.88],
+["Brazil","Grande Oriente Do Estado Do Acre — GOEAC",-9.97,-67.81],
+["Brazil","Grande Oriente Do Ceará — GOCE",-3.73,-38.53],
+["Brazil","Grande Oriente De Alagoas — GOAL",-9.65,-35.71],
+["Brazil","Grande Oriente Do Estado Do Maranhão — GOEMA",-2.53,-44.30],
+["Brazil","Grande Oriente Do Piauí — GOPI",-5.09,-42.80],
+["Brazil","Grande Oriente Amapaense — GOAP",0.03,-51.07],
+["Brazil","Grande Oriente De Roraima — GORR",2.82,-60.67],
+["Brazil","Grande Oriente De Santa Catarina — GOSC",-27.60,-48.55],
+["Brazil","Grande Oriente De Rondônia",-8.76,-63.90],
+["Brazil","Grande Loja Maçônica Do Estado De Alagoas",-9.72,-35.80],
+["Brazil","Grande Loja Maçônica Do Distrito Federal",-15.86,-47.96],
+["Brazil","Grande Loja Maçônica Do Estado Do Espírito Santo",-20.32,-40.34],
+["Brazil","Grande Loja Maçônica Do Estado Do Mato Grosso",-15.68,-56.20],
+["Brazil","Grande Loja De Pernambuco",-8.05,-34.88],
+["Brazil","Grande Loja Do Estado Da Paraíba",-7.12,-34.86],
+["Brazil","Grande Loja Maçônica Do Piauí",-5.16,-42.88],
+["Brazil","Grande Loja Maçônica Do Paraná",-25.43,-49.27],
+["Brazil","Grande Loja Maçônica Do Estado De Rondônia",-8.83,-63.98],
+["Brazil","Grande Loja Maçônica Do Estado Do Rio De Janeiro",-22.98,-43.25],
+["Brazil","Grande Loja Maçônica Do Estado De Sergipe",-10.91,-37.07],
+["Colombia","Gran Logia Nacional De Colombia (Barranquilla)",10.96,-74.80],
+["Colombia","Gran Logia De Los Andes (Bucaramanga)",7.12,-73.12],
+["Colombia","Serenísima Gran Logia Nacional De Colombia (Cartagena)",10.39,-75.51],
+["Colombia","Gran Logia Occidental De Colombia (Cali)",3.44,-76.52],
+["Colombia","Gran Logia Benjamín Herrera (Santa Marta)",11.24,-74.20],
+["Colombia","Gran Logia De Colombia (Bogotá)",4.71,-74.07],
+["Colombia","Gran Logia Oriental De Colombia F. De P. Santander (Cúcuta)",7.89,-72.50],
+["Colombia","Gran Logia De Córdoba (Montería)",8.75,-75.88],
+["South America","Grand Lodge Of Peru",-12.05,-77.04],
+["South America","Grand Lodge Equinoccial Of Ecuador",-0.18,-78.47],
+["South America","Grand Lodge Of Ecuador",-2.19,-79.89],
+["South America","Grand Lodge Of The Republic Of Venezuela",10.49,-66.88],
+["South America","Grand Lodge Of Bolivia",-16.50,-68.15]
+];
+const GREECE = [37.98, 23.73];
+
+if(typeof THREE === 'undefined'){
+  document.getElementById('err').style.display = 'block';
+  document.getElementById('err').textContent =
+    'The 3D library could not load. Open this file with an internet connection.';
+  throw new Error('three.js unavailable');
+}
+const R = 10;
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(42, innerWidth/innerHeight, 0.1, 300);
+camera.position.set(0, 0, 30);
+const renderer = new THREE.WebGLRenderer({antialias:true, preserveDrawingBuffer:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.setClearColor(0x04091a, 1);
+document.getElementById('scene').appendChild(renderer.domElement);
+
+scene.add(new THREE.AmbientLight(0xffffff, 0.72));
+const key = new THREE.DirectionalLight(0xfff2d8, 0.85); key.position.set(8, 6, 12); scene.add(key);
+const rim = new THREE.DirectionalLight(0x7fa0ff, 0.4); rim.position.set(-10, -3, -8); scene.add(rim);
+
+// starfield
+const sg = new THREE.BufferGeometry(), sv = [];
+for(let i=0;i<1400;i++){
+  const u = Math.random()*2 - 1, th = Math.random()*Math.PI*2, s2 = Math.sqrt(1-u*u);
+  const r2 = 90 + Math.random()*60;
+  sv.push(r2*s2*Math.cos(th), r2*u, r2*s2*Math.sin(th));
+}
+sg.setAttribute('position', new THREE.Float32BufferAttribute(sv, 3));
+scene.add(new THREE.Points(sg, new THREE.PointsMaterial({color:0x8ea6d0, size:0.35, sizeAttenuation:true})));
+
+const globe = new THREE.Group(); scene.add(globe);
+
+// --- earth texture: ocean + land drawn from coastline data
+const CW = 4096, CH = 2048;
+const cv = document.createElement('canvas'); cv.width = CW; cv.height = CH;
+const g2 = cv.getContext('2d');
+g2.fillStyle = '#0d2555'; g2.fillRect(0, 0, CW, CH);          // royal blue ocean
+for(let i=0;i<26;i++){                                          // faint latitude lines
+  const y = CH*i/26;
+  g2.strokeStyle = 'rgba(255,255,255,.045)'; g2.lineWidth = 2;
+  g2.beginPath(); g2.moveTo(0,y); g2.lineTo(CW,y); g2.stroke();
+}
+const tex = new THREE.CanvasTexture(cv);
+tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+
+const earth = new THREE.Mesh(new THREE.SphereGeometry(R, 96, 72),
+  new THREE.MeshStandardMaterial({map:tex, roughness:0.85, metalness:0.06}));
+globe.add(earth);
+globe.add(new THREE.Mesh(new THREE.SphereGeometry(R*1.03, 48, 36),
+  new THREE.MeshBasicMaterial({color:0x4d7ad4, transparent:true, opacity:0.10, side:THREE.BackSide})));
+
+const proj = ([lon, lat]) => [ (lon+180)/360*CW, (90-lat)/180*CH ];
+function drawLand(geo){
+  g2.fillStyle = '#efe7d2'; g2.strokeStyle = '#c0a15a'; g2.lineWidth = 2.5;
+  const ring = r => { g2.beginPath();
+    r.forEach((p,i)=>{ const q = proj(p); i ? g2.lineTo(q[0],q[1]) : g2.moveTo(q[0],q[1]); });
+    g2.closePath(); g2.fill(); g2.stroke(); };
+  geo.features.forEach(f=>{
+    const c = f.geometry.coordinates;
+    if(f.geometry.type === 'Polygon') c.forEach(ring);
+    else c.forEach(poly => poly.forEach(ring));
+  });
+  tex.needsUpdate = true;
+  document.getElementById('status').textContent = '102 markers placed';
+  setTimeout(()=> document.getElementById('status').style.opacity = 0, 2600);
+}
+fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json')
+  .then(r => r.json())
+  .then(t => {
+    if(typeof topojson === 'undefined') throw new Error('topojson unavailable');
+    drawLand(topojson.feature(t, t.objects.countries));
+  })
+  .catch(()=>{ document.getElementById('status').textContent =
+    'Offline — showing the globe without coastlines'; });
+
+// --- markers
+const toVec = (lat, lon, r=R) => {
+  const p = (90-lat)*Math.PI/180, t = (lon+180)*Math.PI/180;
+  return new THREE.Vector3(-r*Math.sin(p)*Math.cos(t), r*Math.cos(p), r*Math.sin(p)*Math.sin(t));
+};
+const pinGeo  = new THREE.SphereGeometry(0.17, 14, 12);
+const stemGeo = new THREE.CylinderGeometry(0.035, 0.035, 0.55, 8);
+const pinMat  = new THREE.MeshStandardMaterial({color:0xe0b662, roughness:0.28, metalness:0.85});
+const hitMat  = new THREE.MeshBasicMaterial({visible:false});
+const pins = [];
+DATA.forEach((d, i)=>{
+  const dir = toVec(d[2], d[3]).normalize();
+  const stem = new THREE.Mesh(stemGeo, pinMat);
+  stem.position.copy(dir).multiplyScalar(R+0.22);
+  stem.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), dir);
+  globe.add(stem);
+  const head = new THREE.Mesh(pinGeo, pinMat);
+  head.position.copy(dir).multiplyScalar(R+0.55);
+  globe.add(head);
+  const hit = new THREE.Mesh(new THREE.SphereGeometry(0.42, 8, 6), hitMat);
+  hit.position.copy(head.position);
+  hit.userData = {i, dir, head};
+  globe.add(hit); pins.push(hit);
+});
+// the seat of the National Grand Lodge
+const gdir = toVec(GREECE[0], GREECE[1]).normalize();
+const beacon = new THREE.Mesh(new THREE.SphereGeometry(0.34, 20, 16),
+  new THREE.MeshStandardMaterial({color:0xffffff, emissive:0xd6ae5c, emissiveIntensity:0.9,
+    roughness:0.2, metalness:0.6}));
+beacon.position.copy(gdir).multiplyScalar(R+0.7); globe.add(beacon);
+const halo = new THREE.Mesh(new THREE.RingGeometry(0.55, 0.72, 40),
+  new THREE.MeshBasicMaterial({color:0xd6ae5c, transparent:true, opacity:0.75, side:THREE.DoubleSide}));
+halo.position.copy(gdir).multiplyScalar(R+0.72);
+halo.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1), gdir); globe.add(halo);
+
+// meridians of amity: an arc from Athens to every jurisdiction
+DATA.forEach(d=>{
+  const a = toVec(d[2], d[3]).normalize(), b = gdir;
+  const pts = [];
+  for(let t=0; t<=24; t++){
+    const v = new THREE.Vector3().copy(a).lerp(b, t/24).normalize();
+    const lift = 1 + 0.16*Math.sin(Math.PI*t/24)*a.distanceTo(b);
+    pts.push(v.multiplyScalar(R*lift));
+  }
+  globe.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts),
+    new THREE.LineBasicMaterial({color:0xd6ae5c, transparent:true, opacity:0.16})));
+});
+
+// --- interaction
+let spinning = true, vx = 0, vy = 0, dragging = false, lx = 0, ly = 0, moved = 0, target = null, tA = 0;
+const el = renderer.domElement;
+const pos = e => e.touches ? {x:e.touches[0].clientX, y:e.touches[0].clientY} : {x:e.clientX, y:e.clientY};
+function down(e){ dragging = true; moved = 0; const p = pos(e); lx = p.x; ly = p.y; target = null; }
+function move(e){
+  if(!dragging) return;
+  const p = pos(e), dx = p.x-lx, dy = p.y-ly;
+  lx = p.x; ly = p.y; moved += Math.abs(dx)+Math.abs(dy);
+  vy = dx*0.005; vx = dy*0.005;
+  globe.rotation.y += vy; globe.rotation.x = Math.max(-1.2, Math.min(1.2, globe.rotation.x + vx));
+  if(e.cancelable) e.preventDefault();
+}
+function up(e){ if(dragging && moved < 6) pick(e.changedTouches ? e.changedTouches[0] : e); dragging = false; }
+el.addEventListener('mousedown', down); el.addEventListener('mousemove', move);
+addEventListener('mouseup', up);
+el.addEventListener('touchstart', down, {passive:true});
+el.addEventListener('touchmove', move, {passive:false});
+el.addEventListener('touchend', up);
+addEventListener('wheel', e=>{ camera.position.z = Math.min(44, Math.max(12, camera.position.z + e.deltaY*0.02)); }, {passive:true});
+let pinch = 0;
+el.addEventListener('touchmove', e=>{
+  if(e.touches.length === 2){
+    const d = Math.hypot(e.touches[0].clientX-e.touches[1].clientX, e.touches[0].clientY-e.touches[1].clientY);
+    if(pinch) camera.position.z = Math.min(44, Math.max(12, camera.position.z + (pinch-d)*0.05));
+    pinch = d;
+  }
+}, {passive:true});
+el.addEventListener('touchend', ()=> pinch = 0);
+
+const ray = new THREE.Raycaster(), pt = new THREE.Vector2();
+let lit = null;
+function pick(e){
+  pt.x = (e.clientX/innerWidth)*2-1; pt.y = -(e.clientY/innerHeight)*2+1;
+  ray.setFromCamera(pt, camera);
+  const hit = ray.intersectObjects(pins)[0];
+  if(hit) show(hit.object.userData.i, true);
+}
+function show(i, turn){
+  document.getElementById('grpBox').textContent = DATA[i][0];
+  const box = document.getElementById('nameBox');
+  while(box.childNodes.length > 1) box.removeChild(box.lastChild);
+  box.appendChild(document.createTextNode(DATA[i][1]));
+  if(lit) lit.material = pinMat;
+  lit = pins[i].userData.head;
+  lit.material = new THREE.MeshStandardMaterial({color:0xffffff, emissive:0xd6ae5c,
+    emissiveIntensity:1.1, roughness:0.2, metalness:0.7});
+  if(turn){ target = pins[i].userData.dir.clone(); tA = 0; }
+}
+document.getElementById('find').oninput = e=>{
+  const q = e.target.value.trim().toLowerCase();
+  if(q.length < 3) return;
+  const i = DATA.findIndex(d => d[1].toLowerCase().includes(q));
+  if(i >= 0) show(i, true);
+};
+document.getElementById('spin').onclick = e=>{
+  spinning = !spinning; e.target.textContent = spinning ? 'Pause spin' : 'Resume spin';
+};
+document.getElementById('shot').onclick = ()=>{
+  renderer.render(scene, camera);
+  el.toBlob(b=>{
+    const url = URL.createObjectURL(b);
+    const a = document.createElement('a'); a.href = url; a.download = 'globe-of-amity.jpg'; a.click();
+    const w = window.open(); if(w) w.document.write('<img src="'+url+'" style="width:100%">');
+  }, 'image/jpeg', 0.94);
+};
+addEventListener('resize', ()=>{
+  camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+const q0 = new THREE.Quaternion(), q1 = new THREE.Quaternion(), front = new THREE.Vector3(0,0,1);
+function frame(){
+  requestAnimationFrame(frame);
+  halo.scale.setScalar(1 + 0.12*Math.sin(Date.now()*0.003));
+  if(target){
+    q0.copy(globe.quaternion);
+    const cur = target.clone().applyQuaternion(globe.quaternion);
+    q1.setFromUnitVectors(cur, front).multiply(globe.quaternion);
+    tA = Math.min(1, tA + 0.045);
+    if(globe.quaternion.slerpQuaternions) globe.quaternion.slerpQuaternions(q0, q1, tA);
+    else { globe.quaternion.copy(q0).slerp(q1, tA); }
+    if(tA >= 1) target = null;
+  } else if(!dragging){
+    if(spinning) globe.rotation.y += 0.0016;
+    globe.rotation.y += vy; globe.rotation.x += vx;
+    vy *= 0.94; vx *= 0.94;
+  }
+  renderer.render(scene, camera);
+}
+frame();
+</script>
+</body>
+</html>

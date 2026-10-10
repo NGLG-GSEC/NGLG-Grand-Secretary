@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Past Grand Officer — Patent | Grand Chancellor</title>
+<meta name="description" content="Fill in the honoree's details and download the patent appointing him to past grand rank in the National Grand Lodge of Greece as a print-ready A3 PDF.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Oswald:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/fonts.css">
+<link rel="stylesheet" href="../assets/portal.css">
+<link rel="stylesheet" href="../assets/gc.css">
+</head>
+<body data-doc="Patent" data-file="f-name,f-rank">
+
+<header class="top">
+  <div>
+    <a class="back" href="index.html">← Patents &amp; certificates</a>
+    <h1>Past Grand Officer — Patent</h1>
+    <span class="sub">National Grand Lodge of Greece</span>
+    <nav class="offices">
+      <a href="../index.html" aria-current="page">Grand Chancellor <em>· NGLG</em></a>
+      <a href="../../">Grand Secretary <em>· NGLG</em></a>
+      <a href="https://dskiad.github.io/ATHELSTAN-GRAND-SECRETARY/">Grand Secretary <em>· Athelstan</em></a>
+    </nav>
+  </div>
+  <div class="actions">
+    <button class="btn solid" id="pdf">Download PDF</button>
+    <button class="btn" id="print">Print</button>
+    <button class="btn" id="reset">Reset</button>
+  </div>
+</header>
+
+<main>
+  <form class="panel" id="form" autocomplete="off">
+    <h2>Certificate fields</h2>
+    <p class="hint">Everything else on the patent stays exactly as it is.</p>
+
+    <div class="field">
+      <label for="f-hisrank">HISRANK <i>— his rank / office</i></label>
+      <textarea id="f-hisrank" data-field="hisrank" rows="3">The Grand Master of the Masonic Order of Athelstan in England, Wales and its Provinces Overseas</textarea>
+    </div>
+
+    <div class="field">
+      <label for="f-hisgl">HISGL <i>— his Grand Lodge</i></label>
+      <input id="f-hisgl" data-field="hisgl" type="text" value="United Grand Lodge of England">
+    </div>
+
+    <div class="field">
+      <label for="f-name">NAME</label>
+      <input id="f-name" data-field="name" type="text" value="Paul W. Johnston">
+    </div>
+
+    <div class="field">
+      <label for="f-type">TYPE <i>— appointed or honorary</i></label>
+      <select id="f-type" data-field="type">
+        <option value="APPOINTED">Appointed</option>
+        <option value="HONORARY">Honorary</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label for="f-rank">RANK <i>— appointed as</i></label>
+      <input id="f-rank" data-field="rank" type="text" list="past-ranks" value="PAST GRAND MASTER">
+      <datalist id="past-ranks">
+        <option value="PAST GRAND MASTER"></option>
+        <option value="PAST DEPUTY GRAND MASTER"></option>
+        <option value="PAST ASSISTANT GRAND MASTER"></option>
+        <option value="PAST GRAND WARDEN"></option>
+        <option value="PAST SENIOR GRAND WARDEN"></option>
+        <option value="PAST JUNIOR GRAND WARDEN"></option>
+        <option value="PAST GRAND CHANCELLOR"></option>
+        <option value="PAST GRAND SECRETARY"></option>
+        <option value="PAST GRAND TREASURER"></option>
+        <option value="PAST GRAND ORATOR"></option>
+        <option value="PAST GRAND DEACON"></option>
+      </datalist>
+    </div>
+
+    <hr class="divider">
+
+    <div class="field">
+      <label for="f-date">DATE <i>— day/month/year — fills the two fields below</i></label>
+      <input id="f-date" type="text" inputmode="numeric" placeholder="DD/MM/YYYY" value="24/10/2025" data-day="f-day" data-monthyear="f-monthyear">
+    </div>
+
+    <div class="row">
+      <div class="field">
+        <label for="f-day">DAY</label>
+        <input id="f-day" data-field="day" type="text" value="24th">
+      </div>
+      <div class="field">
+        <label for="f-monthyear">MONTH &amp; YEAR</label>
+        <input id="f-monthyear" data-field="monthyear" type="text" value="October 2025">
+      </div>
+    </div>
+
+    <hr class="divider">
+    <p class="note">
+      The sheet beside this form is the patent at its real size — <b>A3 portrait,
+      297 × 420 mm</b>. <b>Download PDF</b> saves it as a print-ready file;
+      <b>Print</b> hands the same page to the browser's print dialogue, where
+      “Save as PDF” gives a sharper, text-based file.
+    </p>
+    <div class="status" id="status" role="status" aria-live="polite"></div>
+  </form>
+
+  <div class="stage">
+    <div class="scaler" id="scaler">
+      <div class="paper" id="paper">
+
+        <img class="art-header" data-art="header" alt="">
+        <img class="art-frame" data-art="frame" alt="">
+
+        <div class="body-copy">
+          <div class="copy">
+            <p class="lead script"><img class="dropcap" data-art="dropcapF" alt="F">or his outstanding Masonic career, being a reference for the fraternity and an example to follow for all members of the Craft,</p>
+            <p class="hisrank roman"><span data-out="hisrank"></span> <span data-out="hisgl"></span></p>
+            <p class="name" data-out="name"></p>
+            <p class="connector roman appointed" data-show="type:APPOINTED">Is Appointed As</p>
+            <p class="connector roman appointed" data-show="type:HONORARY">By virtue of this Patent, shall henceforth be recognised and received as an</p>
+            <p class="rank" data-out="rank"></p>
+            <p class="connector roman ofthe">of the</p>
+            <p class="lodge">National Grand Lodge of Greece</p>
+            <p class="connector roman honorary-tail" data-show="type:HONORARY">entitled to all honours, courtesies and distinctions traditionally associated with such dignity, in accordance with the Constitution, Regulations and established usages of this Grand Lodge</p>
+            <p class="testimony script first">In testimony Whereof we have hereunto set our hands and caused the seal of the National Grand Lodge of Greece</p>
+            <p class="testimony script date">Masonic Hall of Athens, this <span data-out="day"></span> day of <span data-out="monthyear"></span> AD.</p>
+          </div>
+        </div>
+
+        <img class="art-seal" data-art="seal" alt="">
+
+        <div class="sig sig-left">
+          <img class="sig-img" data-art="sigChancellor" alt="">
+          <div class="rule"></div>
+          <p class="roman">R.W. Bro. Dimitrios Skiadopoulos</p>
+          <p class="roman">Grand Chancellor</p>
+        </div>
+
+        <div class="sig sig-right">
+          <img class="sig-img" data-art="sigGrandMaster" alt="">
+          <div class="rule"></div>
+          <p class="roman">M.W. Bro. Ioannis Benetatos</p>
+          <p class="roman">Grand Master</p>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</main>
+
+<script src="../assets/artwork.js"></script>
+<script src="../assets/lib/html2canvas.min.js"></script>
+<script src="../assets/lib/jspdf.umd.min.js"></script>
+<script src="../assets/gc.js"></script>
+</body>
+</html>
