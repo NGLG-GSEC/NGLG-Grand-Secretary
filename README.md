@@ -34,6 +34,22 @@ The way in to the work of the Secretariat. Everything opens at one address: the 
 νέα εφαρμογή (ρίζα του αποθετηρίου), που τρέχει μόνο στο GitHub Pages. Διατηρούνται προσωρινά, μόνο για τη μεταφορά των δεδομένων
 (βλ. [docs/ΕΦΑΡΜΟΓΗ.md](docs/ΕΦΑΡΜΟΓΗ.md)). Μετά τη μεταφορά διαγράφονται μαζί με την υπηρεσία στο Render.
 
+## Grand Chancellor — document editing (live page)
+
+### 👉 [Open the Grand Chancellor's documents](https://dskiad.github.io/Grand-Chancellor/)
+
+`https://dskiad.github.io/Grand-Chancellor/`
+
+The Chancery's documents, each one a form: fill in what changes and take away a print-ready PDF.
+
+| Document | Live page |
+| --- | --- |
+| Patents and certificates of appointment | [patents](https://dskiad.github.io/Grand-Chancellor/patents/) |
+| Past Grand Officer patent | [past-grand-officer](https://dskiad.github.io/Grand-Chancellor/patents/past-grand-officer.html) |
+| Recognition builder (NGLG Regularity, Globe of Amity) | [recognition](https://dskiad.github.io/Grand-Chancellor/recognition/) |
+
+Source: [`Grand-Chancellor`](https://github.com/dskiad/Grand-Chancellor).
+
 ## The three offices
 
 | Office | Body | Repository |
