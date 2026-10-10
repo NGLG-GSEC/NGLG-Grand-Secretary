@@ -1134,7 +1134,7 @@ def test_letter_and_decree_saved_to_drive_word_and_pdf(app):
     # Επιστολή από Επίσκεψη → κατηγορία ΕΠΙΣΚΕΨΗ
     app.go('/visits')
     rid = app.page.evaluate("async () => (await import('./core/store.js')).db.all('reps')[0].id")
-    vid = app.page.evaluate("async () => (await import('./core/store.js')).db.all('visits').find((v) => v.visit_date >= '2026-10-08').id")
+    vid = app.page.evaluate("async (t) => (await import('./core/store.js')).db.all('visits').find((v) => v.visit_date >= t).id", date.today().isoformat())
     app.page.evaluate(f"async () => {{ const {{db}} = await import('./core/store.js'); await db.save('x', (tx) => tx.update('visits', {vid}, {{ rep_id: {rid} }})); }}")
     app.go('/visits')
     app.page.locator('.vcard a:has-text("📄 Επιστολή")').first.click()
