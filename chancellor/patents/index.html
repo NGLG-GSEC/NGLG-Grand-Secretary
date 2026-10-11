@@ -48,7 +48,46 @@
     </div>
 
   </div>
+
+  <p class="lede">
+    <button class="btn solid" id="archive-btn" type="button" aria-expanded="false" aria-controls="archive">Αρχείο Απονομών</button>
+  </p>
+
+  <section class="archive" id="archive" hidden>
+    <h2>Αρχείο Απονομών</h2>
+    <p class="hint">Every patent produced, with its reference number (“Our reference N.”, from 1201), the name of its PDF and a link to preview it.</p>
+    <div id="register-panel"></div>
+    <div id="archive-table"></div>
+  </section>
 </div>
+
+<script src="../assets/register.js"></script>
+<script>
+(function(){
+  var btn = document.getElementById('archive-btn'), box = document.getElementById('archive'),
+      out = document.getElementById('archive-table');
+  function esc(s){ return String(s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+  function draw(){
+    if (!GC_REG.connected()){ out.innerHTML = ''; return; }
+    out.innerHTML = '<p class="empty">Loading…</p>';
+    GC_REG.load().then(function(st){
+      var rs = st.data.records.slice().sort(function(a, b){ return b.ref - a.ref; });
+      if (!rs.length){ out.innerHTML = '<p class="empty">Nothing issued yet. The first reference number will be ' + GC_REG.START + '.</p>'; return; }
+      out.innerHTML = '<table><thead><tr><th>Our reference N.</th><th>File</th><th>Preview</th></tr></thead><tbody>' +
+        rs.map(function(r){
+          return '<tr><td class="num">' + esc(r.ref) + '</td><td>' + esc(r.file) + '</td>' +
+                 '<td><a href="' + esc(r.form) + '?ref=' + esc(r.ref) + '">Preview</a></td></tr>';
+        }).join('') + '</tbody></table>';
+    }).catch(function(e){ out.innerHTML = '<p class="empty reg-err">' + esc(e.message) + '</p>'; });
+  }
+  btn.addEventListener('click', function(){
+    var open = box.hidden;
+    box.hidden = !open;
+    btn.setAttribute('aria-expanded', String(open));
+    if (open){ GC_REG.panel(document.getElementById('register-panel'), draw); draw(); }
+  });
+})();
+</script>
 
 </body>
 </html>

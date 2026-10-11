@@ -78,7 +78,7 @@ main{
 
 .art-header{left:0.8047in; top:0.1887in; width:9.9740in; height:4.4914in;}
 .art-frame{
-  left:0.5534in; top:4.6801in; width:10.6867in; height:11.6116in;
+  left:0.3091in; top:4.6801in; width:11.1753in; height:11.6116in;
 
   /* Widen the chain collar so its medallion columns clear the text —
      the color artwork's clear window is narrower than the old line-art's,
@@ -163,10 +163,42 @@ main{
 .sig .sig-img{position:static !important; margin:0 auto;}
 .sig .rule{border-top:0.75pt dashed #000; width:100%; margin:0.06in auto 0.07in;}
 .sig p{margin:0; font-size:14pt; line-height:1.35;}
-.sig-left{left:0.7546in; top:14.1554in; width:3.1253in;}
+.sig-left{left:0.7546in; top:14.45in; width:3.1253in;}
 .sig-left .sig-img{width:2.6561in; height:0.6447in;}
-.sig-right{left:7.9724in; top:13.8480in; width:3.1253in;}
+.sig-right{left:7.9724in; top:14.45in; width:3.1253in;}
 .sig-right .sig-img{width:2.5866in; height:1.0118in;}
+
+/* Proof numbers on the 21 circles of the collar, so corrections can be called by number.
+   Hidden now that the artwork is final. To bring them back for more corrections, remove the
+   display:none line below (they are red); --cno-color can also be set to #fff. */
+.paper{--cno-color:#e00000; --cno-halo:#fff;}
+.cno{
+  position:absolute; z-index:4; transform:translate(-50%,-50%);
+  font:700 26pt/1 Arial,'Liberation Sans',Helvetica,sans-serif;
+  color:var(--cno-color);
+  text-shadow:0 0 3px var(--cno-halo),0 0 3px var(--cno-halo),0 0 6px var(--cno-halo);
+  pointer-events:none;
+  display:none;
+}
+
+/* "Our reference N." — bottom left, under the left signature */
+.refno{position:absolute; left:0.7546in; top:15.98in; margin:0; font-size:13pt; z-index:3; text-align:left;}
+
+/* ---------- reference register (form panel + archive) -------------------------- */
+
+.reg-state{font-size:13.5px; margin:0 0 10px;}
+.reg-state.ok{color:var(--gold-bright);}
+.reg-err{font-size:13px; color:#ff9a8a; min-height:1.2em; margin:8px 0 0;}
+.linkbtn{background:none; border:0; padding:0; font:inherit; color:var(--gold-bright); text-decoration:underline; cursor:pointer;}
+
+.archive{margin-top:34px;}
+.archive h2{margin:0 0 6px; font-size:18px;}
+.archive table{width:100%; border-collapse:collapse; margin-top:14px; font-size:14px;}
+.archive th,.archive td{padding:9px 10px; border-bottom:1px solid rgba(255,255,255,.15); text-align:left; vertical-align:top;}
+.archive th{font-weight:600; color:var(--gold-bright); white-space:nowrap;}
+.archive td.num{font-weight:600; white-space:nowrap;}
+.archive a{color:var(--gold-bright);}
+.archive .empty{margin-top:14px;}
 
 /* ---------- print --------------------------------------------------------- */
 
