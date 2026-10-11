@@ -163,13 +163,13 @@ main{
 .sig .sig-img{position:static !important; margin:0 auto;}
 .sig .rule{border-top:0.75pt dashed #000; width:100%; margin:0.06in auto 0.07in;}
 .sig p{margin:0; font-size:14pt; line-height:1.35;}
-.sig-left{left:0.7546in; top:14.1554in; width:3.1253in;}
+.sig-left{left:0.7546in; top:14.45in; width:3.1253in;}
 .sig-left .sig-img{width:2.6561in; height:0.6447in;}
-.sig-right{left:7.9724in; top:13.8480in; width:3.1253in;}
+.sig-right{left:7.9724in; top:14.45in; width:3.1253in;}
 .sig-right .sig-img{width:2.5866in; height:1.0118in;}
 
 /* "Our reference N." — bottom left, under the left signature */
-.refno{position:absolute; left:0.7546in; top:15.55in; margin:0; font-size:13pt; z-index:3; text-align:left;}
+.refno{position:absolute; left:0.7546in; top:15.98in; margin:0; font-size:13pt; z-index:3; text-align:left;}
 
 /* ---------- reference register (form panel + archive) -------------------------- */
 
