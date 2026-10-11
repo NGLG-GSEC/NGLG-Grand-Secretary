@@ -105,7 +105,7 @@
   }
   function showRef(){
     [].forEach.call(document.querySelectorAll('[data-out="ref"]'), function(t){
-      t.textContent = curRef || '____';
+      t.textContent = (curRef || '____') + ' / Chancellery';
     });
   }
   function forgetRef(){

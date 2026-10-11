@@ -52,7 +52,7 @@ is published; the paths and the repository name in it now point here.
 
 ### Reference numbers and the Αρχείο Απονομών
 
-Every patent that is downloaded or printed gets **Our reference N.** (αριθμός
+Every patent that is downloaded or printed gets **Our reference N. 1201 / Chancellery** (αριθμός
 πρωτοκόλλου) — the next free number, starting at **1201** — printed at the
 bottom left of the sheet. The PDF is named
 `1201 - Past Grand Officer - Appointed - PAST GRAND MASTER - Name - 24-10-2025.pdf`.

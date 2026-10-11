@@ -168,6 +168,18 @@ main{
 .sig-right{left:7.9724in; top:14.45in; width:3.1253in;}
 .sig-right .sig-img{width:2.5866in; height:1.0118in;}
 
+/* Proof numbers on the 21 circles of the collar, so corrections can be called by number.
+   Red while the artwork is being corrected; when it is final set --cno-color to #fff
+   (or add  display:none  to .cno) and the sheet is clean. */
+.paper{--cno-color:#e00000; --cno-halo:#fff;}
+.cno{
+  position:absolute; z-index:4; transform:translate(-50%,-50%);
+  font:700 26pt/1 Arial,'Liberation Sans',Helvetica,sans-serif;
+  color:var(--cno-color);
+  text-shadow:0 0 3px var(--cno-halo),0 0 3px var(--cno-halo),0 0 6px var(--cno-halo);
+  pointer-events:none;
+}
+
 /* "Our reference N." — bottom left, under the left signature */
 .refno{position:absolute; left:0.7546in; top:15.98in; margin:0; font-size:13pt; z-index:3; text-align:left;}
 
