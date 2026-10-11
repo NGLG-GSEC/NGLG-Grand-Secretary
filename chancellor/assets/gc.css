@@ -169,8 +169,8 @@ main{
 .sig-right .sig-img{width:2.5866in; height:1.0118in;}
 
 /* Proof numbers on the 21 circles of the collar, so corrections can be called by number.
-   Red while the artwork is being corrected; when it is final set --cno-color to #fff
-   (or add  display:none  to .cno) and the sheet is clean. */
+   Hidden now that the artwork is final. To bring them back for more corrections, remove the
+   display:none line below (they are red); --cno-color can also be set to #fff. */
 .paper{--cno-color:#e00000; --cno-halo:#fff;}
 .cno{
   position:absolute; z-index:4; transform:translate(-50%,-50%);
@@ -178,6 +178,7 @@ main{
   color:var(--cno-color);
   text-shadow:0 0 3px var(--cno-halo),0 0 3px var(--cno-halo),0 0 6px var(--cno-halo);
   pointer-events:none;
+  display:none;
 }
 
 /* "Our reference N." — bottom left, under the left signature */
