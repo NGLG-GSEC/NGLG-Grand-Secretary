@@ -75,10 +75,88 @@
     });
   }
 
+  /* ---------- reference number ------------------------------------------- */
+
+  /* A page that has data-register="Past Grand Officer" gives each produced
+     document an "Our reference N." from the shared register (register.js).
+     curRef is the number of the document as it is filled in right now; it is
+     dropped as soon as any field changes, and the same unchanged document
+     always keeps the number it was given. */
+  var REG = window.GC_REG, regDoc = document.body.getAttribute('data-register');
+  var curRef = null, curFile = null, curSig = null;
+
+  function snapshot(){
+    var f = {};
+    inputs.forEach(function(el){ f[el.id] = el.value.trim(); });
+    if (dateIn) f[dateIn.id] = dateIn.value.trim();
+    return f;
+  }
+  function optionText(el){
+    return el.tagName === 'SELECT' ? el.options[el.selectedIndex].text : el.value;
+  }
+  function fileTail(){
+    var ids = (document.body.getAttribute('data-ref-file') || '').split(',');
+    var bits = [regDoc];
+    ids.forEach(function(id){
+      var el = document.getElementById(id.trim());
+      if (el && el.value.trim()) bits.push(optionText(el).trim().replace(/\//g, '-'));
+    });
+    return bits.join(' - ').replace(/[^\w\s.'-]/g, '').replace(/\s+/g, ' ').trim();
+  }
+  function showRef(){
+    [].forEach.call(document.querySelectorAll('[data-out="ref"]'), function(t){
+      t.textContent = curRef || '____';
+    });
+  }
+  function forgetRef(){
+    if (curRef && JSON.stringify(snapshot()) !== curSig){ curRef = null; curFile = null; showRef(); }
+  }
+
+  /* resolves once the document has its number (no register on this page: at once) */
+  function ensureRef(){
+    if (!regDoc || !REG) return Promise.resolve(null);
+    if (curRef) return Promise.resolve(curRef);
+    if (!REG.connected()){
+      var pnl = document.getElementById('register-panel');
+      if (pnl) pnl.scrollIntoView({ block: 'center' });
+      return Promise.reject(new Error('connect the register first (see “Reference number” in the form)'));
+    }
+    var fields = snapshot();
+    var type = document.querySelector('[data-field="type"]');
+    var rankEl = document.querySelector('[data-field="rank"]'), nameEl = document.querySelector('[data-field="name"]');
+    return REG.assign({
+      form: location.pathname.replace(/.*\//, ''),
+      doc: regDoc,
+      type: type ? optionText(type) : '',
+      rank: rankEl ? rankEl.value.trim() : '',
+      name: nameEl ? nameEl.value.trim() : '',
+      date: dateIn ? dateIn.value.trim() : '',
+      fields: fields,
+      fileTail: fileTail()
+    }).then(function(rec){
+      curRef = rec.ref; curFile = rec.file; curSig = JSON.stringify(fields);
+      showRef();
+      return curRef;
+    });
+  }
+
+  /* opened from the archive as  …html?ref=1201 : show that document as issued */
+  function openIssued(rec){
+    Object.keys(rec.fields).forEach(function(id){
+      var el = document.getElementById(id);
+      if (el) el.value = rec.fields[id];
+    });
+    curRef = rec.ref; curFile = rec.file; curSig = JSON.stringify(snapshot());
+    document.body.classList.add('issued');
+    render();
+    if (status) status.textContent = 'Issued document — Our reference N. ' + rec.ref + '.';
+  }
+
   function render(){
     inputs.forEach(write);
     applyConditionals();
     autofit();
+    showRef();
   }
 
   /* ---------- date -------------------------------------------------------- */
@@ -230,6 +308,7 @@
   /* ---------- export ------------------------------------------------------- */
 
   function fileName(){
+    if (curFile) return curFile;
     var parts = (document.body.getAttribute('data-file') || '').split(',');
     var bits = [document.body.getAttribute('data-doc') || 'Document'];
     parts.forEach(function(id){
@@ -258,7 +337,7 @@
 
     var restore = paper.style.transform;
 
-    Promise.resolve()
+    ensureRef()
       .then(function(){ return document.fonts ? document.fonts.ready : null; })
       .then(imagesReady)
       .then(function(){
@@ -317,8 +396,10 @@
   var form = document.getElementById('form');
   if (form){
     form.addEventListener('input', function(e){
+      if (e.target.closest && e.target.closest('#register-panel')) return;
       if (dateIn && e.target === dateIn){ maskDate(dateIn, e.data); fromDate(); }
       else render();
+      forgetRef();
     });
     form.addEventListener('change', function(e){
       if (historyEls.indexOf(e.target) === -1) return;
@@ -333,11 +414,15 @@
   var printBtn = document.getElementById('print');
   if (printBtn){
     printBtn.addEventListener('click', function(){
-      var restore = paper.style.transform;
-      paper.style.transform = 'none';
-      window.print();
-      paper.style.transform = restore;
-      fit();
+      ensureRef().then(function(){
+        var restore = paper.style.transform;
+        paper.style.transform = 'none';
+        window.print();
+        paper.style.transform = restore;
+        fit();
+      }).catch(function(err){
+        if (status) status.textContent = 'Not printed: ' + err.message + '.';
+      });
     });
   }
 
@@ -347,12 +432,33 @@
       Object.keys(defaults).forEach(function(id){
         document.getElementById(id).value = defaults[id];
       });
+      curRef = null; curFile = null;
+      document.body.classList.remove('issued');
       render();
       if (status) status.textContent = '';
     });
   }
 
   window.addEventListener('resize', fit);
+
+  if (regDoc && REG){
+    REG.panel(document.getElementById('register-panel'), function(){
+      if (status) status.textContent = '';
+    });
+    var want = /[?&]ref=(\d+)/.exec(location.search);
+    if (want){
+      if (status) status.textContent = 'Opening issued document ' + want[1] + '…';
+      var open = function(){
+        REG.find(want[1]).then(function(rec){
+          if (!rec){ if (status) status.textContent = 'No document with reference ' + want[1] + ' in the register.'; return; }
+          openIssued(rec);
+        }).catch(function(err){ if (status) status.textContent = 'Could not open ' + want[1] + ': ' + err.message; });
+      };
+      if (REG.connected()) open();
+      else if (status) status.textContent = 'Connect the register (below) to open document ' + want[1] + '.';
+      REG.panel(document.getElementById('register-panel'), open);
+    }
+  }
 
   render();
   refreshHistoryPickers();

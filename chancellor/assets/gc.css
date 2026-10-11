@@ -168,6 +168,25 @@ main{
 .sig-right{left:7.9724in; top:13.8480in; width:3.1253in;}
 .sig-right .sig-img{width:2.5866in; height:1.0118in;}
 
+/* "Our reference N." — bottom left, under the left signature */
+.refno{position:absolute; left:0.7546in; top:15.55in; margin:0; font-size:13pt; z-index:3; text-align:left;}
+
+/* ---------- reference register (form panel + archive) -------------------------- */
+
+.reg-state{font-size:13.5px; margin:0 0 10px;}
+.reg-state.ok{color:var(--gold-bright);}
+.reg-err{font-size:13px; color:#ff9a8a; min-height:1.2em; margin:8px 0 0;}
+.linkbtn{background:none; border:0; padding:0; font:inherit; color:var(--gold-bright); text-decoration:underline; cursor:pointer;}
+
+.archive{margin-top:34px;}
+.archive h2{margin:0 0 6px; font-size:18px;}
+.archive table{width:100%; border-collapse:collapse; margin-top:14px; font-size:14px;}
+.archive th,.archive td{padding:9px 10px; border-bottom:1px solid rgba(255,255,255,.15); text-align:left; vertical-align:top;}
+.archive th{font-weight:600; color:var(--gold-bright); white-space:nowrap;}
+.archive td.num{font-weight:600; white-space:nowrap;}
+.archive a{color:var(--gold-bright);}
+.archive .empty{margin-top:14px;}
+
 /* ---------- print --------------------------------------------------------- */
 
 @media print{

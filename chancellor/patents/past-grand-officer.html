@@ -12,7 +12,7 @@
 <link rel="stylesheet" href="../assets/portal.css">
 <link rel="stylesheet" href="../assets/gc.css">
 </head>
-<body data-doc="Patent" data-file="f-name,f-rank">
+<body data-doc="Patent" data-file="f-name,f-rank" data-register="Past Grand Officer" data-ref-file="f-type,f-rank,f-name,f-date">
 
 <header class="top">
   <div>
@@ -97,6 +97,11 @@
     </div>
 
     <hr class="divider">
+    <h2>Reference number</h2>
+    <p class="hint">“Our reference N.” is given when the patent is downloaded or printed — the next free number, from 1201 — and is entered in the Αρχείο Απονομών.</p>
+    <div id="register-panel"></div>
+
+    <hr class="divider">
     <p class="note">
       The sheet beside this form is the patent at its real size — <b>A3 portrait,
       297 × 420 mm</b>. <b>Download PDF</b> saves it as a print-ready file;
@@ -129,6 +134,8 @@
           </div>
         </div>
 
+        <p class="refno roman">Our reference N. <span data-out="ref">____</span></p>
+
         <img class="art-seal" data-art="seal" alt="">
 
         <div class="sig sig-left">
@@ -153,6 +160,7 @@
 <script src="../assets/artwork.js"></script>
 <script src="../assets/lib/html2canvas.min.js"></script>
 <script src="../assets/lib/jspdf.umd.min.js"></script>
+<script src="../assets/register.js"></script>
 <script src="../assets/gc.js"></script>
 </body>
 </html>

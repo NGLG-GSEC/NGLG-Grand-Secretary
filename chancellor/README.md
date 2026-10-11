@@ -50,6 +50,26 @@ Moved here from `dskiad/nglg-recognition`, which is no longer the live copy.
 Its own [README](recognition/README.md) covers the builder and how an edition
 is published; the paths and the repository name in it now point here.
 
+### Reference numbers and the Αρχείο Απονομών
+
+Every patent that is downloaded or printed gets **Our reference N.** (αριθμός
+πρωτοκόλλου) — the next free number, starting at **1201** — printed at the
+bottom left of the sheet. The PDF is named
+`1201 - Past Grand Officer - Appointed - PAST GRAND MASTER - Name - 24-10-2025.pdf`.
+The same unchanged patent keeps its number; changing any field makes it a new
+document with a new number.
+
+The register is one shared file, `chancellor/register.json`, in the private data
+repository (`NGLG-GSEC/nglg-grammateia-data`). Numbers are taken with GitHub's
+compare-and-swap, so two people can never be given the same one. Connect once per
+browser with a GitHub token that has *Contents: Read and write* on that repository
+(the form and the archive both show a small panel for it; if the Grand Secretary
+app is already connected on this site, its connection is used).
+
+The **Αρχείο Απονομών** button on `patents/index.html` lists every reference
+number, its file name and a **Preview** link (`past-grand-officer.html?ref=1201`)
+that reopens the patent exactly as issued.
+
 ## How the forms are built
 
 ```
