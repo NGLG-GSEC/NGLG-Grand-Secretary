@@ -195,12 +195,12 @@ main{
    stands to its right and takes the whole height of that block (its size is set by the page script). */
 .honor{display:grid; grid-template-columns:minmax(0,1fr) calc(2.7in * var(--k)); column-gap:calc(0.22in * var(--k)); align-items:center; margin-top:.5em !important;}
 .honor-text{min-width:0;}
-/* Honorary Ambassador: the title (the rank lines) is bolder, 10% bigger and a deeper navy blue */
-.paper.amb .honor .rank{
+/* Every rank on the Honorary patent: the title (the rank lines) is bolder, 10% bigger and a deeper navy blue */
+.honor .rank{
   color:#0a1f5c; -webkit-text-stroke:0.9px #0a1f5c; paint-order:stroke fill;
   font-size:calc(23pt * var(--k) * 1.1); letter-spacing:.01em;
 }
-.paper.amb .honor .rank.gr{font-size:calc(21pt * var(--k) * 1.1); -webkit-text-stroke:0.7px #0a1f5c;}
+.honor .rank.gr{font-size:calc(21pt * var(--k) * 1.1); -webkit-text-stroke:0.7px #0a1f5c;}
 .honor-jewel{display:flex; align-items:center; justify-content:center; min-width:0;}
 .honor-jewel .jewel{position:static !important; display:block; width:100%; height:auto; flex:0 0 auto;}
 
