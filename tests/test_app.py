@@ -1357,3 +1357,18 @@ def test_rep_title_from_epeteirida_and_rep_label(app):
     assert 'Λίαν Σεβάσμιος Αδ. Νικόλαος Χατζηδοκιμίου, Αναπληρωτής Μέγας Γραμματεύς' in app.page.input_value('[name=body]')
     assert app.page.input_value('[name=cc_name]').startswith('Λίαν Σεβάσμιος Αδ. Νικόλαος Χατζηδοκιμίου')
     assert 'Σεβάσμιος Αδ. Νικόλαος' not in app.page.input_value('[name=body]').replace('Λίαν Σεβάσμιος Αδ. Νικόλαος', '')
+
+
+def test_letters_archive_whatsapp_pdf_button(app):
+    app.connect_local()
+    add_member(app)
+    app.go('/letters/new').fill(recipient_name='ΕπΜΓρ. Δοκιμής', recipient_email='t@example.com', subject='Πρόσκληση WhatsApp', body='Κείμενο.')
+    app.click('Αποθήκευση & απόδοση')
+    app.page.wait_for_url('**/#/letters/1')
+    app.go('/letters')
+    opened = []
+    app.page.context.on('page', lambda p: opened.append(p.url))
+    with app.page.expect_download() as dl:
+        app.page.locator('[data-act=wapdf]').first.click()
+    assert dl.value.suggested_filename.endswith('.pdf') and 'Πρόσκληση WhatsApp' in dl.value.suggested_filename
+    app.page.wait_for_selector('text=επισυνάψτε το')
