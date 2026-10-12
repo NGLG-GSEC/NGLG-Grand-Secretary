@@ -1370,9 +1370,8 @@ def test_letters_archive_whatsapp_pdf_button(app):
     app.page.context.on('page', lambda p: opened.append(p.url))
     with app.page.expect_download() as dl:
         app.page.locator('[data-act=wapdf]').first.click()
-    assert dl.value.suggested_filename.endswith('.pdf') and 'Πρόσκληση WhatsApp' in dl.value.suggested_filename
+    assert dl.value.suggested_filename.endswith('.pdf') and dl.value.suggested_filename.isascii() and 'EPISTOLI Prosklisi WhatsApp' in dl.value.suggested_filename
     app.page.wait_for_selector('text=επισυνάψτε το')
-    assert 'ΕΠΙΣΤΟΛΗ Πρόσκληση WhatsApp' in dl.value.suggested_filename
 
 
 def test_home_archive_dropdown_opens_decrees_and_letters(app):

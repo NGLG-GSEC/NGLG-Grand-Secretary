@@ -3,7 +3,7 @@
 import { db } from '../core/store.js';
 import { module, onSubmit, go, flash, toast, bind, confirmDo, table, notice, actor, ACTORS } from '../core/app.js';
 import { crud } from '../core/crud.js';
-import { esc, today, fmtDate, matches, sortBy, safeFileName, EMAIL_RE, splitEmails, download } from '../core/util.js';
+import { esc, today, fmtDate, matches, sortBy, safeFileName, latinFileName, EMAIL_RE, splitEmails, download } from '../core/util.js';
 import { letterPaper, printPaper, signerProfile, IMG, fitPaper } from '../core/paper.js';
 import { makeDocx, letterBlocks } from '../core/docx.js';
 import { docTitle, driveBox, saveDocToDrive } from '../core/drive.js';
@@ -180,7 +180,8 @@ export async function waSendPdf(x, b) {
   const old = b && b.textContent;
   if (b) { b.disabled = true; b.textContent = '⏳ Ετοιμάζεται το PDF…'; }
   try {
-    const { blob, name } = await letterPdf(x);
+    const { blob } = await letterPdf(x);
+    const name = latinFileName(fileName(x)) + '.pdf'; // λατινικό όνομα: τα ελληνικά αλλοιώνονται στο WhatsApp
     const file = new File([blob], name, { type: 'application/pdf' });
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
       try { await navigator.share({ files: [file], title: name, text: waText(x) }); } catch (e) { if (e && e.name !== 'AbortError') throw e; }
