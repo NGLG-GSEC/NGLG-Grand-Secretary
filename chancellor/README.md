@@ -47,7 +47,7 @@ the text always sits inside the collar.
 **Honorary Grand Officer** is the same sheet with its own English wording and the same signers.
 The honoree's name carries the Grand Lodge jewel on its right (the `jewel` image in
 `assets/artwork.js`), and the rank is shown in English with its Greek translation under it
-(`ΒΑΘΜΟΣ`, using *Επίτιμος* for Honorary). `RANK` is picked from a list in both languages (the honorary Past Grand ranks, and Honorary Ambassador / Επίτιμος Πρέσβης; for an Ambassador the emblem on the right is the Ambassador medal, `jewelAmb`), which
+(`ΒΑΘΜΟΣ`, using *Επίτιμος* for Honorary). `RANK` is picked from a list in both languages (the honorary Past Grand ranks, Honorary Ambassador / Επίτιμος Πρέσβης and Honorary Member / Επίτιμο Μέλος; for an Ambassador the emblem on the right is the Ambassador medal, `jewelAmb`), which
 fills the English and the Greek rank fields. It uses the same reference numbers and the same
 Αρχείο Απονομών as the Past Grand Officer patent, so the numbers run on across both documents.
 
