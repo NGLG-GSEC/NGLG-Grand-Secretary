@@ -1372,3 +1372,4 @@ def test_letters_archive_whatsapp_pdf_button(app):
         app.page.locator('[data-act=wapdf]').first.click()
     assert dl.value.suggested_filename.endswith('.pdf') and 'Πρόσκληση WhatsApp' in dl.value.suggested_filename
     app.page.wait_for_selector('text=επισυνάψτε το')
+    assert 'ΕΠΙΣΤΟΛΗ Πρόσκληση WhatsApp' in dl.value.suggested_filename

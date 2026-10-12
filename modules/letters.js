@@ -174,8 +174,8 @@ export async function letterPdf(x) {
   try { const p = host.querySelector('.paper'); fitPaper(p); return { blob: await paperPdf(p, { title: fileName(x) }), name: fileName(x) + '.pdf' }; }
   finally { host.remove(); }
 }
-// WhatsApp με το PDF της επιστολής: κινητό/tablet → κοινοποίηση του αρχείου (διαλέγετε WhatsApp)· υπολογιστής → λήψη PDF + WhatsApp έτοιμο για επισύναψη
-const waText = (x) => `${db.setting('organization_name') || ''}\n${x.protocol_no ? 'Αρ. Πρωτ.: ' + x.protocol_no + '\n' : ''}Θέμα: ${x.subject}`.trim();
+// WhatsApp με το PDF της επιστολής: κινητό/tablet → κοινοποίηση του αρχείου (διαλέγετε WhatsApp ή WhatsApp Business)· υπολογιστής → λήψη PDF + WhatsApp έτοιμο για επισύναψη
+const waText = (x) => fileName(x); // το μήνυμα είναι το όνομα του αρχείου, π.χ. «20545 - ΕΠΙΣΤΟΛΗ Θέμα»
 export async function waSendPdf(x, b) {
   const old = b && b.textContent;
   if (b) { b.disabled = true; b.textContent = '⏳ Ετοιμάζεται το PDF…'; }
@@ -183,7 +183,7 @@ export async function waSendPdf(x, b) {
     const { blob, name } = await letterPdf(x);
     const file = new File([blob], name, { type: 'application/pdf' });
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
-      try { await navigator.share({ files: [file], title: x.subject, text: waText(x) }); } catch (e) { if (e && e.name !== 'AbortError') throw e; }
+      try { await navigator.share({ files: [file], title: name, text: waText(x) }); } catch (e) { if (e && e.name !== 'AbortError') throw e; }
     } else {
       download(name, blob, 'application/pdf');
       window.open('https://wa.me/?text=' + encodeURIComponent(waText(x)), '_blank', 'noopener');
@@ -215,7 +215,7 @@ function viewLetter({ params }) {
     html: `<section class="card send-panel noprint"><h3>Αποστολή & Αποθήκευση</h3>${senderBanner(mailKind(x))}
 <div class="toolbar"><button class="btn primary" data-act="pdf">⬇ PDF / Εκτύπωση</button>${mailButtons({ to: x.recipient_email, bcc: mailBcc(x, x.recipient_email), subject: x.subject, body: x.body, kind: mailKind(x) }, '✉ Αποστολή με Email')}
 <button class="btn" data-act="word">⬇ Word (επεξεργασία)</button><button class="btn" data-act="form">🖋 Ψηφιακό Έντυπο</button>
-<button class="btn" data-act="wapdf">🟢 WhatsApp με PDF</button><a class="btn" target="_blank" rel="noopener" href="${wa}">WhatsApp μήνυμα</a>${x.status === 'ready' ? '' : '<button class="btn primary" data-act="ready">✅ Έτοιμη: απόδοση αρ. πρωτοκόλλου</button>'}</div>
+<button class="btn" data-act="wapdf">🟢 WhatsApp / Business με PDF</button><a class="btn" target="_blank" rel="noopener" href="${wa}">WhatsApp μήνυμα</a>${x.status === 'ready' ? '' : '<button class="btn primary" data-act="ready">✅ Έτοιμη: απόδοση αρ. πρωτοκόλλου</button>'}</div>
 ${x.status === 'ready' ? '<div class="mailsheet"></div>' : '<p class="send-help">Για αποστολή με συνημμένο PDF ορίστε πρώτα την επιστολή «✅ Έτοιμη» (αριθμός πρωτοκόλλου).</p>'}${driveBox(x, fileName(x))}</section>
 <div class="toolbar noprint"><a class="btn" href="#/letters/${x.id}/edit">Επεξεργασία</a><a class="btn" href="#/letters/new?copy_from=${x.id}">Νέα πάνω σε αυτή</a><a class="btn" href="#/letters">Αρχείο Επιστολών</a>
 <button class="btn danger" data-act="del">Διαγραφή</button> ${statusPill(x.status)}</div>
@@ -256,7 +256,7 @@ function archive({ query }) {
 <form class="filters" id="flt"><input name="q" value="${esc(query.q || '')}" placeholder="Αρ. πρωτ., θέμα, παραλήπτης" autofocus><input type="date" name="from" value="${esc(query.from || '')}"><input type="date" name="to" value="${esc(query.to || '')}"><button>Αναζήτηση</button></form>
 <p class="muted">${xs.length} επιστολές${xs.length > 500 ? ' (εμφανίζονται οι 500 πιο πρόσφατες)' : ''}</p>
 ${table(['Αρ. Πρωτ.', 'Ημερομηνία', 'Θέμα', 'Παραλήπτης', 'Κατάσταση', 'Ενέργειες'], shown.map((x) => [`<span class="official-number">${esc(x.protocol_no)}</span>`, esc(fmtDate(x.letter_date)), esc(x.subject), esc(x.recipient_name), statusPill(x.status),
-  `<a href="#/letters/${x.id}">Άνοιγμα</a> · <a href="#/letters/${x.id}/edit">Επεξεργασία</a> · <a href="#/letters/new?copy_from=${x.id}">Νέα πάνω σε αυτή</a> · <button type="button" class="btn wa-btn" data-act="wapdf" data-id="${x.id}">🟢 WhatsApp PDF</button>`]), 'Δεν βρέθηκαν επιστολές.')}`,
+  `<a href="#/letters/${x.id}">Άνοιγμα</a> · <a href="#/letters/${x.id}/edit">Επεξεργασία</a> · <a href="#/letters/new?copy_from=${x.id}">Νέα πάνω σε αυτή</a> · <button type="button" class="btn wa-btn" data-act="wapdf" data-id="${x.id}">🟢 WhatsApp / Business PDF</button>`]), 'Δεν βρέθηκαν επιστολές.')}`,
     mount(el) { onSubmit(el.querySelector('#flt'), (d) => go('/letters', d)); bind(el, { wapdf: (d, b) => waSendPdf(db.get('letters', d.id), b) }); },
   };
 }
