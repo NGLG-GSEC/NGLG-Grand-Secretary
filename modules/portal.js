@@ -31,7 +31,7 @@ module({
   routes: {
     '/portal': () => ({
       title: 'Πύλη', bare: !db.backend,
-      html: `${db.backend ? '' : '<p><a href="#/connect">← Σύνδεση</a></p>'}<h1>🏛 Πύλη Μεγάλης Γραμματείας</h1><p class="muted">Εθνική Μεγάλη Στοά της Ελλάδος — όλες οι εφαρμογές και ιστοσελίδες σε ένα σημείο.</p>${portalHtml()}`,
+      html: `${db.backend ? '' : '<p><a href="#/connect">← Σύνδεση</a></p>'}<a href="#/" class="homebtn homefloat">⌂ Αρχική</a><h1>🏛 Πύλη Μεγάλης Γραμματείας</h1><p class="muted">Εθνική Μεγάλη Στοά της Ελλάδος — όλες οι εφαρμογές και ιστοσελίδες σε ένα σημείο.</p>${portalHtml()}`,
     }),
   },
   tile: { order: 90, render: () => `<div class="dtile"><h3><a href="#/portal">🏛 Πύλη</a></h3><div class="muted">Έντυπο Διατάγματος, Τεκτονικές Ομιλίες, φόρμες εγγραφής, άλλα Γραφεία</div>
