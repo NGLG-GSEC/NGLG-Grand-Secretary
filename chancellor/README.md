@@ -51,6 +51,11 @@ The honoree's name carries the Grand Lodge jewel on its right (the `jewel` image
 fills the English and the Greek rank fields. It uses the same reference numbers and the same
 Αρχείο Απονομών as the Past Grand Officer patent, so the numbers run on across both documents.
 
+**Download format.** Next to the download button each patent has a PDF / JPEG choice (remembered
+in the browser). PDF is the print-ready A3 file; JPEG is the same sheet as one image (about
+2700 × 3800 px). Either way the file carries the reference number in its name, and the same
+patent keeps the same number whichever format is downloaded.
+
 ### Recognition
 
 Moved here from `dskiad/nglg-recognition`, which is no longer the live copy.

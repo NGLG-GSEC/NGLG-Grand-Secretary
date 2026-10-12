@@ -21,7 +21,8 @@
                                       no extra wiring needed
      * <div class="body-copy"><div class="copy">…</div></div>
                                       the copy is scaled down until it fits
-     * #pdf / #print / #reset         the three buttons
+     * #pdf / #print / #reset         the three buttons (#pdf downloads the sheet as a PDF or,
+                                      when the #fmt choice beside it says JPEG, as a JPEG)
      * <body data-doc="Honorary Patent" data-file="name,rank">
                                       names the downloaded file
 
@@ -316,6 +317,24 @@
 
   /* ---------- export ------------------------------------------------------- */
 
+  var busy = false;
+
+  /* PDF or JPEG — the choice is remembered in this browser */
+  var fmtSel = document.getElementById('fmt');
+  function format(){ return fmtSel && fmtSel.value === 'jpeg' ? 'jpeg' : 'pdf'; }
+  function withExt(name, ext){ return name.replace(/\.(pdf|jpe?g)$/i, '') + '.' + ext; }
+  function syncFormat(){
+    var btn = document.getElementById('pdf');
+    if (btn && !busy) btn.textContent = 'Download ' + (format() === 'jpeg' ? 'JPEG' : 'PDF');
+  }
+  if (fmtSel){
+    try { var saved = window.localStorage.getItem('gcFormat'); if (saved === 'jpeg' || saved === 'pdf') fmtSel.value = saved; } catch (e) {}
+    fmtSel.addEventListener('change', function(){
+      try { window.localStorage.setItem('gcFormat', fmtSel.value); } catch (e) {}
+      syncFormat();
+    });
+  }
+
   function fileName(){
     if (curFile) return curFile;
     var parts = (document.body.getAttribute('data-file') || '').split(',');
@@ -335,8 +354,6 @@
     }));
   }
 
-  var busy = false;
-
   function downloadPDF(){
     if (busy) return;
     busy = true;
@@ -350,8 +367,8 @@
       .then(function(){ return document.fonts ? document.fonts.ready : null; })
       .then(imagesReady)
       .then(function(){
-        if (!window.html2canvas || !window.jspdf){
-          throw new Error('the PDF libraries did not load');
+        if (!window.html2canvas || (format() === 'pdf' && !window.jspdf)){
+          throw new Error(format() === 'pdf' ? 'the PDF libraries did not load' : 'the image library did not load');
         }
         paper.style.transform = 'none';
         scaler.style.width  = paper.offsetWidth + 'px';
@@ -373,8 +390,23 @@
       .then(function(canvas){
         paper.style.transform = restore;
         fit();
+        var kind = format();
+        if (kind === 'jpeg'){
+          if (status) status.textContent = 'Building the JPEG…';
+          var name = withExt(fileName(), 'jpg');
+          return new Promise(function(res, rej){
+            canvas.toBlob(function(blob){
+              if (!blob) return rej(new Error('the browser could not make the image'));
+              var a = document.createElement('a');
+              a.href = URL.createObjectURL(blob); a.download = name;
+              document.body.appendChild(a); a.click(); document.body.removeChild(a);
+              setTimeout(function(){ URL.revokeObjectURL(a.href); }, 4000);
+              if (status) status.textContent = 'Saved ' + name;
+              res();
+            }, 'image/jpeg', 0.95);
+          });
+        }
         if (status) status.textContent = 'Building the PDF…';
-
         var pdf = new window.jspdf.jsPDF({
           orientation:'portrait', unit:'mm', format:'a3', compress:true
         });
@@ -383,20 +415,22 @@
         var h  = pw * (canvas.height / canvas.width);
         pdf.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG',
                      0, (ph - h) / 2, pw, h, undefined, 'FAST');
-        pdf.save(fileName());
-        if (status) status.textContent = 'Saved ' + fileName();
+        var pname = withExt(fileName(), 'pdf');
+        pdf.save(pname);
+        if (status) status.textContent = 'Saved ' + pname;
       })
       .catch(function(err){
         paper.style.transform = restore;
         fit();
         if (status){
-          status.textContent = 'PDF export failed (' + err.message +
-                               '). Use Print → “Save as PDF” instead.';
+          status.textContent = (format() === 'jpeg' ? 'Image' : 'PDF') + ' export failed (' + err.message +
+                               ').' + (format() === 'jpeg' ? '' : ' Use Print → “Save as PDF” instead.');
         }
       })
       .then(function(){
         busy = false;
         btn.disabled = false;
+        syncFormat();
       });
   }
 
@@ -419,6 +453,7 @@
 
   var pdfBtn = document.getElementById('pdf');
   if (pdfBtn) pdfBtn.addEventListener('click', downloadPDF);
+  syncFormat();
 
   var printBtn = document.getElementById('print');
   if (printBtn){
