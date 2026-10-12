@@ -23,7 +23,7 @@ arms, the chain collar, the seal and both signatures — is fixed.
 | Document | State |
 | --- | --- |
 | [Past Grand Officer](patents/past-grand-officer.html) | ready |
-| Honorary Grand Officer | in preparation |
+| [Honorary Grand Officer](patents/honorary-grand-officer.html) | ready — same sheet, English text, rank also in Greek |
 
 **Past Grand Officer** takes these fields:
 
@@ -43,6 +43,13 @@ storage — a small picker appears under a field once it has past entries to
 offer, so filling the same document again is a click, not retyping. The body
 copy scales itself down if a long rank or Grand Lodge name needs the room, so
 the text always sits inside the collar.
+
+**Honorary Grand Officer** is the same sheet with its own English wording and the same signers.
+The honoree's name carries the Grand Lodge jewel on its right (the `jewel` image in
+`assets/artwork.js`), and the rank is shown in English with its Greek translation under it
+(`ΒΑΘΜΟΣ`, using *Επίτιμος* for Honorary). `RANK` is picked from a list in both languages, which
+fills the English and the Greek rank fields. It uses the same reference numbers and the same
+Αρχείο Απονομών as the Past Grand Officer patent, so the numbers run on across both documents.
 
 ### Recognition
 

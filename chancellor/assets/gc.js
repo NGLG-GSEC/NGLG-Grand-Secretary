@@ -13,6 +13,7 @@
      * <select data-field="type">    a choice field behaves like any other
                                       data-field — read with its current
                                       option's value
+     * <p data-show="lang:EN,BOTH">  several values may be listed, separated by commas
      * <p data-show="type:HONORARY"> only shown while the field named
                                       data-field="type" currently holds
                                       "HONORARY"; the rest of the copy
@@ -71,7 +72,7 @@
       var parts = el.getAttribute('data-show').split(':');
       var field = document.querySelector('[data-field="' + parts[0] + '"]');
       var value = field ? field.value.trim() : '';
-      el.hidden = (value !== parts[1]);
+      el.hidden = (parts[1].split(',').indexOf(value) === -1);
     });
   }
 
@@ -122,7 +123,7 @@
       return Promise.reject(new Error('connect the register first (see “Reference number” in the form)'));
     }
     var fields = snapshot();
-    var type = document.querySelector('[data-field="type"]');
+    var type = document.querySelector('[data-field="type"]') || document.querySelector('[data-field="lang"]');
     var rankEl = document.querySelector('[data-field="rank"]'), nameEl = document.querySelector('[data-field="name"]');
     return REG.assign({
       form: location.pathname.replace(/.*\//, ''),
@@ -164,6 +165,9 @@
   var MONTHS = ['January','February','March','April','May','June',
                 'July','August','September','October','November','December'];
 
+  var MONTHS_GR = ['Ιανουαρίου','Φεβρουαρίου','Μαρτίου','Απριλίου','Μαΐου','Ιουνίου',
+                   'Ιουλίου','Αυγούστου','Σεπτεμβρίου','Οκτωβρίου','Νοεμβρίου','Δεκεμβρίου'];
+
   function ordinal(n){
     var rest = n % 100;
     if (rest >= 11 && rest <= 13) return n + 'th';
@@ -202,6 +206,11 @@
     var my    = document.getElementById(dateIn.getAttribute('data-monthyear'));
     if (dayEl) dayEl.value = ordinal(day);
     if (my)    my.value    = MONTHS[month - 1] + ' ' + year;
+    /* a Greek date too, when the form has the fields:  24η Οκτωβρίου 2025 */
+    var dayGr = document.getElementById(dateIn.getAttribute('data-day-gr'));
+    var myGr  = document.getElementById(dateIn.getAttribute('data-monthyear-gr'));
+    if (dayGr) dayGr.value = day + 'η';
+    if (myGr)  myGr.value  = MONTHS_GR[month - 1] + ' ' + year;
     render();
   }
 
@@ -287,9 +296,9 @@
      the clear window of the sheet, however long the fields run. */
   function autofit(){
     if (!win || !copy) return;
-    var k = 1;
+    var k = 1, minK = parseFloat(document.body.getAttribute('data-min-k')) || 0.55;
     win.style.setProperty('--k', k);
-    while (copy.scrollHeight > win.clientHeight && k > 0.55){
+    while (copy.scrollHeight > win.clientHeight && k > minK){
       k = Math.round((k - 0.02) * 100) / 100;
       win.style.setProperty('--k', k);
     }
