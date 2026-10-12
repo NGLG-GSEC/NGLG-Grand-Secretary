@@ -4,7 +4,7 @@ The documents of the Chancery, each one a form: open it, fill in what changes,
 and take away a print-ready PDF. Everything else on a sheet — the wording, the
 arms, the chain collar, the seal and both signatures — is fixed.
 
-**https://nglg-gsec.github.io/Grand-Chancellor/**
+**https://nglg-gsec.github.io/NGLG-Grand-Secretary/chancellor/**
 
 > The link goes live once GitHub Pages is enabled for this repository:
 > **Settings → Pages → Build and deployment → Source: _GitHub Actions_**.

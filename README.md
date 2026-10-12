@@ -46,6 +46,7 @@ The Office of the Grand Chancellor has its own distinct page in this repository 
 | --- | --- |
 | Patents and certificates of appointment | [patents](https://nglg-gsec.github.io/NGLG-Grand-Secretary/chancellor/patents/) |
 | Past Grand Officer patent | [past-grand-officer](https://nglg-gsec.github.io/NGLG-Grand-Secretary/chancellor/patents/past-grand-officer.html) |
+| Honorary Grand Officer patent | [honorary-grand-officer](https://nglg-gsec.github.io/NGLG-Grand-Secretary/chancellor/patents/honorary-grand-officer.html) |
 | Recognition builder (NGLG Regularity, Globe of Amity) | [recognition](https://nglg-gsec.github.io/NGLG-Grand-Secretary/chancellor/recognition/) |
 
 Also available from the standalone repository [`Grand-Chancellor`](https://github.com/dskiad/Grand-Chancellor).

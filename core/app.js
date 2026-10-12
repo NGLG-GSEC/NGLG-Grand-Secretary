@@ -98,9 +98,9 @@ function navHtml() {
   }).join('');
   const who = actor();
   return `<header class="top has-nav"><div class="brand"><a href="#/" class="brandname"><b>Μεγάλη Γραμματεία · ΕΜΣΤΕ</b></a>
-<span class="actor-pill" title="Υπογράφων">✍ ${esc(ACTORS[who])}</span><span id="syncPill" class="sync-pill" hidden>Αποθήκευση…</span></div>
+<a class="actor-pill" href="#/identity" title="Υπογράφων — πατήστε για αλλαγή">✍ ${esc(ACTORS[who])}</a><span id="syncPill" class="sync-pill" hidden>Αποθήκευση…</span></div>
 <button type="button" class="navtoggle" aria-expanded="false" aria-controls="mainnav">☰ Μενού</button>
-<nav id="mainnav" aria-label="Κύριο μενού"><a href="#/">Αρχική</a>${items}<a href="#/identity">Υπογράφων</a></nav></header>`;
+<nav id="mainnav" aria-label="Κύριο μενού"><a href="#/">Αρχική</a>${items}</nav></header>`;
 }
 
 function wireNav(root) {
