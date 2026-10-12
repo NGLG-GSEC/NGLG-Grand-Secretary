@@ -92,7 +92,7 @@ main{
   transform:scaleX(var(--frame-scale-x)) scaleY(var(--frame-scale-y));
   transform-origin:50% 0%;
 }
-.art-seal{left:4.6554in; top:13.9998in; width:2.2188in; height:2.2398in; z-index:3;}
+.art-seal{left:4.8926in; top:13.9998in; width:2.2188in; height:2.2398in; z-index:3;}
 
 .body-copy{
   /* The clear window inside the chain collar — measured off the artwork:
