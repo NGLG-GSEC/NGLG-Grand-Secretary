@@ -123,12 +123,17 @@
           <div class="copy">
             <p class="lead script"><img class="dropcap" data-art="dropcapF" alt="F">or his distinguished service to the Craft and his devotion to the ideals of Freemasonry,</p>
             <p class="hisrank roman"><span data-out="hisrank"></span> <span data-out="hisgl"></span></p>
-            <div class="name-row"><p class="name" data-out="name"></p><img class="jewel" data-art="jewel" alt=""></div>
-            <p class="connector roman appointed">is hereby conferred the honorary rank of</p>
-            <p class="rank" data-out="rank"></p>
-            <p class="rank gr" lang="el" data-out="rank_gr"></p>
-            <p class="connector roman ofthe">of the</p>
-            <p class="lodge">National Grand Lodge of Greece</p>
+            <div class="honor">
+              <div class="honor-text">
+                <p class="name" data-out="name"></p>
+                <p class="connector roman appointed">is hereby conferred the honorary rank of</p>
+                <p class="rank" data-out="rank"></p>
+                <p class="rank gr" lang="el" data-out="rank_gr"></p>
+                <p class="connector roman ofthe">of the</p>
+                <p class="lodge">National Grand Lodge of Greece</p>
+              </div>
+              <div class="honor-jewel"><img class="jewel" data-art="jewel" alt=""></div>
+            </div>
             <p class="connector roman honorary-tail">with all the honours, courtesies and distinctions traditionally associated with such dignity, in accordance with the Constitution, Regulations and established usages of this Grand Lodge</p>
             <p class="testimony script first">In testimony Whereof we have hereunto set our hands and caused the seal of the National Grand Lodge of Greece</p>
             <p class="testimony script date">Masonic Hall of Athens, this <span data-out="day"></span> day of <span data-out="monthyear"></span> AD.</p>
@@ -188,6 +193,19 @@
 <script>
 (function(){
   var pick = document.getElementById('f-rankpick');
+  /* the jewel takes the whole height of the text block beside it (px sizes, so the PDF export sees them too) */
+  var text = document.querySelector('.honor-text'), cell = document.querySelector('.honor-jewel'), jewel = cell.querySelector('img');
+  var RATIO = 672 / 760;
+  function fitJewel(){
+    var h = text.offsetHeight, maxW = cell.clientWidth;
+    if (!h || !maxW) return;
+    var w = Math.min(maxW, h * RATIO);
+    jewel.style.width = w + 'px'; jewel.style.height = (w / RATIO) + 'px';
+  }
+  if (window.ResizeObserver) new ResizeObserver(fitJewel).observe(text);
+  window.addEventListener('resize', fitJewel);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitJewel);
+  setTimeout(fitJewel, 50);
   pick.addEventListener('change', function(){            /* the list fills the English rank and its Greek translation */
     if (!pick.value) return;
     var p = pick.value.split('|'), en = document.getElementById('f-rank');
