@@ -1373,3 +1373,15 @@ def test_letters_archive_whatsapp_pdf_button(app):
     assert dl.value.suggested_filename.endswith('.pdf') and 'Πρόσκληση WhatsApp' in dl.value.suggested_filename
     app.page.wait_for_selector('text=επισυνάψτε το')
     assert 'ΕΠΙΣΤΟΛΗ Πρόσκληση WhatsApp' in dl.value.suggested_filename
+
+
+def test_home_archive_dropdown_opens_decrees_and_letters(app):
+    app.connect_local()
+    app.go('/')
+    app.page.locator('.archdrop summary').click()
+    app.page.locator('.archdrop-menu a', has_text='ΔΙΑΤΑΓΜΑΤΑ').click()
+    app.page.wait_for_url('**/#/decrees')
+    app.go('/')
+    app.page.locator('.archdrop summary').click()
+    app.page.locator('.archdrop-menu a', has_text='ΕΠΙΣΤΟΛΕΣ').click()
+    app.page.wait_for_url('**/#/letters')
