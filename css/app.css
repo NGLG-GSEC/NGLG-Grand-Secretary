@@ -111,6 +111,7 @@ mark{background:#ffe58a;color:inherit;padding:0 1px;border-radius:3px}
 .drive-status{margin-top:12px;padding-top:10px;border-top:1px solid #d7e2f1}
 .drive-status form button{margin-left:6px}
 .actor-pill{font-size:.88rem;background:#eef3fa;color:#0b2f63;padding:5px 9px;border-radius:999px;font-weight:bold}
+.actor-pill{text-decoration:none}
 @media screen and (max-width:1180px){.top{padding:10px 16px;flex-wrap:nowrap}
 .top.has-nav{flex-wrap:wrap}
 .brand{flex:1}
