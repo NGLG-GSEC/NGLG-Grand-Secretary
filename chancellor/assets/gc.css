@@ -191,12 +191,12 @@ main{
 .connector.gr{font-size:calc(19pt * var(--k));}
 .rank.gr{margin-top:.12em !important;}
 
-/* the jewel stands to the right of the honoree's name; an empty spacer of the same width on the left keeps the name centred */
-.name-row{--jh:calc(1.05in * var(--k)); --jw:calc(var(--jh) * 0.883); --gap:calc(0.16in * var(--k));
-  min-height:var(--jh); display:flex; align-items:center; justify-content:center; margin-top:.35em !important;}
-.name-row::before{content:''; flex:0 0 auto; width:calc(var(--jw) + var(--gap));}
-.name-row .name{margin:0 !important; flex:0 1 auto;}
-.name-row .jewel{position:static !important; flex:0 0 auto; height:var(--jh); width:var(--jw); margin-left:var(--gap);}
+/* The honoree's block (name, rank, "of the National Grand Lodge of Greece") sits to the left; the jewel
+   stands to its right and takes the whole height of that block (its size is set by the page script). */
+.honor{display:grid; grid-template-columns:minmax(0,1fr) calc(2.7in * var(--k)); column-gap:calc(0.22in * var(--k)); align-items:center; margin-top:.5em !important;}
+.honor-text{min-width:0;}
+.honor-jewel{display:flex; align-items:center; justify-content:center; min-width:0;}
+.honor-jewel .jewel{position:static !important; display:block; width:100%; height:auto; flex:0 0 auto;}
 
 /* "Our reference N." — bottom left, under the left signature */
 .refno{position:absolute; left:0.7546in; top:15.98in; margin:0; font-size:13pt; z-index:3; text-align:left;}
