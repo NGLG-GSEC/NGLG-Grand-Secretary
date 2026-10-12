@@ -206,6 +206,8 @@ main{
 .reg-state{font-size:13.5px; margin:0 0 10px;}
 .reg-state.ok{color:var(--gold-bright);}
 .reg-err{font-size:13px; color:#ff9a8a; min-height:1.2em; margin:8px 0 0;}
+.actions select.btn{appearance:auto; padding-right:6px; cursor:pointer;}
+.actions select.btn option{color:#111; background:#fff;}
 .linkbtn{background:none; border:0; padding:0; font:inherit; color:var(--gold-bright); text-decoration:underline; cursor:pointer;}
 
 .archive{margin-top:34px;}
