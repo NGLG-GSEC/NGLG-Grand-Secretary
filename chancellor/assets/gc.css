@@ -194,6 +194,8 @@ main{
 /* The honoree's block (name, rank, "of the National Grand Lodge of Greece") sits to the left; the jewel
    stands to its right and takes the whole height of that block (its size is set by the page script). */
 .honor{display:grid; grid-template-columns:minmax(0,1fr) calc(2.7in * var(--k)); column-gap:calc(0.22in * var(--k)); align-items:center; margin-top:.5em !important;}
+.honor.amb{grid-template-columns:minmax(0,1fr) calc(3.1in * var(--k));}   /* the Ambassador medal is wider than tall */
+.honor.amb .lodge{font-size:calc(19pt * var(--k)); white-space:nowrap;}                 /* keeps the Grand Lodge on one line in the narrower column */
 .honor-text{min-width:0;}
 .honor-jewel{display:flex; align-items:center; justify-content:center; min-width:0;}
 .honor-jewel .jewel{position:static !important; display:block; width:100%; height:auto; flex:0 0 auto;}

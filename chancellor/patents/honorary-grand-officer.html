@@ -196,17 +196,30 @@
   var pick = document.getElementById('f-rankpick');
   /* the jewel takes the whole height of the text block beside it (px sizes, so the PDF export sees them too) */
   var text = document.querySelector('.honor-text'), cell = document.querySelector('.honor-jewel'), jewel = cell.querySelector('img');
-  var RATIO = 672 / 760;
+  /* the emblem follows the rank: the Ambassador medal for an Ambassador, the Grand Lodge jewel otherwise */
+  var rankEn = document.getElementById('f-rank'), kind = '';
+  function syncJewel(){
+    var amb = /AMBASSADOR/i.test(rankEn.value), want = amb ? 'jewelAmb' : 'jewel';
+    if (want !== kind && window.GC_ART && window.GC_ART[want]){ kind = want; jewel.src = window.GC_ART[want]; }
+    document.querySelector('.honor').classList.toggle('amb', amb);
+    fitJewel();
+  }
   function fitJewel(){
     var h = text.offsetHeight, maxW = cell.clientWidth;
+    var ratio = (jewel.naturalWidth && jewel.naturalHeight) ? jewel.naturalWidth / jewel.naturalHeight : 672 / 760;
     if (!h || !maxW) return;
-    var w = Math.min(maxW, h * RATIO);
-    jewel.style.width = w + 'px'; jewel.style.height = (w / RATIO) + 'px';
+    var w = Math.min(maxW, h * ratio);
+    jewel.style.width = w + 'px'; jewel.style.height = (w / ratio) + 'px';
   }
+  jewel.addEventListener('load', fitJewel);
+  document.getElementById('form').addEventListener('input', syncJewel);
+  document.getElementById('form').addEventListener('change', syncJewel);
+  new MutationObserver(syncJewel).observe(document.body, { attributes: true, attributeFilter: ['class'] });
   if (window.ResizeObserver) new ResizeObserver(fitJewel).observe(text);
   window.addEventListener('resize', fitJewel);
-  if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitJewel);
-  setTimeout(fitJewel, 50);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(syncJewel);
+  setTimeout(syncJewel, 50);
+  var rs = document.getElementById('reset'); if (rs) rs.addEventListener('click', function(){ setTimeout(syncJewel, 0); });
   pick.addEventListener('change', function(){            /* the list fills the English rank and its Greek translation */
     if (!pick.value) return;
     var p = pick.value.split('|'), en = document.getElementById('f-rank');
