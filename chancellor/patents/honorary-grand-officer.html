@@ -205,6 +205,7 @@
   function syncJewel(){
     var amb = /AMBASSADOR/i.test(rankEn.value), want = amb ? 'jewelAmb' : 'jewel';
     if (want !== kind && window.GC_ART && window.GC_ART[want]){ kind = want; jewel.src = window.GC_ART[want]; }
+    document.getElementById('paper').classList.toggle('amb', amb);
     fitJewel();
   }
   function fitJewel(){
