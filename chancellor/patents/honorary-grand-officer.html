@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Honorary Grand Officer — Patent | Grand Chancellor</title>
+<meta name="description" content="Fill in the honoree's details and download the patent conferring honorary grand rank in the National Grand Lodge of Greece — in English, in Greek or in both — as a print-ready A3 PDF.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Oswald:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/fonts.css">
+<link rel="stylesheet" href="../assets/portal.css">
+<link rel="stylesheet" href="../assets/gc.css">
+</head>
+<body data-doc="Honorary Patent" data-file="f-name,f-rank" data-register="Honorary Grand Officer" data-ref-file="f-lang,f-rank,f-name,f-date" data-min-k="0.34">
+
+<header class="top">
+  <div>
+    <a class="back" href="index.html">← Patents &amp; certificates</a>
+    <h1>Honorary Grand Officer — Patent</h1>
+    <span class="sub">National Grand Lodge of Greece</span>
+    <nav class="offices">
+      <a href="../index.html" aria-current="page">Grand Chancellor <em>· NGLG</em></a>
+      <a href="../../">Grand Secretary <em>· NGLG</em></a>
+      <a href="https://dskiad.github.io/ATHELSTAN-GRAND-SECRETARY/">Grand Secretary <em>· Athelstan</em></a>
+    </nav>
+  </div>
+  <div class="actions">
+    <button class="btn solid" id="pdf">Download PDF</button>
+    <button class="btn" id="print">Print</button>
+    <button class="btn" id="reset">Reset</button>
+  </div>
+</header>
+
+<main>
+  <form class="panel" id="form" autocomplete="off">
+    <h2>Certificate fields</h2>
+    <p class="hint">Everything else on the patent stays exactly as it is.</p>
+
+    <div class="field">
+      <label for="f-lang">LANGUAGE <i>— the language of the text on the patent</i></label>
+      <select id="f-lang" data-field="lang">
+        <option value="EN">English</option>
+        <option value="GR">Greek (Ελληνικά)</option>
+        <option value="BOTH">English and Greek</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label for="f-hisrank">HISRANK <i>— his rank / office</i></label>
+      <textarea id="f-hisrank" data-field="hisrank" rows="3">The Grand Master of the Masonic Order of Athelstan in England, Wales and its Provinces Overseas</textarea>
+    </div>
+
+    <div class="field">
+      <label for="f-hisgl">HISGL <i>— his Grand Lodge</i></label>
+      <input id="f-hisgl" data-field="hisgl" type="text" value="United Grand Lodge of England">
+    </div>
+
+    <div class="field">
+      <label for="f-name">NAME <i>— in English letters</i></label>
+      <input id="f-name" data-field="name" type="text" value="Paul W. Johnston">
+    </div>
+
+    <div class="field">
+      <label for="f-name-gr">ΟΝΟΜΑ <i>— the name in Greek (copies the English name until you change it)</i></label>
+      <input id="f-name-gr" data-field="name_gr" type="text" value="Paul W. Johnston">
+    </div>
+
+    <div class="field">
+      <label for="f-rankpick">RANK <i>— pick from the list (English — Greek); it fills both rank fields below</i></label>
+      <select id="f-rankpick">
+        <option value="">— choose a rank —</option>
+        <option value="HONORARY PAST GRAND MASTER|ΤΙΜΗΤΙΚΟΣ ΠΡΩΗΝ ΜΕΓΑΣ ΔΙΔΑΣΚΑΛΟΣ">Honorary Past Grand Master — Τιμητικός Πρώην Μέγας Διδάσκαλος</option>
+        <option value="HONORARY PAST DEPUTY GRAND MASTER|ΤΙΜΗΤΙΚΟΣ ΠΡΩΗΝ ΑΝΑΠΛΗΡΩΤΗΣ ΜΕΓΑΣ ΔΙΔΑΣΚΑΛΟΣ">Honorary Past Deputy Grand Master — Τιμητικός Πρώην Αναπληρωτής Μέγας Διδάσκαλος</option>
+        <option value="HONORARY PAST ASSISTANT GRAND MASTER|ΤΙΜΗΤΙΚΟΣ ΠΡΩΗΝ ΒΟΗΘΟΣ ΜΕΓΑΣ ΔΙΔΑΣΚΑΛΟΣ">Honorary Past Assistant Grand Master — Τιμητικός Πρώην Βοηθός Μέγας Διδάσκαλος</option>
+        <option value="HONORARY PAST SENIOR GRAND WARDEN|ΤΙΜΗΤΙΚΟΣ ΠΡΩΗΝ ΠΡΩΤΟΣ ΜΕΓΑΣ ΕΠΟΠΤΗΣ">Honorary Past Senior Grand Warden — Τιμητικός Πρώην Πρώτος Μέγας Επόπτης</option>
+        <option value="HONORARY PAST JUNIOR GRAND WARDEN|ΤΙΜΗΤΙΚΟΣ ΠΡΩΗΝ ΔΕΥΤΕΡΟΣ ΜΕΓΑΣ ΕΠΟΠΤΗΣ">Honorary Past Junior Grand Warden — Τιμητικός Πρώην Δεύτερος Μέγας Επόπτης</option>
+        <option value="HONORARY PAST GRAND CHANCELLOR|ΤΙΜΗΤΙΚΟΣ ΠΡΩΗΝ ΜΕΓΑΣ ΚΑΓΚΕΛΑΡΙΟΣ">Honorary Past Grand Chancellor — Τιμητικός Πρώην Μέγας Καγκελάριος</option>
+        <option value="HONORARY PAST GRAND SECRETARY|ΤΙΜΗΤΙΚΟΣ ΠΡΩΗΝ ΜΕΓΑΣ ΓΡΑΜΜΑΤΕΥΣ">Honorary Past Grand Secretary — Τιμητικός Πρώην Μέγας Γραμματεύς</option>
+        <option value="HONORARY PAST GRAND TREASURER|ΤΙΜΗΤΙΚΟΣ ΠΡΩΗΝ ΜΕΓΑΣ ΤΑΜΙΑΣ">Honorary Past Grand Treasurer — Τιμητικός Πρώην Μέγας Ταμίας</option>
+        <option value="HONORARY PAST GRAND ORATOR|ΤΙΜΗΤΙΚΟΣ ΠΡΩΗΝ ΜΕΓΑΣ ΡΗΤΩΡ">Honorary Past Grand Orator — Τιμητικός Πρώην Μέγας Ρήτωρ</option>
+        <option value="HONORARY PAST GRAND DEACON|ΤΙΜΗΤΙΚΟΣ ΠΡΩΗΝ ΜΕΓΑΣ ΔΙΑΚΟΝΟΣ">Honorary Past Grand Deacon — Τιμητικός Πρώην Μέγας Διάκονος</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label for="f-rank">RANK <i>— in English</i></label>
+      <input id="f-rank" data-field="rank" type="text" value="HONORARY PAST GRAND MASTER">
+    </div>
+
+    <div class="field">
+      <label for="f-rank-gr">ΒΑΘΜΟΣ <i>— in Greek</i></label>
+      <input id="f-rank-gr" data-field="rank_gr" type="text" value="ΤΙΜΗΤΙΚΟΣ ΠΡΩΗΝ ΜΕΓΑΣ ΔΙΔΑΣΚΑΛΟΣ">
+    </div>
+
+    <hr class="divider">
+
+    <div class="field">
+      <label for="f-date">DATE <i>— day/month/year — fills the English and the Greek date fields below</i></label>
+      <input id="f-date" type="text" inputmode="numeric" placeholder="DD/MM/YYYY" value="24/10/2025" data-day="f-day" data-monthyear="f-monthyear" data-day-gr="f-day-gr" data-monthyear-gr="f-monthyear-gr">
+    </div>
+
+    <div class="row">
+      <div class="field">
+        <label for="f-day">DAY</label>
+        <input id="f-day" data-field="day" type="text" value="24th">
+      </div>
+      <div class="field">
+        <label for="f-monthyear">MONTH &amp; YEAR</label>
+        <input id="f-monthyear" data-field="monthyear" type="text" value="October 2025">
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="field">
+        <label for="f-day-gr">ΗΜΕΡΑ</label>
+        <input id="f-day-gr" data-field="day_gr" type="text" value="24η">
+      </div>
+      <div class="field">
+        <label for="f-monthyear-gr">ΜΗΝΑΣ &amp; ΕΤΟΣ</label>
+        <input id="f-monthyear-gr" data-field="monthyear_gr" type="text" value="Οκτωβρίου 2025">
+      </div>
+    </div>
+
+    <hr class="divider">
+    <h2>Reference number</h2>
+    <p class="hint">“Our reference N. 1201 / Chancellery” is given when the patent is downloaded or printed — the next free number, from 1201 — and is entered in the Αρχείο Απονομών.</p>
+    <div id="register-panel"></div>
+
+    <hr class="divider">
+    <p class="note">
+      The sheet beside this form is the patent at its real size — <b>A3 portrait,
+      297 × 420 mm</b>. <b>Download PDF</b> saves it as a print-ready file;
+      <b>Print</b> hands the same page to the browser's print dialogue, where
+      “Save as PDF” gives a sharper, text-based file.
+    </p>
+    <div class="status" id="status" role="status" aria-live="polite"></div>
+  </form>
+
+  <div class="stage">
+    <div class="scaler" id="scaler">
+      <div class="paper" id="paper">
+
+        <img class="art-header" data-art="header" alt="">
+        <img class="art-frame" data-art="frame" alt="">
+
+        <div class="body-copy">
+          <div class="copy">
+            <p class="lead script" data-show="lang:EN,BOTH"><img class="dropcap" data-art="dropcapF" alt="F">or his distinguished service to the Craft and his devotion to the ideals of Freemasonry,</p>
+            <p class="lead script gr" lang="el" data-show="lang:GR,BOTH">Για τη διακεκριμένη προσφορά του στην Τέχνη και την αφοσίωσή του στα ιδεώδη της Τεκτονικής,</p>
+            <p class="hisrank roman"><span data-out="hisrank"></span> <span data-out="hisgl"></span></p>
+            <p class="name" data-out="name" data-show="lang:EN,BOTH"></p>
+            <p class="name gr" lang="el" data-out="name_gr" data-show="lang:GR,BOTH"></p>
+            <p class="connector roman appointed" data-show="lang:EN,BOTH">is hereby conferred the honorary rank of</p>
+            <p class="connector roman appointed gr" lang="el" data-show="lang:GR,BOTH">αναγνωρίζεται και του απονέμεται ο τιμητικός βαθμός του</p>
+            <p class="rank" data-out="rank" data-show="lang:EN,BOTH"></p>
+            <p class="rank gr" lang="el" data-out="rank_gr" data-show="lang:GR,BOTH"></p>
+            <p class="connector roman ofthe" data-show="lang:EN,BOTH">of the</p>
+            <p class="lodge" data-show="lang:EN,BOTH">National Grand Lodge of Greece</p>
+            <p class="lodge gr" lang="el" data-show="lang:GR,BOTH">της Εθνικής Μεγάλης Στοάς της Ελλάδος</p>
+            <p class="connector roman honorary-tail" data-show="lang:EN,BOTH">with all the honours, courtesies and distinctions traditionally associated with such dignity, in accordance with the Constitution, Regulations and established usages of this Grand Lodge</p>
+            <p class="connector roman honorary-tail gr" lang="el" data-show="lang:GR,BOTH">με όλες τις τιμές, τα προνόμια και τα διακριτικά που αρμόζουν στο αξίωμα αυτό, σύμφωνα με το Σύνταγμα, τους Κανονισμούς και τις καθιερωμένες συνήθειες της Μεγάλης Στοάς</p>
+            <p class="testimony script first" data-show="lang:EN,BOTH">In testimony Whereof we have hereunto set our hands and caused the seal of the National Grand Lodge of Greece</p>
+            <p class="testimony script date" data-show="lang:EN,BOTH">Masonic Hall of Athens, this <span data-out="day"></span> day of <span data-out="monthyear"></span> AD.</p>
+            <p class="testimony script first gr" lang="el" data-show="lang:GR,BOTH">Σε πίστωση των ανωτέρω, υπογράψαμε και επικυρώσαμε με τη σφραγίδα της Εθνικής Μεγάλης Στοάς της Ελλάδος</p>
+            <p class="testimony script date gr" lang="el" data-show="lang:GR,BOTH">Στη Μασονική Αίθουσα των Αθηνών, σήμερα <span data-out="day_gr"></span> <span data-out="monthyear_gr"></span> μ.Χ.</p>
+          </div>
+        </div>
+
+        <!-- proof numbers on the 21 circles of the collar (clockwise from the top left); colour and visibility: --cno-* in gc.css -->
+        <span class="cno" style="left:1.522in; top:5.644in">1</span>
+        <span class="cno" style="left:3.130in; top:5.644in">2</span>
+        <span class="cno" style="left:4.584in; top:5.644in">3</span>
+        <span class="cno" style="left:5.906in; top:5.644in">4</span>
+        <span class="cno" style="left:7.242in; top:5.644in">5</span>
+        <span class="cno" style="left:8.685in; top:5.644in">6</span>
+        <span class="cno" style="left:10.219in; top:5.644in">7</span>
+        <span class="cno" style="left:10.219in; top:7.162in">8</span>
+        <span class="cno" style="left:10.219in; top:8.806in">9</span>
+        <span class="cno" style="left:10.219in; top:10.426in">10</span>
+        <span class="cno" style="left:10.219in; top:12.103in">11</span>
+        <span class="cno" style="left:10.219in; top:13.803in">12</span>
+        <span class="cno" style="left:8.689in; top:13.803in">13</span>
+        <span class="cno" style="left:7.218in; top:13.803in">14</span>
+        <span class="cno" style="left:4.449in; top:13.803in">15</span>
+        <span class="cno" style="left:2.967in; top:13.803in">16</span>
+        <span class="cno" style="left:1.522in; top:13.803in">17</span>
+        <span class="cno" style="left:1.522in; top:12.103in">18</span>
+        <span class="cno" style="left:1.522in; top:10.426in">19</span>
+        <span class="cno" style="left:1.522in; top:8.806in">20</span>
+        <span class="cno" style="left:1.522in; top:7.162in">21</span>
+        <p class="refno roman">Our reference N. <span data-out="ref">____</span></p>
+
+        <img class="art-seal" data-art="seal" alt="">
+
+        <div class="sig sig-left">
+          <img class="sig-img" data-art="sigChancellor" alt="">
+          <div class="rule"></div>
+          <p class="roman">R.W. Bro. Dimitrios Skiadopoulos</p>
+          <p class="roman">Grand Secretary</p>
+        </div>
+
+        <div class="sig sig-right">
+          <img class="sig-img" data-art="sigGrandMaster" alt="">
+          <div class="rule"></div>
+          <p class="roman">M.W. Bro. Ioannis Benetatos</p>
+          <p class="roman">Grand Master</p>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</main>
+
+<script src="../assets/artwork.js"></script>
+<script src="../assets/lib/html2canvas.min.js"></script>
+<script src="../assets/lib/jspdf.umd.min.js"></script>
+<script src="../assets/register.js"></script>
+<script src="../assets/gc.js"></script>
+<script>
+(function(){
+  var form = document.getElementById('form'), paper = document.getElementById('paper');
+  var nameEn = document.getElementById('f-name'), nameGr = document.getElementById('f-name-gr');
+  var pick = document.getElementById('f-rankpick'), lang = document.getElementById('f-lang');
+  var mirrored = nameGr.value;
+  function fire(el){ el.dispatchEvent(new Event('input', { bubbles: true })); }
+  nameEn.addEventListener('input', function(){          /* the Greek name follows the English one until it is edited */
+    if (nameGr.value === '' || nameGr.value === mirrored){ nameGr.value = nameEn.value; mirrored = nameEn.value; }
+  });
+  pick.addEventListener('change', function(){
+    if (!pick.value) return;
+    var p = pick.value.split('|');
+    document.getElementById('f-rank').value = p[0];
+    document.getElementById('f-rank-gr').value = p[1];
+    fire(document.getElementById('f-rank'));
+    pick.value = '';
+  });
+  function mark(){ paper.classList.toggle('both', lang.value === 'BOTH'); }
+  form.addEventListener('input', mark); form.addEventListener('change', mark);
+  /* the archive's Preview link fills the fields from the register: follow the language it brings */
+  new MutationObserver(mark).observe(document.body, { attributes: true, attributeFilter: ['class'] });
+  var rs = document.getElementById('reset'); if (rs) rs.addEventListener('click', function(){ setTimeout(mark, 0); });
+  mark();
+})();
+</script>
+</body>
+</html>

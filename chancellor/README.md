@@ -23,7 +23,7 @@ arms, the chain collar, the seal and both signatures — is fixed.
 | Document | State |
 | --- | --- |
 | [Past Grand Officer](patents/past-grand-officer.html) | ready |
-| Honorary Grand Officer | in preparation |
+| [Honorary Grand Officer](patents/honorary-grand-officer.html) | ready — same sheet, English, Greek or both |
 
 **Past Grand Officer** takes these fields:
 
@@ -43,6 +43,15 @@ storage — a small picker appears under a field once it has past entries to
 offer, so filling the same document again is a click, not retyping. The body
 copy scales itself down if a long rank or Grand Lodge name needs the room, so
 the text always sits inside the collar.
+
+**Honorary Grand Officer** is the same sheet with its own wording. A `LANGUAGE` field
+(English / Greek / English and Greek) chooses the language of the text on the patent; the
+Greek lines are set in the sheet's Palatino-style serif because the display faces have no
+Greek. `NAME` and `ΟΝΟΜΑ` hold the name in English and in Greek letters (the Greek one
+follows the English one until it is edited), and `RANK` is picked from a list of honorary
+ranks in both languages, filling `RANK` and `ΒΑΘΜΟΣ`. The `DATE` also fills the Greek day and
+month (`24η Οκτωβρίου 2025`). It uses the same reference numbers and the same Αρχείο
+Απονομών as the Past Grand Officer patent, so the numbers run on across both documents.
 
 ### Recognition
 

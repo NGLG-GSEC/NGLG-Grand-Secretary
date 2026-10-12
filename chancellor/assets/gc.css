@@ -181,6 +181,16 @@ main{
   display:none;
 }
 
+/* Greek lines (lang="el"): the display faces have no Greek, so they are set in the Palatino-style
+   serif the sheet already uses, in italic where the English line is script */
+.gr{font-family:'Palatino Linotype','Book Antiqua',Palatino,'URW Palladio L','TeX Gyre Pagella','EB Garamond',Georgia,serif;}
+.script.gr{font-style:italic; font-weight:600; line-height:1.28; clear:both;}
+.lead.gr{font-size:calc(23pt * var(--k));}
+.testimony.gr{font-size:calc(23pt * var(--k));}
+.name.gr,.rank.gr,.lodge.gr{font-weight:700; letter-spacing:.05em; font-size:calc(21pt * var(--k));}
+.connector.gr{font-size:calc(19pt * var(--k));}
+.paper.both .name.gr,.paper.both .rank.gr,.paper.both .lodge.gr{margin-top:.12em !important;}
+
 /* "Our reference N." — bottom left, under the left signature */
 .refno{position:absolute; left:0.7546in; top:15.98in; margin:0; font-size:13pt; z-index:3; text-align:left;}
 
