@@ -282,3 +282,4 @@ input[type=file]{max-width:100%;min-width:0}
 @media print{.homebtn{display:none !important}}
 .top nav>a.homebtn{background:#0b3d91;color:#fff;border:0;padding:8px 14px;margin-left:auto}
 .top nav>a.homebtn:hover{background:#1553b8}
+.wa-btn{background:#128c4a;color:#fff;border-color:#128c4a;padding:3px 10px;font-size:.85rem}.wa-btn:hover{background:#0f7a40}
