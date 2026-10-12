@@ -189,7 +189,14 @@ main{
 .testimony.gr{font-size:calc(23pt * var(--k));}
 .name.gr,.rank.gr,.lodge.gr{font-weight:700; letter-spacing:.05em; font-size:calc(21pt * var(--k));}
 .connector.gr{font-size:calc(19pt * var(--k));}
-.paper.both .name.gr,.paper.both .rank.gr,.paper.both .lodge.gr{margin-top:.12em !important;}
+.rank.gr{margin-top:.12em !important;}
+
+/* the jewel stands to the right of the honoree's name; an empty spacer of the same width on the left keeps the name centred */
+.name-row{--jh:calc(1.05in * var(--k)); --jw:calc(var(--jh) * 0.883); --gap:calc(0.16in * var(--k));
+  min-height:var(--jh); display:flex; align-items:center; justify-content:center; margin-top:.35em !important;}
+.name-row::before{content:''; flex:0 0 auto; width:calc(var(--jw) + var(--gap));}
+.name-row .name{margin:0 !important; flex:0 1 auto;}
+.name-row .jewel{position:static !important; flex:0 0 auto; height:var(--jh); width:var(--jw); margin-left:var(--gap);}
 
 /* "Our reference N." — bottom left, under the left signature */
 .refno{position:absolute; left:0.7546in; top:15.98in; margin:0; font-size:13pt; z-index:3; text-align:left;}
