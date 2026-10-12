@@ -46,6 +46,21 @@ export function download(name, data, type = 'application/octet-stream') {
 
 export const safeFileName = (s) => String(s || '').replace(/[\\/:*?"<>|\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim();
 
+// Λατινικό όνομα αρχείου (ELOT 743 απλοποιημένο) — για WhatsApp/κοινοποίηση, όπου τα ελληνικά ονόματα αρχείων αλλοιώνονται
+const GR1 = { α: 'a', β: 'v', γ: 'g', δ: 'd', ε: 'e', ζ: 'z', η: 'i', θ: 'th', ι: 'i', κ: 'k', λ: 'l', μ: 'm', ν: 'n', ξ: 'x', ο: 'o', π: 'p', ρ: 'r', σ: 's', ς: 's', τ: 't', υ: 'y', φ: 'f', χ: 'ch', ψ: 'ps', ω: 'o' };
+const GR2 = { αι: 'ai', ει: 'ei', οι: 'oi', υι: 'yi', ου: 'ou', μπ: 'b', ντ: 'nt', γκ: 'g', γγ: 'ng', γχ: 'nch', ευ: 'ef', αυ: 'af' };
+function latinWord(w) {
+  const lower = w.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  let out = '';
+  for (let i = 0; i < lower.length;) {
+    const two = lower.slice(i, i + 2);
+    if (GR2[two]) { out += GR2[two]; i += 2; } else { out += GR1[lower[i]] ?? lower[i]; i += 1; }
+  }
+  const upper = w === w.toUpperCase() && w.toLowerCase() !== w.toUpperCase();
+  return upper ? out.toUpperCase() : (w[0] !== w[0].toLowerCase() ? out.charAt(0).toUpperCase() + out.slice(1) : out);
+}
+export const latinFileName = (s) => safeFileName(String(s || '').replace(/[\u0370-\u03ff\u1f00-\u1fff]+/g, latinWord)).replace(/[^\x20-\x7e]/g, '').replace(/\s+/g, ' ').trim();
+
 // Excel (SheetJS, μέσα στην εφαρμογή: vendor/xlsx.full.min.js · φορτώνεται μόνο όταν χρειαστεί)
 let xlsxLib;
 export async function XLSX() {
