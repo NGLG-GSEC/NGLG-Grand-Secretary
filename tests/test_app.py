@@ -1406,6 +1406,16 @@ def test_decree_templates_general_decree_and_page_design(app):
     app.go(f"/decrees/{d['id']}")
     app.page.wait_for_function("() => document.querySelector('.print-area .layer-header')?.src?.startsWith('blob:')")
     assert app.page.locator('.print-area .paper .head').count() == 0 and app.page.locator('.print-area .layer-bg').count() == 1
+    # Word: οι εικόνες της σχεδίασης σε σταθερή θέση (φόντο πίσω από το κείμενο, με διαφάνεια), χωρίς την κανονική κεφαλίδα
+    with app.page.expect_download() as dl:
+        app.page.click('[data-act=word]')
+    import zipfile
+    z = zipfile.ZipFile(dl.value.path())
+    doc = z.read('word/document.xml').decode()
+    assert doc.count('<wp:anchor ') == 2 and 'behindDoc="1"' in doc and '<a:alphaModFix amt="25000"/>' in doc
+    assert '<wp:positionV relativeFrom="page"><wp:posOffset>432000</wp:posOffset>' in doc  # κεφαλίδα στα 12 mm
+    assert 'Εθνική Μεγάλη Στοά της Ελλάδος</w:t>' not in doc.split('ΔΙΑΤΑΓΜΑ υπ')[0]  # χωρίς την κανονική κεφαλίδα
+    assert len([n for n in z.namelist() if n.startswith('word/media/')]) == 3  # 2 εικόνες σχεδίασης + υπογραφή
     # Διάταγμα Διορισμού: χωρίς σχεδίαση → κανονική κεφαλίδα
     app.go('/decrees/new')
     assert app.page.locator('#appointPart').is_visible() and app.page.locator('#dprev .paper .head').count() == 1

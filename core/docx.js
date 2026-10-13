@@ -31,7 +31,21 @@ function image(b, rid, n, w, h) {
     + '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>';
 }
 
-export async function makeDocx(blocks, { title = '', author = '' } = {}) {
+// Εικόνα σε σταθερή θέση της σελίδας (mm από την πάνω-αριστερή γωνία)· behind = πίσω από το κείμενο (φόντο)
+const MM = 36000; // EMU ανά mm
+function anchored(a, rid, n) {
+  const e = (v) => Math.round((Number(v) || 0) * MM), cx = e(a.w), cy = e(a.h);
+  const alpha = a.opacity != null && a.opacity < 1 ? `<a:alphaModFix amt="${Math.round(Math.max(0, a.opacity) * 100000)}"/>` : '';
+  return `<w:r><w:drawing><wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0" relativeHeight="${a.behind ? n : 251658240 + n}" behindDoc="${a.behind ? 1 : 0}" locked="1" layoutInCell="1" allowOverlap="1">`
+    + `<wp:simplePos x="0" y="0"/><wp:positionH relativeFrom="page"><wp:posOffset>${e(a.x)}</wp:posOffset></wp:positionH><wp:positionV relativeFrom="page"><wp:posOffset>${e(a.y)}</wp:posOffset></wp:positionV>`
+    + `<wp:extent cx="${cx}" cy="${cy}"/><wp:effectExtent l="0" t="0" r="0" b="0"/><wp:wrapNone/><wp:docPr id="${n}" name="Εικόνα ${n}"/><wp:cNvGraphicFramePr/>`
+    + `<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic><pic:nvPicPr><pic:cNvPr id="${n}" name="image${n}.png"/><pic:cNvPicPr/></pic:nvPicPr>`
+    + `<pic:blipFill><a:blip r:embed="${rid}">${alpha}</a:blip><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm>`
+    + '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:anchor></w:drawing></w:r>';
+}
+
+// anchors: [{ bytes (PNG), x, y, w, h (mm), behind, opacity }] — εικόνες της «Σχεδίασης σελίδας»
+export async function makeDocx(blocks, { title = '', author = '', anchors = [] } = {}) {
   const X = await XLSX(), C = X.CFB, z = C.utils.cfb_new(), enc = new TextEncoder();
   const add = (p, s) => C.utils.cfb_add(z, p, typeof s === 'string' ? enc.encode(s) : s);
   const rels = [['rIdStyles', 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles', 'styles.xml']];
@@ -48,6 +62,16 @@ export async function makeDocx(blocks, { title = '', author = '' } = {}) {
       body += image(b, rid, n, w, h);
     } else body += para(b);
   }
+  let runs = '';
+  for (const a of anchors) {
+    if (!a || !a.bytes || a.bytes[1] !== 0x50) continue;
+    n++;
+    const rid = `rIdImg${n}`;
+    add(`/word/media/image${n}.png`, a.bytes);
+    rels.push([rid, 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/image', `media/image${n}.png`]);
+    runs += anchored(a, rid, n);
+  }
+  if (runs) { const i = body.indexOf('</w:pPr>'); body = i >= 0 ? body.slice(0, i + 8) + runs + body.slice(i + 8) : `<w:p>${runs}</w:p>` + body; }
   const doc = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document ${NS}><w:body>${body}`
     + '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1000" w:right="1250" w:bottom="1000" w:left="1250" w:header="500" w:footer="500" w:gutter="0"/></w:sectPr></w:body></w:document>';
   add('/word/document.xml', doc);
@@ -72,11 +96,15 @@ export async function makeDocx(blocks, { title = '', author = '' } = {}) {
 }
 
 // Επιστολόχαρτο ΕΜΣτΕ: κεφαλίδα + στοιχεία + κείμενο + κλείσιμο/υπογραφή
-export function letterBlocks({ base = '', org, founded, gmTitle, gmName, number, date, place, title, to, cc, subject, paragraphs = [], closing, signature, signer, signerTitle }) {
-  const B = [{ img: base + 'img/header_emblem.png', width: 3.2 }, { text: org, align: 'center', bold: true, size: 15, color: '1D2F5E', after: 0 }];
-  if (founded) B.push({ text: `Έτος Ιδρύσεως ${founded}`, align: 'center', size: 10, color: 'B18A43', after: 0 });
-  if (gmTitle || gmName) B.push({ text: [gmTitle, gmName].filter(Boolean).join('\n'), align: 'center', size: 10, after: 0 });
-  B.push({ text: '', rule: true, after: 12 });
+// noHead: χωρίς την κανονική κεφαλίδα (τη θέση της παίρνει εικόνα της Σχεδίασης σελίδας)· topSpace: κενό (pt) πάνω από το κείμενο
+export function letterBlocks({ base = '', org, founded, gmTitle, gmName, number, date, place, title, to, cc, subject, paragraphs = [], closing, signature, signer, signerTitle, noHead = false, topSpace = 0 }) {
+  const B = [];
+  if (!noHead) {
+    B.push({ img: base + 'img/header_emblem.png', width: 3.2 }, { text: org, align: 'center', bold: true, size: 15, color: '1D2F5E', after: 0 });
+    if (founded) B.push({ text: `Έτος Ιδρύσεως ${founded}`, align: 'center', size: 10, color: 'B18A43', after: 0 });
+    if (gmTitle || gmName) B.push({ text: [gmTitle, gmName].filter(Boolean).join('\n'), align: 'center', size: 10, after: 0 });
+    B.push({ text: '', rule: true, after: 12 });
+  } else B.push({ text: '', before: Math.max(0, topSpace), after: 0, size: 2 });
   B.push({ text: [number && `Αρ. Πρωτ.: ${number}`, [place, date].filter(Boolean).join(', ')].filter(Boolean).join('\n'), align: 'right', size: 11, after: 12 });
   if (title) B.push({ text: title, align: 'center', bold: true, size: 14, after: 10 });
   if (to) B.push({ text: `Προς: ${to}`, bold: true, after: cc ? 2 : 6 });

@@ -68,14 +68,32 @@ const meta = (d) => {
 const apps = (d) => { try { return typeof d.appointments === 'string' ? JSON.parse(d.appointments || '[]') : d.appointments || []; } catch { return []; } };
 const decreeNo = (d) => `${d.decree_no}/${d.decree_year}`;
 const fileName = (d) => (d.protocol_seq ? docTitle(d.protocol_seq, 'ΔΙΑΤΑΓΜΑ', `${decreeNo(d)} ${d.matter || ''}`) : safeFileName(`ΔΙΑΤΑΓΜΑ ${decreeNo(d)} ${d.matter || ''}`));
-// Word του Διατάγματος (με επιστολόχαρτο), για το Drive
+// Εικόνα της Σχεδίασης σελίδας ως PNG (το Word δέχεται με ασφάλεια PNG)
+async function layerPng(path) {
+  const bytes = await db.file(path);
+  if (!bytes) return null;
+  if (bytes[0] === 0x89 && bytes[1] === 0x50) return bytes;
+  const bmp = await createImageBitmap(new Blob([bytes]));
+  const c = Object.assign(document.createElement('canvas'), { width: bmp.width, height: bmp.height });
+  c.getContext('2d').drawImage(bmp, 0, 0);
+  return new Uint8Array(await (await new Promise((r) => c.toBlob(r, 'image/png'))).arrayBuffer());
+}
+// Word του Διατάγματος (με επιστολόχαρτο ή με τη Σχεδίαση σελίδας του προτύπου), για λήψη και Drive
 async function decreeDocxBlob(d) {
-  const S = (k) => db.setting(k) || '';
-  const blocks = letterBlocks({ org: S('organization_name'), founded: S('founded_year'), gmTitle: S('grand_master_title'), gmName: S('grand_master_name'),
+  const S = (k) => db.setting(k) || '', L = layoutOf(decreeTemplate(decreeKey(d))), top = layoutTop(L);
+  const anchors = [];
+  for (const k of ['bg', 'header']) {
+    const x = L[k];
+    if (!x || !x.file) continue;
+    const bytes = await layerPng(x.file);
+    if (bytes) anchors.push({ bytes, x: +x.x || 0, y: +x.y || 0, w: +x.w || 210, h: +x.h || 297, behind: k === 'bg', opacity: k === 'bg' ? (x.opacity ?? 1) : null });
+  }
+  const PT = 72 / 25.4, MARGIN_TOP = 1000 / 1440 * 25.4; // περιθώριο σελίδας (mm)
+  const blocks = letterBlocks({ noHead: top != null, topSpace: top != null ? (top - MARGIN_TOP) * PT : 0, org: S('organization_name'), founded: S('founded_year'), gmTitle: S('grand_master_title'), gmName: S('grand_master_name'),
     number: d.protocol_seq ? String(d.protocol_seq) : (d.protocol_no || ''), date: fmtDate(d.decree_date), place: 'Εν Αθήναις', title: `ΔΙΑΤΑΓΜΑ υπ’ αριθμ. ${decreeNo(d)}`,
     paragraphs: String(d.body || '').split(/\n\s*\n/).map((t) => ({ text: t.trim(), align: 'center', bold: /^(ΗΜΕΙΣ|ΔΙΟΡΙΖΟΜΕΝ|ΑΠΟΝΕΜΕΙ|ΕΥΑΡΕΣΤΟΥΜΕΘΑ)/.test(t.trim()) })),
     signature: IMG.signature, signer: 'Δημήτριος Σκιαδόπουλος', signerTitle: 'Ο ΜΕΓΑΣ ΓΡΑΜΜΑΤΕΑΣ' });
-  return makeDocx(blocks, { title: d.subject, author: 'Μεγάλη Γραμματεία' });
+  return makeDocx(blocks, { title: d.subject, author: 'Μεγάλη Γραμματεία', anchors });
 }
 const nextDecreeNo = (tx) => Math.max(tx.all('decree_documents').reduce((m, d) => Math.max(m, Number(d.decree_no) || 0), 0) + 1, Number(db.setting('decree_first_no')) || 513);
 
