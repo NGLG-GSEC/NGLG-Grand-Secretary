@@ -36,6 +36,37 @@ ${x.recipient_name ? `<p><b>Προς:</b> ${esc(x.recipient_name)}</p>` : ''}${x
 <div class="body">${linkify(x.body)}</div><p style="margin-top:10mm">${esc(x.closing || db.setting('closing'))}</p>${signatureBlock(x.signer)}</article>`;
 }
 
+// Εικόνες αποθηκευμένες στα δεδομένα (π.χ. φόντο/κεφαλίδα προτύπου Διατάγματος): <img data-dfile="templates/…">
+const dfileUrls = new Map();
+const MIME = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif', svg: 'image/svg+xml' };
+export async function dfileUrl(path) {
+  if (dfileUrls.has(path)) return dfileUrls.get(path);
+  const bytes = await db.file(path);
+  if (!bytes) return '';
+  const u = URL.createObjectURL(new Blob([bytes], { type: MIME[String(path).split('.').pop().toLowerCase()] || 'application/octet-stream' }));
+  dfileUrls.set(path, u);
+  return u;
+}
+export async function resolveFileImages(root = document) {
+  await Promise.all([...root.querySelectorAll('img[data-dfile]:not([src])')].map(async (img) => {
+    const u = await dfileUrl(img.dataset.dfile);
+    if (u) { img.src = u; await img.decode().catch(() => {}); }
+  }));
+}
+// Στρώσεις σελίδας από τη «Σχεδίαση σελίδας» ενός προτύπου: φόντο και κεφαλίδα σε θέση/διαστάσεις mm πάνω στο Α4.
+// layout = { bg: { file, x, y, w, h, opacity }, header: { file, x, y, w, h } } · urls: προσωρινά src (πριν την αποθήκευση)
+export function pageLayers(layout = {}, urls = {}) {
+  const img = (k, cls, extra = '') => {
+    const L = layout[k];
+    if (!L || !(L.file || urls[k])) return '';
+    const src = urls[k] ? ` src="${esc(urls[k])}"` : ` data-dfile="${esc(L.file)}"`;
+    return `<img class="${cls}" data-layer="${k}" alt=""${src} style="left:${+L.x || 0}mm;top:${+L.y || 0}mm;width:${+L.w || 210}mm;height:${+L.h || 297}mm;${extra}">`;
+  };
+  return img('bg', 'layer layer-bg', `opacity:${layout.bg && layout.bg.opacity != null ? +layout.bg.opacity : 1}`) + img('header', 'layer layer-header');
+}
+// Περιθώριο κειμένου κάτω από την κεφαλίδα-εικόνα
+export const layoutTop = (layout = {}, urls = {}) => { const h = layout.header; return h && (h.file || urls.header) ? +((+h.y || 0) + (+h.h || 0) + 4).toFixed(1) : null; };
+
 // Μία σελίδα Α4: Επιστολή/Διάταγμα που ξεπερνά τη σελίδα σμικρύνεται ομοιόμορφα (ίδια διάταξη, ίδιες αλλαγές γραμμής)
 // ώστε οθόνη, εκτύπωση και PDF να δείχνουν πάντα το ίδιο ένα φύλλο. Οι αναφορές (.report) μένουν πολυσέλιδες.
 const A4_PX = (293 * 96) / 25.4; // ύψος Α4 με μικρό περιθώριο ασφαλείας
@@ -61,7 +92,7 @@ export function fitPapers(root = document, print = false) {
 }
 if (typeof document !== 'undefined') {
   let t = 0;
-  const later = () => { cancelAnimationFrame(t); t = requestAnimationFrame(() => fitPapers()); };
+  const later = () => { cancelAnimationFrame(t); t = requestAnimationFrame(() => { fitPapers(); resolveFileImages().then(() => fitPapers()); }); };
   new MutationObserver((ms) => { if (ms.some((m) => [...m.addedNodes].some((n) => n.nodeType === 1 && (n.matches(DOC) || n.querySelector?.(DOC))))) later(); })
     .observe(document.documentElement, { childList: true, subtree: true });
   document.addEventListener('load', (e) => { if (e.target.tagName === 'IMG' && e.target.closest(DOC)) later(); }, true);

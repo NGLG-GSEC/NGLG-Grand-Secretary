@@ -1133,7 +1133,7 @@ def test_letter_and_decree_saved_to_drive_word_and_pdf(app):
     # Επιστολή από Επίσκεψη → κατηγορία ΕΠΙΣΚΕΨΗ
     app.go('/visits')
     rid = app.page.evaluate("async () => (await import('./core/store.js')).db.all('reps')[0].id")
-    vid = app.page.evaluate("async () => (await import('./core/store.js')).db.all('visits').find((v) => v.visit_date >= '2026-10-08').id")
+    vid = app.page.evaluate("async () => (await import('./core/store.js')).db.all('visits').find((v) => v.visit_date >= new Date().toISOString().slice(0, 10)).id")
     app.page.evaluate(f"async () => {{ const {{db}} = await import('./core/store.js'); await db.save('x', (tx) => tx.update('visits', {vid}, {{ rep_id: {rid} }})); }}")
     app.go('/visits')
     app.page.locator('.vcard a:has-text("📄 Επιστολή")').first.click()
@@ -1356,3 +1356,55 @@ def test_rep_title_from_epeteirida_and_rep_label(app):
     assert 'Λίαν Σεβάσμιος Αδ. Νικόλαος Χατζηδοκιμίου, Αναπληρωτής Μέγας Γραμματεύς' in app.page.input_value('[name=body]')
     assert app.page.input_value('[name=cc_name]').startswith('Λίαν Σεβάσμιος Αδ. Νικόλαος Χατζηδοκιμίου')
     assert 'Σεβάσμιος Αδ. Νικόλαος' not in app.page.input_value('[name=body]').replace('Λίαν Σεβάσμιος Αδ. Νικόλαος', '')
+
+
+def test_decree_templates_general_decree_and_page_design(app):
+    app.connect_local()
+    # τα δύο πρότυπα Διατάγματος στα Πρότυπα, όχι στη Νέα Επιστολή
+    app.go('/templates')
+    t = app.text()
+    assert 'ΓΕΝΙΚΟ ΔΙΑΤΑΓΜΑ' in t and 'ΔΙΑΤΑΓΜΑ ΔΙΟΡΙΣΜΟΥ ΜΑΞ' in t and '🎨 Σχεδίαση σελίδας' in t
+    app.go('/letters/new')
+    assert 'ΓΕΝΙΚΟ ΔΙΑΤΑΓΜΑ' not in app.page.inner_text('#tplSel')
+    # Γενικό Διάταγμα
+    app.go('/decrees/new?kind=decree-general')
+    assert app.page.locator('#appointPart').is_hidden() and app.page.locator('#generalPart').is_visible()
+    app.page.fill('[name=g_matter]', 'ιδρύσεως της Σεβαστής Στοάς «Δοκιμή»')
+    body = app.page.input_value('[name=g_body]').replace('……\n\nΕγένετο', 'Ιδρύεται η Σεβαστή Στοά «Δοκιμή» υπ’ αριθμ. 999.\n\nΕγένετο')
+    app.page.fill('[name=g_body]', body)
+    app.page.fill('[name=g_to_email]', 'stoa@example.com')
+    app.page.wait_for_timeout(300)
+    assert 'περί ιδρύσεως της Σεβαστής Στοάς «Δοκιμή»' in app.text('#dprev')
+    app.click('Έκδοση Διατάγματος')
+    app.page.wait_for_url('**/#/decrees/*')
+    t = app.text()
+    assert 'ΓΕΝΙΚΟ ΔΙΑΤΑΓΜΑ — Αποστολή' in t and 'Ιδρύεται η Σεβαστή Στοά «Δοκιμή»' in t and 'Σεβασμιώτατος Αδελφός Ιωάννης Μπενετάτος' in t and '{' not in app.text('.print-area')
+    d = app.page.evaluate("async () => (await import('./core/store.js')).db.all('decree_documents').at(-1)")
+    assert d['template_key'] == 'decree-general' and d['recipient_email'] == 'stoa@example.com' and '{Περί}' in d['body_src']
+    assert app.page.evaluate("async () => (await import('./core/store.js')).db.all('member_degrees_offices').filter((o) => o.decree_id === %d).length" % d['id']) == 0
+    # Σχεδίαση σελίδας: κεφαλίδα-εικόνα και φόντο
+    tid = app.page.evaluate("async () => (await import('./core/store.js')).db.all('letter_templates').find((t) => t.key === 'decree-general').id")
+    app.go(f'/templates/{tid}/design')
+    app.page.set_input_files('[data-up=header]', 'img/header_emblem.png')
+    app.page.wait_for_selector('.dz-box.dz-header')
+    app.page.fill('[data-k=header][data-f=y]', '12')
+    app.page.dispatch_event('[data-k=header][data-f=y]', 'input')
+    app.page.set_input_files('[data-up=bg]', 'img/seal.png')
+    app.page.wait_for_selector('.dz-box.dz-bg')
+    # σύρσιμο της κεφαλίδας προς τα δεξιά
+    b = app.page.locator('.dz-box.dz-header').bounding_box()
+    app.page.mouse.move(b['x'] + 20, b['y'] + 20); app.page.mouse.down(); app.page.mouse.move(b['x'] + 60, b['y'] + 20, steps=4); app.page.mouse.up()
+    x_after = float(app.page.input_value('[data-k=header][data-f=x]'))
+    assert x_after > 15, x_after
+    app.page.click('[data-act=saveLayout]')
+    app.page.wait_for_selector('text=Η σχεδίαση σελίδας αποθηκεύτηκε')
+    L = app.page.evaluate("async () => (await import('./core/store.js')).db.all('letter_templates').find((t) => t.key === 'decree-general').layout")
+    assert L['header']['file'].startswith('templates/decree-general-header-') and L['header']['y'] == 12 and L['bg']['w'] == 210 and L['bg']['file']
+    assert app.page.evaluate("async (p) => !!(await (await import('./core/store.js')).db.file(p))", L['header']['file'])
+    # το Διάταγμα με τη νέα σελίδα: εικόνες στη θέση τους, χωρίς την κανονική κεφαλίδα
+    app.go(f"/decrees/{d['id']}")
+    app.page.wait_for_function("() => document.querySelector('.print-area .layer-header')?.src?.startsWith('blob:')")
+    assert app.page.locator('.print-area .paper .head').count() == 0 and app.page.locator('.print-area .layer-bg').count() == 1
+    # Διάταγμα Διορισμού: χωρίς σχεδίαση → κανονική κεφαλίδα
+    app.go('/decrees/new')
+    assert app.page.locator('#appointPart').is_visible() and app.page.locator('#dprev .paper .head').count() == 1

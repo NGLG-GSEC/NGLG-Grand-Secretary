@@ -11,6 +11,7 @@ export function loadScript(rel) {
 // el: το στοιχείο .paper (A4) → Blob PDF μίας σελίδας Α4 (ό,τι ξεπερνά σμικρύνεται, όπως στην προεπισκόπηση)
 export async function paperPdf(el, { title = '', author = '' } = {}) {
   await Promise.all([loadScript('../vendor/html2canvas.min.js'), loadScript('../vendor/jspdf.umd.min.js')]);
+  await (await import('./paper.js')).resolveFileImages(el);
   await Promise.all([...el.querySelectorAll('img')].map((i) => (i.complete ? null : new Promise((r) => { i.onload = i.onerror = r; }))));
   const keep = { zoom: el.style.zoom, a4: el.classList.contains('a4') };
   el.style.zoom = '1'; el.classList.add('a4');
