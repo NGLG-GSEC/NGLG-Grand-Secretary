@@ -8,21 +8,17 @@ const M = (title, order, items, cls) => ({ title, order, items: items.map(([labe
 module({
   id: 'home',
   menu: [
-    M('Επιστολές', 10, [['+ Νέα Επιστολή', '#/letters/new'], ['Αρχείο Επιστολών', '#/letters'], ['-'], ['Πρότυπα Επιστολών', '#/templates']], 'letters'),
-    M('Διατάγματα', 20, [['+ Νέο Διάταγμα Διορισμού ΜΑΞ', '#/decrees/new'], ['+ Νέο Γενικό Διάταγμα', '#/decrees/new?kind=decree-general'], ['Αρχείο Διαταγμάτων', '#/decrees'], ['-'], ['Πρότυπα & σχεδίαση σελίδας', '#/templates']]),
-    M('Εργασίες ΜΔ', 30, [['Επισκέψεις Στοών', '#/visits'], ['+ Νέα επίσκεψη', '#/visits/new'], ['Ενημέρωση Επαρχίας', '#/visits/publish'], ['Αναφορά επισκέψεων', '#/visits/report'], ['Εκπρόσωποι ΜΔ', '#/reps'], ['-'],
-      ['🎉 Εορτολόγιο & ευχές', '#/namedays'], ['Πρότζεκτ ΜΔ', '#/projects']]),
-    { title: '📇 Κατάλογος', order: 40, href: '#/directory' },
-    { title: '🏛 Πύλη', order: 70, href: '#/portal' },
-    M('Μητρώα', 50, [['📇 Κατάλογος (Επαρχίες & Στοές)', '#/directory'], ['-'], ['Μητρώο Μελών', '#/members'], ['Συμβολικές Στοές', '#/lodges'], ['Επαρχιακές Μεγάλες Στοές', '#/provinces'], ['-'], ['📜 Επετηρίδα (πίνακας)', '#/epeteirida/pinakas'], ['Ιστορικό αξιωμάτων (Διατάγματα)', '#/epeteirida'],
-      ['-'], ['🗄 Βάση Δεδομένων', '#/database'], ['📖 Βιβλίο Πρωτοκόλλου', '#/database/protocol']]),
-    M('Διαχείριση', 60, [['Ρυθμίσεις', '#/settings'], ['🗄 Βάση Δεδομένων', '#/database'], ['💾 Αντίγραφο & μεταφορά δεδομένων', '#/database/backup'], ['🩺 Έλεγχος εφαρμογής', '#/system']]),
+    M('✉ Έγγραφα', 10, [['+ Νέα Επιστολή', '#/letters/new'], ['Αρχείο Επιστολών', '#/letters'], ['Πρότυπα (Επιστολές & Διατάγματα)', '#/templates'], ['-'], ['+ Νέο Διάταγμα Διορισμού ΜΑΞ', '#/decrees/new'], ['+ Νέο Γενικό Διάταγμα', '#/decrees/new?kind=decree-general'], ['Αρχείο Διαταγμάτων', '#/decrees'], ['Ψηφιακό Έντυπο Διατάγματος', 'diatagma/'], ['-'], ['📖 Βιβλίο Πρωτοκόλλου', '#/database/protocol']], 'letters'),
+    M('🏛 Στοές & Μέλη', 20, [['📇 Κατάλογος (Επαρχίες & Στοές)', '#/directory'], ['Μητρώο Μελών', '#/members'], ['Συμβολικές Στοές', '#/lodges'], ['Επαρχιακές Μεγάλες Στοές', '#/provinces'], ['-'], ['📜 Επετηρίδα (πίνακας)', '#/epeteirida/pinakas'], ['Ιστορικό αξιωμάτων', '#/epeteirida']]),
+    M('📅 Δραστηριότητα', 30, [['Επισκέψεις Στοών', '#/visits'], ['+ Νέα επίσκεψη', '#/visits/new'], ['Ενημέρωση Επαρχίας', '#/visits/publish'], ['Αναφορά επισκέψεων', '#/visits/report'], ['Εκπρόσωποι ΜΔ', '#/reps'], ['-'], ['🎉 Εορτολόγιο & ευχές', '#/namedays'], ['Πρότζεκτ ΜΔ', '#/projects']]),
+    M('🌐 Άλλα Γραφεία', 40, [['🏛 Πύλη (όλες οι εφαρμογές)', '#/portal'], ['⚖ Καγκελαρία — Πατέντες & Αναγνώριση', 'chancellor/']]),
+    M('⚙ Ρυθμίσεις', 50, [['Ρυθμίσεις', '#/settings'], ['✍ Ποιος υπογράφει', '#/identity'], ['-'], ['🗄 Βάση Δεδομένων', '#/database'], ['💾 Αντίγραφο & μεταφορά δεδομένων', '#/database/backup'], ['🩺 Έλεγχος εφαρμογής', '#/system']]),
   ],
   routes: {
     '/': () => ({
       title: 'Αρχική',
       html: `<div class="hero"><div><h1>Μεγάλη Γραμματεία</h1><p>Όλη η δουλειά της Γραμματείας σε ένα σημείο — τι εκκρεμεί σε κάθε ενότητα και οι συχνές ενέργειες.</p></div>
-<div class="toolbar"><a class="btn primary" href="#/letters/new">+ Νέα Επιστολή</a><a class="btn" href="#/decrees/new">+ Νέο Διάταγμα</a></div></div>${bannersHtml()}${tilesHtml()}`,
+<div class="toolbar"><a class="btn primary" href="#/letters/new">+ Νέα Επιστολή</a><details class="archdrop"><summary class="btn">ΑΡΧΕΙΟ ΕΠΙΣΤΟΛΩΝ <span class="caret">▾</span></summary><div class="archdrop-menu"><a href="#/decrees">ΔΙΑΤΑΓΜΑΤΑ</a><a href="#/letters">ΕΠΙΣΤΟΛΕΣ</a></div></details><a class="btn" href="#/decrees/new">+ Νέο Διάταγμα</a></div></div>${bannersHtml()}${tilesHtml()}`,
     }),
     '/identity': () => ({
       title: 'Υπογράφων',

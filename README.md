@@ -34,11 +34,28 @@ The way in to the work of the Secretariat. Everything opens at one address: the 
 νέα εφαρμογή (ρίζα του αποθετηρίου), που τρέχει μόνο στο GitHub Pages. Διατηρούνται προσωρινά, μόνο για τη μεταφορά των δεδομένων
 (βλ. [docs/ΕΦΑΡΜΟΓΗ.md](docs/ΕΦΑΡΜΟΓΗ.md)). Μετά τη μεταφορά διαγράφονται μαζί με την υπηρεσία στο Render.
 
+## Grand Chancellor — document editing (live page)
+
+### 👉 [Open the Grand Chancellor's documents](https://nglg-gsec.github.io/NGLG-Grand-Secretary/chancellor/)
+
+`https://nglg-gsec.github.io/NGLG-Grand-Secretary/chancellor/`
+
+The Office of the Grand Chancellor has its own distinct page in this repository (`chancellor/`), published by the same Pages workflow. Each document is a form: fill in what changes and take away a print-ready PDF.
+
+| Document | Live page |
+| --- | --- |
+| Patents and certificates of appointment | [patents](https://nglg-gsec.github.io/NGLG-Grand-Secretary/chancellor/patents/) |
+| Past Grand Officer patent | [past-grand-officer](https://nglg-gsec.github.io/NGLG-Grand-Secretary/chancellor/patents/past-grand-officer.html) |
+| Honorary Grand Officer patent | [honorary-grand-officer](https://nglg-gsec.github.io/NGLG-Grand-Secretary/chancellor/patents/honorary-grand-officer.html) |
+| Recognition builder (NGLG Regularity, Globe of Amity) | [recognition](https://nglg-gsec.github.io/NGLG-Grand-Secretary/chancellor/recognition/) |
+
+Also available from the standalone repository [`Grand-Chancellor`](https://github.com/dskiad/Grand-Chancellor).
+
 ## The three offices
 
 | Office | Body | Repository |
 | --- | --- | --- |
-| Grand Chancellor | National Grand Lodge of Greece | [`Grand-Chancellor`](https://github.com/dskiad/Grand-Chancellor) |
+| Grand Chancellor | National Grand Lodge of Greece | [`chancellor/`](chancellor/) in this repository · standalone: [`Grand-Chancellor`](https://github.com/dskiad/Grand-Chancellor) |
 | Grand Secretary | National Grand Lodge of Greece | this repository |
 | Grand Secretary | Masonic Order of Athelstan | [`ATHELSTAN-GRAND-SECRETARY`](https://github.com/dskiad/ATHELSTAN-GRAND-SECRETARY) |
 

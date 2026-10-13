@@ -13,7 +13,7 @@ const CARDS = [
   ['Βιβλιοθήκη', [['Τεκτονικές Ομιλίες', 'Η ψηφιακή βιβλιοθήκη της Μεγάλης Στοάς — ομιλίες και εργασίες σε PDF, σε θεματικά ράφια.', 'https://library.nglgreece.org/', 'Βιβλιοθήκη']]],
   ['Τυπικό', [['Bear Bell Ritual', 'Το δίγλωσσο διαδραστικό τυπικό (Αγγλικά/Ελληνικά). Ανοίγει μόνο για όσους έχουν πρόσβαση.', 'https://github.com/dskiad/bear-bell-ritual', 'Περιορισμένη πρόσβαση']]],
   ['Άλλα Γραφεία', [
-    ['Μέγας Καγκελάριος · ΕΜΣτΕ', 'Το Γραφείο του Μεγάλου Καγκελαρίου.', 'https://dskiad.github.io/Grand-Chancellor/', 'Ιστοσελίδα'],
+    ['Μέγας Καγκελάριος · ΕΜΣτΕ', 'Το Γραφείο του Μεγάλου Καγκελαρίου.', 'chancellor/', 'Ιστοσελίδα'],
     ['Μέγας Γραμματέας · Athelstan', 'Masonic Order of Athelstan — Grand Secretary.', 'https://dskiad.github.io/ATHELSTAN-GRAND-SECRETARY/', 'Ιστοσελίδα'],
   ]],
 ];
@@ -31,7 +31,7 @@ module({
   routes: {
     '/portal': () => ({
       title: 'Πύλη', bare: !db.backend,
-      html: `${db.backend ? '' : '<p><a href="#/connect">← Σύνδεση</a></p>'}<h1>🏛 Πύλη Μεγάλης Γραμματείας</h1><p class="muted">Εθνική Μεγάλη Στοά της Ελλάδος — όλες οι εφαρμογές και ιστοσελίδες σε ένα σημείο.</p>${portalHtml()}`,
+      html: `${db.backend ? '' : '<p><a href="#/connect">← Σύνδεση</a></p>'}<a href="#/" class="homebtn homefloat">⌂ Αρχική</a><h1>🏛 Πύλη Μεγάλης Γραμματείας</h1><p class="muted">Εθνική Μεγάλη Στοά της Ελλάδος — όλες οι εφαρμογές και ιστοσελίδες σε ένα σημείο.</p>${portalHtml()}`,
     }),
   },
   tile: { order: 90, render: () => `<div class="dtile"><h3><a href="#/portal">🏛 Πύλη</a></h3><div class="muted">Έντυπο Διατάγματος, Τεκτονικές Ομιλίες, φόρμες εγγραφής, άλλα Γραφεία</div>

@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Patents &amp; certificates | Grand Chancellor</title>
+<meta name="description" content="Patents and certificates of the National Grand Lodge of Greece — filled in from a form and downloaded as print-ready A3 PDFs.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Oswald:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/portal.css">
+<link rel="stylesheet" href="../assets/gc.css">
+<script src="../assets/home.js" defer></script>
+</head>
+<body>
+
+<header class="top">
+  <div>
+    <a class="back" href="../index.html">← Grand Chancellor</a>
+    <h1>Patents &amp; certificates</h1>
+    <span class="sub">National Grand Lodge of Greece</span>
+    <nav class="offices">
+      <a href="../index.html" aria-current="page"><img src="../assets/emblem-chancellor.png" alt="">Grand Chancellor <em>· NGLG</em></a>
+      <a href="../../"><img src="../assets/emblem-secretary.png" alt="">Grand Secretary <em>· NGLG</em></a>
+      <a href="https://dskiad.github.io/ATHELSTAN-GRAND-SECRETARY/"><img src="../assets/emblem-athelstan.png" alt="">Grand Secretary <em>· Athelstan</em></a>
+    </nav>
+  </div>
+</header>
+
+<div class="menu-wrap">
+  <p class="lede">
+    Each patent is drawn at the real size of the original — A3 portrait,
+    297 × 420 mm — and downloads as a print-ready PDF.
+  </p>
+
+  <div class="doc-grid">
+
+    <a class="doc-card" href="past-grand-officer.html">
+      <span class="tag">Ready</span>
+      <h3>Past Grand Officer</h3>
+      <p>Patent appointing a brother to past grand rank — his rank and Grand
+         Lodge, his name, the rank conferred and the date.</p>
+    </a>
+
+    <a class="doc-card" href="honorary-grand-officer.html">
+      <span class="tag">Ready</span>
+      <h3>Honorary Grand Officer</h3>
+      <p>Patent conferring honorary grand rank — his name with the Grand Lodge
+         jewel beside it, the rank given in English and in Greek.</p>
+    </a>
+
+  </div>
+
+  <p class="lede">
+    <button class="btn solid" id="archive-btn" type="button" aria-expanded="false" aria-controls="archive">Αρχείο Απονομών</button>
+  </p>
+
+  <section class="archive" id="archive" hidden>
+    <h2>Αρχείο Απονομών</h2>
+    <p class="hint">Every patent produced, with its reference number (“Our reference N.”, from 1201), the name of its PDF and a link to preview it.</p>
+    <div id="register-panel"></div>
+    <div id="archive-table"></div>
+  </section>
+</div>
+
+<script src="../assets/register.js"></script>
+<script>
+(function(){
+  var btn = document.getElementById('archive-btn'), box = document.getElementById('archive'),
+      out = document.getElementById('archive-table');
+  function esc(s){ return String(s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+  function draw(){
+    if (!GC_REG.connected()){ out.innerHTML = ''; return; }
+    out.innerHTML = '<p class="empty">Loading…</p>';
+    GC_REG.load().then(function(st){
+      var rs = st.data.records.slice().sort(function(a, b){ return b.ref - a.ref; });
+      if (!rs.length){ out.innerHTML = '<p class="empty">Nothing issued yet. The first reference number will be ' + GC_REG.START + '.</p>'; return; }
+      out.innerHTML = '<table><thead><tr><th>Our reference N.</th><th>File</th><th>Preview</th></tr></thead><tbody>' +
+        rs.map(function(r){
+          return '<tr><td class="num">' + esc(r.ref) + '</td><td>' + esc(r.file) + '</td>' +
+                 '<td><a href="' + esc(r.form) + '?ref=' + esc(r.ref) + '">Preview</a></td></tr>';
+        }).join('') + '</tbody></table>';
+    }).catch(function(e){ out.innerHTML = '<p class="empty reg-err">' + esc(e.message) + '</p>'; });
+  }
+  btn.addEventListener('click', function(){
+    var open = box.hidden;
+    box.hidden = !open;
+    btn.setAttribute('aria-expanded', String(open));
+    if (open){ GC_REG.panel(document.getElementById('register-panel'), draw); draw(); }
+  });
+})();
+</script>
+
+</body>
+</html>

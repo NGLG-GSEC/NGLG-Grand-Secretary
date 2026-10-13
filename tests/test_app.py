@@ -718,11 +718,12 @@ def test_grand_officers_as_representatives_assigned_per_installation(app):
     app.go('/visits')
     sel = app.page.locator('.vrepsel').first
     labels = sel.locator('option').all_inner_texts()
-    assert labels[1].startswith('Μπενετάτος Ιωάννης — Μέγας Διδάσκαλος · Σεβτ.')
-    assert labels[2].startswith('Υπόδειγμα Στυλιανός — Πρόεδρος του Συμβουλίου Γενικών Υποθέσεων · Πρώην Μέγας Διδάσκαλος · Σεβτ.')  # Πρώην ΜΔ: 3ος στην τάξη προβαδίσματος
-    assert labels[3].startswith('Πρότυπος Δημήτριος — Πρώτος Μέγας Επόπτης · Πσεβ.') and labels[4].startswith('Τεστάκης Άγγελος — Αναπληρωτής Μέγας Τελετάρχης · Πρώην Δεύτερος Μέγας Επόπτης · Πσεβ.')
+    assert labels[1].startswith('ΟΥΔΕΙΣ')  # ο ΜΔ δεν έστειλε κανέναν: πάνω από τον ΜΔ
+    assert labels[2].startswith('Μπενετάτος Ιωάννης — Μέγας Διδάσκαλος · Σεβτ.')
+    assert labels[3].startswith('Υπόδειγμα Στυλιανός — Πρόεδρος του Συμβουλίου Γενικών Υποθέσεων · Πρώην Μέγας Διδάσκαλος · Σεβτ.')  # Πρώην ΜΔ: 3ος στην τάξη προβαδίσματος
+    assert labels[4].startswith('Πρότυπος Δημήτριος — Πρώτος Μέγας Επόπτης · Πσεβ.') and labels[5].startswith('Τεστάκης Άγγελος — Αναπληρωτής Μέγας Τελετάρχης · Πρώην Δεύτερος Μέγας Επόπτης · Πσεβ.')
     vid = sel.get_attribute('data-id')
-    sel.select_option(label=labels[1])
+    sel.select_option(label=labels[2])
     app.page.wait_for_selector('text=Ορίστηκε: Σεβασμιώτατος Αδ. Μπενετάτος')
     v = app.page.evaluate(f"async () => {{ const m = await import('./core/store.js'); return m.db.get('visits', {vid}); }}")
     assert v['rep_id'] == by['Μπενετάτος']['id']
@@ -1133,7 +1134,7 @@ def test_letter_and_decree_saved_to_drive_word_and_pdf(app):
     # Επιστολή από Επίσκεψη → κατηγορία ΕΠΙΣΚΕΨΗ
     app.go('/visits')
     rid = app.page.evaluate("async () => (await import('./core/store.js')).db.all('reps')[0].id")
-    vid = app.page.evaluate("async () => (await import('./core/store.js')).db.all('visits').find((v) => v.visit_date >= new Date().toISOString().slice(0, 10)).id")
+    vid = app.page.evaluate("async (t) => (await import('./core/store.js')).db.all('visits').find((v) => v.visit_date >= t).id", date.today().isoformat())
     app.page.evaluate(f"async () => {{ const {{db}} = await import('./core/store.js'); await db.save('x', (tx) => tx.update('visits', {vid}, {{ rep_id: {rid} }})); }}")
     app.go('/visits')
     app.page.locator('.vcard a:has-text("📄 Επιστολή")').first.click()
@@ -1408,3 +1409,30 @@ def test_decree_templates_general_decree_and_page_design(app):
     # Διάταγμα Διορισμού: χωρίς σχεδίαση → κανονική κεφαλίδα
     app.go('/decrees/new')
     assert app.page.locator('#appointPart').is_visible() and app.page.locator('#dprev .paper .head').count() == 1
+
+
+def test_letters_archive_whatsapp_pdf_button(app):
+    app.connect_local()
+    add_member(app)
+    app.go('/letters/new').fill(recipient_name='ΕπΜΓρ. Δοκιμής', recipient_email='t@example.com', subject='Πρόσκληση WhatsApp', body='Κείμενο.')
+    app.click('Αποθήκευση & απόδοση')
+    app.page.wait_for_url('**/#/letters/1')
+    app.go('/letters')
+    opened = []
+    app.page.context.on('page', lambda p: opened.append(p.url))
+    with app.page.expect_download() as dl:
+        app.page.locator('[data-act=wapdf]').first.click()
+    assert dl.value.suggested_filename.endswith('.pdf') and dl.value.suggested_filename.isascii() and 'EPISTOLI Prosklisi WhatsApp' in dl.value.suggested_filename
+    app.page.wait_for_selector('text=επισυνάψτε το')
+
+
+def test_home_archive_dropdown_opens_decrees_and_letters(app):
+    app.connect_local()
+    app.go('/')
+    app.page.locator('.archdrop summary').click()
+    app.page.locator('.archdrop-menu a', has_text='ΔΙΑΤΑΓΜΑΤΑ').click()
+    app.page.wait_for_url('**/#/decrees')
+    app.go('/')
+    app.page.locator('.archdrop summary').click()
+    app.page.locator('.archdrop-menu a', has_text='ΕΠΙΣΤΟΛΕΣ').click()
+    app.page.wait_for_url('**/#/letters')
