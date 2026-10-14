@@ -8,6 +8,7 @@ const M = (title, order, items, cls) => ({ title, order, items: items.map(([labe
 module({
   id: 'home',
   menu: [
+    { title: '📋 Αναφορά εκπροσώπησης ΜΔ', order: 5, href: '#/visits/gm-programme', cls: 'navbtn' },
     M('✉ Έγγραφα', 10, [['+ Νέα Επιστολή', '#/letters/new'], ['Αρχείο Επιστολών', '#/letters'], ['Πρότυπα (Επιστολές & Διατάγματα)', '#/templates'], ['-'], ['+ Νέο Διάταγμα Διορισμού ΜΑΞ', '#/decrees/new'], ['+ Νέο Γενικό Διάταγμα', '#/decrees/new?kind=decree-general'], ['Αρχείο Διαταγμάτων', '#/decrees'], ['Ψηφιακό Έντυπο Διατάγματος', 'diatagma/'], ['-'], ['📖 Βιβλίο Πρωτοκόλλου', '#/database/protocol']], 'letters'),
     M('🏛 Στοές & Μέλη', 20, [['📇 Κατάλογος (Επαρχίες & Στοές)', '#/directory'], ['Μητρώο Μελών', '#/members'], ['Συμβολικές Στοές', '#/lodges'], ['Επαρχιακές Μεγάλες Στοές', '#/provinces'], ['-'], ['📜 Επετηρίδα (πίνακας)', '#/epeteirida/pinakas'], ['Ιστορικό αξιωμάτων', '#/epeteirida']]),
     M('📅 Δραστηριότητα', 30, [['Επισκέψεις Στοών', '#/visits'], ['+ Νέα επίσκεψη', '#/visits/new'], ['Ενημέρωση Επαρχίας', '#/visits/publish'], ['Αναφορά επισκέψεων', '#/visits/report'], ['Εκπρόσωποι ΜΔ', '#/reps'], ['-'], ['🎉 Εορτολόγιο & ευχές', '#/namedays'], ['Πρότζεκτ ΜΔ', '#/projects']]),

@@ -4,6 +4,9 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+  # Δημόσιο πρόγραμμα επισκέψεων (programme/): ανανέωση από τα ιδιωτικά δεδομένα κάθε 10 λεπτά
+  schedule:
+    - cron: '*/10 * * * *'
 
 permissions:
   contents: read
@@ -28,6 +31,18 @@ jobs:
           enablement: true
       - name: Έκδοση στα αρχεία (νέα έκδοση χωρίς παλιά cache)
         run: python3 tools/stamp_version.py "${GITHUB_SHA}"
+      - name: Δημόσιο πρόγραμμα επισκέψεων (από τα ιδιωτικά δεδομένα)
+        # Χρειάζεται το secret DATA_REPO_TOKEN: κλειδί GitHub μόνο για ανάγνωση του αποθετηρίου δεδομένων.
+        # Δημοσιεύεται μόνο το files/public/programme.json που γράφει η εφαρμογή (ημερομηνία, Στοά, Επαρχία, εκπρόσωπος).
+        env:
+          DATA_TOKEN: ${{ secrets.DATA_REPO_TOKEN }}
+          DATA_REPO: ${{ vars.DATA_REPO || 'NGLG-GSEC/nglg-grammateia-data' }}
+        run: |
+          if [ -z "$DATA_TOKEN" ]; then echo "Δεν έχει οριστεί το DATA_REPO_TOKEN — η σελίδα programme/ μένει χωρίς δεδομένα."; exit 0; fi
+          curl -fsSL -H "Authorization: Bearer $DATA_TOKEN" -H "Accept: application/vnd.github.raw" \
+            "https://api.github.com/repos/$DATA_REPO/contents/files/public/programme.json" -o programme/programme.json \
+            && python3 -c "import json; d=json.load(open('programme/programme.json')); print('Πρόγραμμα:', len(d.get('rows', [])), 'επισκέψεις')" \
+            || { echo "Δεν βρέθηκε ακόμη πρόγραμμα στα δεδομένα."; rm -f programme/programme.json; }
       - name: Upload site
         uses: actions/upload-pages-artifact@v3
         with:

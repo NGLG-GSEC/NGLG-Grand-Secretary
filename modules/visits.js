@@ -7,7 +7,7 @@ import { crud } from '../core/crud.js';
 import { esc, fold, today, fmtDate, dayStr, parseIso, sortBy, download, EMAIL_RE, splitEmails, grUpper, DAYS, isoDate, parsePasted, readXlsx } from '../core/util.js';
 import { senderBanner, copyText } from '../core/mail.js';
 import { bccWithout } from '../core/gmail.js';
-import { reportPaper, printPaper } from '../core/paper.js';
+import { reportPaper, printPaper, letterhead, IMG } from '../core/paper.js';
 import { attachPicker, contactItems, memberItems, noContact } from '../core/pickers.js';
 import { provincialChoices, provinceByShort, provinceRoles } from './provinces.js';
 import { lodgesAll, lodgeNoKey, lodgeByNumber, cleanLodgeName } from './lodges.js';
@@ -472,6 +472,90 @@ export function provinceLetter(v) {
   return { to_name: g.toName, to_email: [g.to, g.cc].filter(Boolean).join(', '), subject: visitSubject(v), body: visitBody(v, false), closing: visitClosing(v), category: 'ΕΠΙΣΚΕΨΗ', template_id: t.id || '', visit_id: v.id, cc_name: g.ccName || '' };
 }
 
+// ---- Αναφορά εκπροσώπησης ΜΔ: επίσημη επιστολή της Μεγάλης Γραμματείας προς τους Μεγάλους Αξιωματικούς με το πρόγραμμα
+// των επισκέψεων (από σήμερα, κατά ημερομηνία) — μόνο όσες έχουν ορισμένο εκπρόσωπο· όπου «ΟΥΔΕΙΣ» δεν αναφέρεται.
+const GMP_SALUTE = 'Σεβασμιώτατοι, Πανσεβάσμιοι, Λίαν Σεβαστοί και Σεβαστοί Αδελφοί,';
+const GMP_TEXT = 'Σας κοινοποιείται το πρόγραμμα των επισκέψεων του Σεβασμιωτάτου Μεγάλου Διδασκάλου, προκειμένου να είστε ενήμεροι και, εφόσον το επιτρέπουν οι υποχρεώσεις σας, να έχετε τη δυνατότητα να τον συνοδεύετε.\n\n'
+  + 'Παρακαλείσθε να ενημερώνετε εγκαίρως τον Σεβάσμιο της οικείας Στοάς, εφόσον προτίθεστε να παρευρεθείτε συνοδεύοντας τον Μέγα Διδάσκαλο.';
+const MONTH_G = ['Ιανουαρίου', 'Φεβρουαρίου', 'Μαρτίου', 'Απριλίου', 'Μαΐου', 'Ιουνίου', 'Ιουλίου', 'Αυγούστου', 'Σεπτεμβρίου', 'Οκτωβρίου', 'Νοεμβρίου', 'Δεκεμβρίου'];
+const longToday = () => { const d = new Date(); return `${d.getDate()} ${MONTH_G[d.getMonth()]} ${d.getFullYear()}`; };
+const noRep = (r) => !r || /ουδεις/.test(fold(`${r.surname || ''} ${r.name || ''}`));
+export function gmProgrammeRows(frm = today(), to = '') {
+  const reps = repMap();
+  return sortBy(visitsAll().filter((v) => v.visit_date >= (frm || today()) && (!to || v.visit_date <= to) && !noRep(reps[v.rep_id])), 'visit_date', (v) => Number(v.lodge_number) || 0)
+    .map((v) => ({ v, r: reps[v.rep_id] }));
+}
+function gmProgrammePaper(rows, { showRep = true } = {}) {
+  const d = (iso) => { const x = parseIso(iso); return x ? `<b>${esc(fmtDate(iso))}</b><small>${esc(DAYS[x.getDay()])}</small>` : esc(iso); };
+  const who = (r) => (isGM(r) ? '<b>Ο Μέγας Διδάσκαλος</b>' : `${esc(repFull(r))}`);
+  const body = rows.map(({ v, r }, i) => `<tr><td class="n">${i + 1}</td><td class="d">${d(v.visit_date)}</td><td class="l"><b>«${esc(v.lodge || '')}»</b>${v.lodge_number ? `<small>υπ’ αριθ. ${esc(v.lodge_number)}</small>` : ''}</td>`
+    + `<td class="p">${esc(v.province || '')}</td>${showRep ? `<td class="r">${who(r)}</td>` : ''}</tr>`).join('');
+  return `<article class="paper report gmprog">${letterhead()}<div class="gmp-office">ΜΕΓΑΛΗ ΓΡΑΜΜΑΤΕΙΑ</div>
+<div class="gmp-meta">Εν Αθήναις, ${esc(longToday())}</div>
+<p class="gmp-subject"><b>Θέμα:</b> Πρόγραμμα επισκέψεων του Σεβασμιωτάτου Μεγάλου Διδασκάλου</p>
+<p class="gmp-salute">${esc(GMP_SALUTE)}</p>${GMP_TEXT.split('\n\n').map((t) => `<p class="gmp-p">${esc(t)}</p>`).join('')}
+${rows.length ? `<table class="gmp-table"><thead><tr><th class="n">Α/Α</th><th>Ημερομηνία</th><th>Σεβαστή Στοά</th><th>Επαρχία</th>${showRep ? '<th>Εκπρόσωπος</th>' : ''}</tr></thead><tbody>${body}</tbody></table>`
+    : '<p class="gmp-p muted"><i>Δεν έχουν οριστεί επισκέψεις για το διάστημα αυτό.</i></p>'}
+<p class="gmp-close">Με αδελφικούς χαιρετισμούς,</p>
+<div class="gmp-sign"><img class="signature-img" src="${IMG.signature}" alt=""><div class="signature-line"></div><b>Δημήτριος Σκιαδόπουλος</b><div>Μέγας Γραμματέας</div></div></article>`;
+}
+// ---- Δημόσια σελίδα του προγράμματος (programme/): η εφαρμογή γράφει το πρόγραμμα στα δεδομένα (files/public/programme.json)
+// μετά από κάθε αλλαγή Επισκέψεων/Εκπροσώπων· η δημοσίευση (GitHub Pages) το παίρνει από εκεί. Μόνο όσα δείχνει η αναφορά.
+export const PUBLIC_PROGRAMME_URL = 'https://nglg-gsec.github.io/NGLG-Grand-Secretary/programme/';
+export function publicProgramme() {
+  return { title: 'Πρόγραμμα επισκέψεων του Σεβασμιωτάτου Μεγάλου Διδασκάλου', salute: GMP_SALUTE, text: GMP_TEXT, closing: 'Με αδελφικούς χαιρετισμούς,',
+    signer: 'Δημήτριος Σκιαδόπουλος', signer_title: 'Μέγας Γραμματέας', organization: db.setting('organization_name') || '',
+    rows: gmProgrammeRows(today()).map(({ v, r }) => ({ date: v.visit_date, lodge: v.lodge || '', no: String(v.lodge_number || ''), province: v.province || '', rep: isGM(r) ? 'Ο Μέγας Διδάσκαλος' : repFull(r), gm: isGM(r) ? 1 : 0 })) };
+}
+let publishing = null;
+export async function publishProgramme(force = false) {
+  if (publishing || !db.backend) return publishing;
+  publishing = (async () => {
+    const data = publicProgramme(), dec = new TextDecoder();
+    let cur = null;
+    try { const b = await db.file('public/programme.json'); cur = b ? JSON.parse(dec.decode(b)) : null; } catch { cur = null; }
+    const same = cur && JSON.stringify({ ...cur, updated_at: 0 }) === JSON.stringify({ ...data, updated_at: 0 });
+    if (same && !force) return false;
+    const json = JSON.stringify({ ...data, updated_at: new Date().toISOString() }, null, 1);
+    await db.save('Δημόσιο πρόγραμμα επισκέψεων: ενημέρωση', (tx) => tx.putFile('public/programme.json', new TextEncoder().encode(json)));
+    return true;
+  })().finally(() => { publishing = null; });
+  return publishing;
+}
+db.on((ev) => {
+  if (ev.type === 'saved' && !/^Δημόσιο πρόγραμμα/.test(ev.message || '') && (ev.tables || []).some((t) => ['visits', 'reps', 'epeteirida', 'member_registry'].includes(t))) {
+    setTimeout(() => publishProgramme().catch((e) => console.warn('Δημόσιο πρόγραμμα:', e)), 400);
+  }
+});
+
+function gmProgrammePage({ query }) {
+  const frm = query.frm || today(), to = query.to || '', showRep = query.rep !== '0', rows = gmProgrammeRows(frm, to);
+  const title = `ANAFORA-EKPROSOPISIS-MD_${frm}${to ? '_' + to : ''}`;
+  return {
+    title: 'Αναφορά εκπροσώπησης ΜΔ',
+    html: `<div class="noprint"><h1>📋 Αναφορά εκπροσώπησης ΜΔ</h1><p class="muted">Επίσημη επιστολή της Μεγάλης Γραμματείας με το πρόγραμμα των επισκέψεων, από σήμερα και μετά, κατά ημερομηνία — μόνο όσες έχουν ορισμένο εκπρόσωπο (όπου «ΟΥΔΕΙΣ» δεν αναφέρεται).</p>
+<form class="filters" id="gmpf"><label>Από<input type="date" name="frm" value="${esc(frm)}" min="${today()}"></label><label>Έως<input type="date" name="to" value="${esc(to)}"></label>
+<label class="chk"><input type="checkbox" name="rep" value="1"${showRep ? ' checked' : ''}> Στήλη «Εκπρόσωπος»</label><button>Ενημέρωση</button></form>
+<div class="toolbar"><button class="btn primary" data-act="print">⬇ PDF / Εκτύπωση</button><span class="muted" style="align-self:center">${rows.length} επισκέψεις</span></div>
+<div class="card gmp-public"><b>🌐 Δημόσια σελίδα (χωρίς σύνδεση, ενημερώνεται αυτόματα)</b><br><a href="${PUBLIC_PROGRAMME_URL}" target="_blank" rel="noopener">${PUBLIC_PROGRAMME_URL}</a>
+<div class="toolbar" style="margin-top:8px"><a class="btn wa-btn" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent('Πρόγραμμα επισκέψεων του Σεβασμιωτάτου Μεγάλου Διδασκάλου: ' + PUBLIC_PROGRAMME_URL)}">WhatsApp: αποστολή συνδέσμου</a>
+<button class="btn" data-act="copyPub">📋 Αντιγραφή συνδέσμου</button><button class="btn" data-act="publish">📢 Ενημέρωση τώρα</button></div>
+<small class="muted">Κάθε αλλαγή σε Επισκέψεις ή Εκπροσώπους δημοσιεύεται μόνη της· η σελίδα ανανεώνεται μέσα σε λίγα λεπτά. Δείχνει μόνο ημερομηνία, Στοά, Επαρχία και εκπρόσωπο — όχι email ή τηλέφωνα.</small></div><div class="mailsheet"></div></div>
+<div class="print-area">${gmProgrammePaper(rows, { showRep })}</div>`,
+    async mount(el) {
+      onSubmit(el.querySelector('#gmpf'), (d) => go('/visits/gm-programme', { frm: d.frm < today() ? today() : d.frm, to: d.to || '', rep: d.rep ? '1' : '0' }));
+      bind(el, { print: () => printPaper(title),
+        async copyPub() { await copyText(PUBLIC_PROGRAMME_URL); toast('Ο σύνδεσμος αντιγράφηκε.'); },
+        async publish() { await publishProgramme(true); toast('Το πρόγραμμα στάλθηκε για δημοσίευση· η δημόσια σελίδα ενημερώνεται μέσα σε λίγα λεπτά.'); } });
+      publishProgramme().catch(() => {});
+      const { mailSheet } = await import('../core/gmail.js');
+      mailSheet(el, { kind: 'general', pdfName: title, getMsg: () => ({ to: '', cc: '', bcc: db.setting('visit_bcc') || '', subject: 'Πρόγραμμα επισκέψεων του Σεβασμιωτάτου Μεγάλου Διδασκάλου',
+        body: `${GMP_SALUTE}\n\n${GMP_TEXT}\n\nΣυνημμένο: το πρόγραμμα των επισκέψεων.\n\nΜε αδελφικούς χαιρετισμούς,\n\nΔημήτριος Σκιαδόπουλος\nΜέγας Γραμματέας` }),
+        getPdf: async () => ({ blob: await (await import('../core/pdf.js')).paperPdf(el.querySelector('.print-area .paper'), { title }), name: title + '.pdf' }) });
+    },
+  };
+}
+
 const pubRows = (prov, frm, to) => visitsAll().filter((v) => v.province === prov && (!frm || v.visit_date >= frm) && (!to || v.visit_date <= to));
 function publishPage({ query }) {
   const provs = provincialChoices(), prov = provs.includes(query.prov) ? query.prov : provs[0] || '', frm = query.frm || today(), to = query.to || '';
@@ -768,7 +852,7 @@ module({
   routes: {
     '/visits': visitsPage, '/visits/new': ({ query }) => { const l = query.lodge && lodgeByNumber(query.lodge); return visitForm(null, l ? { lodge: l.name, lodge_number: String(l.number), province: l.provincial || '', location: l.meeting_place || '' } : null); },
     '/visits/edit/:id': ({ params }) => { const v = db.get('visits', params.id); return v ? visitForm(v) : '<h1>Δεν βρέθηκε η επίσκεψη</h1>'; },
-    '/visits/import': importPage, '/visits/brief': briefPage, '/visits/notify': notifyPage, '/visits/missing': missingPage, '/visits/publish': publishPage, '/visits/publish/compose': publishCompose, '/visits/report': reportPage,
+    '/visits/import': importPage, '/visits/brief': briefPage, '/visits/notify': notifyPage, '/visits/missing': missingPage, '/visits/publish': publishPage, '/visits/publish/compose': publishCompose, '/visits/report': reportPage, '/visits/gm-programme': gmProgrammePage,
     ...repRoutes, '/reps/ranks': ranksPage,
     '/reps/import': () => ({
       title: 'Επικόλληση εκπροσώπων',

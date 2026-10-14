@@ -315,3 +315,22 @@ input[type=file]{max-width:100%;min-width:0}
 .archdrop-menu{position:absolute;z-index:30;left:0;top:calc(100% + 4px);min-width:100%;background:#fff;border:1px solid #c9d3e6;border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.18);overflow:hidden}
 .archdrop-menu a{display:block;padding:11px 16px;color:#0b2f63;font-weight:700;text-decoration:none;white-space:nowrap}
 .archdrop-menu a:hover{background:#eef3fa}
+/* Αναφορά εκπροσώπησης ΜΔ (επίσημη επιστολή με πίνακα) */
+.top nav>a[href="#/visits/gm-programme"]{background:#b18a43;color:#fff;border-radius:8px;padding:8px 12px;font-weight:700}
+.paper.gmprog .gmp-office{text-align:center;margin:-4mm 0 4mm;color:#1d2f5e;font-weight:700;letter-spacing:.18em;font-size:10.5pt}
+.paper.gmprog .gmp-meta{text-align:right;font-size:10.5pt;color:#4a5670}
+.paper.gmprog .gmp-subject{margin:4mm 0 3mm}
+.paper.gmprog .gmp-salute{font-weight:700;color:#1d2f5e;margin:5mm 0 2mm}
+.paper.gmprog .gmp-p{text-align:justify;margin:0 0 2.5mm;line-height:1.5}
+.paper.gmprog .gmp-table{width:100%;border-collapse:separate;border-spacing:0;margin:6mm 0 3mm;font-size:10.5pt}
+.paper.gmprog .gmp-table th{background:#1d2f5e;color:#fff;font-weight:600;text-align:left;padding:2.4mm 3mm;font-size:9pt;letter-spacing:.05em;text-transform:uppercase;border:0}
+.paper.gmprog .gmp-table th:first-child{border-radius:2mm 0 0 0;text-align:center}.paper.gmprog .gmp-table th:last-child{border-radius:0 2mm 0 0}
+.paper.gmprog .gmp-table td{padding:2.2mm 3mm;border:0;border-bottom:.3mm solid #e6e1d4;vertical-align:top;background:#fff}
+.paper.gmprog .gmp-table tr:nth-child(even) td{background:#f8f4ea}
+.paper.gmprog .gmp-table td.n{text-align:center;color:#b18a43;font-weight:700;width:10mm}
+.paper.gmprog .gmp-table td.d b{display:block;color:#1d2f5e}.paper.gmprog .gmp-table small{display:block;color:#6b7790;font-size:8.5pt}
+.paper.gmprog .gmp-table tr{break-inside:avoid}
+.paper.gmprog .gmp-close{margin-top:7mm}
+.paper.gmprog .gmp-sign{width:62mm;margin:2mm 0 0 auto;text-align:center}
+.paper.gmprog .gmp-sign .signature-img{width:44mm;height:auto;display:block;margin:0 auto -2mm}
+.gmp-public{border-left:4px solid #b18a43}

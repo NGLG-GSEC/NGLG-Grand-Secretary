@@ -1446,3 +1446,37 @@ def test_home_archive_dropdown_opens_decrees_and_letters(app):
     app.page.locator('.archdrop summary').click()
     app.page.locator('.archdrop-menu a', has_text='ΕΠΙΣΤΟΛΕΣ').click()
     app.page.wait_for_url('**/#/letters')
+
+
+def test_gm_programme_report_and_public_page(app):
+    app.connect_local()
+    app.page.evaluate("""async () => { const {db} = await import('./core/store.js');
+      await db.save('x', (tx) => { tx.replace('visits', []);
+        const r = tx.insert('reps', { surname: 'Νικολαΐδης', name: 'Αθανάσιος', office: 'Βοηθός Μέγας Διδάσκαλος', rep_rank: 'Πανσεβάσμιος Αδ.' });
+        const gm = tx.find('reps', (x) => x.office === 'Μέγας Διδάσκαλος');
+        const P = 'ΕπΜΣτ. Αθηνών';
+        tx.insert('visits', { visit_date: '2099-03-10', lodge: 'ΒΗΤΑ', lodge_number: '20', location: '', province: P, rep_id: r.id, notes: '' });
+        tx.insert('visits', { visit_date: '2099-02-01', lodge: 'ΑΛΦΑ', lodge_number: '10', location: '', province: P, rep_id: gm.id, notes: '' });
+        tx.insert('visits', { visit_date: '2099-02-15', lodge: 'ΚΕΝΗ', lodge_number: '30', location: '', province: P, rep_id: null, notes: '' });
+        tx.insert('visits', { visit_date: '2020-01-01', lodge: 'ΠΑΛΙΑ', lodge_number: '40', location: '', province: P, rep_id: r.id, notes: '' }); }); }""")
+    app.go('/')
+    app.page.locator('nav a', has_text='Αναφορά εκπροσώπησης ΜΔ').click()
+    app.page.wait_for_url('**/#/visits/gm-programme')
+    t = app.text('.print-area')
+    assert 'ΜΕΓΑΛΗ ΓΡΑΜΜΑΤΕΙΑ' in t and 'Σεβασμιώτατοι, Πανσεβάσμιοι, Λίαν Σεβαστοί και Σεβαστοί Αδελφοί,' in t and 'Με αδελφικούς χαιρετισμούς,' in t and 'Μέγας Γραμματέας' in t
+    rows = app.page.locator('.gmp-table tbody tr').all_inner_texts()
+    assert len(rows) == 2 and '«ΑΛΦΑ»' in rows[0] and 'Ο Μέγας Διδάσκαλος' in rows[0] and '«ΒΗΤΑ»' in rows[1] and 'Νικολαΐδης' in rows[1], rows  # αύξουσα, χωρίς ΟΥΔΕΙΣ/παλιές
+    assert 'ΚΕΝΗ' not in t and 'ΠΑΛΙΑ' not in t
+    # το δημόσιο πρόγραμμα γράφεται στα δεδομένα
+    app.page.click('[data-act=publish]')
+    app.page.wait_for_selector('text=στάλθηκε για δημοσίευση')
+    data = app.page.evaluate("async () => JSON.parse(new TextDecoder().decode(await (await import('./core/store.js')).db.file('public/programme.json')))")
+    assert [r['lodge'] for r in data['rows']] == ['ΑΛΦΑ', 'ΒΗΤΑ'] and data['rows'][0]['gm'] == 1 and 'email' not in json.dumps(data)
+    # η δημόσια σελίδα το δείχνει (χωρίς σύνδεση)
+    pub = app.page.context.new_page()
+    pub.route('**/programme/programme.json*', lambda r: r.fulfill(json=data))
+    pub.goto(app.base + 'programme/')
+    pub.wait_for_selector('table tbody tr')
+    pt = pub.inner_text('body')
+    assert 'ΜΕΓΑΛΗ ΓΡΑΜΜΑΤΕΙΑ' in pt and '«ΑΛΦΑ»' in pt and 'Ο Μέγας Διδάσκαλος' in pt and pub.locator('tbody tr').count() == 2
+    pub.close()
