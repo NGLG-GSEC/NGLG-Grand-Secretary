@@ -1500,5 +1500,8 @@ def test_gm_programme_report_and_public_page(app):
     assert pub.locator('td.pr').first.inner_text().strip() == '20551'
     assert pub.locator('td.pr a').first.get_attribute('href') == f'https://nglg-gsec.github.io/NGLG-Grand-Secretary/#/letters/{lid}'
     assert 'ΑΥΤΟΜΑΤΟ ΣΥΣΤΗΜΑ ΕΝΗΜΕΡΩΣΗΣ ΣΥΜΦΩΝΑ ΜΕ ΤΑ ΙΣΧΥΟΝΤΑ' in pt and 'Λίαν Σεβάσμιοι και Σεβάσμιοι Αδελφοί' in pt and 'Σεβαστοί' not in pt
+    assert 'ΣΤΟ ΜΥΑΛΟ ΤΟΥ ΜΔ' in pt and pub.locator('#mda a[href="sto-myalo-tou-md.pdf"]').count() == 3
+    assert pub.request.get(app.base + 'programme/sto-myalo-tou-md.pdf').body()[:5] == b'%PDF-'
+    assert pub.evaluate("() => document.querySelector('.auto').compareDocumentPosition(document.querySelector('#mda')) & Node.DOCUMENT_POSITION_FOLLOWING")
     assert 'ΜΕΓΑΛΗ ΓΡΑΜΜΑΤΕΙΑ' in pt and '«ΑΛΦΑ»' in pt and 'Ο Μέγας Διδάσκαλος' in pt and pub.locator('tbody tr').count() == 2
     pub.close()

@@ -26,6 +26,12 @@
   header .office{margin:10px auto 0;display:inline-block;color:var(--navy);font-weight:700;letter-spacing:.18em;font-size:.95rem;border-top:1px solid var(--gold);border-bottom:1px solid var(--gold);padding:4px 18px}
   .rule{height:1px;background:linear-gradient(90deg,transparent,var(--gold),transparent);margin:16px 0 18px}
   .auto{text-align:center;font-weight:700;font-size:18px;color:var(--navy);letter-spacing:.04em;margin:0 0 10px}
+  .mda{display:flex;gap:16px;align-items:center;margin:4px auto 18px;padding:14px 16px;border:1px solid var(--gold-lt);border-left:4px solid var(--gold);border-radius:8px;background:#fff;max-width:620px}
+  .mda img{width:96px;height:auto;border:1px solid #ddd;border-radius:3px;box-shadow:0 3px 10px #1d2f5e22;flex:none}
+  .mda h2{margin:0 0 4px;color:var(--navy);font-size:1.15rem;letter-spacing:.06em}
+  .mda p{margin:0 0 10px;color:var(--muted);font-size:.9rem}
+  .mda .btns a{display:inline-block;margin:0 8px 6px 0;padding:7px 14px;border-radius:6px;background:var(--navy);color:#fff;text-decoration:none;font-weight:700;font-size:.9rem}
+  .mda .btns a.dl{background:none;color:var(--navy);border:1px solid var(--navy)}
   .meta{text-align:right;color:var(--muted);font-size:.92rem}
   .subject{margin:14px 0 12px}
   .salute{font-weight:700;color:var(--navy);margin:16px 0 8px}
@@ -65,8 +71,9 @@
     td.pr .nopr{display:none}
     td.d b{display:inline;font-size:1.05rem}td.d small{display:inline;margin-left:6px}
     .sign{margin:10px auto 0}
+    .mda{padding:12px}.mda img{width:72px}
   }
-  @media print{body{background:#fff}.sheet{box-shadow:none;margin:0;max-width:none}.sheet:before{display:none}footer{display:none}}
+  @media print{body{background:#fff}.mda{display:none}.sheet{box-shadow:none;margin:0;max-width:none}.sheet:before{display:none}footer{display:none}}
 </style>
 </head>
 <body>
@@ -75,6 +82,9 @@
     <div class="office">ΜΕΓΑΛΗ ΓΡΑΜΜΑΤΕΙΑ</div></header>
   <div class="rule"></div>
   <div class="auto">ΑΥΤΟΜΑΤΟ ΣΥΣΤΗΜΑ ΕΝΗΜΕΡΩΣΗΣ ΣΥΜΦΩΝΑ ΜΕ ΤΑ ΙΣΧΥΟΝΤΑ</div>
+  <section class="mda" id="mda"><a href="sto-myalo-tou-md.pdf" target="_blank" rel="noopener"><img src="sto-myalo-tou-md.jpg" alt="ΣΤΟ ΜΥΑΛΟ ΤΟΥ ΜΔ"></a>
+    <div><h2>ΣΤΟ ΜΥΑΛΟ ΤΟΥ ΜΔ</h2><p>Συνοπτική Στρατηγική Μεγάλων Αξιωματικών 2026-2027 · PDF, 4 σελίδες</p>
+      <div class="btns"><a href="sto-myalo-tou-md.pdf" target="_blank" rel="noopener">📄 Ανάγνωση</a><a class="dl" href="sto-myalo-tou-md.pdf" download="ΣΤΟ ΜΥΑΛΟ ΤΟΥ ΜΔ.pdf">⬇ Λήψη</a></div></div></section>
   <div class="meta" id="meta"></div>
   <div class="subject"><b>Θέμα:</b> <span id="title">Πρόγραμμα επισκέψεων του Σεβασμιωτάτου Μεγάλου Διδασκάλου</span></div>
   <div id="body"><p class="empty">Φόρτωση…</p></div>
