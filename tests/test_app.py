@@ -1370,16 +1370,16 @@ def test_decree_templates_general_decree_and_page_design(app):
     # Γενικό Διάταγμα
     app.go('/decrees/new?kind=decree-general')
     assert app.page.locator('#appointPart').is_hidden() and app.page.locator('#generalPart').is_visible()
-    app.page.fill('[name=g_matter]', 'ιδρύσεως της Σεβαστής Στοάς «Δοκιμή»')
-    body = app.page.input_value('[name=g_body]').replace('……\n\nΕγένετο', 'Ιδρύεται η Σεβαστή Στοά «Δοκιμή» υπ’ αριθμ. 999.\n\nΕγένετο')
+    app.page.fill('[name=g_matter]', 'ιδρύσεως της Στοάς «Δοκιμή»')
+    body = app.page.input_value('[name=g_body]').replace('……\n\nΕγένετο', 'Ιδρύεται η Στοά «Δοκιμή» υπ’ αριθμ. 999.\n\nΕγένετο')
     app.page.fill('[name=g_body]', body)
     app.page.fill('[name=g_to_email]', 'stoa@example.com')
     app.page.wait_for_timeout(300)
-    assert 'περί ιδρύσεως της Σεβαστής Στοάς «Δοκιμή»' in app.text('#dprev')
+    assert 'περί ιδρύσεως της Στοάς «Δοκιμή»' in app.text('#dprev')
     app.click('Έκδοση Διατάγματος')
     app.page.wait_for_url('**/#/decrees/*')
     t = app.text()
-    assert 'ΓΕΝΙΚΟ ΔΙΑΤΑΓΜΑ — Αποστολή' in t and 'Ιδρύεται η Σεβαστή Στοά «Δοκιμή»' in t and 'Σεβασμιώτατος Αδελφός Ιωάννης Μπενετάτος' in t and '{' not in app.text('.print-area')
+    assert 'ΓΕΝΙΚΟ ΔΙΑΤΑΓΜΑ — Αποστολή' in t and 'Ιδρύεται η Στοά «Δοκιμή»' in t and 'Σεβασμιώτατος Αδελφός Ιωάννης Μπενετάτος' in t and '{' not in app.text('.print-area')
     d = app.page.evaluate("async () => (await import('./core/store.js')).db.all('decree_documents').at(-1)")
     assert d['template_key'] == 'decree-general' and d['recipient_email'] == 'stoa@example.com' and '{Περί}' in d['body_src']
     assert app.page.evaluate("async () => (await import('./core/store.js')).db.all('member_degrees_offices').filter((o) => o.decree_id === %d).length" % d['id']) == 0

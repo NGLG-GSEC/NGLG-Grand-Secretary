@@ -166,7 +166,7 @@ function decreeForm(d, query = {}) {
 <div class="card dec-kind"><label>Είδος Διατάγματος (Πρότυπο)</label><div class="dec-kinds">${Object.entries(DECREE_KINDS).map(([k, v]) => `<label class="chip"><input type="radio" name="template_key" value="${k}"${k === key ? ' checked' : ''}${d && d.id ? ' disabled' : ''}><span><b>${esc(v.name)}</b><small>${esc(v.short)}</small></span></label>`).join('')}</div>
 <small class="muted">${d && d.id ? 'Το είδος δεν αλλάζει σε εκδομένο Διάταγμα. ' : ''}Σελίδα (φόντο, κεφαλίδα): <a href="#/templates">Πρότυπα</a> → «🎨 Σχεδίαση σελίδας».</small>${d && d.id ? `<input type="hidden" name="template_key" value="${key}">` : ''}</div>
 <fieldset class="plainfs" id="generalPart"${gen ? '' : ' disabled hidden'}><div class="card"><div class="grid">
-<div class="full"><label>Περί</label><input name="g_matter" value="${esc(d && gen ? d.matter : '')}" placeholder="π.χ. ιδρύσεως της Σεβαστής Στοάς «……»"></div>
+<div class="full"><label>Περί</label><input name="g_matter" value="${esc(d && gen ? d.matter : '')}" placeholder="π.χ. ιδρύσεως της Στοάς «……»"></div>
 <div class="full"><label>Κείμενο Διατάγματος</label><textarea name="g_body" style="min-height:320px">${esc(gBody)}</textarea><small class="muted">Από το πρότυπο «ΓΕΝΙΚΟ ΔΙΑΤΑΓΜΑ». Πεδία: ${DECREE_PLACEHOLDERS.map(([k, h]) => `{${esc(k)}} = ${esc(h)}`).join(' · ')}. Γραμμές με ΚΕΦΑΛΑΙΑ τυπώνονται έντονα.</small></div>
 <div class="full"><label>🔎 Παραλήπτες από τον Κατάλογο (Στοές, Επαρχίες, μέλη)</label><input id="gPick" placeholder="Στοά, Επαρχία, όνομα…" autocomplete="off"></div>
 <div><label>Προς (για το email)</label><input name="g_to_name" value="${esc(d && gen ? d.recipient_name : '')}"></div><div><label>Email παραληπτών</label><input name="g_to_email" value="${esc(d && gen ? d.recipient_email : '')}" placeholder="πολλά με κόμμα"></div>
@@ -343,7 +343,7 @@ const A4 = { w: 210, h: 297 };
 const LAYER_LABEL = { header: 'Κεφαλίδα (εικόνα στην κορυφή)', bg: 'Φόντο (εικόνα πίσω από το κείμενο)' };
 function sampleDecree(key) {
   const date = today(), year = new Date().getFullYear(), no = Math.max(db.all('decree_documents').reduce((x, y) => Math.max(x, Number(y.decree_no) || 0), 0) + 1, Number(db.setting('decree_first_no')) || 513);
-  if (key === 'decree-general') return { template_key: key, decree_no: no, decree_year: year, decree_date: date, rules: '{"action":"general"}', body: fillGeneral(decreeTemplate(key).body || GENERAL_BODY, { matter: 'ιδρύσεως της Σεβαστής Στοάς «Δείγμα»', date, no: `${no}/${year}` }) };
+  if (key === 'decree-general') return { template_key: key, decree_no: no, decree_year: year, decree_date: date, rules: '{"action":"general"}', body: fillGeneral(decreeTemplate(key).body || GENERAL_BODY, { matter: 'ιδρύσεως της Στοάς «Δείγμα»', date, no: `${no}/${year}` }) };
   const { body } = decreeBody('διορισμού Μεγάλων Αξιωματικών', [{ first_name: 'Ιωάννης', last_name: 'Παπαδόπουλος', office: 'Μέγας Γραμματεύς', honorific: 'Πσεβ. Αδ.', rule: (DEC_MAP['Μέγας Γραμματεύς'] || {}).rule || '' }], date, 'appoint', '', `${year} - ${year + 1}`);
   return { template_key: key, decree_no: no, decree_year: year, decree_date: date, rules: '{"action":"appoint"}', body };
 }

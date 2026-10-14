@@ -88,7 +88,7 @@
     if (data.title) document.getElementById('title').textContent = data.title;
     document.getElementById('meta').textContent = 'Εν Αθήναις, ' + longDate(parse(today));
     var paras = String(data.text || '').split(/\n\s*\n/).map(function (t) { return '<p class="t">' + esc(t) + '</p>'; }).join('');
-    var table = rows.length ? '<table><thead><tr><th>Α/Α</th><th>Ημερομηνία</th><th>Σεβαστή Στοά</th><th>Επαρχία</th><th>Εκπρόσωπος</th></tr></thead><tbody>'
+    var table = rows.length ? '<table><thead><tr><th>Α/Α</th><th>Ημερομηνία</th><th>Στοά</th><th>Επαρχία</th><th>Εκπρόσωπος</th></tr></thead><tbody>'
       + rows.map(function (r, i) {
         var d = parse(r.date);
         return '<tr' + (r.gm ? ' class="gm"' : '') + '><td class="n">' + (i + 1) + '</td><td class="d"><b>' + esc(d ? dmy(d) : r.date) + '</b><small>' + esc(d ? DAYS[d.getDay()] : '') + '</small></td>'

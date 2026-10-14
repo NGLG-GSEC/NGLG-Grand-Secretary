@@ -152,7 +152,7 @@ function repContact(r) {
   if (c.person && noContact(c.person.member)) return ['', ''];
   return [c.email, c.mobile];
 }
-const lodgeRef = (v) => `Σ.Σ. «${v.lodge || ''}»` + (v.lodge_number ? ` Αρ. ${v.lodge_number}` : '');
+const lodgeRef = (v) => `Στοά «${v.lodge || ''}»` + (v.lodge_number ? ` Αρ. ${v.lodge_number}` : '');
 const monthTitle = (k) => { const [y, m] = k.split('-'); return `${MONTHS[Number(m) - 1]} ${y}`; };
 const provTitle = (p) => { const w = String((p || {}).addressee || '').split(' ')[0]; return w.endsWith('.') ? w : ''; };
 const repNotified = (v) => !!v.rep_notified_at && v.rep_notified_date === v.visit_date && (v.rep_notified_rep || null) === (v.rep_id || null);
@@ -181,7 +181,7 @@ function repMail(r, vs) {
   const one = vs.length === 1, v = vs[0];
   const item = (x) => { const p = provinceByShort(x.province || ''); let s = `${lodgeRef(x)}\n   Ημερομηνία: ${dayStr(x.visit_date)}`; if (x.location) s += `\n   Τόπος: ${x.location}`; if (x.province) s += `\n   Επαρχία: ${(p || {}).full_title || x.province}` + (p && p.email ? ` (Γραμματεία: ${p.email})` : ''); return s; };
   const items = one ? item(v) : vs.map((x, i) => `${i + 1}. ${item(x)}`).join('\n\n');
-  const where = one ? 'στην Εγκατάσταση του Σεβασμίου Διδασκάλου της κάτωθι Σεβαστής Στοάς' : 'στις Εγκαταστάσεις των Σεβασμίων Διδασκάλων των κάτωθι Σεβαστών Στοών';
+  const where = one ? 'στην Εγκατάσταση του Σεβασμίου Διδασκάλου της κάτωθι Στοάς' : 'στις Εγκαταστάσεις των Σεβασμίων Διδασκάλων των κάτωθι Στοών';
   return {
     visits: vs,
     subject: one ? `Ενημέρωση Εκπροσώπησης ΜΔ — Εγκατάσταση Σεβασμίου ${lodgeRef(v)} — ${dayStr(v.visit_date)}` : 'Ενημέρωση Εκπροσώπησης ΜΔ στις Εγκαταστάσεις Σεβασμίων Σ. Στοών',
@@ -232,10 +232,10 @@ function provinceMail(p, rows, missing) {
   const reps = repMap();
   const lines = rows.map((v, i) => `${i + 1}. ${dayStr(v.visit_date)} — ${lodgeRef(v)}${v.location ? ' — ' + v.location : ''}` + (isGM(reps[v.rep_id]) ? '\n   Επίσημη επίσκεψη του Μεγάλου Διδασκάλου, Σεβασμιωτάτου Αδελφού ' + gmName() : '\n   Εκπρόσωπος ΜΔ: ' + (reps[v.rep_id] ? repFull(reps[v.rep_id]) : isNobody(v) ? 'ΟΥΔΕΙΣ' : 'θα οριστεί και θα σας γνωστοποιηθεί'))).join('\n\n');
   const t = provTitle(p), full = (p || {}).full_title || '';
-  let out = `Αγαπητέ Αδελφέ${t ? ' ' + t : ''},\n\nΣας γνωρίζουμε ότι στις Εγκαταστάσεις των Σεβασμίων Διδασκάλων των Σεβαστών Στοών της Επαρχίας σας${full ? ` (${full})` : ''} τον Μεγάλο Διδάσκαλο θα εκπροσωπήσουν οι κάτωθι Αδελφοί:\n\n${lines}\n`;
+  let out = `Αγαπητέ Αδελφέ${t ? ' ' + t : ''},\n\nΣας γνωρίζουμε ότι στις Εγκαταστάσεις των Σεβασμίων Διδασκάλων των Στοών της Επαρχίας σας${full ? ` (${full})` : ''} τον Μεγάλο Διδάσκαλο θα εκπροσωπήσουν οι κάτωθι Αδελφοί:\n\n${lines}\n`;
   if (rows.some((v) => !reps[v.rep_id] && !isNobody(v))) out += '\nΓια τις Εγκαταστάσεις όπου δεν έχει ακόμη οριστεί εκπρόσωπος θα ακολουθήσει νεότερη ενημέρωση.\n';
-  if (missing.length) out += '\nΔεν μας έχει ακόμη γνωστοποιηθεί η ημερομηνία Εγκατάστασης για τις Σεβαστές Στοές: ' + missing.map((l) => `«${l.name}» Αρ. ${l.number}`).join(', ') + '. Παρακαλούμε όπως μας τη γνωστοποιήσετε.\n';
-  return out + `\nΠαρακαλούμε όπως ενημερώσετε σχετικά τις Σεβαστές Στοές.\n\n${signature()}`;
+  if (missing.length) out += '\nΔεν μας έχει ακόμη γνωστοποιηθεί η ημερομηνία Εγκατάστασης για τις Στοές: ' + missing.map((l) => `«${l.name}» Αρ. ${l.number}`).join(', ') + '. Παρακαλούμε όπως μας τη γνωστοποιήσετε.\n';
+  return out + `\nΠαρακαλούμε όπως ενημερώσετε σχετικά τις Στοές.\n\n${signature()}`;
 }
 
 // ---------------------------------------------------------------- σελίδες
@@ -494,7 +494,7 @@ function gmProgrammePaper(rows, { showRep = true } = {}) {
 <div class="gmp-meta">Εν Αθήναις, ${esc(longToday())}</div>
 <p class="gmp-subject"><b>Θέμα:</b> Πρόγραμμα επισκέψεων του Σεβασμιωτάτου Μεγάλου Διδασκάλου</p>
 <p class="gmp-salute">${esc(GMP_SALUTE)}</p>${GMP_TEXT.split('\n\n').map((t) => `<p class="gmp-p">${esc(t)}</p>`).join('')}
-${rows.length ? `<table class="gmp-table"><thead><tr><th class="n">Α/Α</th><th>Ημερομηνία</th><th>Σεβαστή Στοά</th><th>Επαρχία</th>${showRep ? '<th>Εκπρόσωπος</th>' : ''}</tr></thead><tbody>${body}</tbody></table>`
+${rows.length ? `<table class="gmp-table"><thead><tr><th class="n">Α/Α</th><th>Ημερομηνία</th><th>Στοά</th><th>Επαρχία</th>${showRep ? '<th>Εκπρόσωπος</th>' : ''}</tr></thead><tbody>${body}</tbody></table>`
     : '<p class="gmp-p muted"><i>Δεν έχουν οριστεί επισκέψεις για το διάστημα αυτό.</i></p>'}
 <p class="gmp-close">Με αδελφικούς χαιρετισμούς,</p>
 <div class="gmp-sign"><img class="signature-img" src="${IMG.signature}" alt=""><div class="signature-line"></div><b>Δημήτριος Σκιαδόπουλος</b><div>Μέγας Γραμματέας</div></div></article>`;

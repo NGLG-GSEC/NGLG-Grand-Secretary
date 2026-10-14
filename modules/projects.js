@@ -71,7 +71,7 @@ ${xs.length ? `<div class="pgrid">${cards}</div>` : `<div class="card">${all.len
 function newPage() {
   return {
     title: 'Νέο πρότζεκτ',
-    html: `<h1>Νέο πρότζεκτ</h1><form id="nf" class="grid card"><div class="full"><label>Τίτλος</label><input name="title" required placeholder="π.χ. Ίδρυση Σ.Σ. «…»"></div>
+    html: `<h1>Νέο πρότζεκτ</h1><form id="nf" class="grid card"><div class="full"><label>Τίτλος</label><input name="title" required placeholder="π.χ. Ίδρυση Στοάς «…»"></div>
 <div><label>Είδος</label><select name="ptype" id="pt">${Object.entries(TYPES).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></div>
 <div id="nunits" hidden><label>Πόσες Στοές θα έχει το Σώμα</label><input name="units" type="number" min="0" max="50" value="4"><small class="muted">Δημιουργούνται ως «Στοά 1», «Στοά 2»… και μετονομάζονται αργότερα.</small></div>
 <div><label>Ημερομηνία έναρξης</label><input type="date" name="start_date" value="${today()}"></div><div><label>Ημερομηνία στόχου</label><input type="date" name="target_date"></div>

@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
   # Δημόσιο πρόγραμμα επισκέψεων (programme/): ανανέωση από τα ιδιωτικά δεδομένα κάθε 10 λεπτά
   schedule:
-    - cron: '*/10 * * * *'
+    - cron: '5,20,35,50 * * * *'
 
 permissions:
   contents: read
@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      url: ${{ steps.deployment.outputs.page_url || steps.deployment2.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
       - name: Configure Pages
@@ -49,4 +49,13 @@ jobs:
           path: .
       - name: Deploy
         id: deployment
+        continue-on-error: true
+        uses: actions/deploy-pages@v4
+      # Αν συμπέσει με άλλη δημοσίευση (π.χ. την αυτόματη ανά 10 λεπτά), νέα προσπάθεια σε λίγο
+      - name: Αναμονή πριν τη νέα προσπάθεια
+        if: steps.deployment.outcome == 'failure'
+        run: sleep 90
+      - name: Deploy (νέα προσπάθεια)
+        id: deployment2
+        if: steps.deployment.outcome == 'failure'
         uses: actions/deploy-pages@v4
