@@ -487,7 +487,7 @@ export function visitProtocol(v, letters = db.all('letters')) {
   let xs = ready.filter((l) => l.visit_id === v.id);
   if (!xs.length && v.lodge) {
     const no = String(v.lodge_number || '').trim();
-    xs = ready.filter((l) => l.category === 'ΕΠΙΣΚΕΨΗ' && String(l.subject || '').includes(`«${v.lodge}»`) && (!no || new RegExp(`(αριθμ?\\.|Αρ\\.)\\s*${no}(?!\\d)`).test(l.subject || '')));
+    xs = ready.filter((l) => !l.visit_id && String(l.subject || '').includes(`«${v.lodge}»`) && (!no || new RegExp(`(αριθμ?\\.|Αρ\\.)\\s*${no}(?!\\d)`).test(l.subject || '')));
   }
   return sortBy(xs, (l) => -Number(l.protocol_seq)).map((l) => String(l.protocol_seq))[0] || '';
 }
@@ -533,7 +533,10 @@ export async function publishProgramme(force = false) {
   })().finally(() => { publishing = null; });
   return publishing;
 }
+let firstPublish = true;
 db.on((ev) => {
+  // με το άνοιγμα της εφαρμογής: το δημόσιο πρόγραμμα ευθυγραμμίζεται με τα τρέχοντα δεδομένα (μόνο αν άλλαξε κάτι)
+  if (ev.type === 'refresh' && firstPublish && db.backend && db.backend.kind === 'github') { firstPublish = false; setTimeout(() => publishProgramme().catch((e) => console.warn('Δημόσιο πρόγραμμα:', e)), 1500); }
   if (ev.type === 'saved' && !/^Δημόσιο πρόγραμμα/.test(ev.message || '') && (ev.tables || []).some((t) => ['visits', 'reps', 'epeteirida', 'member_registry', 'letters'].includes(t))) {
     setTimeout(() => publishProgramme().catch((e) => console.warn('Δημόσιο πρόγραμμα:', e)), 400);
   }

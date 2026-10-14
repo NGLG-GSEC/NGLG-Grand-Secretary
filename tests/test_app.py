@@ -1233,6 +1233,13 @@ def test_template_representative_field_and_day_article(app):
     assert 'υπ’ αρ. 32, την Παρασκευή, 9 Οκτωβρίου 2099, θα παραστεί' in body, body
     assert 'Μεγάλου Διδασκάλου, Πανσεβάσμιος Αδ. Αθανάσιος Νικολαΐδης, Βοηθός Μέγας Διδάσκαλος.' in body, body
     assert 'rep@example.com' in app.page.input_value('[name=recipient_email]')
+    # η επιστολή από τη «Συμπλήρωση από τη βάση» συνδέεται με την Επίσκεψη
+    vid = app.page.evaluate("async () => (await import('./core/store.js')).db.all('visits').find((v) => v.lodge_number === '32').id")
+    assert app.page.input_value('[name=visit_id]') == str(vid)
+    app.page.fill('[name=subject]', 'Δοκιμή εκπροσώπησης')
+    app.click('💾 Αποθήκευση')
+    app.page.wait_for_url('**/#/letters/*')
+    assert app.page.evaluate("async () => (await import('./core/store.js')).db.all('letters').at(-1).visit_id") == vid
 
 
 def test_old_visit_letter_link_uses_representation_template(app):
@@ -1470,7 +1477,7 @@ def test_gm_programme_report_and_public_page(app):
     # αριθμός πρωτοκόλλου της επιστολής κάθε επίσκεψης (κόκκινος)
     app.page.evaluate("""async () => { const {db} = await import('./core/store.js');
       const v = db.all('visits').find((x) => x.lodge === 'ΒΗΤΑ');
-      await db.save('x', (tx) => { tx.insert('letters', { protocol_seq: 20550, protocol_no: '20550', status: 'ready', category: 'ΕΠΙΣΚΕΨΗ', subject: 'Εκπροσώπηση ΜΔ εις την Στοάν «ΒΗΤΑ» υπ’ αριθμ. 20', body: 'x', letter_date: '2026-10-14' });
+      await db.save('x', (tx) => { tx.insert('letters', { protocol_seq: 20550, protocol_no: '20550', status: 'ready', category: 'ΕΠΙΣΤΟΛΗ', subject: 'Εκπροσώπηση ΜΔ εις την Στοάν «ΒΗΤΑ» υπ’ αριθμ. 20', body: 'x', letter_date: '2026-10-14' });
         tx.insert('letters', { protocol_seq: 20551, protocol_no: '20551', status: 'ready', category: 'ΕΠΙΣΚΕΨΗ', subject: 'Επίσημη Επίσκεψη', body: 'x', letter_date: '2026-10-14', visit_id: db.all('visits').find((x) => x.lodge === 'ΑΛΦΑ').id }); }); }""")
     app.go('/visits/gm-programme')
     prs = app.page.locator('.gmp-table td.pr').all_inner_texts()

@@ -83,7 +83,7 @@ function letterForm(x, query = {}) {
 <div><label>Ημερομηνία</label><input value="${esc(fmtDate(x.letter_date || today()))}" disabled></div>
 ${fillPanel(x, query)}
 <div class="full"><label>🔎 Παραλήπτης από τον Κατάλογο / Μητρώο</label><input id="rcptPick" placeholder="Επαρχία, Στοά, ΕπΜΔ, όνομα μέλους…" autocomplete="off"></div>
-<input type="hidden" name="recipient_member_id" value="${esc(x.recipient_member_id || '')}"><input type="hidden" name="closing" value="${esc(x.closing || '')}"><input type="hidden" name="category" value="${esc(category(x))}">
+<input type="hidden" name="recipient_member_id" value="${esc(x.recipient_member_id || '')}"><input type="hidden" name="visit_id" value="${esc(x.visit_id || '')}"><input type="hidden" name="closing" value="${esc(x.closing || '')}"><input type="hidden" name="category" value="${esc(category(x))}">
 <div><label>Παραλήπτης («Προς»)</label><input name="recipient_name" value="${esc(x.recipient_name || '')}"></div>
 <div><label>Email παραλήπτη</label><input name="recipient_email" value="${esc(x.recipient_email || '')}" inputmode="email" placeholder="πολλά με κόμμα"></div>
 <div class="full"><label>Κοιν. (στο έντυπο, κάτω από το «Προς»)</label><textarea name="cc_name" rows="2" style="min-height:0">${esc(x.cc_name || '')}</textarea></div>
@@ -112,7 +112,8 @@ function mountLetterForm(el, x, isNew) {
   };
   const apply = (force) => {
     if (!tpl) return;
-    const c = ctx(), body = fillPlaceholders(tpl.body, c), subject = tpl.subject ? fillPlaceholders(tpl.subject, c) : f.subject.value;
+    const c = ctx(); if (c.visit_id) f.visit_id.value = c.visit_id;
+    const body = fillPlaceholders(tpl.body, c), subject = tpl.subject ? fillPlaceholders(tpl.subject, c) : f.subject.value;
     const edited = (f.body.value.trim() && f.body.value !== auto.body) || (f.subject.value.trim() && f.subject.value !== auto.subject);
     if (!force && edited && !confirmDo('Αντικατάσταση του κειμένου με το πρότυπο συμπληρωμένο από τη βάση;')) return;
     f.body.value = body; f.subject.value = subject; auto = { body, subject };
@@ -150,9 +151,9 @@ function mountLetterForm(el, x, isNew) {
     const emails = splitEmails(d.recipient_email), bad = emails.filter((e) => !EMAIL_RE.test(e));
     if (bad.length) throw new Error('Μη έγκυρο email: ' + bad.join(', '));
     const row = { subject: d.subject.trim(), body: d.body.trim(), template_id: d.template_id ? Number(d.template_id) : null, recipient_name: d.recipient_name.trim(),
-      recipient_email: emails.join(', '), recipient_member_id: d.recipient_member_id ? Number(d.recipient_member_id) : null, cc_name: String(d.cc_name || '').trim(), closing: String(d.closing || '').trim(), category: LETTER_CATEGORIES[d.category] ? d.category : 'ΕΠΙΣΤΟΛΗ', status: d.status, signer: d.signer };
+      recipient_email: emails.join(', '), recipient_member_id: d.recipient_member_id ? Number(d.recipient_member_id) : null, visit_id: Number(d.visit_id) || x.visit_id || null, cc_name: String(d.cc_name || '').trim(), closing: String(d.closing || '').trim(), category: LETTER_CATEGORIES[d.category] ? d.category : 'ΕΠΙΣΤΟΛΗ', status: d.status, signer: d.signer };
     const id = await db.save(isNew ? `Νέα Επιστολή: ${row.subject}` : `Επιστολή ${x.protocol_no || x.id}: ενημέρωση`, (tx) => {
-      const r = isNew ? tx.insert('letters', { ...row, letter_date: today(), source_letter_id: x.source_letter_id || null, visit_id: x.visit_id || null }) : tx.update('letters', x.id, row);
+      const r = isNew ? tx.insert('letters', { ...row, letter_date: today(), source_letter_id: x.source_letter_id || null, visit_id: row.visit_id || x.visit_id || null }) : tx.update('letters', x.id, row);
       if (row.status === 'ready') assignProtocol(tx, r.id);
       return r.id;
     });

@@ -40,7 +40,7 @@ export function fillContext({ visit, lodge_number, date } = {}) {
   if (!visit && lodge_number && date) visit = db.all('visits').find((v) => String(v.lodge_number) === String(lodge_number) && v.visit_date === date) || null;
   const no = visit ? visit.lodge_number : lodge_number, l = no ? lodgeByNumber(no) : null, r = visit && visit.rep_id ? repInfo(visit.rep_id) : null;
   return { lodge: (visit && visit.lodge) || (l && l.name) || '', lodge_number: no ? String(no) : '', date: (visit && visit.visit_date) || date || '',
-    province: (visit && visit.province) || (l && l.provincial) || '', lodgeRec: l, rep: r ? r.text : '', repEmail: r ? r.email : '' };
+    province: (visit && visit.province) || (l && l.provincial) || '', lodgeRec: l, rep: r ? r.text : '', repEmail: r ? r.email : '', visit_id: visit ? visit.id : null };
 }
 // Γραμματέας με τον τίτλο του, όταν ταυτοποιείται στο Μητρώο (π.χ. «Αδ. Νικόλαος Παπαδόπουλος»)
 const secretaryName = (s) => { if (/Αδ\./.test(s)) return s; const id = identify({ full_name: s }), m = id && db.get('member_registry', id); return m ? titledName(m) : s; };
