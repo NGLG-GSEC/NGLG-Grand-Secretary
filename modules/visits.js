@@ -520,7 +520,7 @@ function gmProgrammePaper(rows, { showRep = true } = {}) {
   const d = (iso) => { const x = parseIso(iso); return x ? `<b>${esc(fmtDate(iso))}</b><small>${esc(DAYS[x.getDay()])}</small>` : esc(iso); };
   const who = (r) => (isGM(r) ? '<b>Ο Μέγας Διδάσκαλος</b>' : `${esc(repFull(r))}`);
   const body = rows.map(({ v, r, prot, letter }, i) => `<tr><td class="n">${i + 1}</td><td class="d">${d(v.visit_date)}</td><td class="l"><b>«${esc(v.lodge || '')}»</b>${v.lodge_number ? `<small>υπ’ αριθ. ${esc(v.lodge_number)}</small>` : ''}</td>`
-    + `<td class="p">${esc(v.province || '')}</td>${showRep ? `<td class="r">${who(r)}</td>` : ''}<td class="pr">${prot ? `<a href="#/letters/${letter.id}" title="Άνοιγμα της επιστολής">${esc(prot)}</a>` : '—'}</td></tr>`).join('');
+    + `<td class="p">${esc(v.province || '')}</td>${showRep ? `<td class="r">${who(r)}</td>` : ''}<td class="pr">${prot ? `<a href="#/letters/${letter.id}/preview" title="Άνοιγμα της επιστολής">${esc(prot)}</a>` : '—'}</td></tr>`).join('');
   return `<article class="paper report gmprog">${letterhead()}<div class="gmp-office">ΜΕΓΑΛΗ ΓΡΑΜΜΑΤΕΙΑ</div>
 <div class="gmp-meta">Εν Αθήναις, ${esc(longToday())}</div>
 <p class="gmp-subject"><b>Θέμα:</b> Πρόγραμμα επισκέψεων του Σεβασμιωτάτου Μεγάλου Διδασκάλου</p>

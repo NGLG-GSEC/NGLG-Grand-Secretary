@@ -284,6 +284,18 @@ module({
       return { title: 'Νέα Επιστολή', html: `<h1>Νέα Επιστολή</h1><div class="card signer-card noprint"><b>Υπογράφων:</b> ${esc(ACTORS[actor()])} <a class="btn small" href="#/identity">Αλλαγή</a></div>${letterForm(x, query)}`, mount: (el) => mountLetterForm(el, x, true) };
     },
     '/letters/:id': viewLetter,
+    // Μόνο το έντυπο της επιστολής (χωρίς μενού, αποστολή, παραλήπτες email) — π.χ. από τον Αρ. Πρωτ. της Αναφοράς εκπροσώπησης
+    '/letters/:id/preview': ({ params }) => {
+      const x = db.get('letters', params.id);
+      if (!x) return { title: 'Επιστολή', bare: true, html: '<p class="lmsg">Δεν βρέθηκε η επιστολή.</p>' };
+      return { title: `Επιστολή ${x.protocol_seq || ''}`, bare: true,
+        html: `<div class="lbar noprint"><a class="back" href="javascript:history.back()">← Πίσω</a><span>Αρ. Πρωτ. ${esc(String(x.protocol_seq || x.protocol_no || ''))}</span><button type="button" class="btn" data-act="print">🖨 Εκτύπωση</button><button type="button" class="btn" data-act="pdf">⬇ PDF</button></div>
+<div class="print-area lwrap">${letterPaper(x)}</div>`,
+        mount(el) {
+          const p = el.querySelector('.paper'); if (p) fitPaper(p);
+          bind(el, { print: () => window.print(), async pdf() { const r = await letterPdf(x); download(r.name, r.blob, 'application/pdf'); } });
+        } };
+    },
     '/letters/:id/edit': ({ params }) => {
       const x = db.get('letters', params.id);
       if (!x) return '<h1>Δεν βρέθηκε η επιστολή</h1>';

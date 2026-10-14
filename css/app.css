@@ -338,3 +338,8 @@ input[type=file]{max-width:100%;min-width:0}
 .paper.gmprog .gmp-table td.pr{color:#b3261e;font-weight:700;white-space:nowrap}
 .paper.gmprog .gmp-table td.pr a{color:#b3261e;text-decoration:underline}
 .vlodge .vprot{color:#b3261e;font-weight:700;margin-left:8px;white-space:nowrap;text-decoration:underline;text-underline-offset:3px}
+/* Προεπισκόπηση επιστολής χωρίς μενού (#/letters/:id/preview) */
+.lbar{position:sticky;top:0;z-index:5;display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:center;padding:10px 12px;background:#1d2f5e;color:#fff;font-weight:600}
+.lbar a.back{color:#fff;text-decoration:none;padding:6px 10px;border:1px solid #e9dcc0;border-radius:6px}
+.lwrap{padding:12px 0 30px}.lmsg{text-align:center;color:#6b7790;font-style:italic;padding:40px 16px}
+@media print{.lbar{display:none!important}.lwrap{padding:0}}

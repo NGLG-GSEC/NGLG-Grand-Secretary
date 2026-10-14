@@ -1511,7 +1511,11 @@ def test_gm_programme_report_and_public_page(app):
     prs = app.page.locator('.gmp-table td.pr').all_inner_texts()
     assert prs == ['20551', '20550'], prs
     lid = app.page.evaluate("async () => (await import('./core/store.js')).db.all('letters').find((l) => l.protocol_seq === 20551).id")
-    assert app.page.locator('.gmp-table td.pr a').first.get_attribute('href') == f'#/letters/{lid}'
+    assert app.page.locator('.gmp-table td.pr a').first.get_attribute('href') == f'#/letters/{lid}/preview'
+    app.page.locator('.gmp-table td.pr a').first.click()
+    app.page.wait_for_selector('.print-area .paper')
+    assert app.page.locator('nav, .top, .mailsheet, [data-act=del]').count() == 0 and '20551' in app.text('.lbar')
+    app.page.go_back()
     assert app.page.evaluate("() => getComputedStyle(document.querySelector('.gmp-table td.pr')).color") == 'rgb(179, 38, 30)'
     # το δημόσιο πρόγραμμα γράφεται στα δεδομένα
     app.page.click('[data-act=publish]')
