@@ -7,6 +7,20 @@ import { disconnect, makeInvite, isSealed, lockSession } from '../core/connect.j
 import { copyText } from '../core/mail.js';
 import { historyLink, exportAll } from './database.js';
 
+// Αφαίρεση διευθύνσεων από όλες τις λίστες Κοιν./Bcc των Ρυθμίσεων. Στον (δημόσιο) κώδικα μένει μόνο αποτύπωμα (FNV-1a)
+// της διεύθυνσης, όχι η ίδια η διεύθυνση.
+export const emailHash = (e) => { let h = 0x811c9dc5; for (const c of String(e).trim().toLowerCase()) { h ^= c.codePointAt(0); h = Math.imul(h, 0x01000193) >>> 0; } return h.toString(16); };
+export function withoutHashed(v, hashes) {
+  if (typeof v !== 'string' || !v.includes('@')) return v;
+  const parts = v.split(/[,;\n]+/).map((x) => x.trim()).filter(Boolean);
+  const keep = parts.filter((x) => !(String(x).match(/[^\s<>,;:"'()]+@[^\s<>,;:"'()]+\.[A-Za-z]{2,}/g) || []).some((e) => hashes.includes(emailHash(e))));
+  return keep.length === parts.length ? v : keep.join(', ');
+}
+const REMOVED_EMAILS = ['7da049a6'];
+db.migrate('remove-cc-bcc-email-2026-10-14', (tx) => {
+  for (const k of Object.keys(db.settings || {})) { const v = tx.setting(k), n = withoutHashed(v, REMOVED_EMAILS); if (n !== v) tx.setting(k, n); }
+});
+
 const GROUPS = [
   ['Στοιχεία επίσημων εντύπων', [['organization_name', 'Επωνυμία'], ['founded_year', 'Έτος ιδρύσεως'], ['grand_master_title', 'Τίτλος Μεγάλου Διδασκάλου'], ['grand_master_name', 'Όνομα Μεγάλου Διδασκάλου'],
     ['grand_secretary_name', 'Όνομα Μεγάλου Γραμματέα'], ['grand_secretary_title', 'Τίτλος Μεγάλου Γραμματέα'], ['closing', 'Αποφώνηση επιστολών']]],

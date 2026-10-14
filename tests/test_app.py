@@ -1513,7 +1513,8 @@ def test_gm_programme_report_and_public_page(app):
     lid = app.page.evaluate("async () => (await import('./core/store.js')).db.all('letters').find((l) => l.protocol_seq === 20551).id")
     assert app.page.locator('.gmp-table td.pr a').first.get_attribute('href') == f'#/letters/{lid}/preview'
     app.page.locator('.gmp-table td.pr a').first.click()
-    app.page.wait_for_selector('.print-area .paper')
+    app.page.wait_for_url('**/preview')
+    app.page.wait_for_selector('.lbar')
     assert app.page.locator('nav, .top, .mailsheet, [data-act=del]').count() == 0 and '20551' in app.text('.lbar')
     app.page.go_back()
     assert app.page.evaluate("() => getComputedStyle(document.querySelector('.gmp-table td.pr')).color") == 'rgb(179, 38, 30)'
@@ -1550,3 +1551,10 @@ def test_gm_programme_report_and_public_page(app):
     assert pub.evaluate("() => document.querySelector('.auto').compareDocumentPosition(document.querySelector('#mda')) & Node.DOCUMENT_POSITION_FOLLOWING")
     assert 'ΜΕΓΑΛΗ ΓΡΑΜΜΑΤΕΙΑ' in pt and '«ΑΛΦΑ»' in pt and 'Ο Μέγας Διδάσκαλος' in pt and pub.locator('tbody tr').count() == 2
     pub.close()
+
+
+def test_remove_hashed_email_from_cc_lists(app):
+    app.connect_local()
+    r = app.page.evaluate("""async () => { const m = await import('./modules/settings.js'), h = m.emailHash('Gone.Person@Example.com');
+      return [m.withoutHashed('a@x.gr, gone.person@example.com, b@x.gr', [h]), m.withoutHashed('Όνομα <gone.person@example.com>\\nc@x.gr', [h]), m.withoutHashed('a@x.gr, b@x.gr', [h]), m.withoutHashed(5, [h])]; }""")
+    assert r == ['a@x.gr, b@x.gr', 'c@x.gr', 'a@x.gr, b@x.gr', 5], r
