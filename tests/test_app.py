@@ -1502,7 +1502,7 @@ def test_gm_programme_report_and_public_page(app):
     # αριθμός πρωτοκόλλου της επιστολής κάθε επίσκεψης (κόκκινος)
     app.page.evaluate("""async () => { const {db} = await import('./core/store.js');
       const v = db.all('visits').find((x) => x.lodge === 'ΒΗΤΑ');
-      await db.save('x', (tx) => { tx.insert('letters', { protocol_seq: 20550, protocol_no: '20550', status: 'ready', category: 'ΕΠΙΣΤΟΛΗ', subject: 'Εκπροσώπηση ΜΔ εις την Στοάν «ΒΗΤΑ» υπ’ αριθμ. 20', body: 'x', letter_date: '2026-10-14' });
+      await db.save('x', (tx) => { tx.insert('letters', { protocol_seq: 20550, protocol_no: '20550', status: 'ready', category: 'ΕΠΙΣΤΟΛΗ', subject: 'Εκπροσώπηση ΜΔ εις την Στοάν «ΒΗΤΑ» υπ’ αριθμ. 20', body: 'Σώμα επιστολής ΒΗΤΑ, γράψτε στο secret.person@example.com', recipient_name: 'ΕπΜΓρ. Αθηνών', cc_name: 'Πανσεβ. Αδ. Νικολαΐδης\\nrep.secret@example.com', letter_date: '2026-10-14' });
         tx.insert('letters', { protocol_seq: 20551, protocol_no: '20551', status: 'ready', category: 'ΕΠΙΣΚΕΨΗ', subject: 'Επίσημη Επίσκεψη', body: 'x', letter_date: '2026-10-14', visit_id: db.all('visits').find((x) => x.lodge === 'ΑΛΦΑ').id }); }); }""")
     app.go('/visits')
     cards = {c.locator('.vlodge a').first.inner_text(): c.locator('.vprot').all_inner_texts() for c in app.page.locator('.vcard').all()}
@@ -1526,7 +1526,19 @@ def test_gm_programme_report_and_public_page(app):
     pub.wait_for_selector('table tbody tr')
     pt = pub.inner_text('body')
     assert pub.locator('td.pr').first.inner_text().strip() == '20551'
-    assert pub.locator('td.pr a').first.get_attribute('href') == f'https://nglg-gsec.github.io/NGLG-Grand-Secretary/#/letters/{lid}'
+    assert pub.locator('td.pr a').first.get_attribute('href') == 'https://nglg-gsec.github.io/NGLG-Grand-Secretary/programme/letter.html?p=20551'
+    assert set(data['letters']) == {'20550', '20551'} and '@' not in json.dumps(data['letters'])
+    # η προεπισκόπηση της επιστολής (χωρίς σύνδεση, χωρίς email)
+    lp = app.page.context.new_page()
+    lp.route('**/programme/programme.json*', lambda r: r.fulfill(json=data))
+    lp.goto(app.base + 'programme/letter.html?p=20550')
+    lp.wait_for_selector('.paper')
+    lt = lp.inner_text('.paper')
+    assert '20550' in lt and 'Σώμα επιστολής ΒΗΤΑ' in lt and 'Νικολαΐδης' in lt and '@' not in lt and 'Θέμα' in lt
+    assert lp.locator('.lbar button', has_text='Εκτύπωση / PDF').count() == 1 and lp.evaluate("() => document.querySelector('.paper .head img').naturalWidth") > 0
+    lp.goto(app.base + 'programme/letter.html?p=99999')
+    lp.wait_for_selector('text=δεν είναι διαθέσιμη')
+    lp.close()
     assert 'ΑΥΤΟΜΑΤΟ ΣΥΣΤΗΜΑ ΕΝΗΜΕΡΩΣΗΣ ΣΥΜΦΩΝΑ ΜΕ ΤΑ ΙΣΧΥΟΝΤΑ' in pt and 'Λίαν Σεβάσμιοι και Σεβάσμιοι Αδελφοί' in pt and 'Σεβαστοί' not in pt
     assert 'ΣΤΟ ΜΥΑΛΟ ΤΟΥ ΜΔ' in pt and pub.locator('#mda a[href="sto-myalo-tou-md.pdf"]').count() == 3
     assert pub.request.get(app.base + 'programme/sto-myalo-tou-md.pdf').body()[:5] == b'%PDF-'

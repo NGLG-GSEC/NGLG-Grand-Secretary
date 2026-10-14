@@ -7,7 +7,7 @@ import { crud } from '../core/crud.js';
 import { esc, fold, today, fmtDate, dayStr, parseIso, sortBy, download, EMAIL_RE, splitEmails, grUpper, DAYS, isoDate, parsePasted, readXlsx } from '../core/util.js';
 import { senderBanner, copyText } from '../core/mail.js';
 import { bccWithout } from '../core/gmail.js';
-import { reportPaper, printPaper, letterhead, IMG } from '../core/paper.js';
+import { reportPaper, printPaper, letterhead, letterPaper, IMG } from '../core/paper.js';
 import { attachPicker, contactItems, memberItems, noContact } from '../core/pickers.js';
 import { provincialChoices, provinceByShort, provinceRoles } from './provinces.js';
 import { lodgesAll, lodgeNoKey, lodgeByNumber, cleanLodgeName } from './lodges.js';
@@ -506,7 +506,11 @@ export function visitLetter(v, letters = db.all('letters')) {
 export const visitProtocol = (v, letters) => { const l = visitLetter(v, letters); return l ? String(seqOf(l)) : ''; };
 // Σύνδεσμος της επιστολής: το PDF στο Drive (αν αποθηκεύτηκε) — αλλιώς η επιστολή στην εφαρμογή (για όσους έχουν πρόσβαση)
 const APP_URL = 'https://nglg-gsec.github.io/NGLG-Grand-Secretary/';
-const letterLink = (l) => (l ? l.drive_pdf || `${APP_URL}#/letters/${l.id}` : '');
+// Δημόσια προεπισκόπηση της επιστολής (programme/letter.html): το έντυπο Α4 χωρίς διευθύνσεις email
+const publicLetterUrl = (l) => (l ? `${APP_URL}programme/letter.html?p=${encodeURIComponent(String(seqOf(l)))}` : '');
+const ANY_EMAIL = /[^\s<>,;:"'()]+@[^\s<>,;:"'()]+\.[A-Za-z]{2,}/g;
+const noEmails = (t) => String(t || '').replace(ANY_EMAIL, '').replace(/[ \t]*(<\s*>|\(\s*\)|[,;:]\s*(?=\n|$))/g, '').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+const publicLetterHtml = (l) => letterPaper({ ...l, recipient_name: noEmails(l.recipient_name), cc_name: noEmails(l.cc_name), subject: noEmails(l.subject), body: noEmails(l.body), protocol_seq: seqOf(l) });
 export function gmProgrammeRows(frm = today(), to = '') {
   const reps = repMap(), letters = db.all('letters');
   return sortBy(visitsAll().filter((v) => v.visit_date >= (frm || today()) && (!to || v.visit_date <= to) && !noRep(reps[v.rep_id])), 'visit_date', (v) => Number(v.lodge_number) || 0)
@@ -532,7 +536,8 @@ export const PUBLIC_PROGRAMME_URL = 'https://nglg-gsec.github.io/NGLG-Grand-Secr
 export function publicProgramme() {
   return { title: 'Πρόγραμμα επισκέψεων του Σεβασμιωτάτου Μεγάλου Διδασκάλου', salute: GMP_SALUTE, text: GMP_TEXT, closing: 'Με αδελφικούς χαιρετισμούς,',
     signer: 'Δημήτριος Σκιαδόπουλος', signer_title: 'Μέγας Γραμματέας', organization: db.setting('organization_name') || '',
-    rows: gmProgrammeRows(today()).map(({ v, r, prot, letter }) => ({ protocol: prot, letter_url: letterLink(letter), date: v.visit_date, lodge: v.lodge || '', no: String(v.lodge_number || ''), province: v.province || '', rep: isGM(r) ? 'Ο Μέγας Διδάσκαλος' : repFull(r), gm: isGM(r) ? 1 : 0 })) };
+    letters: Object.fromEntries(gmProgrammeRows(today()).filter((x) => x.letter).map(({ letter }) => [String(seqOf(letter)), { html: publicLetterHtml(letter), pdf: letter.drive_pdf || '' }])),
+    rows: gmProgrammeRows(today()).map(({ v, r, prot, letter }) => ({ protocol: prot, letter_url: publicLetterUrl(letter), date: v.visit_date, lodge: v.lodge || '', no: String(v.lodge_number || ''), province: v.province || '', rep: isGM(r) ? 'Ο Μέγας Διδάσκαλος' : repFull(r), gm: isGM(r) ? 1 : 0 })) };
 }
 let publishing = null;
 export async function publishProgramme(force = false) {
