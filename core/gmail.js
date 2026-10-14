@@ -82,7 +82,8 @@ export function mailSheet(el, { getMsg, getPdf, kind = 'general', pdfName = '', 
   };
   const state = (h) => { box.querySelector('.ms-state').innerHTML = h; };
   async function send(ev) {
-    const b = ev.currentTarget, m = getMsg(), from = senderFor(kind);
+    const b = ev.currentTarget, from = senderFor(kind);
+    let m = getMsg();
     if (!list(m.to).length) { state('<span class="warn">Συμπληρώστε τον παραλήπτη (Προς).</span>'); return; }
     if (!driveReady()) { state('<span class="warn">Για άμεση αποστολή χρειάζεται το Google Client ID (Ρυθμίσεις → Google). Μέχρι τότε χρησιμοποιήστε «Άνοιγμα στο Gmail».</span>'); return; }
     const n = list(m.bcc).length;
@@ -91,6 +92,7 @@ export function mailSheet(el, { getMsg, getPdf, kind = 'general', pdfName = '', 
     try {
       state('⏳ Ετοιμάζεται το PDF…');
       const pdf = await getPdf();
+      m = getMsg();
       state(`⏳ Αποστολή από ${esc(from)}…`);
       await sendNow(m, [{ name: pdf.name, type: 'application/pdf', b64: await blobB64(pdf.blob) }], kind);
       state(`<div class="ms-ok">✓ Το email στάλθηκε από <b>${esc(from)}</b> με το PDF συνημμένο (θα το βρείτε στα «Απεσταλμένα» του Gmail).</div>`);
@@ -102,12 +104,14 @@ export function mailSheet(el, { getMsg, getPdf, kind = 'general', pdfName = '', 
     }
   }
   async function go(ev) {
-    const b = ev.currentTarget, m = getMsg(), desktop = !isMobile();
+    const b = ev.currentTarget, desktop = !isMobile();
+    let m = getMsg();
     b.disabled = true;
     const win = desktop ? window.open('about:blank', '_blank') : null; // πριν από την αναμονή, ώστε να μη μπλοκαριστεί
     try {
       state('⏳ Ετοιμάζεται το PDF…');
       const pdf = await getPdf();
+      m = getMsg(); // π.χ. ο Αρ. Πρωτ. στο θέμα, αν η επιστολή μόλις δημιουργήθηκε
       if (driveReady()) {
         state('⏳ Δημιουργείται το email στο Gmail…');
         const d = await createDraft(m, [{ name: pdf.name, type: 'application/pdf', b64: await blobB64(pdf.blob) }], kind);

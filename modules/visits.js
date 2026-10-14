@@ -398,7 +398,10 @@ ${attach ? `<p><button type="button" class="btn" data-act="ics">📅 Λήψη ${
     async mount(el) {
       const f = el.querySelector('#cf');
       const { gmailUrl, mailtoUrl } = await import('../core/mail.js');
-      const cur = () => ({ to: f.to.value, cc: f.cc.value, bcc: f.bcc.value, subject: f.subject.value, body: f.body.value, kind });
+      const cur = () => {
+        if (visit) { const n = withProt(f.subject.value, visitProtocol(visit)); if (n !== f.subject.value.trim()) f.subject.value = n; }
+        return { to: f.to.value, cc: f.cc.value, bcc: f.bcc.value, subject: f.subject.value, body: f.body.value, kind };
+      };
       attachPicker(el.querySelector('#cPick'), contactItems, (c) => { if (c.email) f.to.value = [...splitEmails(f.to.value), c.email].join(', '); });
       bind(el, {
         gmail: () => window.open(gmailUrl(cur()), '_blank', 'noopener'),
@@ -454,11 +457,13 @@ function visitRecipients(v) {
   const to = g.to || all.shift() || '';
   return { ...g, to, cc: all.filter((e) => e !== to).join(', '), r, gm, repEmail: repEmail || '' };
 }
+// Θέμα με τον Αρ. Πρωτ. μπροστά (π.χ. «20551 - Επίσημη Επίσκεψη ΜΔ …»), όταν η επιστολή της Επίσκεψης έχει αριθμό
+const withProt = (subject, seq) => { const t = String(subject || '').trim(); return !seq || t.startsWith(String(seq)) ? t : `${seq} - ${t}`; };
 function notifyPage({ query }) {
   const v = db.get('visits', ids(query.ids)[0]);
   if (!v) return '<h1>Δεν βρέθηκε η επίσκεψη</h1>';
   const g = visitRecipients(v), back = query.back === 'list' ? '#/visits' : `#/visits/edit/${v.id}`;
-  return composePage(g.gm ? 'Επίσημη Επίσκεψη του Μεγάλου Διδασκάλου' : 'Εκπροσώπηση του Μεγάλου Διδασκάλου', { to: g.to, cc: g.cc, bcc: bccWithout(db.setting('visit_bcc') || '', g.to, g.cc), subject: visitSubject(v), body: visitBody(v) }, {
+  return composePage(g.gm ? 'Επίσημη Επίσκεψη του Μεγάλου Διδασκάλου' : 'Εκπροσώπηση του Μεγάλου Διδασκάλου', { to: g.to, cc: g.cc, bcc: bccWithout(db.setting('visit_bcc') || '', g.to, g.cc), subject: withProt(visitSubject(v), visitProtocol(v)), body: visitBody(v) }, {
     visit: v, kind: 'general',
     hint: [!g.to && g.r && !g.gm && 'Η Επαρχία δεν έχει email ΕπΜΓρ. (Μητρώα → Επαρχιακές Μεγάλες Στοές) — συμπληρώστε το εδώ.', (!g.r || g.gm) && !g.lodgeMail && 'Η Στοά δεν έχει email (Συμβολικές Στοές → email Στοάς ή Γραμματέα): το email πηγαίνει στον ΕπΜΓρ. — ή συμπληρώστε εδώ το email της Στοάς.',
       g.r && !g.gm && !g.repEmail && `Ο εκπρόσωπος ${g.r.surname} ${g.r.name} δεν έχει email — συμπληρώστε το εδώ.`, !g.r && 'Δεν έχει οριστεί εκπρόσωπος.'].filter(Boolean).join(' '),

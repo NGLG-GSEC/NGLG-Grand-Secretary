@@ -1285,6 +1285,8 @@ def test_visit_email_gmail_draft_with_pdf_and_bcc(app):
     raw = drafts[0]['json']['message']['raw']
     mime = base64.urlsafe_b64decode(raw + '=' * (-len(raw) % 4)).decode()
     assert 'From: info@nglgreece.gr' in mime and 'To: secretary.pr.pwg.nglgreece@gmail.com' in mime
+    subj = mime.split('Subject: ')[1].split('\r\n')[0]
+    assert subj.startswith('=?UTF-8?B?') and base64.b64decode(subj[10:-2]).decode().startswith('20545 - Εκπροσώπηση'), subj  # Αρ. Πρωτ. μπροστά στο θέμα
     assert 'Cc: rep@example.com, gm@example.com' in mime and 'Bcc: b1@example.com, b2@example.com' in mime
     assert 'Content-Type: application/pdf' in mime and "filename*=UTF-8''20545%20-%20%CE%95%CE%A0%CE%99%CE%A3%CE%9A%CE%95%CE%A8%CE%97" in mime
     pdf_b64 = mime.split("filename*=UTF-8''")[1].split('\r\n\r\n', 1)[1].split('\r\n--')[0].replace('\r\n', '')
@@ -1312,6 +1314,7 @@ def test_visit_email_gmail_draft_with_pdf_and_bcc(app):
     app.go(f'/visits/notify?ids={vid}&back=list')
     app.page.wait_for_selector('[data-ms=send]')
     assert 'Αποστολή τώρα από info@nglgreece.gr' in app.page.inner_text('[data-ms=send]')
+    assert app.page.input_value('[name=subject]').startswith('20545 - Εκπροσώπηση ΜΔ εις την Στοάν «ΔΙΩΝΗ»')
     app.page.click('[data-ms=send]')
     app.page.wait_for_selector('.ms-state .warn', timeout=30000)
     assert 'other@example.com' in app.text('.ms-state') and not sent  # λάθος λογαριασμός → δεν στάλθηκε
