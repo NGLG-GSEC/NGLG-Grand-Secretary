@@ -42,6 +42,20 @@ export async function createDraft(msg, attachments, kind) {
   const j = await r.json();
   return { id: j.id, messageId: j.message && j.message.id };
 }
+// Άμεση αποστολή από τον λογαριασμό αποστολής (π.χ. info@nglgreece.gr) → { id }
+// Ελέγχεται πρώτα ότι ο συνδεδεμένος λογαριασμός Google είναι ο σωστός, ώστε να μη φύγει από άλλο email.
+export async function sendNow(msg, attachments, kind) {
+  const from = senderFor(kind), token = await googleToken(GMAIL_SCOPE, from), H = { Authorization: `Bearer ${token}` };
+  const pr = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/profile', { headers: H });
+  if (pr.ok) {
+    const me = String((await pr.json()).emailAddress || '').toLowerCase();
+    if (me && me !== from.toLowerCase()) throw new Error(`Ο λογαριασμός Google που επιλέχθηκε είναι ${me}, όχι ${from}. Δεν στάλθηκε τίποτα — πατήστε ξανά και επιλέξτε τον ${from}.`);
+  }
+  const raw = btoa(buildMime({ ...msg, from, attachments })).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const r = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', { method: 'POST', headers: { ...H, 'Content-Type': 'application/json' }, body: JSON.stringify({ raw }) });
+  if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error(`Gmail ${r.status}: ${(j.error && j.error.message) || r.statusText}`); }
+  return r.json();
+}
 // Σύνδεσμοι ανοίγματος του Προχείρου
 export const draftWebUrl = (kind, messageId) => `https://mail.google.com/mail/u/${encodeURIComponent(senderFor(kind))}/#drafts${messageId ? '?compose=' + messageId : ''}`;
 export const gmailAppUrl = (kind, messageId) => (isIOS() ? 'googlegmail:///'
@@ -52,7 +66,8 @@ const blobB64 = async (blob) => b64(new Uint8Array(await blob.arrayBuffer()));
 const chips = (xs) => list(xs).map((e) => `<span class="mchip">${esc(e)}</span>`).join('') || '<span class="muted">—</span>';
 
 // Καρτέλα αποστολής: getMsg() → { to, cc, bcc, subject, body }, getPdf() → Promise<{ blob, name }>
-export function mailSheet(el, { getMsg, getPdf, kind = 'general', pdfName = '', onDone = null }) {
+// onSent: καλείται μετά την άμεση αποστολή (π.χ. σημείωση «ενημερώθηκε»)
+export function mailSheet(el, { getMsg, getPdf, kind = 'general', pdfName = '', onDone = null, onSent = null }) {
   const box = el.querySelector('.mailsheet');
   const render = () => {
     const m = getMsg();
@@ -60,10 +75,32 @@ export function mailSheet(el, { getMsg, getPdf, kind = 'general', pdfName = '', 
 <div class="ms-row"><span>Προς</span><div>${chips(m.to)}</div></div><div class="ms-row"><span>Κοιν.</span><div>${chips(m.cc)}</div></div><div class="ms-row"><span>Bcc</span><div>${chips(m.bcc)}</div></div>
 <div class="ms-row"><span>Θέμα</span><div><b>${esc(m.subject || '')}</b></div></div>
 <div class="ms-row"><span>📎</span><div><span class="mchip att">${esc(pdfName || 'PDF επιστολής')}.pdf</span></div></div>
-<div class="ms-acts"><button type="button" class="btn primary big" data-ms="go">✉ Άνοιγμα στο Gmail με το PDF</button></div><div class="ms-state muted"></div>`;
+<div class="ms-acts"><button type="button" class="btn primary big" data-ms="send">📤 Αποστολή τώρα από ${esc(senderFor(kind))}</button>
+<button type="button" class="btn big" data-ms="go">✉ Άνοιγμα στο Gmail με το PDF (έλεγχος πριν την αποστολή)</button></div><div class="ms-state muted"></div>`;
     box.querySelector('[data-ms=go]').onclick = go;
+    box.querySelector('[data-ms=send]').onclick = send;
   };
   const state = (h) => { box.querySelector('.ms-state').innerHTML = h; };
+  async function send(ev) {
+    const b = ev.currentTarget, m = getMsg(), from = senderFor(kind);
+    if (!list(m.to).length) { state('<span class="warn">Συμπληρώστε τον παραλήπτη (Προς).</span>'); return; }
+    if (!driveReady()) { state('<span class="warn">Για άμεση αποστολή χρειάζεται το Google Client ID (Ρυθμίσεις → Google). Μέχρι τότε χρησιμοποιήστε «Άνοιγμα στο Gmail».</span>'); return; }
+    const n = list(m.bcc).length;
+    if (!window.confirm(`Αποστολή τώρα από ${from};\n\nΠρος: ${list(m.to).join(', ')}${list(m.cc).length ? `\nΚοιν.: ${list(m.cc).join(', ')}` : ''}${n ? `\nBcc: ${n} παραλήπτες` : ''}\nΘέμα: ${m.subject || ''}\nΣυνημμένο: ${pdfName || 'PDF επιστολής'}.pdf`)) return;
+    box.querySelectorAll('button').forEach((x) => { x.disabled = true; });
+    try {
+      state('⏳ Ετοιμάζεται το PDF…');
+      const pdf = await getPdf();
+      state(`⏳ Αποστολή από ${esc(from)}…`);
+      await sendNow(m, [{ name: pdf.name, type: 'application/pdf', b64: await blobB64(pdf.blob) }], kind);
+      state(`<div class="ms-ok">✓ Το email στάλθηκε από <b>${esc(from)}</b> με το PDF συνημμένο (θα το βρείτε στα «Απεσταλμένα» του Gmail).</div>`);
+      b.textContent = '✓ Στάλθηκε';
+      if (onSent) await onSent();
+    } catch (e) {
+      state(`<span class="warn">${esc(e.message || e)}</span>`);
+      box.querySelectorAll('button').forEach((x) => { x.disabled = false; });
+    }
+  }
   async function go(ev) {
     const b = ev.currentTarget, m = getMsg(), desktop = !isMobile();
     b.disabled = true;

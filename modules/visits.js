@@ -410,7 +410,7 @@ ${attach ? `<p><button type="button" class="btn" data-act="ics">📅 Λήψη ${
         const { mailSheet } = await import('../core/gmail.js'), L = await import('./letters.js');
         const lt = () => sortBy(db.all('letters').filter((l) => l.visit_id === visit.id && l.status === 'ready'), (l) => -(l.protocol_seq || 0))[0];
         const sheet = mailSheet(el, { kind, getMsg: cur, pdfName: lt() ? L.letterFileName(lt()) : 'Επιστολή Επίσκεψης (αρ. πρωτοκόλλου)',
-          getPdf: async () => L.letterPdf(await L.ensureVisitLetter(visit)) });
+          getPdf: async () => L.letterPdf(await L.ensureVisitLetter(visit)), onSent: () => onSent(cur()) });
         let t = 0; f.addEventListener('input', () => { clearTimeout(t); t = setTimeout(sheet.render, 400); });
       }
       onSubmit(f, async () => { await onSent(cur()); });

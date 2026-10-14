@@ -1298,6 +1298,31 @@ def test_visit_email_gmail_draft_with_pdf_and_bcc(app):
     app.go(f"/letters/{ls[0]['id']}")
     app.page.wait_for_selector('.mailsheet .ms-head')
     assert 'b1@example.com' in app.text('.mailsheet')
+    # άμεση αποστολή από info@: έλεγχος λογαριασμού, αποστολή, σημείωση «ενημερώθηκε»
+    sent, profile = [], {'emailAddress': 'other@example.com'}
+
+    def gmail2(route, request):
+        if request.url.endswith('/profile'):
+            return route.fulfill(json=profile)
+        sent.append(json.loads(request.post_data or '{}'))
+        return route.fulfill(json={'id': 'm-1'})
+    app.page.unroute('https://gmail.googleapis.com/**')
+    app.page.route('https://gmail.googleapis.com/**', gmail2)
+    vid = app.page.evaluate("async () => (await import('./core/store.js')).db.all('visits')[0].id")
+    app.go(f'/visits/notify?ids={vid}&back=list')
+    app.page.wait_for_selector('[data-ms=send]')
+    assert 'Αποστολή τώρα από info@nglgreece.gr' in app.page.inner_text('[data-ms=send]')
+    app.page.click('[data-ms=send]')
+    app.page.wait_for_selector('.ms-state .warn', timeout=30000)
+    assert 'other@example.com' in app.text('.ms-state') and not sent  # λάθος λογαριασμός → δεν στάλθηκε
+    profile['emailAddress'] = 'info@nglgreece.gr'
+    app.page.click('[data-ms=send]')
+    app.page.wait_for_url('**/#/visits', timeout=30000)
+    assert len(sent) == 1
+    mime = base64.urlsafe_b64decode(sent[0]['raw'] + '=' * (-len(sent[0]['raw']) % 4)).decode()
+    assert 'From: info@nglgreece.gr' in mime and 'Bcc: b1@example.com, b2@example.com' in mime and 'Content-Type: application/pdf' in mime
+    v = app.page.evaluate("async () => (await import('./core/store.js')).db.all('visits')[0]")
+    assert v.get('prov_notified_at') and v.get('rep_notified_at'), v
 
 
 EP_TSV = '\n'.join([

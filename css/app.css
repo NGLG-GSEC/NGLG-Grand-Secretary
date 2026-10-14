@@ -256,6 +256,7 @@ input[type=file]{max-width:100%;min-width:0}
 .mchip{display:inline-block;background:#eef2fb;border-radius:999px;padding:3px 10px;margin:2px 4px 2px 0;font-size:.88em;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:top}
 .mchip.att{background:#fdecea;color:#a3261b}
 .mailsheet .ms-acts{margin-top:10px}.mailsheet .btn.big{width:100%;min-height:48px;font-size:1.05em}
+.mailsheet .ms-acts .btn.big+.btn.big{margin-top:8px}
 .mailsheet .ms-state{margin-top:8px}.mailsheet .ms-ok{background:#eef8f0;border-radius:10px;padding:10px;margin-bottom:8px;color:#1d5e2f}
 /* Επετηρίδα (πίνακας) */
 .ep-fgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px 12px;align-items:end}
