@@ -1520,13 +1520,14 @@ def test_gm_programme_report_and_public_page(app):
     assert [r['lodge'] for r in data['rows']] == ['ΑΛΦΑ', 'ΒΗΤΑ'] and data['rows'][0]['gm'] == 1 and [r['protocol'] for r in data['rows']] == ['20551', '20550'] and 'email' not in json.dumps(data)
     # η δημόσια σελίδα το δείχνει (χωρίς σύνδεση)
     pub = app.page.context.new_page()
-    old = {**data, 'salute': 'Σεβασμιώτατοι, Πανσεβάσμιοι, Λίαν Σεβαστοί και Σεβαστοί Αδελφοί,'}  # παλαιότερη δημοσίευση
+    old = {**data, 'rows': [{**r, 'letter_url': 'https://nglg-gsec.github.io/NGLG-Grand-Secretary/#/letters/1'} for r in data['rows']], 'salute': 'Σεβασμιώτατοι, Πανσεβάσμιοι, Λίαν Σεβαστοί και Σεβαστοί Αδελφοί,'}  # παλαιότερη δημοσίευση
     pub.route('**/programme/programme.json*', lambda r: r.fulfill(json=old))
     pub.goto(app.base + 'programme/')
     pub.wait_for_selector('table tbody tr')
     pt = pub.inner_text('body')
     assert pub.locator('td.pr').first.inner_text().strip() == '20551'
-    assert pub.locator('td.pr a').first.get_attribute('href') == 'https://nglg-gsec.github.io/NGLG-Grand-Secretary/programme/letter.html?p=20551'
+    assert pub.locator('td.pr a').first.get_attribute('href') == 'letter.html?p=20551'
+    assert all('#/' not in (h or '') for h in pub.eval_on_selector_all('a', 'xs => xs.map((x) => x.getAttribute("href"))'))  # ποτέ σύνδεσμος στην εφαρμογή
     assert set(data['letters']) == {'20550', '20551'} and '@' not in json.dumps(data['letters'])
     # η προεπισκόπηση της επιστολής (χωρίς σύνδεση, χωρίς email)
     lp = app.page.context.new_page()

@@ -99,6 +99,8 @@
   function parse(iso) { var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || ''); return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null; }
   function dmy(d) { return ('0' + d.getDate()).slice(-2) + '/' + ('0' + (d.getMonth() + 1)).slice(-2) + '/' + d.getFullYear(); }
   function longDate(d) { return d.getDate() + ' ' + MONTHS[d.getMonth()] + ' ' + d.getFullYear(); }
+  // Ο σύνδεσμος του Αρ. Πρωτ. οδηγεί ΠΑΝΤΑ στη δημόσια προεπισκόπηση της επιστολής — ποτέ στην εφαρμογή
+  function letterHref(r) { var n = String(r.protocol || '').replace(/[^\d]/g, ''); return n ? 'letter.html?p=' + n : ''; }
   function render(data) {
     var today = athensToday(), rows = (data.rows || []).filter(function (r) { return r.date >= today; }).sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : (+a.no || 0) - (+b.no || 0); });
     if (data.organization) document.getElementById('org').textContent = data.organization;
@@ -111,7 +113,7 @@
         return '<tr' + (r.gm ? ' class="gm"' : '') + '><td class="n">' + (i + 1) + '</td><td class="d"><b>' + esc(d ? dmy(d) : r.date) + '</b><small>' + esc(d ? DAYS[d.getDay()] : '') + '</small></td>'
           + '<td class="l"><b>«' + esc(r.lodge) + '»</b>' + (r.no ? '<small>υπ’ αριθ. ' + esc(r.no) + '</small>' : '') + '</td><td class="p">' + esc(r.province) + '</td>'
           + '<td class="r">' + (r.gm ? '<span class="gmtag">Ο Μέγας Διδάσκαλος</span>' : esc(r.rep)) + '</td>'
-          + '<td class="pr">' + (r.protocol ? (r.letter_url ? '<a href="' + esc(r.letter_url) + '" target="_blank" rel="noopener" title="Άνοιγμα της επιστολής">' : '') + '<span class="prl">Αρ. Πρωτ. </span>' + esc(r.protocol) + (r.letter_url ? '</a>' : '') : '<span class="nopr">—</span>') + '</td></tr>';
+          + '<td class="pr">' + (r.protocol ? '<a href="' + esc(letterHref(r)) + '" title="Άνοιγμα της επιστολής"><span class="prl">Αρ. Πρωτ. </span>' + esc(r.protocol) + '</a>' : '<span class="nopr">—</span>') + '</td></tr>';
       }).join('') + '</tbody></table>' : '<p class="empty">Δεν υπάρχουν προγραμματισμένες επισκέψεις.</p>';
     var salute = String(data.salute || '').replace(/Σεβαστοί/g, 'Σεβάσμιοι');
     document.getElementById('body').innerHTML = '<p class="salute">' + esc(salute) + '</p>' + paras + table
