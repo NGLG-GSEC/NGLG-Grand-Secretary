@@ -1463,7 +1463,7 @@ def test_gm_programme_report_and_public_page(app):
     app.page.locator('nav a', has_text='Αναφορά εκπροσώπησης ΜΔ').click()
     app.page.wait_for_url('**/#/visits/gm-programme')
     t = app.text('.print-area')
-    assert 'ΜΕΓΑΛΗ ΓΡΑΜΜΑΤΕΙΑ' in t and 'Σεβασμιώτατοι, Πανσεβάσμιοι, Λίαν Σεβαστοί και Σεβαστοί Αδελφοί,' in t and 'Με αδελφικούς χαιρετισμούς,' in t and 'Μέγας Γραμματέας' in t
+    assert 'ΜΕΓΑΛΗ ΓΡΑΜΜΑΤΕΙΑ' in t and 'Σεβασμιώτατοι, Πανσεβάσμιοι, Λίαν Σεβάσμιοι και Σεβάσμιοι Αδελφοί,' in t and 'Με αδελφικούς χαιρετισμούς,' in t and 'Μέγας Γραμματέας' in t
     rows = app.page.locator('.gmp-table tbody tr').all_inner_texts()
     assert len(rows) == 2 and '«ΑΛΦΑ»' in rows[0] and 'Ο Μέγας Διδάσκαλος' in rows[0] and '«ΒΗΤΑ»' in rows[1] and 'Νικολαΐδης' in rows[1], rows  # αύξουσα, χωρίς ΟΥΔΕΙΣ/παλιές
     assert 'ΚΕΝΗ' not in t and 'ΠΑΛΙΑ' not in t
