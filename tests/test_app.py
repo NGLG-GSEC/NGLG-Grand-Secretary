@@ -1467,11 +1467,20 @@ def test_gm_programme_report_and_public_page(app):
     rows = app.page.locator('.gmp-table tbody tr').all_inner_texts()
     assert len(rows) == 2 and '«ΑΛΦΑ»' in rows[0] and 'Ο Μέγας Διδάσκαλος' in rows[0] and '«ΒΗΤΑ»' in rows[1] and 'Νικολαΐδης' in rows[1], rows  # αύξουσα, χωρίς ΟΥΔΕΙΣ/παλιές
     assert 'ΚΕΝΗ' not in t and 'ΠΑΛΙΑ' not in t
+    # αριθμός πρωτοκόλλου της επιστολής κάθε επίσκεψης (κόκκινος)
+    app.page.evaluate("""async () => { const {db} = await import('./core/store.js');
+      const v = db.all('visits').find((x) => x.lodge === 'ΒΗΤΑ');
+      await db.save('x', (tx) => { tx.insert('letters', { protocol_seq: 20550, protocol_no: '20550', status: 'ready', category: 'ΕΠΙΣΚΕΨΗ', subject: 'Εκπροσώπηση ΜΔ εις την Στοάν «ΒΗΤΑ» υπ’ αριθμ. 20', body: 'x', letter_date: '2026-10-14' });
+        tx.insert('letters', { protocol_seq: 20551, protocol_no: '20551', status: 'ready', category: 'ΕΠΙΣΚΕΨΗ', subject: 'Επίσημη Επίσκεψη', body: 'x', letter_date: '2026-10-14', visit_id: db.all('visits').find((x) => x.lodge === 'ΑΛΦΑ').id }); }); }""")
+    app.go('/visits/gm-programme')
+    prs = app.page.locator('.gmp-table td.pr').all_inner_texts()
+    assert prs == ['20551', '20550'], prs
+    assert app.page.evaluate("() => getComputedStyle(document.querySelector('.gmp-table td.pr')).color") == 'rgb(179, 38, 30)'
     # το δημόσιο πρόγραμμα γράφεται στα δεδομένα
     app.page.click('[data-act=publish]')
     app.page.wait_for_selector('text=στάλθηκε για δημοσίευση')
     data = app.page.evaluate("async () => JSON.parse(new TextDecoder().decode(await (await import('./core/store.js')).db.file('public/programme.json')))")
-    assert [r['lodge'] for r in data['rows']] == ['ΑΛΦΑ', 'ΒΗΤΑ'] and data['rows'][0]['gm'] == 1 and 'email' not in json.dumps(data)
+    assert [r['lodge'] for r in data['rows']] == ['ΑΛΦΑ', 'ΒΗΤΑ'] and data['rows'][0]['gm'] == 1 and [r['protocol'] for r in data['rows']] == ['20551', '20550'] and 'email' not in json.dumps(data)
     # η δημόσια σελίδα το δείχνει (χωρίς σύνδεση)
     pub = app.page.context.new_page()
     old = {**data, 'salute': 'Σεβασμιώτατοι, Πανσεβάσμιοι, Λίαν Σεβαστοί και Σεβαστοί Αδελφοί,'}  # παλαιότερη δημοσίευση
@@ -1479,6 +1488,7 @@ def test_gm_programme_report_and_public_page(app):
     pub.goto(app.base + 'programme/')
     pub.wait_for_selector('table tbody tr')
     pt = pub.inner_text('body')
+    assert pub.locator('td.pr').first.inner_text().strip() == '20551'
     assert 'ΑΥΤΟΜΑΤΟ ΣΥΣΤΗΜΑ ΕΝΗΜΕΡΩΣΗΣ ΣΥΜΦΩΝΑ ΜΕ ΤΑ ΙΣΧΥΟΝΤΑ' in pt and 'Λίαν Σεβάσμιοι και Σεβάσμιοι Αδελφοί' in pt and 'Σεβαστοί' not in pt
     assert 'ΜΕΓΑΛΗ ΓΡΑΜΜΑΤΕΙΑ' in pt and '«ΑΛΦΑ»' in pt and 'Ο Μέγας Διδάσκαλος' in pt and pub.locator('tbody tr').count() == 2
     pub.close()

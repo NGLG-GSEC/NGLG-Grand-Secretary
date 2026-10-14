@@ -334,3 +334,4 @@ input[type=file]{max-width:100%;min-width:0}
 .paper.gmprog .gmp-sign{width:62mm;margin:2mm 0 0 auto;text-align:center}
 .paper.gmprog .gmp-sign .signature-img{width:44mm;height:auto;display:block;margin:0 auto -2mm}
 .gmp-public{border-left:4px solid #b18a43}
+.paper.gmprog .gmp-table td.pr{color:#b3261e;font-weight:700;white-space:nowrap}

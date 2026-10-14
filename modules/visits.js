@@ -480,21 +480,32 @@ const GMP_TEXT = 'Σας κοινοποιείται το πρόγραμμα τω
 const MONTH_G = ['Ιανουαρίου', 'Φεβρουαρίου', 'Μαρτίου', 'Απριλίου', 'Μαΐου', 'Ιουνίου', 'Ιουλίου', 'Αυγούστου', 'Σεπτεμβρίου', 'Οκτωβρίου', 'Νοεμβρίου', 'Δεκεμβρίου'];
 const longToday = () => { const d = new Date(); return `${d.getDate()} ${MONTH_G[d.getMonth()]} ${d.getFullYear()}`; };
 const noRep = (r) => !r || /ουδεις/.test(fold(`${r.surname || ''} ${r.name || ''}`));
+// Αριθμός πρωτοκόλλου της επιστολής μιας Επίσκεψης (Έτοιμη): πρώτα όσες φτιάχτηκαν από την Επίσκεψη, αλλιώς επιστολή
+// κατηγορίας ΕΠΙΣΚΕΨΗ με τη Στοά (και τον αριθμό της) στο θέμα
+export function visitProtocol(v, letters = db.all('letters')) {
+  const ready = letters.filter((l) => l.status === 'ready' && l.protocol_seq);
+  let xs = ready.filter((l) => l.visit_id === v.id);
+  if (!xs.length && v.lodge) {
+    const no = String(v.lodge_number || '').trim();
+    xs = ready.filter((l) => l.category === 'ΕΠΙΣΚΕΨΗ' && String(l.subject || '').includes(`«${v.lodge}»`) && (!no || new RegExp(`(αριθμ?\\.|Αρ\\.)\\s*${no}(?!\\d)`).test(l.subject || '')));
+  }
+  return sortBy(xs, (l) => -Number(l.protocol_seq)).map((l) => String(l.protocol_seq))[0] || '';
+}
 export function gmProgrammeRows(frm = today(), to = '') {
-  const reps = repMap();
+  const reps = repMap(), letters = db.all('letters');
   return sortBy(visitsAll().filter((v) => v.visit_date >= (frm || today()) && (!to || v.visit_date <= to) && !noRep(reps[v.rep_id])), 'visit_date', (v) => Number(v.lodge_number) || 0)
-    .map((v) => ({ v, r: reps[v.rep_id] }));
+    .map((v) => ({ v, r: reps[v.rep_id], prot: visitProtocol(v, letters) }));
 }
 function gmProgrammePaper(rows, { showRep = true } = {}) {
   const d = (iso) => { const x = parseIso(iso); return x ? `<b>${esc(fmtDate(iso))}</b><small>${esc(DAYS[x.getDay()])}</small>` : esc(iso); };
   const who = (r) => (isGM(r) ? '<b>Ο Μέγας Διδάσκαλος</b>' : `${esc(repFull(r))}`);
-  const body = rows.map(({ v, r }, i) => `<tr><td class="n">${i + 1}</td><td class="d">${d(v.visit_date)}</td><td class="l"><b>«${esc(v.lodge || '')}»</b>${v.lodge_number ? `<small>υπ’ αριθ. ${esc(v.lodge_number)}</small>` : ''}</td>`
-    + `<td class="p">${esc(v.province || '')}</td>${showRep ? `<td class="r">${who(r)}</td>` : ''}</tr>`).join('');
+  const body = rows.map(({ v, r, prot }, i) => `<tr><td class="n">${i + 1}</td><td class="d">${d(v.visit_date)}</td><td class="l"><b>«${esc(v.lodge || '')}»</b>${v.lodge_number ? `<small>υπ’ αριθ. ${esc(v.lodge_number)}</small>` : ''}</td>`
+    + `<td class="p">${esc(v.province || '')}</td>${showRep ? `<td class="r">${who(r)}</td>` : ''}<td class="pr">${prot ? esc(prot) : '—'}</td></tr>`).join('');
   return `<article class="paper report gmprog">${letterhead()}<div class="gmp-office">ΜΕΓΑΛΗ ΓΡΑΜΜΑΤΕΙΑ</div>
 <div class="gmp-meta">Εν Αθήναις, ${esc(longToday())}</div>
 <p class="gmp-subject"><b>Θέμα:</b> Πρόγραμμα επισκέψεων του Σεβασμιωτάτου Μεγάλου Διδασκάλου</p>
 <p class="gmp-salute">${esc(GMP_SALUTE)}</p>${GMP_TEXT.split('\n\n').map((t) => `<p class="gmp-p">${esc(t)}</p>`).join('')}
-${rows.length ? `<table class="gmp-table"><thead><tr><th class="n">Α/Α</th><th>Ημερομηνία</th><th>Στοά</th><th>Επαρχία</th>${showRep ? '<th>Εκπρόσωπος</th>' : ''}</tr></thead><tbody>${body}</tbody></table>`
+${rows.length ? `<table class="gmp-table"><thead><tr><th class="n">Α/Α</th><th>Ημερομηνία</th><th>Στοά</th><th>Επαρχία</th>${showRep ? '<th>Εκπρόσωπος</th>' : ''}<th>Αρ. Πρωτ.</th></tr></thead><tbody>${body}</tbody></table>`
     : '<p class="gmp-p muted"><i>Δεν έχουν οριστεί επισκέψεις για το διάστημα αυτό.</i></p>'}
 <p class="gmp-close">Με αδελφικούς χαιρετισμούς,</p>
 <div class="gmp-sign"><img class="signature-img" src="${IMG.signature}" alt=""><div class="signature-line"></div><b>Δημήτριος Σκιαδόπουλος</b><div>Μέγας Γραμματέας</div></div></article>`;
@@ -505,7 +516,7 @@ export const PUBLIC_PROGRAMME_URL = 'https://nglg-gsec.github.io/NGLG-Grand-Secr
 export function publicProgramme() {
   return { title: 'Πρόγραμμα επισκέψεων του Σεβασμιωτάτου Μεγάλου Διδασκάλου', salute: GMP_SALUTE, text: GMP_TEXT, closing: 'Με αδελφικούς χαιρετισμούς,',
     signer: 'Δημήτριος Σκιαδόπουλος', signer_title: 'Μέγας Γραμματέας', organization: db.setting('organization_name') || '',
-    rows: gmProgrammeRows(today()).map(({ v, r }) => ({ date: v.visit_date, lodge: v.lodge || '', no: String(v.lodge_number || ''), province: v.province || '', rep: isGM(r) ? 'Ο Μέγας Διδάσκαλος' : repFull(r), gm: isGM(r) ? 1 : 0 })) };
+    rows: gmProgrammeRows(today()).map(({ v, r, prot }) => ({ protocol: prot, date: v.visit_date, lodge: v.lodge || '', no: String(v.lodge_number || ''), province: v.province || '', rep: isGM(r) ? 'Ο Μέγας Διδάσκαλος' : repFull(r), gm: isGM(r) ? 1 : 0 })) };
 }
 let publishing = null;
 export async function publishProgramme(force = false) {
@@ -523,7 +534,7 @@ export async function publishProgramme(force = false) {
   return publishing;
 }
 db.on((ev) => {
-  if (ev.type === 'saved' && !/^Δημόσιο πρόγραμμα/.test(ev.message || '') && (ev.tables || []).some((t) => ['visits', 'reps', 'epeteirida', 'member_registry'].includes(t))) {
+  if (ev.type === 'saved' && !/^Δημόσιο πρόγραμμα/.test(ev.message || '') && (ev.tables || []).some((t) => ['visits', 'reps', 'epeteirida', 'member_registry', 'letters'].includes(t))) {
     setTimeout(() => publishProgramme().catch((e) => console.warn('Δημόσιο πρόγραμμα:', e)), 400);
   }
 });
