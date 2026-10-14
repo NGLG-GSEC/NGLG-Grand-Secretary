@@ -1288,6 +1288,13 @@ def test_visit_email_gmail_draft_with_pdf_and_bcc(app):
     subj = mime.split('Subject: ')[1].split('\r\n')[0]
     assert subj.startswith('=?UTF-8?B?') and base64.b64decode(subj[10:-2]).decode().startswith('20545 - Εκπροσώπηση'), subj  # Αρ. Πρωτ. μπροστά στο θέμα
     assert 'Cc: rep@example.com, gm@example.com' in mime and 'Bcc: b1@example.com, b2@example.com' in mime
+    txt = base64.b64decode(mime.split('Content-Transfer-Encoding: base64\r\n\r\n')[1].split('\r\n--')[0].replace('\r\n', '')).decode()
+    assert txt.startswith('ΕΘΝΙΚΗ ΜΕΓΑΛΗ ΣΤΟΑ ΤΗΣ ΕΛΛΑΔΟΣ\nΜΕΓΑΛΗ ΓΡΑΜΜΑΤΕΙΑ\n\n') and txt.count('ΕΘΝΙΚΗ ΜΕΓΑΛΗ ΣΤΟΑ ΤΗΣ ΕΛΛΑΔΟΣ') == 1, txt[:80]
+    html = base64.b64decode(mime.split('Content-Type: text/html; charset="UTF-8"\r\nContent-Transfer-Encoding: base64\r\n\r\n')[1].split('\r\n--')[0].replace('\r\n', '')).decode()
+    assert 'src="cid:nglg-emblem"' in html and 'height:80px' in html and 'font-weight:bold;font-size:16px' in html and '>ΕΘΝΙΚΗ ΜΕΓΑΛΗ ΣΤΟΑ ΤΗΣ ΕΛΛΑΔΟΣ<' in html and '>Μεγάλη Γραμματεία<' in html
+    assert html.count('ΕΘΝΙΚΗ ΜΕΓΑΛΗ ΣΤΟΑ') == 1 and 'Content-ID: <nglg-emblem>' in mime
+    logo = mime.split('Content-ID: <nglg-emblem>')[1].split('\r\n\r\n', 1)[1].split('\r\n--')[0].replace('\r\n', '')
+    assert base64.b64decode(logo)[:4] == b'\x89PNG'
     assert 'Content-Type: application/pdf' in mime and "filename*=UTF-8''20545%20-%20%CE%95%CE%A0%CE%99%CE%A3%CE%9A%CE%95%CE%A8%CE%97" in mime
     pdf_b64 = mime.split("filename*=UTF-8''")[1].split('\r\n\r\n', 1)[1].split('\r\n--')[0].replace('\r\n', '')
     assert base64.b64decode(pdf_b64)[:4] == b'%PDF'

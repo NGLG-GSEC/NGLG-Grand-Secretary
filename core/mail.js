@@ -16,16 +16,20 @@ export function senderFor(kind = 'general') {
   return EMAIL_RE.test(v) ? v : s.def;
 }
 
+// Κάθε κείμενο email ξεκινά με την επικεφαλίδα του Τεκτονικού Σώματος
+export const MAIL_HEADER = 'ΕΘΝΙΚΗ ΜΕΓΑΛΗ ΣΤΟΑ ΤΗΣ ΕΛΛΑΔΟΣ\nΜΕΓΑΛΗ ΓΡΑΜΜΑΤΕΙΑ';
+export const withMailHeader = (body) => { const b = String(body || '').replace(/^\s+/, ''); return b.startsWith(MAIL_HEADER) ? b : `${MAIL_HEADER}\n\n${b}`; };
+
 const list = (x) => (Array.isArray(x) ? x : splitEmails(x)).filter(Boolean).join(',');
 export function gmailUrl({ to = '', cc = '', bcc = '', subject = '', body = '', kind = 'general' }) {
   const p = new URLSearchParams({ authuser: senderFor(kind), view: 'cm', fs: '1', to: list(to) });
   if (list(cc)) p.set('cc', list(cc));
   if (list(bcc)) p.set('bcc', list(bcc));
-  p.set('su', subject); p.set('body', body);
+  p.set('su', subject); p.set('body', withMailHeader(body));
   return 'https://mail.google.com/mail/u/?' + p.toString().replace(/\+/g, '%20');
 }
 export function mailtoUrl({ to = '', cc = '', bcc = '', subject = '', body = '' }) {
-  const q = [cc && 'cc=' + encodeURIComponent(list(cc)), bcc && 'bcc=' + encodeURIComponent(list(bcc)), 'subject=' + encodeURIComponent(subject), 'body=' + encodeURIComponent(body)].filter(Boolean);
+  const q = [cc && 'cc=' + encodeURIComponent(list(cc)), bcc && 'bcc=' + encodeURIComponent(list(bcc)), 'subject=' + encodeURIComponent(subject), 'body=' + encodeURIComponent(withMailHeader(body))].filter(Boolean);
   return 'mailto:' + encodeURIComponent(list(to)).replace(/%40/g, '@').replace(/%2C/g, ',') + '?' + q.join('&');
 }
 
