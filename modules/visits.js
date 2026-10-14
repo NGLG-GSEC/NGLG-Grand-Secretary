@@ -406,7 +406,7 @@ ${attach ? `<p><button type="button" class="btn" data-act="ics">📅 Λήψη ${
       bind(el, {
         gmail: () => window.open(gmailUrl(cur()), '_blank', 'noopener'),
         device: () => { location.href = mailtoUrl(cur()); },
-        async copy() { await copyText(f.body.value); toast('Το κείμενο αντιγράφηκε.'); },
+        async copy() { const { richPlain } = await import('../core/rich.js'); await copyText(richPlain(f.body.value)); toast('Το κείμενο αντιγράφηκε.'); },
         ics: () => download(attach.name, attach.data, 'text/calendar'),
       });
       if (visit) {

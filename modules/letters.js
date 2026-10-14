@@ -4,6 +4,7 @@ import { db } from '../core/store.js';
 import { module, onSubmit, go, flash, toast, bind, confirmDo, table, notice, actor, ACTORS } from '../core/app.js';
 import { crud } from '../core/crud.js';
 import { esc, today, fmtDate, matches, sortBy, safeFileName, latinFileName, EMAIL_RE, splitEmails, download } from '../core/util.js';
+import { richPlain } from '../core/rich.js';
 import { letterPaper, printPaper, signerProfile, IMG, fitPaper } from '../core/paper.js';
 import { makeDocx, letterBlocks } from '../core/docx.js';
 import { docTitle, driveBox, saveDocToDrive } from '../core/drive.js';
@@ -51,7 +52,7 @@ export function openInDigitalForm(x) {
   const p = signerProfile(x.signer);
   try {
     localStorage.setItem('nglg-diatagma-prefill', JSON.stringify({ num: x.protocol_seq ? String(x.protocol_seq) : (x.protocol_no || ''), date: x.letter_date || today(), place: 'Εν Αθήναις', doctype: 'ΕΠΙΣΤΟΛΗ', subject: x.subject || '',
-      p0: [x.recipient_name && `Προς: ${x.recipient_name}`, x.cc_name && `Κοιν.: ${x.cc_name}`].filter(Boolean).join('\n'), p1: x.body || '', p2: '', greet: x.closing || db.setting('closing') || '', signer: p.name, sigtitle: p.title,
+      p0: [x.recipient_name && `Προς: ${x.recipient_name}`, x.cc_name && `Κοιν.: ${x.cc_name}`].filter(Boolean).join('\n'), p1: richPlain(x.body || ''), p2: '', greet: x.closing || db.setting('closing') || '', signer: p.name, sigtitle: p.title,
       useSig: p.img === IMG.signature, mailto: x.recipient_email || '' }));
   } catch { /* χωρίς localStorage: ανοίγει κενό */ }
   location.href = 'diatagma/';

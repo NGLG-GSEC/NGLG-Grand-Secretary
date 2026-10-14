@@ -2,6 +2,7 @@
 // Κάθε ενότητα δηλώνεται με app.module({...}) στο δικό της αρχείο· το μενού και η Αρχική χτίζονται αυτόματα,
 // οπότε για μια αλλαγή αρκεί να ανοίξει κανείς μόνο το αρχείο της ενότητας.
 import { db } from './store.js';
+import { attachFormatBars } from './rich.js';
 import { esc } from './util.js';
 
 const routes = [], menus = [], tiles = [], banners = [];
@@ -148,6 +149,7 @@ export async function render() {
   if (!out.keepScroll) window.scrollTo(0, 0);
   const main = root.querySelector('main');
   if (out.mount) try { await out.mount(main); } catch (e) { console.error(e); toast(e.message, 'error'); }
+  attachFormatBars(main);
   const f = main.querySelector('[autofocus]');
   if (f && matchMedia('(min-width:800px)').matches) f.focus();
 }

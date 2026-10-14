@@ -4,6 +4,7 @@
 //   general  → όλα τα υπόλοιπα (info@nglgreece.gr)
 import { db } from './store.js';
 import { esc, EMAIL_RE, splitEmails } from './util.js';
+import { richPlain } from './rich.js';
 
 export const MAIL_SENDERS = {
   official: { key: 'mail_from_official', def: 'grand.secretary@nglgreece.gr', label: 'Επιστολές & Διατάγματα' },
@@ -25,11 +26,11 @@ export function gmailUrl({ to = '', cc = '', bcc = '', subject = '', body = '', 
   const p = new URLSearchParams({ authuser: senderFor(kind), view: 'cm', fs: '1', to: list(to) });
   if (list(cc)) p.set('cc', list(cc));
   if (list(bcc)) p.set('bcc', list(bcc));
-  p.set('su', subject); p.set('body', withMailHeader(body));
+  p.set('su', subject); p.set('body', richPlain(withMailHeader(body)));
   return 'https://mail.google.com/mail/u/?' + p.toString().replace(/\+/g, '%20');
 }
 export function mailtoUrl({ to = '', cc = '', bcc = '', subject = '', body = '' }) {
-  const q = [cc && 'cc=' + encodeURIComponent(list(cc)), bcc && 'bcc=' + encodeURIComponent(list(bcc)), 'subject=' + encodeURIComponent(subject), 'body=' + encodeURIComponent(withMailHeader(body))].filter(Boolean);
+  const q = [cc && 'cc=' + encodeURIComponent(list(cc)), bcc && 'bcc=' + encodeURIComponent(list(bcc)), 'subject=' + encodeURIComponent(subject), 'body=' + encodeURIComponent(richPlain(withMailHeader(body)))].filter(Boolean);
   return 'mailto:' + encodeURIComponent(list(to)).replace(/%40/g, '@').replace(/%2C/g, ',') + '?' + q.join('&');
 }
 

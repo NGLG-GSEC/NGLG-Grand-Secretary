@@ -3,6 +3,7 @@
 // blocks: [{ text, align: 'left'|'center'|'right'|'both', bold, italic, size (pt), color, before, after (pt), rule }
 //          | { img: url, width (cm), align }]
 import { XLSX } from './util.js';
+import { richRuns } from './rich.js';
 
 const xe = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const NS = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" '
@@ -18,7 +19,10 @@ function para(b) { // σειρά στοιχείων κατά το σχήμα OOX
   const ppr = (b.rule ? '<w:pBdr><w:bottom w:val="single" w:sz="8" w:space="4" w:color="B18A43"/></w:pBdr>' : '')
     + `<w:spacing w:before="${Math.round((b.before || 0) * 20)}" w:after="${Math.round((b.after ?? 6) * 20)}"/><w:jc w:val="${b.align || 'left'}"/>`;
   const rpr = (b.bold ? '<w:b/>' : '') + (b.italic ? '<w:i/>' : '') + (b.color ? `<w:color w:val="${b.color}"/>` : '') + (b.size ? `<w:sz w:val="${b.size * 2}"/><w:szCs w:val="${b.size * 2}"/>` : '');
-  const runs = String(b.text ?? '').split('\n').map((line, i) => `<w:r><w:rPr>${rpr}</w:rPr>${i ? '<w:br/>' : ''}<w:t xml:space="preserve">${xe(line)}</w:t></w:r>`).join('');
+  // Μορφοποίηση [b] [i] [size=N] του κειμένου → ξεχωριστά runs
+  const rp = (r) => ((b.bold || r.bold) ? '<w:b/>' : '') + ((b.italic || r.italic) ? '<w:i/>' : '') + (b.color ? `<w:color w:val="${b.color}"/>` : '')
+    + ((r.size || b.size) ? `<w:sz w:val="${Math.round((r.size || b.size) * 2)}"/><w:szCs w:val="${Math.round((r.size || b.size) * 2)}"/>` : '');
+  const runs = richRuns(b.text).map((r) => r.text.split('\n').map((line, i) => `<w:r><w:rPr>${rp(r)}</w:rPr>${i ? '<w:br/>' : ''}<w:t xml:space="preserve">${xe(line)}</w:t></w:r>`).join('')).join('') || `<w:r><w:rPr>${rpr}</w:rPr><w:t xml:space="preserve"></w:t></w:r>`;
   return `<w:p><w:pPr>${ppr}</w:pPr>${runs}</w:p>`;
 }
 

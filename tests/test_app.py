@@ -1568,3 +1568,22 @@ def test_remove_hashed_email_from_cc_lists(app):
     r = app.page.evaluate("""async () => { const m = await import('./modules/settings.js'), h = m.emailHash('Gone.Person@Example.com');
       return [m.withoutHashed('a@x.gr, gone.person@example.com, b@x.gr', [h]), m.withoutHashed('Όνομα <gone.person@example.com>\\nc@x.gr', [h]), m.withoutHashed('a@x.gr, b@x.gr', [h]), m.withoutHashed(5, [h])]; }""")
     assert r == ['a@x.gr, b@x.gr', 'c@x.gr', 'a@x.gr, b@x.gr', 5], r
+
+
+def test_letter_body_formatting_bar(app):
+    app.connect_local()
+    app.go('/letters/new')
+    ta = app.page.locator('textarea[name=body]')
+    ta.fill('Αγαπητέ Αδελφέ, σημαντική ανακοίνωση.')
+    assert app.page.locator('.richbar button[data-w=b]').count() == 1
+    app.page.evaluate("() => { const t = document.querySelector('textarea[name=body]'); t.setSelectionRange(0, 7); }")
+    app.page.click('.richbar button[data-w=b]')
+    app.page.evaluate("() => { const t = document.querySelector('textarea[name=body]'); const i = t.value.indexOf('σημαντική'); t.setSelectionRange(i, i + 9); }")
+    app.page.click('.richbar button[data-w=i]')
+    app.page.evaluate("() => { const t = document.querySelector('textarea[name=body]'); const i = t.value.indexOf('ανακοίνωση'); t.setSelectionRange(i, i + 10); }")
+    app.page.select_option('.richbar select', '16')
+    assert ta.input_value() == '[b]Αγαπητέ[/b] Αδελφέ, [i]σημαντική[/i] [size=16]ανακοίνωση[/size].'
+    html = app.page.evaluate("async () => (await import('./core/paper.js')).letterPaper({ subject: 'x', body: document.querySelector('textarea[name=body]').value })")
+    assert '<b>Αγαπητέ</b>' in html and '<i>σημαντική</i>' in html and 'font-size:16pt">ανακοίνωση' in html and '[b]' not in html
+    plain = app.page.evaluate("async () => (await import('./core/mail.js')).gmailUrl({ to: 'a@b.gr', subject: 's', body: document.querySelector('textarea[name=body]').value })")
+    assert '%5Bb%5D' not in plain and '[b]' not in plain

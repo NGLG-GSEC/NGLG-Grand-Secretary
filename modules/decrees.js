@@ -4,6 +4,7 @@ import { db } from '../core/store.js';
 import { module, onSubmit, go, flash, bind, confirmDo, table, notice, toast } from '../core/app.js';
 import { esc, today, fmtDate, matches, sortBy, safeFileName, parseIso, MONTHS_GEN, download, splitEmails, EMAIL_RE } from '../core/util.js';
 import { makeDocx, letterBlocks } from '../core/docx.js';
+import { richHtml } from '../core/rich.js';
 import { docTitle, driveBox, saveDocToDrive } from '../core/drive.js';
 import { letterhead, IMG, printPaper, pageLayers, layoutTop } from '../core/paper.js';
 import { mailButtons, senderBanner } from '../core/mail.js';
@@ -102,8 +103,8 @@ const nextDecreeNo = (tx) => Math.max(tx.all('decree_documents').reduce((m, d) =
 export function decreePaper(d, opts = {}) {
   const action = meta(d).action, general = decreeKey(d) === 'decree-general';
   const L = opts.layout || layoutOf(decreeTemplate(decreeKey(d))), urls = opts.urls || {}, layers = pageLayers(L, urls), top = layoutTop(L, urls);
-  const bodyHtml = general ? esc(d.body).replace(/^([Α-ΩΆ-Ώ][Α-ΩΆ-ΏΪΫ ’'΄-]{3,})$/gm, '<b>$1</b>')
-    : esc(d.body).replace(/^(ΗΜΕΙΣ|ΔΙΟΡΙΖΟΜΕΝ|ΑΠΟΝΕΜΕΙ|ΕΥΑΡΕΣΤΟΥΜΕΘΑ ΝΑ ΑΠΟΝΕΙΜΩΜΕΝ)$/gm, '<b>$1</b>');
+  const bodyHtml = general ? richHtml(d.body, { links: false }).replace(/^([Α-ΩΆ-Ώ][Α-ΩΆ-ΏΪΫ ’'΄-]{3,})$/gm, '<b>$1</b>')
+    : richHtml(d.body, { links: false }).replace(/^(ΗΜΕΙΣ|ΔΙΟΡΙΖΟΜΕΝ|ΑΠΟΝΕΜΕΙ|ΕΥΑΡΕΣΤΟΥΜΕΘΑ ΝΑ ΑΠΟΝΕΙΜΩΜΕΝ)$/gm, '<b>$1</b>');
   return `<article class="paper decree${layers ? ' has-layers' : ''}"${top != null ? ` style="--pt:${top}mm"` : ''}>${layers}${top != null ? '' : letterhead()}<div class="dec-title">ΔΙΑΤΑΓΜΑ</div>
 <div class="dec-no official-number">${action === 'service_award' ? 'υπ’ αριθ. ' : 'υπ’ αριθμ. '}${esc(decreeNo(d))}</div><div class="dec-date official-number">${esc(fmtDate(d.decree_date))}</div>
 <div class="decbody">${bodyHtml}</div>

@@ -4,6 +4,7 @@
 // Χωρίς Client ID: κινητό → κοινοποίηση του PDF στην εφαρμογή Gmail (οι διευθύνσεις αντιγράφονται)· υπολογιστής → λήψη PDF + Gmail έτοιμο.
 import { esc, download } from './util.js';
 import { senderFor, gmailUrl, withMailHeader, MAIL_HEADER } from './mail.js';
+import { richPlain, richHtml } from './rich.js';
 import { googleToken, driveReady } from './drive.js';
 import { copyText } from './mail.js';
 
@@ -26,7 +27,7 @@ const wrap = (s) => s.replace(/.{1,76}/g, '$&\r\n');
 const LOGO_CID = 'nglg-emblem';
 export function mailHtml(body) {
   const t = String(body || '').replace(/^\s+/, '').replace(new RegExp('^' + MAIL_HEADER.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*'), '');
-  const txt = esc(t).replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1">$1</a>').replace(/\r?\n/g, '<br>');
+  const txt = richHtml(t).replace(/\r?\n/g, '<br>');
   return `<!doctype html><html><body style="margin:0;padding:0"><div style="font-family:Georgia,'Times New Roman',serif;font-size:14px;line-height:1.55;color:#1f2a44">
 <div style="text-align:center;margin:0 0 18px"><img src="cid:${LOGO_CID}" alt="ΕΜΣτΕ" height="80" style="height:80px;width:auto;display:block;margin:0 auto 6px">
 <div style="color:#1d2f5e;font-weight:bold;font-size:16px;letter-spacing:.02em">ΕΘΝΙΚΗ ΜΕΓΑΛΗ ΣΤΟΑ ΤΗΣ ΕΛΛΑΔΟΣ</div><div style="font-size:14px;font-weight:normal;color:#1f2a44">Μεγάλη Γραμματεία</div></div>
@@ -42,7 +43,7 @@ export function buildMime({ from, to, cc, bcc, subject, body, attachments = [], 
   const B = 'nglg_' + Math.random().toString(36).slice(2), A = B + '_alt', R = B + '_rel';
   const h = [`From: ${from}`, `To: ${list(to).join(', ')}`, list(cc).length && `Cc: ${list(cc).join(', ')}`, list(bcc).length && `Bcc: ${list(bcc).join(', ')}`,
     `Subject: ${hdr(subject || '')}`, 'MIME-Version: 1.0', `Content-Type: multipart/mixed; boundary="${B}"`].filter(Boolean).join('\r\n');
-  const plain = `Content-Type: text/plain; charset="UTF-8"\r\nContent-Transfer-Encoding: base64\r\n\r\n${wrap(u8b64(withMailHeader(body)))}`;
+  const plain = `Content-Type: text/plain; charset="UTF-8"\r\nContent-Transfer-Encoding: base64\r\n\r\n${wrap(u8b64(richPlain(withMailHeader(body))))}`;
   const html = `Content-Type: text/html; charset="UTF-8"\r\nContent-Transfer-Encoding: base64\r\n\r\n${wrap(u8b64(mailHtml(body)))}`;
   const alt = `Content-Type: multipart/alternative; boundary="${A}"\r\n\r\n--${A}\r\n${plain}\r\n--${A}\r\n${html}\r\n--${A}--`;
   const part = logo
@@ -151,7 +152,7 @@ export function mailSheet(el, { getMsg, getPdf, kind = 'general', pdfName = '', 
         await copyText([m.to, m.cc, m.bcc].filter(Boolean).join(', '));
         state(`<div class="ms-ok">Οι διευθύνσεις αντιγράφηκαν. Πατήστε «Κοινοποίηση» και επιλέξτε <b>Gmail</b>· επικολλήστε τις διευθύνσεις.</div>
 <button type="button" class="btn primary" data-ms="share">📎 Κοινοποίηση PDF στο Gmail</button>`);
-        box.querySelector('[data-ms=share]').onclick = () => navigator.share({ files: [file], title: m.subject, text: withMailHeader(m.body) }).then(() => onDone && onDone()).catch(() => {});
+        box.querySelector('[data-ms=share]').onclick = () => navigator.share({ files: [file], title: m.subject, text: richPlain(withMailHeader(m.body)) }).then(() => onDone && onDone()).catch(() => {});
         return;
       }
       download(pdf.name, pdf.blob, 'application/pdf');
