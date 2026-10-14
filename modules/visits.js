@@ -239,15 +239,15 @@ function provinceMail(p, rows, missing) {
 }
 
 // ---------------------------------------------------------------- σελίδες
-function visitCard(v, reps, opts = '') {
-  const d = parseIso(v.visit_date), r = reps[v.rep_id], p = provinceByShort(v.province || '');
+function visitCard(v, reps, opts = '', letters) {
+  const lt = visitLetter(v, letters), d = parseIso(v.visit_date), r = reps[v.rep_id], p = provinceByShort(v.province || '');
   const oks = (repNotified(v) ? `<span class="vok">✓ Εκπρόσωπος ενημερώθηκε ${esc(fmtDate(v.rep_notified_at))}</span>` : '') + (provNotified(v) ? `<span class="vok">✓ ${r && !isGM(r) ? 'ΕπΜΓρ.' : 'Στοά'} ενημερώθηκε ${esc(fmtDate(v.prov_notified_at))}</span>` : '');
   const brief = r && isGM(r) ? `<span class="pill ok">Επίσημη επίσκεψη ΜΔ</span> <a class="btn small${provNotified(v) ? '' : ' primary'}" href="#/visits/notify?ids=${v.id}&back=list">✉ Email προς Στοά (Επίσημη Επίσκεψη)</a>
 <a class="btn small" href="#/letters/new?${new URLSearchParams(provinceLetter(v))}">📄 Επιστολή</a>` : r ? `<a class="btn small${repNotified(v) && provNotified(v) ? '' : ' primary'}" href="#/visits/notify?ids=${v.id}&back=list">✉ Email προς Στοά (Εκπροσώπηση)</a>
 <a class="btn small" href="#/letters/new?${new URLSearchParams(provinceLetter(v))}">📄 Επιστολή</a>
 <a class="btn small" href="#/visits/brief?ids=${v.id}" title="Μόνο στον εκπρόσωπο, με πρόσκληση ημερολογίου">✉ Μόνο εκπρόσωπος</a>` : '';
   return `<div class="vcard${v.visit_date < today() ? ' past' : ''}"><div class="vdate"><b>${d ? d.getDate() : ''}</b><small>${d ? DAYS[d.getDay()].slice(0, 3) : ''}</small></div>
-<div><div class="vlodge"><a href="#/visits/edit/${v.id}">${esc(v.lodge)}</a>${v.lodge_number ? `<span class="no">Αρ. ${esc(v.lodge_number)}</span>` : ''}</div><div class="vmeta">${esc(dayStr(v.visit_date))} · ${esc(v.location || 'Τόπος —')}</div>
+<div><div class="vlodge"><a href="#/visits/edit/${v.id}">${esc(v.lodge)}</a>${v.lodge_number ? `<span class="no">Αρ. ${esc(v.lodge_number)}</span>` : ''}${lt ? ` <a class="vprot" href="#/letters/${lt.id}" title="Άνοιγμα της επιστολής">Αρ. Πρωτ. ${esc(String(seqOf(lt)))}</a>` : ''}</div><div class="vmeta">${esc(dayStr(v.visit_date))} · ${esc(v.location || 'Τόπος —')}</div>
 ${v.notes ? `<div class="vnote">${esc(v.notes)}</div>` : ''}${v.province ? `<span class="vchip">${esc(v.province)}</span>` : ''}${p && p.email ? ` <span class="vmeta">${esc(p.email)}</span>` : ''}${brief || oks ? `<div>${brief} ${oks}</div>` : ''}</div>
 <div class="vrep">${r ? `<b>${esc(repLabel(r))}</b><div class="vmeta">${esc(r.office || '')}</div>` : isNobody(v) ? '<b>ΟΥΔΕΙΣ</b><div class="vmeta">Ο Μέγας Διδάσκαλος δεν έστειλε κανέναν</div>' : '<span class="vwarn">Χωρίς εκπρόσωπο</span>'}
 ${v.visit_date >= today() ? `<label class="vreplabel" for="vrep${v.id}">ΕΚΠΡΟΣΩΠΟΣ</label><select class="vrepsel${isNobody(v) ? ' nobody' : ''}${isGM(r) ? ' gm' : ''}" id="vrep${v.id}" data-id="${v.id}" aria-label="ΕΚΠΡΟΣΩΠΟΣ"><option value="">${r || isNobody(v) ? '— Αφαίρεση εκπροσώπου —' : '+ Ορισμός ΜΔ / εκπροσώπου…'}</option>${opts.replace(`value="${v.rep_id}"`, `value="${v.rep_id}" selected`)}</select>` : ''}</div></div>`;
@@ -265,10 +265,10 @@ function visitsPage({ query }) {
     if (query.notif === 'prov' && provNotified(v)) return false;
     return !ql || fold([v.lodge, v.lodge_number, v.location, v.province, repLabel(reps[v.rep_id], rm), isNobody(v) ? 'ΟΥΔΕΙΣ' : ''].join(' ')).includes(ql);
   });
-  const groups = {}, opts = repOptions(null, rm);
+  const groups = {}, opts = repOptions(null, rm), letters = db.all('letters');
   for (const v of lst) (groups[v.visit_date.slice(0, 7)] ||= []).push(v);
   const body = !vs.length ? '<div class="card">Δεν υπάρχουν ακόμη επισκέψεις. Πατήστε «Νέα επίσκεψη» ή «Επικόλληση λίστας».</div>' : !lst.length ? '<div class="card">Καμία επίσκεψη δεν ταιριάζει με τα φίλτρα.</div>'
-    : Object.entries(groups).map(([k, items]) => `<section class="vmonth"><h2>${monthTitle(k)} <small>${items.length} ${items.length === 1 ? 'επίσκεψη' : 'επισκέψεις'}</small></h2>${items.map((v) => visitCard(v, reps, opts)).join('')}</section>`).join('');
+    : Object.entries(groups).map(([k, items]) => `<section class="vmonth"><h2>${monthTitle(k)} <small>${items.length} ${items.length === 1 ? 'επίσκεψη' : 'επισκέψεις'}</small></h2>${items.map((v) => visitCard(v, reps, opts, letters)).join('')}</section>`).join('');
   const sel = (n, v) => (String(query[n] || '') === String(v) ? ' selected' : '');
   const yr = masonicYear(), summary = provinceSummary(yr), sumAll = summary.reduce((a, o) => ({ total: a.total + o.total, declared: a.declared + o.declared }), { total: 0, declared: 0 });
   return {
@@ -482,23 +482,35 @@ const longToday = () => { const d = new Date(); return `${d.getDate()} ${MONTH_G
 const noRep = (r) => !r || /ουδεις/.test(fold(`${r.surname || ''} ${r.name || ''}`));
 // Αριθμός πρωτοκόλλου της επιστολής μιας Επίσκεψης (Έτοιμη): πρώτα όσες φτιάχτηκαν από την Επίσκεψη, αλλιώς επιστολή
 // κατηγορίας ΕΠΙΣΚΕΨΗ με τη Στοά (και τον αριθμό της) στο θέμα
+const seqOf = (l) => Number(l.protocol_seq) || Number(String(l.protocol_no || '').replace(/\D/g, '')) || 0;
+const nrmTxt = (x) => String(x || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/ς/g, 'σ').toUpperCase().replace(/[“”"«»‘’']/g, ' ').replace(/\s+/g, ' ');
+const escRe = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+// Η επιστολή (έτοιμη, με αρ. πρωτοκόλλου) της επίσκεψης: συνδεδεμένη (visit_id) ή, για παλαιότερες, με το όνομα και τον αριθμό
+// της Στοάς στο θέμα ή στο κείμενο· με πολλές, η πιο πρόσφατη πριν από την ημερομηνία της επίσκεψης.
 export function visitLetter(v, letters = db.all('letters')) {
-  const ready = letters.filter((l) => l.status === 'ready' && l.protocol_seq);
+  const ready = letters.filter((l) => seqOf(l) && (l.status === 'ready' || l.protocol_seq));
   let xs = ready.filter((l) => l.visit_id === v.id);
   if (!xs.length && v.lodge) {
-    const no = String(v.lodge_number || '').trim();
-    xs = ready.filter((l) => !l.visit_id && String(l.subject || '').includes(`«${v.lodge}»`) && (!no || new RegExp(`(αριθμ?\\.|Αρ\\.)\\s*${no}(?!\\d)`).test(l.subject || '')));
+    const name = new RegExp(`(^|[^Α-ΩA-Z0-9])${escRe(nrmTxt(v.lodge).trim())}([^Α-ΩA-Z0-9]|$)`), no = String(v.lodge_number || '').trim();
+    const num = no && new RegExp(`(ΑΡΙΘΜ?\\.?|ΑΡ\\.?|NO\\.?|Ν[ΟO]\\.?|#)\\s*${escRe(no)}(?!\\d)`);
+    xs = ready.filter((l) => {
+      if (l.visit_id) return false;
+      const sub = nrmTxt(l.subject), all = sub + ' ' + nrmTxt(l.body);
+      return (name.test(sub) || name.test(all)) && (!num || num.test(all));
+    });
+    const before = xs.filter((l) => !l.letter_date || !v.visit_date || l.letter_date <= v.visit_date);
+    if (before.length) xs = before;
   }
-  return sortBy(xs, (l) => -Number(l.protocol_seq))[0] || null;
+  return sortBy(xs, (l) => -seqOf(l))[0] || null;
 }
-export const visitProtocol = (v, letters) => { const l = visitLetter(v, letters); return l ? String(l.protocol_seq) : ''; };
+export const visitProtocol = (v, letters) => { const l = visitLetter(v, letters); return l ? String(seqOf(l)) : ''; };
 // Σύνδεσμος της επιστολής: το PDF στο Drive (αν αποθηκεύτηκε) — αλλιώς η επιστολή στην εφαρμογή (για όσους έχουν πρόσβαση)
 const APP_URL = 'https://nglg-gsec.github.io/NGLG-Grand-Secretary/';
 const letterLink = (l) => (l ? l.drive_pdf || `${APP_URL}#/letters/${l.id}` : '');
 export function gmProgrammeRows(frm = today(), to = '') {
   const reps = repMap(), letters = db.all('letters');
   return sortBy(visitsAll().filter((v) => v.visit_date >= (frm || today()) && (!to || v.visit_date <= to) && !noRep(reps[v.rep_id])), 'visit_date', (v) => Number(v.lodge_number) || 0)
-    .map((v) => { const l = visitLetter(v, letters); return { v, r: reps[v.rep_id], prot: l ? String(l.protocol_seq) : '', letter: l }; });
+    .map((v) => { const l = visitLetter(v, letters); return { v, r: reps[v.rep_id], prot: l ? String(seqOf(l)) : '', letter: l }; });
 }
 function gmProgrammePaper(rows, { showRep = true } = {}) {
   const d = (iso) => { const x = parseIso(iso); return x ? `<b>${esc(fmtDate(iso))}</b><small>${esc(DAYS[x.getDay()])}</small>` : esc(iso); };

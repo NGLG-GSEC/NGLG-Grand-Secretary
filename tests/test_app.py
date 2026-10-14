@@ -1479,6 +1479,9 @@ def test_gm_programme_report_and_public_page(app):
       const v = db.all('visits').find((x) => x.lodge === 'ΒΗΤΑ');
       await db.save('x', (tx) => { tx.insert('letters', { protocol_seq: 20550, protocol_no: '20550', status: 'ready', category: 'ΕΠΙΣΤΟΛΗ', subject: 'Εκπροσώπηση ΜΔ εις την Στοάν «ΒΗΤΑ» υπ’ αριθμ. 20', body: 'x', letter_date: '2026-10-14' });
         tx.insert('letters', { protocol_seq: 20551, protocol_no: '20551', status: 'ready', category: 'ΕΠΙΣΚΕΨΗ', subject: 'Επίσημη Επίσκεψη', body: 'x', letter_date: '2026-10-14', visit_id: db.all('visits').find((x) => x.lodge === 'ΑΛΦΑ').id }); }); }""")
+    app.go('/visits')
+    cards = {c.locator('.vlodge a').first.inner_text(): c.locator('.vprot').all_inner_texts() for c in app.page.locator('.vcard').all()}
+    assert cards['ΑΛΦΑ'] == ['Αρ. Πρωτ. 20551'] and cards['ΒΗΤΑ'] == ['Αρ. Πρωτ. 20550'] and cards['ΚΕΝΗ'] == [], cards
     app.go('/visits/gm-programme')
     prs = app.page.locator('.gmp-table td.pr').all_inner_texts()
     assert prs == ['20551', '20550'], prs
