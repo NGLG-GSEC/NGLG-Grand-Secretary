@@ -482,25 +482,29 @@ const longToday = () => { const d = new Date(); return `${d.getDate()} ${MONTH_G
 const noRep = (r) => !r || /ουδεις/.test(fold(`${r.surname || ''} ${r.name || ''}`));
 // Αριθμός πρωτοκόλλου της επιστολής μιας Επίσκεψης (Έτοιμη): πρώτα όσες φτιάχτηκαν από την Επίσκεψη, αλλιώς επιστολή
 // κατηγορίας ΕΠΙΣΚΕΨΗ με τη Στοά (και τον αριθμό της) στο θέμα
-export function visitProtocol(v, letters = db.all('letters')) {
+export function visitLetter(v, letters = db.all('letters')) {
   const ready = letters.filter((l) => l.status === 'ready' && l.protocol_seq);
   let xs = ready.filter((l) => l.visit_id === v.id);
   if (!xs.length && v.lodge) {
     const no = String(v.lodge_number || '').trim();
     xs = ready.filter((l) => !l.visit_id && String(l.subject || '').includes(`«${v.lodge}»`) && (!no || new RegExp(`(αριθμ?\\.|Αρ\\.)\\s*${no}(?!\\d)`).test(l.subject || '')));
   }
-  return sortBy(xs, (l) => -Number(l.protocol_seq)).map((l) => String(l.protocol_seq))[0] || '';
+  return sortBy(xs, (l) => -Number(l.protocol_seq))[0] || null;
 }
+export const visitProtocol = (v, letters) => { const l = visitLetter(v, letters); return l ? String(l.protocol_seq) : ''; };
+// Σύνδεσμος της επιστολής: το PDF στο Drive (αν αποθηκεύτηκε) — αλλιώς η επιστολή στην εφαρμογή (για όσους έχουν πρόσβαση)
+const APP_URL = 'https://nglg-gsec.github.io/NGLG-Grand-Secretary/';
+const letterLink = (l) => (l ? l.drive_pdf || `${APP_URL}#/letters/${l.id}` : '');
 export function gmProgrammeRows(frm = today(), to = '') {
   const reps = repMap(), letters = db.all('letters');
   return sortBy(visitsAll().filter((v) => v.visit_date >= (frm || today()) && (!to || v.visit_date <= to) && !noRep(reps[v.rep_id])), 'visit_date', (v) => Number(v.lodge_number) || 0)
-    .map((v) => ({ v, r: reps[v.rep_id], prot: visitProtocol(v, letters) }));
+    .map((v) => { const l = visitLetter(v, letters); return { v, r: reps[v.rep_id], prot: l ? String(l.protocol_seq) : '', letter: l }; });
 }
 function gmProgrammePaper(rows, { showRep = true } = {}) {
   const d = (iso) => { const x = parseIso(iso); return x ? `<b>${esc(fmtDate(iso))}</b><small>${esc(DAYS[x.getDay()])}</small>` : esc(iso); };
   const who = (r) => (isGM(r) ? '<b>Ο Μέγας Διδάσκαλος</b>' : `${esc(repFull(r))}`);
-  const body = rows.map(({ v, r, prot }, i) => `<tr><td class="n">${i + 1}</td><td class="d">${d(v.visit_date)}</td><td class="l"><b>«${esc(v.lodge || '')}»</b>${v.lodge_number ? `<small>υπ’ αριθ. ${esc(v.lodge_number)}</small>` : ''}</td>`
-    + `<td class="p">${esc(v.province || '')}</td>${showRep ? `<td class="r">${who(r)}</td>` : ''}<td class="pr">${prot ? esc(prot) : '—'}</td></tr>`).join('');
+  const body = rows.map(({ v, r, prot, letter }, i) => `<tr><td class="n">${i + 1}</td><td class="d">${d(v.visit_date)}</td><td class="l"><b>«${esc(v.lodge || '')}»</b>${v.lodge_number ? `<small>υπ’ αριθ. ${esc(v.lodge_number)}</small>` : ''}</td>`
+    + `<td class="p">${esc(v.province || '')}</td>${showRep ? `<td class="r">${who(r)}</td>` : ''}<td class="pr">${prot ? `<a href="#/letters/${letter.id}" title="Άνοιγμα της επιστολής">${esc(prot)}</a>` : '—'}</td></tr>`).join('');
   return `<article class="paper report gmprog">${letterhead()}<div class="gmp-office">ΜΕΓΑΛΗ ΓΡΑΜΜΑΤΕΙΑ</div>
 <div class="gmp-meta">Εν Αθήναις, ${esc(longToday())}</div>
 <p class="gmp-subject"><b>Θέμα:</b> Πρόγραμμα επισκέψεων του Σεβασμιωτάτου Μεγάλου Διδασκάλου</p>
@@ -516,7 +520,7 @@ export const PUBLIC_PROGRAMME_URL = 'https://nglg-gsec.github.io/NGLG-Grand-Secr
 export function publicProgramme() {
   return { title: 'Πρόγραμμα επισκέψεων του Σεβασμιωτάτου Μεγάλου Διδασκάλου', salute: GMP_SALUTE, text: GMP_TEXT, closing: 'Με αδελφικούς χαιρετισμούς,',
     signer: 'Δημήτριος Σκιαδόπουλος', signer_title: 'Μέγας Γραμματέας', organization: db.setting('organization_name') || '',
-    rows: gmProgrammeRows(today()).map(({ v, r, prot }) => ({ protocol: prot, date: v.visit_date, lodge: v.lodge || '', no: String(v.lodge_number || ''), province: v.province || '', rep: isGM(r) ? 'Ο Μέγας Διδάσκαλος' : repFull(r), gm: isGM(r) ? 1 : 0 })) };
+    rows: gmProgrammeRows(today()).map(({ v, r, prot, letter }) => ({ protocol: prot, letter_url: letterLink(letter), date: v.visit_date, lodge: v.lodge || '', no: String(v.lodge_number || ''), province: v.province || '', rep: isGM(r) ? 'Ο Μέγας Διδάσκαλος' : repFull(r), gm: isGM(r) ? 1 : 0 })) };
 }
 let publishing = null;
 export async function publishProgramme(force = false) {

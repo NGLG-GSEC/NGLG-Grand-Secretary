@@ -1482,6 +1482,8 @@ def test_gm_programme_report_and_public_page(app):
     app.go('/visits/gm-programme')
     prs = app.page.locator('.gmp-table td.pr').all_inner_texts()
     assert prs == ['20551', '20550'], prs
+    lid = app.page.evaluate("async () => (await import('./core/store.js')).db.all('letters').find((l) => l.protocol_seq === 20551).id")
+    assert app.page.locator('.gmp-table td.pr a').first.get_attribute('href') == f'#/letters/{lid}'
     assert app.page.evaluate("() => getComputedStyle(document.querySelector('.gmp-table td.pr')).color") == 'rgb(179, 38, 30)'
     # το δημόσιο πρόγραμμα γράφεται στα δεδομένα
     app.page.click('[data-act=publish]')
@@ -1496,6 +1498,7 @@ def test_gm_programme_report_and_public_page(app):
     pub.wait_for_selector('table tbody tr')
     pt = pub.inner_text('body')
     assert pub.locator('td.pr').first.inner_text().strip() == '20551'
+    assert pub.locator('td.pr a').first.get_attribute('href') == f'https://nglg-gsec.github.io/NGLG-Grand-Secretary/#/letters/{lid}'
     assert 'ΑΥΤΟΜΑΤΟ ΣΥΣΤΗΜΑ ΕΝΗΜΕΡΩΣΗΣ ΣΥΜΦΩΝΑ ΜΕ ΤΑ ΙΣΧΥΟΝΤΑ' in pt and 'Λίαν Σεβάσμιοι και Σεβάσμιοι Αδελφοί' in pt and 'Σεβαστοί' not in pt
     assert 'ΜΕΓΑΛΗ ΓΡΑΜΜΑΤΕΙΑ' in pt and '«ΑΛΦΑ»' in pt and 'Ο Μέγας Διδάσκαλος' in pt and pub.locator('tbody tr').count() == 2
     pub.close()

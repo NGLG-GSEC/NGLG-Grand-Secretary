@@ -41,6 +41,7 @@
   td.l b{color:var(--ink)}
   td.pr{color:#b3261e;font-weight:700;white-space:nowrap}
   td.pr .prl{display:none;font-weight:600}
+  td.pr a{color:#b3261e;text-decoration:underline;text-underline-offset:3px}
   td.r .gmtag{display:inline-block;background:var(--gold);color:#fff;border-radius:999px;padding:1px 10px;font-size:.82rem;font-weight:700}
   .close{margin-top:22px}
   .sign{margin-top:8px;text-align:center;width:260px;margin-left:auto}
@@ -100,7 +101,7 @@
         return '<tr' + (r.gm ? ' class="gm"' : '') + '><td class="n">' + (i + 1) + '</td><td class="d"><b>' + esc(d ? dmy(d) : r.date) + '</b><small>' + esc(d ? DAYS[d.getDay()] : '') + '</small></td>'
           + '<td class="l"><b>«' + esc(r.lodge) + '»</b>' + (r.no ? '<small>υπ’ αριθ. ' + esc(r.no) + '</small>' : '') + '</td><td class="p">' + esc(r.province) + '</td>'
           + '<td class="r">' + (r.gm ? '<span class="gmtag">Ο Μέγας Διδάσκαλος</span>' : esc(r.rep)) + '</td>'
-          + '<td class="pr">' + (r.protocol ? '<span class="prl">Αρ. Πρωτ. </span>' + esc(r.protocol) : '<span class="nopr">—</span>') + '</td></tr>';
+          + '<td class="pr">' + (r.protocol ? (r.letter_url ? '<a href="' + esc(r.letter_url) + '" target="_blank" rel="noopener" title="Άνοιγμα της επιστολής">' : '') + '<span class="prl">Αρ. Πρωτ. </span>' + esc(r.protocol) + (r.letter_url ? '</a>' : '') : '<span class="nopr">—</span>') + '</td></tr>';
       }).join('') + '</tbody></table>' : '<p class="empty">Δεν υπάρχουν προγραμματισμένες επισκέψεις.</p>';
     var salute = String(data.salute || '').replace(/Σεβαστοί/g, 'Σεβάσμιοι');
     document.getElementById('body').innerHTML = '<p class="salute">' + esc(salute) + '</p>' + paras + table
