@@ -1474,9 +1474,11 @@ def test_gm_programme_report_and_public_page(app):
     assert [r['lodge'] for r in data['rows']] == ['ΑΛΦΑ', 'ΒΗΤΑ'] and data['rows'][0]['gm'] == 1 and 'email' not in json.dumps(data)
     # η δημόσια σελίδα το δείχνει (χωρίς σύνδεση)
     pub = app.page.context.new_page()
-    pub.route('**/programme/programme.json*', lambda r: r.fulfill(json=data))
+    old = {**data, 'salute': 'Σεβασμιώτατοι, Πανσεβάσμιοι, Λίαν Σεβαστοί και Σεβαστοί Αδελφοί,'}  # παλαιότερη δημοσίευση
+    pub.route('**/programme/programme.json*', lambda r: r.fulfill(json=old))
     pub.goto(app.base + 'programme/')
     pub.wait_for_selector('table tbody tr')
     pt = pub.inner_text('body')
+    assert 'ΑΥΤΟΜΑΤΟ ΣΥΣΤΗΜΑ ΕΝΗΜΕΡΩΣΗΣ ΣΥΜΦΩΝΑ ΜΕ ΤΑ ΙΣΧΥΟΝΤΑ' in pt and 'Λίαν Σεβάσμιοι και Σεβάσμιοι Αδελφοί' in pt and 'Σεβαστοί' not in pt
     assert 'ΜΕΓΑΛΗ ΓΡΑΜΜΑΤΕΙΑ' in pt and '«ΑΛΦΑ»' in pt and 'Ο Μέγας Διδάσκαλος' in pt and pub.locator('tbody tr').count() == 2
     pub.close()
