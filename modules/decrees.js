@@ -323,7 +323,7 @@ function viewDecree({ params }) {
       bind(el, {
         pdf: () => printPaper(fileName(d)),
         async word() { download(fileName(d) + '.docx', await decreeDocxBlob(d)); },
-        async drive() { await saveDocToDrive('decree_documents', d.id, fileName(d), await decreeDocxBlob(d), el.querySelector('.print-area .paper')); flash('Αποθηκεύτηκε στο Drive (Word + PDF).'); go(`/decrees/${d.id}`); },
+        async drive() { await saveDocToDrive('decree_documents', d.id, fileName(d), null, el.querySelector('.print-area .paper')); flash('Αποθηκεύτηκε στο Drive (Word + PDF).'); go(`/decrees/${d.id}`); },
         async ready() {
           await db.save(`Διάταγμα ${decreeNo(d)}: έτοιμο`, (tx) => { const p = d.protocol_seq ? null : nextProtocol(tx); tx.update('decree_documents', d.id, { status: 'ready', ...(p ? { protocol_seq: p.seq, protocol_year: p.year, protocol_no: p.no } : {}) }); });
           flash('Το Διάταγμα είναι έτοιμο και πήρε αριθμό πρωτοκόλλου.'); go(`/decrees/${d.id}`);

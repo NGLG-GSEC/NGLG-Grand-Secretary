@@ -1115,8 +1115,8 @@ def test_letter_and_decree_saved_to_drive_word_and_pdf(app):
     assert '20545' in app.text() and '«20545 - ΕΠΙΣΤΟΛΗ Πρόσκληση σε σύσκεψη»' in app.text()
     app.page.locator('[data-act=drive]').click()
     app.page.wait_for_selector('text=✓ Στο Drive', timeout=30000)
-    assert [u['name'] for u in uploads] == ['20545 - ΕΠΙΣΤΟΛΗ Πρόσκληση σε σύσκεψη.docx', '20545 - ΕΠΙΣΤΟΛΗ Πρόσκληση σε σύσκεψη.pdf']
-    assert all(u['auth'] == 'Bearer g-token' and u['parents'] for u in uploads) and uploads[0]['docx'] and uploads[1]['pdf']
+    assert [u['name'] for u in uploads] == ['20545 - ΕΠΙΣΤΟΛΗ Πρόσκληση σε σύσκεψη.pdf']  # μόνο PDF, όχι Word
+    assert all(u['auth'] == 'Bearer g-token' and u['parents'] for u in uploads) and uploads[0]['pdf']
     # Διάταγμα: ίδιο πρωτόκολλο, κατηγορία ΔΙΑΤΑΓΜΑ
     app.go('/decrees/new')
     app.fill(matter='διορισμού Μεγάλων Αξιωματικών')
@@ -1129,8 +1129,7 @@ def test_letter_and_decree_saved_to_drive_word_and_pdf(app):
     app.page.locator('[data-act=drive]').click()
     app.page.wait_for_selector('text=✓ Στο Drive', timeout=30000)
     y = date.today().year
-    assert uploads[2]['name'] == f'20546 - ΔΙΑΤΑΓΜΑ 513-{y} διορισμού Μεγάλων Αξιωματικών.docx' or uploads[2]['name'].startswith('20546 - ΔΙΑΤΑΓΜΑ 513')
-    assert uploads[3]['name'].endswith('.pdf') and uploads[3]['pdf']
+    assert len(uploads) == 2 and uploads[1]['name'].startswith('20546 - ΔΙΑΤΑΓΜΑ 513') and uploads[1]['name'].endswith('.pdf') and uploads[1]['pdf']
     # Επιστολή από Επίσκεψη → κατηγορία ΕΠΙΣΚΕΨΗ
     app.go('/visits')
     rid = app.page.evaluate("async () => (await import('./core/store.js')).db.all('reps')[0].id")

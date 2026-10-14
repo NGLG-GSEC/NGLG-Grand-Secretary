@@ -27,7 +27,7 @@ const GROUPS = [
   ['✉ Λογαριασμοί αποστολής', [['mail_from_official', 'Επιστολές & Διατάγματα', 'email'], ['mail_from_general', 'Γενικά εξερχόμενα (επισκέψεις, ευχές, αναφορές)', 'email']]],
   ['Αρίθμηση', [['protocol_start', 'Πρώτος αριθμός πρωτοκόλλου (αν δεν υπάρχει μεγαλύτερος)', 'int'], ['decree_first_no', 'Πρώτος αριθμός Διατάγματος (αν δεν υπάρχει μεγαλύτερος)', 'int']]],
   ['Διατάγματα', [['decree_cc', 'Κοινοποίηση (Cc) κάθε Διατάγματος', 'emails']]],
-  ['☁ Google: Drive (Word + PDF) και Gmail (email με συνημμένο PDF)', [['drive_folder_id', 'Φάκελος Drive (σύνδεσμος ή ID)'], ['google_client_id', 'Google OAuth Client ID (βλ. οδηγίες παρακάτω)']]],
+  ['☁ Google: Drive (PDF) και Gmail (email με συνημμένο PDF)', [['drive_folder_id', 'Φάκελος Drive (σύνδεσμος ή ID)'], ['google_client_id', 'Google OAuth Client ID (βλ. οδηγίες παρακάτω)']]],
   ['Επισκέψεις & Ευχές', [['gm_email', 'Email Μεγάλου Διδασκάλου (κοινοποίηση στις ενημερώσεις Εγκαταστάσεων)', 'emails'], ['visit_bcc', 'Κρυφή κοινοποίηση (Bcc) σε κάθε email/επιστολή Επίσκεψης', 'emails'], ['visits_signer_name', 'Υπογραφή email: όνομα'], ['visits_signer_title', 'Υπογραφή email: τίτλος'], ['greet_bcc_self', 'Ευχές: κρυφή κοινοποίηση και σε (προαιρετικό)', 'emails']]],
 ];
 

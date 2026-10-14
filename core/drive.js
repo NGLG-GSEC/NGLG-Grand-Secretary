@@ -54,21 +54,20 @@ export async function uploadFile(blob, name, mime) {
 export const docTitle = (seq, category, subject) => `${seq || ''} - ${String(category || 'ΕΠΙΣΤΟΛΗ').toUpperCase()} ${String(subject || '').trim()}`
   .replace(/[\\/:*?"<>|\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 180);
 
-// Word + PDF ενός εγγράφου στο Drive και σημείωση των συνδέσμων στην εγγραφή (letters / decree_documents)
-export async function saveDocToDrive(table, id, title, docxBlob, paperEl) {
+// Μόνο το PDF ενός εγγράφου στο Drive και σημείωση του συνδέσμου στην εγγραφή (letters / decree_documents)· το Word κατεβαίνει χωριστά
+export async function saveDocToDrive(table, id, title, _docx, paperEl) {
   const { paperPdf } = await import('./pdf.js');
   const pdf = await paperPdf(paperEl, { title });
-  const w = await uploadFile(docxBlob, title + '.docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
   const p = await uploadFile(pdf, title + '.pdf', 'application/pdf');
   const now = new Date().toISOString().slice(0, 16).replace('T', ' ');
-  await db.save(`Drive: ${title}`, (tx) => tx.update(table, id, { drive_docx: w.webViewLink || '', drive_pdf: p.webViewLink || '', drive_saved_at: now, drive_title: title }));
-  return { w, p };
+  await db.save(`Drive: ${title}`, (tx) => tx.update(table, id, { drive_docx: '', drive_pdf: p.webViewLink || '', drive_saved_at: now, drive_title: title }));
+  return { p };
 }
 const escA = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 // Κουμπί + κατάσταση για τη σελίδα εγγράφου
 export function driveBox(rec, title) {
   const saved = rec.drive_pdf && rec.drive_title === title;
-  return `<div class="drivebox">${driveReady() ? `<button class="btn${saved ? '' : ' primary'}" data-act="drive">☁ ${saved ? 'Νέα αποθήκευση' : 'Αποθήκευση'} στο Drive (Word + PDF)</button>` : `<a class="btn" href="#/settings">☁ Ρύθμιση Google Drive</a>`}
-${saved ? `<span class="vok">✓ Στο Drive ${escA(rec.drive_saved_at)}: <a href="${escA(rec.drive_docx)}" target="_blank" rel="noopener">Word</a> · <a href="${escA(rec.drive_pdf)}" target="_blank" rel="noopener">PDF</a></span>` : ''}
+  return `<div class="drivebox">${driveReady() ? `<button class="btn${saved ? '' : ' primary'}" data-act="drive">☁ ${saved ? 'Νέα αποθήκευση' : 'Αποθήκευση'} στο Drive (PDF)</button>` : `<a class="btn" href="#/settings">☁ Ρύθμιση Google Drive</a>`}
+${saved ? `<span class="vok">✓ Στο Drive ${escA(rec.drive_saved_at)}: <a href="${escA(rec.drive_pdf)}" target="_blank" rel="noopener">PDF</a></span>` : ''}
 <small class="muted">Όνομα αρχείου: «${escA(title)}» · <a href="${escA(folderUrl())}" target="_blank" rel="noopener">φάκελος Drive</a></small></div>`;
 }

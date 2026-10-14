@@ -232,8 +232,8 @@ ${x.status === 'ready' ? '<div class="mailsheet"></div>' : '<p class="send-help"
         wapdf: (_, b) => waSendPdf(x, b),
         async drive(_, b) {
           b.disabled = true; b.textContent = '☁ Αποθήκευση…';
-          try { await saveDocToDrive('letters', x.id, fileName(x), await letterDocxBlob(x), el.querySelector('.print-area .paper')); flash('Αποθηκεύτηκε στο Drive (Word + PDF).'); go(`/letters/${x.id}`); }
-          catch (e) { b.disabled = false; b.textContent = '☁ Αποθήκευση στο Drive (Word + PDF)'; throw e; }
+          try { await saveDocToDrive('letters', x.id, fileName(x), null, el.querySelector('.print-area .paper')); flash('Αποθηκεύτηκε στο Drive (Word + PDF).'); go(`/letters/${x.id}`); }
+          catch (e) { b.disabled = false; b.textContent = '☁ Αποθήκευση στο Drive (PDF)'; throw e; }
         },
         form: () => openInDigitalForm(x),
         async ready() { await db.save(`Επιστολή ${x.subject}: έτοιμη`, (tx) => { tx.update('letters', x.id, { status: 'ready' }); assignProtocol(tx, x.id); }); flash('Η επιστολή είναι έτοιμη και πήρε αριθμό πρωτοκόλλου.'); go(`/letters/${x.id}`); },
