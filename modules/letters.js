@@ -86,8 +86,8 @@ ${fillPanel(x, query)}
 <div class="full"><label>🔎 Παραλήπτης από τον Κατάλογο / Μητρώο</label><input id="rcptPick" placeholder="Επαρχία, Στοά, ΕπΜΔ, όνομα μέλους…" autocomplete="off"></div>
 <input type="hidden" name="recipient_member_id" value="${esc(x.recipient_member_id || '')}"><input type="hidden" name="visit_id" value="${esc(x.visit_id || '')}"><input type="hidden" name="closing" value="${esc(x.closing || '')}"><input type="hidden" name="category" value="${esc(category(x))}">
 <div><label>Παραλήπτης («Προς»)</label><input name="recipient_name" value="${esc(x.recipient_name || '')}"></div>
-<div><label>Email παραλήπτη</label><input name="recipient_email" value="${esc(x.recipient_email || '')}" inputmode="email" placeholder="πολλά με κόμμα"></div>
-<div class="full"><label>Κοιν. (στο έντυπο, κάτω από το «Προς»)</label><textarea name="cc_name" rows="2" style="min-height:0">${esc(x.cc_name || '')}</textarea></div>
+<div><label>Email παραλήπτη</label><input name="recipient_email" value="${esc(x.recipient_email || '')}" inputmode="email" placeholder="πολλά με κόμμα"><input id="emailPick" class="subpick" placeholder="+ Προσθήκη email από επαφή ή ομάδα…" autocomplete="off"></div>
+<div class="full"><label>Κοιν. (στο έντυπο, κάτω από το «Προς»)</label><input id="ccPick" class="subpick" placeholder="🔎 Κοιν.: επαφή ή ομάδα (μπαίνει στο έντυπο και το email της στους παραλήπτες)…" autocomplete="off"><textarea name="cc_name" rows="2" style="min-height:0">${esc(x.cc_name || '')}</textarea></div>
 <div class="full"><label>Θέμα</label><input name="subject" value="${esc(x.subject || '')}" required></div>
 <div class="full"><label>Κείμενο</label><textarea name="body" required>${esc(x.body || '')}</textarea><small class="muted">Οι σύνδεσμοι (https://… ή www.…) μένουν ενεργοί στο τελικό έγγραφο.</small></div>
 <div><label>Κατάσταση</label><select name="status"><option value="draft"${x.status !== 'ready' ? ' selected' : ''}>Πρόχειρη</option><option value="ready"${x.status === 'ready' ? ' selected' : ''}>Έτοιμη</option></select></div>
@@ -101,6 +101,14 @@ function mountLetterForm(el, x, isNew) {
   const f = el.querySelector('#lf');
   attachPicker(el.querySelector('#rcptPick'), contactItems, (c) => {
     f.recipient_name.value = c.name || ''; f.recipient_email.value = c.email || ''; f.recipient_member_id.value = c.member_id || '';
+  });
+  // Προσθήκη (όχι αντικατάσταση): email παραληπτών και Κοιν. από επαφές/ομάδες
+  const addEmails = (v) => { f.recipient_email.value = [...new Set([...splitEmails(f.recipient_email.value), ...splitEmails(v)])].join(', '); f.recipient_email.dispatchEvent(new Event('input', { bubbles: true })); };
+  attachPicker(el.querySelector('#emailPick'), contactItems, (c) => addEmails(c.email));
+  attachPicker(el.querySelector('#ccPick'), contactItems, (c) => {
+    const lines = f.cc_name.value.split('\n').map((s) => s.trim()).filter(Boolean);
+    if (c.name && !lines.includes(c.name)) f.cc_name.value = [...lines, c.name].join('\n');
+    addEmails(c.email); f.cc_name.dispatchEvent(new Event('input', { bubbles: true }));
   });
   // Πρότυπο + στοιχεία από τη βάση → κείμενο, θέμα, παραλήπτες
   const box = el.querySelector('#fillBox'), fv = el.querySelector('#fillVisit'), fl = el.querySelector('#fillLodge'), fd = el.querySelector('#fillDate'), state = el.querySelector('#fillState');

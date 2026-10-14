@@ -347,3 +347,4 @@ input[type=file]{max-width:100%;min-width:0}
 .richbar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:2px 0 4px}
 .richbar button,.richbar select{min-height:32px;padding:3px 10px;border:1px solid #c9d1e1;border-radius:6px;background:#fff;color:#1d2f5e;font-size:.95em;cursor:pointer;width:auto}
 .richbar button:hover{background:#eef2f9}.richbar small{margin-left:4px}
+.subpick{margin-top:6px;font-size:.92em;background:#f8fafd}

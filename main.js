@@ -10,6 +10,7 @@ import './modules/epeteirida.js';
 import './modules/provinces.js';
 import './modules/lodges.js';
 import './modules/directory.js';
+import './modules/contacts.js';
 import './modules/visits.js';
 import './modules/namedays.js';
 import './modules/epeteirida-table.js';

@@ -1586,3 +1586,41 @@ def test_letter_body_formatting_bar(app):
     assert '<b>Αγαπητέ</b>' in html and '<i>σημαντική</i>' in html and 'font-size:16pt">ανακοίνωση' in html and '[b]' not in html
     plain = app.page.evaluate("async () => (await import('./core/mail.js')).gmailUrl({ to: 'a@b.gr', subject: 's', body: document.querySelector('textarea[name=body]').value })")
     assert '%5Bb%5D' not in plain and '[b]' not in plain
+
+
+GOOGLE_CSV = '''First Name,Middle Name,Last Name,Organization Name,Organization Title,Notes,Labels,E-mail 1 - Label,E-mail 1 - Value,E-mail 2 - Label,E-mail 2 - Value,Phone 1 - Label,Phone 1 - Value
+Άλφα,,Δοκιμαστής,ΜΑΞ,Μέγας Δοκιμαστής,"σημείωση
+
+με γραμμές",Ομάδα Α ::: Διοίκηση ::: * myContacts,* ,alfa@example.com,,alfa2@example.com,Mobile,6900000001
+Βήτα,,Δεύτερος,,,,Ομάδα Α ::: * myContacts,* ,beta@example.com ::: beta.old@example.com,,,,
+,,Γραμματεία Δοκιμής,,,,Διοίκηση ::: * myContacts,* ,sec@example.com,,,,
+Χωρίς,,Email,,,,Ομάδα Α,,,,,,
+'''
+
+
+def test_google_contacts_groups_in_letter_recipients(app, tmp_path):
+    app.connect_local()
+    f1, f2 = tmp_path / 'contacts.csv', tmp_path / 'contacts_1.csv'
+    f1.write_text(GOOGLE_CSV, encoding='utf-8')
+    f2.write_text(GOOGLE_CSV.splitlines()[0] + '\n' + GOOGLE_CSV.splitlines()[1] + '\n' + '\n'.join(GOOGLE_CSV.splitlines()[2:4]) + '\n', encoding='utf-8')
+    app.go('/contacts')
+    app.page.set_input_files('#gcsv', [str(f1), str(f2)])
+    app.page.click('[data-act=imp]')
+    app.page.wait_for_selector('text=Επαφές: 3 νέες')
+    t = app.text()
+    assert 'Ομάδα Α · 2' in t and 'Διοίκηση · 2' in t and 'Χωρίς Email' not in t and 'myContacts' not in t
+    cs = app.page.evaluate("async () => (await import('./core/store.js')).db.all('contacts')")
+    assert len(cs) == 3 and next(c for c in cs if c['name'] == 'Άλφα Δοκιμαστής')['emails'] == 'alfa@example.com, alfa2@example.com'
+    # Επιστολή: Προς = ομάδα, Κοιν. = επαφή (προσθήκη στο έντυπο και στα email)
+    app.go('/letters/new')
+    app.page.fill('#rcptPick', 'Ομάδα')
+    app.page.locator('#rcptPick + .picker-list button', has_text='Ομάδα Α').first.click()
+    assert app.page.input_value('[name=recipient_name]') == 'Ομάδα Α'
+    assert app.page.input_value('[name=recipient_email]') == 'alfa@example.com, beta@example.com'
+    app.page.fill('#ccPick', 'Γραμματεία Δοκ')
+    app.page.locator('#ccPick + .picker-list button', has_text='Γραμματεία Δοκιμής').first.click()
+    assert app.page.input_value('[name=cc_name]') == 'Γραμματεία Δοκιμής'
+    assert app.page.input_value('[name=recipient_email]') == 'alfa@example.com, beta@example.com, sec@example.com'
+    app.page.fill('#emailPick', 'Διοίκ')
+    app.page.locator('#emailPick + .picker-list button', has_text='Διοίκηση').first.click()
+    assert app.page.input_value('[name=recipient_email]') == 'alfa@example.com, beta@example.com, sec@example.com'  # χωρίς διπλά
