@@ -359,3 +359,4 @@ input[type=file]{max-width:100%;min-width:0}
 .memtable td:nth-child(1),.memtable td:nth-child(2),.memtable td:nth-child(6),.memtable td:nth-child(10),.memtable td:last-child,.memtable th:nth-child(1),.memtable th:nth-child(6){white-space:nowrap}
 .memtable td:last-child .btn{padding:3px 8px}
 }
+.altsend{display:inline-block;margin-left:4px}.altsend summary{cursor:pointer;font-size:.85em}.altsend[open] .btn{margin:4px 4px 0 0}

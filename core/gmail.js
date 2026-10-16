@@ -39,14 +39,15 @@ async function loadLogo() {
   try { const r = await fetch(new URL('../img/header_emblem.png', import.meta.url)); logoB64 = r.ok ? b64(new Uint8Array(await r.arrayBuffer())) : ''; } catch { logoB64 = ''; }
   return logoB64;
 }
-export function buildMime({ from, to, cc, bcc, subject, body, attachments = [], logo = '' }) {
+// htmlBody: έτοιμο HTML (π.χ. ευχές με την πλακέτα) αντί του προεπιλεγμένου με τον θυρεό
+export function buildMime({ from, to, cc, bcc, subject, body, attachments = [], logo = '', htmlBody = '' }) {
   const B = 'nglg_' + Math.random().toString(36).slice(2), A = B + '_alt', R = B + '_rel';
   const h = [`From: ${from}`, `To: ${list(to).join(', ')}`, list(cc).length && `Cc: ${list(cc).join(', ')}`, list(bcc).length && `Bcc: ${list(bcc).join(', ')}`,
     `Subject: ${hdr(subject || '')}`, 'MIME-Version: 1.0', `Content-Type: multipart/mixed; boundary="${B}"`].filter(Boolean).join('\r\n');
   const plain = `Content-Type: text/plain; charset="UTF-8"\r\nContent-Transfer-Encoding: base64\r\n\r\n${wrap(u8b64(richPlain(withMailHeader(body))))}`;
-  const html = `Content-Type: text/html; charset="UTF-8"\r\nContent-Transfer-Encoding: base64\r\n\r\n${wrap(u8b64(mailHtml(body)))}`;
+  const html = `Content-Type: text/html; charset="UTF-8"\r\nContent-Transfer-Encoding: base64\r\n\r\n${wrap(u8b64(htmlBody || mailHtml(body)))}`;
   const alt = `Content-Type: multipart/alternative; boundary="${A}"\r\n\r\n--${A}\r\n${plain}\r\n--${A}\r\n${html}\r\n--${A}--`;
-  const part = logo
+  const part = logo && !htmlBody
     ? `Content-Type: multipart/related; boundary="${R}"\r\n\r\n--${R}\r\n${alt}\r\n--${R}\r\nContent-Type: image/png; name="emblem.png"\r\nContent-ID: <${LOGO_CID}>\r\nContent-Disposition: inline; filename="emblem.png"\r\nContent-Transfer-Encoding: base64\r\n\r\n${wrap(logo)}\r\n--${R}--`
     : alt;
   let m = `${h}\r\n\r\n--${B}\r\n${part}`;
@@ -59,7 +60,7 @@ export function buildMime({ from, to, cc, bcc, subject, body, attachments = [], 
 // → { id, messageId }
 export async function createDraft(msg, attachments, kind) {
   const from = senderFor(kind), token = await googleToken(GMAIL_SCOPE, from);
-  const raw = btoa(buildMime({ ...msg, from, attachments, logo: await loadLogo() })).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const raw = btoa(buildMime({ ...msg, from, attachments, logo: msg.htmlBody ? '' : await loadLogo() })).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
   const r = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/drafts', { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ message: { raw } }) });
   if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error(`Gmail ${r.status}: ${(j.error && j.error.message) || r.statusText}`); }
   const j = await r.json();
@@ -74,7 +75,7 @@ export async function sendNow(msg, attachments, kind) {
     const me = String((await pr.json()).emailAddress || '').toLowerCase();
     if (me && me !== from.toLowerCase()) throw new Error(`Ο λογαριασμός Google που επιλέχθηκε είναι ${me}, όχι ${from}. Δεν στάλθηκε τίποτα — πατήστε ξανά και επιλέξτε τον ${from}.`);
   }
-  const raw = btoa(buildMime({ ...msg, from, attachments, logo: await loadLogo() })).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const raw = btoa(buildMime({ ...msg, from, attachments, logo: msg.htmlBody ? '' : await loadLogo() })).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
   const r = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', { method: 'POST', headers: { ...H, 'Content-Type': 'application/json' }, body: JSON.stringify({ raw }) });
   if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error(`Gmail ${r.status}: ${(j.error && j.error.message) || r.statusText}`); }
   return r.json();

@@ -198,7 +198,25 @@ def test_namedays_greetings(app):
     assert acc == ['Λουκάς', 'ΛΟΥΚΑΣ', 'Ιωάννης-Γεώργιος', 'Δομεστιχος', 'Αγαπητός'], acc
     nd = app.page.evaluate("async () => (await import('./core/store.js')).db.all('namedays').find((x) => x.name_key === 'αγαπητοσ').name")
     assert nd == 'Αγαπητός', nd  # το εορτολόγιο με τόνους
-    app.click('2. ✓ Στάλθηκε')
+    # προεπισκόπηση + άμεση αποστολή από info@ (Gmail API) με την πλακέτα
+    assert 'Από: info@nglgreece.gr' in sample and 'Προς: nik@example.com' in sample
+    sent = []
+
+    def gmail(route, request):
+        if request.url.endswith('/profile'):
+            return route.fulfill(json={'emailAddress': 'info@nglgreece.gr'})
+        sent.append(json.loads(request.post_data or '{}'))
+        return route.fulfill(json={'id': 'm-1'})
+    app.page.route('https://accounts.google.com/gsi/client', lambda r: r.fulfill(body=GSI_FAKE, content_type='text/javascript'))
+    app.page.route('https://gmail.googleapis.com/**', gmail)
+    app.page.on('dialog', lambda d: d.accept())
+    app.page.evaluate("async () => { const {db} = await import('./core/store.js'); await db.save('x', (tx) => tx.setting('google_client_id', 'test.apps.googleusercontent.com')); }")
+    app.page.click('[data-act=send]')
+    app.page.wait_for_selector('text=Στάλθηκε και καταχωρίστηκε', timeout=30000)
+    raw = sent[0]['raw']
+    mime = base64.urlsafe_b64decode(raw + '=' * (-len(raw) % 4)).decode()
+    html = base64.b64decode(mime.split('Content-Type: text/html; charset="UTF-8"\r\nContent-Transfer-Encoding: base64\r\n\r\n')[1].split('\r\n--')[0].replace('\r\n', '')).decode()
+    assert 'From: info@nglgreece.gr' in mime and 'To: nik@example.com' in mime and 'ΕΘΝΙΚΗ ΜΕΓΑΛΗ ΣΤΟΑ' in html and 'Μπενετάτου</b>' in html and 'cid:' not in html
     app.wait_saved()
     app.go(f'/namedays?frm={y}-01-01&to={y}-12-31')
     assert '✓ Ευχές' in app.text()
@@ -1640,3 +1658,31 @@ def test_google_contacts_groups_in_letter_recipients(app, tmp_path):
     app.page.fill('#emailPick', 'Διοίκ')
     app.page.locator('#emailPick + .picker-list button', has_text='Διοίκηση').first.click()
     assert app.page.input_value('[name=recipient_email]') == 'alfa@example.com, beta@example.com, sec@example.com'  # χωρίς διπλά
+
+
+def test_registry_numbers_from_1200_permanent(app):
+    gh = MockGitHub()
+    connect_github(app, gh)
+    app.page.wait_for_selector('.dash')
+    # υπάρχοντα μέλη με παλιούς αριθμούς (Member_ID πηγής) → εφάπαξ νέα αλφαβητική αρίθμηση από το 1200
+    rows = [{'id': 1, 'registry_no': 55, 'surname': 'Ωμέγας', 'first_name': 'Άγγελος', 'active': 1},
+            {'id': 2, 'registry_no': 7, 'surname': 'Άλφας', 'first_name': 'Βασίλειος', 'active': 0, 'no_contact': 1},
+            {'id': 3, 'registry_no': None, 'surname': 'Άλφας', 'first_name': 'Αθανάσιος', 'active': 1},
+            {'id': 4, 'registry_no': 9, 'surname': 'μέσος', 'first_name': 'Γεώργιος', 'active': 1}]
+    gh.external_commit('data/member_registry.json', json.dumps(rows, ensure_ascii=False))
+    st = gh.read_json('data/settings.json')
+    st['_migrations'] = ','.join(x for x in str(st.get('_migrations', '')).split(',') if x != 'registry-renumber-1200-2026-10')
+    gh.external_commit('data/settings.json', json.dumps(st, ensure_ascii=False))
+    app.page.reload()
+    app.page.wait_for_selector('.dash')
+    app.page.wait_for_function("async () => (await import('./core/store.js')).db.all('member_registry').every((m) => m.registry_no >= 1200)")
+    ms = {m['id']: m for m in app.page.evaluate("async () => (await import('./core/store.js')).db.all('member_registry')")}
+    assert [ms[i]['registry_no'] for i in (3, 2, 4, 1)] == [1200, 1201, 1202, 1203]  # Άλφας Αθ., Άλφας Βασ. (διαγραμμένος), μέσος, Ωμέγας
+    assert ms[1]['source_member_id'] == 55 and ms[2]['source_member_id'] == 7 and ms[3].get('source_member_id') is None
+    # νέο μέλος: επόμενος ελεύθερος αριθμός· ενημέρωση δεν αλλάζει τον αριθμό
+    add_member(app, surname='Νέος', first='Δημήτριος', email='new@example.com')
+    new = app.page.evaluate("async () => (await import('./core/store.js')).db.all('member_registry').find((m) => m.surname === 'Νέος')")
+    assert new['registry_no'] == 1204
+    app.page.evaluate("async () => { const {db} = await import('./core/store.js'); const m = await import('./modules/members.js');"
+                      " await db.save('x', (tx) => m.updateMember(tx, 1, { registry_no: 1, email: 'w@example.com' })); }")
+    assert app.page.evaluate("async () => (await import('./core/store.js')).db.get('member_registry', 1).registry_no") == 1203

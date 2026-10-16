@@ -285,7 +285,7 @@ function mountDecreeForm(el, d, m0) {
       if (!fn || !ln || !em || !mo) throw new Error('Ελέγξτε όνομα, επώνυμο, email και κινητό κάθε Αδελφού.');
       if (!service && !hon) throw new Error('Επιλέξτε τίτλο Αδελφού.');
       if (action === 'appoint' && DEC_MAP[office].hon_short) hon = DEC_MAP[office].hon_short;
-      return { member_id: Number(q('.mid')) || null, registry_no: q('.mid'), first_name: fn, last_name: ln, full_name: `${fn} ${ln}`, decree_first_name: proper(q('.dfn')), decree_last_name: proper(q('.dln')),
+      return { member_id: Number(q('.mid')) || null, registry_no: (db.get('member_registry', Number(q('.mid'))) || {}).registry_no ?? '', first_name: fn, last_name: ln, full_name: `${fn} ${ln}`, decree_first_name: proper(q('.dfn')), decree_last_name: proper(q('.dln')),
         honorific: service ? '' : hon, former_office: service ? '' : q('.former'), email: em, mobile: mo, office: action === 'appoint' ? office : '', rule: action === 'appoint' ? DEC_MAP[office].rule : '19' };
     });
     if (!people.length) throw new Error('Συμπληρώστε τουλάχιστον έναν Αδελφό.');

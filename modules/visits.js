@@ -808,7 +808,8 @@ export function importVisitsPayload(tx, data) {
       repIds[ext] = ex.id;
     } else { repIds[ext] = tx.insert('reps', { name, surname: sur, ...vals, member_id: memberFor(email, mobile), notes: '', ext_id: ext }).id; n.rep_new++; }
   }
-  const byReg = Object.fromEntries(tx.all('member_registry').filter((m) => m.registry_no != null).map((m) => [String(m.registry_no), m.id]));
+  // παλαιά δεδομένα: ο αριθμός είναι το Member_ID της πηγής (source_member_id μετά τη νέα αρίθμηση από το 1200)
+  const byReg = Object.fromEntries(tx.all('member_registry').filter((m) => (m.source_member_id ?? m.registry_no) != null).map((m) => [String(m.source_member_id ?? m.registry_no), m.id]));
   for (const x of data.lodgeMasters || []) {
     const ex = tx.find('lodges', (l) => lodgeNoKey(l.number) === lodgeNoKey(s(x.number))), nm = [s(x.name), s(x.surname)].filter(Boolean).join(' ');
     if (ex && nm && !String(ex.master || '').trim()) { tx.update('lodges', ex.id, { master: nm }); n.lodge_upd++; }
