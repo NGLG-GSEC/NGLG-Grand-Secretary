@@ -182,6 +182,17 @@ def test_namedays_greetings(app):
     app.page.wait_for_selector('#gBody')
     sample = app.text('#sample')
     assert 'ΕΘΝΙΚΗ ΜΕΓΑΛΗ ΣΤΟΑ' in sample and 'Αγαπητέ Αδελφέ' in sample and 'Νικόλαος Εορτάζων' in sample
+    MG = ['Ιανουαρίου', 'Φεβρουαρίου', 'Μαρτίου', 'Απριλίου', 'Μαΐου', 'Ιουνίου', 'Ιουλίου', 'Αυγούστου', 'Σεπτεμβρίου', 'Οκτωβρίου', 'Νοεμβρίου', 'Δεκεμβρίου']
+    t = date.today()
+    assert f'Αθήνα, {t.day} {MG[t.month - 1]} {t.year}' in sample and 'για την ονομαστική σας εορτή της ' in sample and '{' not in sample and '[b]' not in sample
+    assert app.page.locator('#sample b', has_text='Σεβτ. Αδ. Ιωάννη Μπενετάτου').count() == 1 and app.page.locator('.richbar').count() == 1
+    # Επετηρίδα: υπερισχύει στον τίτλο/προσφώνηση και στη γραφή του ονόματος
+    app.page.evaluate("async () => { const {db} = await import('./core/store.js'); const m = db.all('member_registry').find((x) => x.surname === 'Εορτάζων');"
+                      " await db.save('x', (tx) => tx.insert('epeteirida', { member_id: m.id, honorific: 'Πανσεβάσμιος', full_name: 'ΕΟΡΤΑΖΩΝ Νικόλαος' })); }")
+    app.page.reload()
+    app.page.wait_for_selector('#gBody')
+    sample = app.text('#sample')
+    assert 'Πσεβ. Αδ. Νικόλαος ΕΟΡΤΑΖΩΝ' in sample and 'Αγαπητέ Πανσεβάσμιε Αδελφέ' in sample, sample[:300]
     app.click('2. ✓ Στάλθηκε')
     app.wait_saved()
     app.go(f'/namedays?frm={y}-01-01&to={y}-12-31')
