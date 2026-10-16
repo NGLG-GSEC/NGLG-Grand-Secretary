@@ -1844,3 +1844,25 @@ def test_sure_duplicates_merged_once_with_backup(app):
     assert len(dipl) == 1 and 'a@example.com' in (dipl[0]['email'] + (dipl[0].get('other_emails') or '')) and '6900000001' in (dipl[0]['mobile'] + (dipl[0].get('other_mobiles') or ''))
     assert len([m for m in ms if m['surname'] == 'Συνώνυμος']) == 2  # διαφορετικό κινητό: μένουν για έλεγχο
     assert any(p.startswith('files/backups/member_registry-before-merge-') for p in gh.files())
+
+
+def test_small_lodges_report(app):
+    # Στοές με λιγότερα από 12 κύρια μέλη: σειρά αρχαιότητας, δυναμικά φίλτρα στις επικεφαλίδες, PDF
+    app.connect_local()
+    add_member(app, surname='ΜΙΚΡΟΣΤΟΪΤΗΣ', first='ΑΝΤΩΝΙΟΣ', email='ms1@example.com', lodges='ΑΚΡΟΠΟΛΙΣ | 2 | 1. ΤΑΚΤΙΚΟ\nΠΑΡΘΕΝΩΝ | 3 | 2. ΣΥΝΔΕΔΕΜΕΝΟ')
+    app.go('/members')
+    app.page.click('a:has-text("Στοές με < 12 κύρια μέλη")')
+    app.page.wait_for_selector('#slbody tr')
+    nums = app.page.eval_on_selector_all('#slbody .c-number', 'xs => xs.map((x) => x.textContent)')
+    assert nums[:2] == ['1', '2'] and nums == sorted(nums, key=lambda n: int(n) if n.isdigit() else 10**9), nums
+    cnt = lambda n: app.page.eval_on_selector_all('#slbody tr', f"rs => rs.filter((r) => r.querySelector('.c-number').textContent === '{n}').map((r) => r.querySelector('.c-count').textContent)")
+    assert cnt('2') == ['1'] and cnt('3') == ['0']  # μόνο το «1. ΤΑΚΤΙΚΟ» μετρά ως κύριο μέλος
+    app.page.fill('#slf [data-f="number"]', '2-3')
+    assert app.page.eval_on_selector_all('#slbody .c-number', 'xs => xs.map((x) => x.textContent)') == ['2', '3']
+    app.page.select_option('#slf [data-f="count"]', '1')
+    assert app.page.eval_on_selector_all('#slbody .c-number', 'xs => xs.map((x) => x.textContent)') == ['2']
+    assert '(1)' in app.page.inner_text('#slf [data-f="provincial"]')
+    with app.page.expect_download() as d:
+        app.click('📄 Αναφορά PDF')
+    assert d.value.suggested_filename.endswith('.pdf') and Path(d.value.path()).read_bytes()[:4] == b'%PDF'
+    assert not app.errors, app.errors

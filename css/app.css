@@ -365,3 +365,10 @@ input[type=file]{max-width:100%;min-width:0}
 .gprev-box{background:#fff;border-radius:12px;max-width:760px;width:100%;padding:14px 18px 22px;box-shadow:0 20px 60px #0006}
 .gprev-bar{display:flex;gap:10px;align-items:center;justify-content:space-between;border-bottom:1px solid #e3e7ef;padding-bottom:8px;margin-bottom:10px;color:#1d2f5e}
 .mtitle{color:#8a6d2b;font-weight:600;letter-spacing:.02em}
+/* Στοές με λίγα κύρια μέλη */
+.sl-st{border:0;padding:0;margin:10px 0 0;display:flex;flex-wrap:wrap;gap:6px}.sl-st legend{font-weight:600;margin-bottom:4px}
+.sl-grid{border-collapse:separate;border-spacing:0;width:100%}
+.sl-grid th{background:#1d2f5e;color:#fff;padding:8px 6px;text-align:left;white-space:nowrap;font-weight:600}
+.sl-grid thead tr:first-child th{cursor:pointer;user-select:none}
+.sl-grid .sl-f th{background:#eef1f6;padding:4px}.sl-grid .sl-f input,.sl-grid .sl-f select{width:100%;min-width:90px;padding:4px 6px;min-height:0;font-size:.92em}
+.sl-grid td{border-bottom:1px solid #eef1f6;padding:6px}.sl-grid .c-number,.sl-grid .c-count{text-align:center;width:110px}
