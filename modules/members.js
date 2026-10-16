@@ -9,6 +9,7 @@ import { noContact, NO_CONTACT } from '../core/pickers.js';
 import { epeteiridaOf, highestOfficeText } from './epeteirida-table.js';
 import { identify, canonicalId, person, digits10, sameNameGroups } from '../core/people.js';
 import { isSealed } from '../core/connect.js';
+import { smallLodgesPage } from './small-lodges.js';
 
 // Αρ. Μητρώου: μοναδικός και μόνιμος αριθμός κάθε προσώπου που είναι ή υπήρξε μέλος της ΕΜΣτΕ (και διαγραμμένου).
 // Ξεκινά από το 1200, δίνεται αυτόματα στο νέο μέλος (επόμενος ελεύθερος) και δεν αλλάζει ποτέ· μόνο ο διαχειριστής
@@ -152,7 +153,7 @@ function listPage({ query }) {
   const mk = (p) => '#/members?' + new URLSearchParams({ q, field, p });
   return {
     title: 'Μητρώο Μελών',
-    html: `<h1>Μητρώο Μελών</h1>${notice(query.msg)}<div class="toolbar"><a class="btn primary" href="#/members/new">+ Προσθήκη Μέλους</a>${(() => { const n = sameNameGroups().length; return n ? `<a class="btn" href="#/members/duplicates">Διπλές εγγραφές (${n})</a>` : ''; })()}<button class="btn" data-act="export">⬇ Excel</button></div>
+    html: `<h1>Μητρώο Μελών</h1>${notice(query.msg)}<div class="toolbar"><a class="btn primary" href="#/members/new">+ Προσθήκη Μέλους</a>${(() => { const n = sameNameGroups().length; return n ? `<a class="btn" href="#/members/duplicates">Διπλές εγγραφές (${n})</a>` : ''; })()}<button class="btn" data-act="export">⬇ Excel</button><a class="btn" href="#/members/small-lodges">🏛 Στοές με &lt; 12 κύρια μέλη</a></div>
 <div class="card member-search"><h3 style="margin-top:0">Αναζήτηση μέλους</h3><form class="msearch" id="ms"><fieldset class="msfield"><legend>1. Τι θα δώσετε;</legend>
 ${MEMBER_FIELDS.map(([k, v]) => `<label class="chip"><input type="radio" name="field" value="${k}"${k === field ? ' checked' : ''}><span>${esc(v)}</span></label>`).join('')}</fieldset>
 <div><label for="msq" id="msqlabel">2. ${esc(qlabel)}</label><input id="msq" name="q" value="${esc(q)}" autofocus autocomplete="off" type="${itype}" placeholder="${esc(ph)}"${field === 'lodge' ? ' list="lodgelist"' : ''}>
@@ -480,6 +481,7 @@ module({
     '/members': listPage,
     '/members/new': () => formPage(null),
     '/members/duplicates': duplicatesPage,
+    '/members/small-lodges': smallLodgesPage,
     '/members/:id': ({ params }) => { const m = db.get('member_registry', params.id); return m ? formPage(m) : '<h1>Δεν βρέθηκε το μέλος</h1>'; },
   },
   tile: { order: 60, render: () => `<div class="dtile"><h3><a href="#/members">Μητρώο Μελών</a></h3><div class="big">${membersAll().filter((m) => m.active !== 0).length} ενεργά μέλη</div><small class="muted">${membersAll().filter(noContact).length} διαγραμμένα (⛔ χωρίς επικοινωνία)</small>
