@@ -172,7 +172,7 @@ def test_visits_reps_and_mails(app):
 def test_namedays_greetings(app):
     app.connect_local()
     add_member(app, surname='Εορτάζων', first='Νικόλαος', email='nik@example.com')
-    app.page.evaluate("async () => { const {db} = await import('./core/store.js'); await db.save('x', (tx) => { tx.setting('gm_email', 'gm@example.com'); tx.setting('greet_cc_rules', 'piraeus.secretary@nglgreece.gr => extra@example.com\\nnone@example.com => never@example.com'); }); }")
+    app.page.evaluate("async () => { const {db} = await import('./core/store.js'); await db.save('x', (tx) => { tx.setting('gm_email', 'gm@example.com'); tx.setting('greet_cc_rules', 'piraeus.secretary@nglgreece.gr => extra@example.com\\npiraeus.secretary@nglgreece.gr => cc: vis@example.com\\nnone@example.com => never@example.com'); }); }")
     app.go('/namedays/calendar?q=νικολαος')
     assert 'Νικόλαος' in app.text()
     y = date.today().year
@@ -200,7 +200,7 @@ def test_namedays_greetings(app):
     nd = app.page.evaluate("async () => (await import('./core/store.js')).db.all('namedays').find((x) => x.name_key === 'αγαπητοσ').name")
     assert nd == 'Αγαπητός', nd  # το εορτολόγιο με τόνους
     # προεπισκόπηση + άμεση αποστολή από info@ (Gmail API) με την πλακέτα
-    assert 'Από: info@nglgreece.gr' in sample and 'Προς: nik@example.com' in sample and 'Κοιν.: gm@example.com, extra@example.com' in sample and 'never@example.com' not in sample
+    assert 'Από: info@nglgreece.gr' in sample and 'Προς: nik@example.com' in sample and 'Κοιν.: gm@example.com, vis@example.com' in sample and 'Bcc: piraeus.secretary@nglgreece.gr, extra@example.com' in sample and 'never@example.com' not in sample
     subj = app.page.locator('#sample').inner_text()
     assert 'Θέμα: Πσεβ. Αδ. Νικόλαος ΕΟΡΤΑΖΩΝ - Ευχές για την ονομαστική σας εορτή από τον Μέγα Διδάσκαλο' in subj, subj[:300]
     app.page.click('[data-act=preview]')
@@ -224,7 +224,7 @@ def test_namedays_greetings(app):
     raw = sent[0]['raw']
     mime = base64.urlsafe_b64decode(raw + '=' * (-len(raw) % 4)).decode()
     html = base64.b64decode(mime.split('Content-Type: text/html; charset="UTF-8"\r\nContent-Transfer-Encoding: base64\r\n\r\n')[1].split('\r\n--')[0].replace('\r\n', '')).decode()
-    assert 'From: info@nglgreece.gr' in mime and 'To: nik@example.com' in mime and 'Cc: gm@example.com, extra@example.com' in mime and 'ΕΘΝΙΚΗ ΜΕΓΑΛΗ ΣΤΟΑ' in html and 'Μπενετάτου</b>' in html and 'cid:' not in html
+    assert 'From: info@nglgreece.gr' in mime and 'To: nik@example.com' in mime and 'Cc: gm@example.com, vis@example.com' in mime and 'Bcc: piraeus.secretary@nglgreece.gr, extra@example.com' in mime and 'ΕΘΝΙΚΗ ΜΕΓΑΛΗ ΣΤΟΑ' in html and 'Μπενετάτου</b>' in html and 'cid:' not in html
     app.wait_saved()
     app.go(f'/namedays?frm={y}-01-01&to={y}-12-31')
     assert '✓ Ευχές' in app.text()

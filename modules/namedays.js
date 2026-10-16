@@ -23,10 +23,12 @@ const SUBJECT_DEFAULT = '{Τίτλος} {Όνομα} {Επώνυμο} - Ευχέ
 const BODY_OLD = 'Προς: {Τίτλος} {Όνομα} {Επώνυμο}\n\nΑγαπητέ {Προσφώνηση},\n\nΣας μεταφέρω, με ιδιαίτερη χαρά, τις θερμότερες ευχές του Σεβτ. Αδ. Ιωάννη Μπενετάτου, Μεγάλου Διδασκάλου της Εθνικής Μεγάλης Στοάς της Ελλάδος, για την ονομαστική σας εορτή.\n\nΕύχεται από καρδιάς υγεία, χαρά, οικογενειακή ευτυχία και κάθε καλό στη ζωή και στο έργο σας.\n\nΟ Μέγας Γραμματεύς\nΠσεβ. Αδ. Δημήτριος Σκιαδόπουλος';
 const BODY_DEFAULT = 'Προς: {Τίτλος} {Όνομα} {Επώνυμο}\n\nΑθήνα, {Σήμερα}\n\nΑγαπητέ {Προσφώνηση},\n\nΣας μεταφέρω, με ιδιαίτερη χαρά, τις θερμότερες ευχές του [b]Σεβτ. Αδ. Ιωάννη Μπενετάτου[/b], Μεγάλου Διδασκάλου της Εθνικής Μεγάλης Στοάς της Ελλάδος, για την ονομαστική σας εορτή της {Ημερομηνία Εορτής}.\n\nΕύχεται από καρδιάς υγεία, χαρά, οικογενειακή ευτυχία και κάθε καλό στη ζωή και στο έργο σας.\n\nΟ Μέγας Γραμματεύς\nΠσεβ. Αδ. Δημήτριος Σκιαδόπουλος';
 db.defaultSettings({ greet_subject: SUBJECT_DEFAULT, greet_body: BODY_DEFAULT, greet_bcc_self: '', greet_cc_rules: '' });
-// Κανόνες κοινοποίησης ευχών (Ρυθμίσεις): «αν το email περιέχει Χ => Κοιν. και σε Υ»
+// Κανόνες κοινοποίησης ευχών (Ρυθμίσεις): «αν το email περιέχει Χ => Υ» → κρυφή κοινοποίηση (Bcc) στο Υ·
+// με «cc:» μπροστά (π.χ. «Χ => cc: Υ») → ορατή κοινοποίηση (Κοιν.). → [ifs, add, kind]
 export function ccRules(v = db.setting('greet_cc_rules')) {
   return String(v || '').split(/\n+/).map((l) => l.split(/\s*(?:=>|→|->)\s*/)).filter((p) => p.length === 2)
-    .map(([a, b]) => [splitEmails(a).map((e) => e.toLowerCase()), splitEmails(b).filter((e) => EMAIL_RE.test(e))]).filter(([a, b]) => a.length && b.length);
+    .map(([a, b]) => [splitEmails(a).map((e) => e.toLowerCase()), splitEmails(b.replace(/^\s*(cc|bcc)\s*:/i, '')).filter((e) => EMAIL_RE.test(e)), /^\s*cc\s*:/i.test(b) ? 'cc' : 'bcc'])
+    .filter(([a, b]) => a.length && b.length);
 }
 // Νέο κείμενο ευχών: «Αθήνα, σημερινή ημερομηνία», ΜΔ με έντονα, ημερομηνία της εορτής
 db.migrate('greet-subject-title-2026-10', (tx) => { const v = tx.setting('greet_subject'); if (!v || v === SUBJECT_OLD) tx.setting('greet_subject', SUBJECT_DEFAULT); });
@@ -291,9 +293,11 @@ function greetPage() {
         const bcc = [...new Set([...(el.querySelector('#gProv').checked ? bccProvince(it.m, it.email) : []), ...(el.querySelector('#gSelf').checked ? selfBcc : [])])].filter((e) => e.toLowerCase() !== it.email.toLowerCase());
         let cc = el.querySelector('#gGm').checked ? gmCc.filter((e) => e.toLowerCase() !== it.email.toLowerCase()) : [];
         const all = [it.email, ...cc, ...bcc].map((e) => e.toLowerCase());
-        for (const [ifs, add] of ccRules()) if (ifs.some((e) => all.includes(e))) cc = [...cc, ...add];
+        let extraBcc = [];
+        for (const [ifs, add, kind] of ccRules()) if (ifs.some((e) => all.includes(e))) { if (kind === 'cc') cc = [...cc, ...add]; else extraBcc = [...extraBcc, ...add]; }
         cc = [...new Map(cc.filter((e) => e.toLowerCase() !== it.email.toLowerCase()).map((e) => [e.toLowerCase(), e])).values()];
-        return { to: it.email, cc, bcc: bcc.filter((e) => !cc.some((c) => c.toLowerCase() === e.toLowerCase())), subject: richPlain(fill(S.value, it.m, r, it.label, it.date)), text: richPlain(text), html: greetHtml(text) }; };
+        const bccAll = [...new Map([...bcc, ...extraBcc].filter((e) => e.toLowerCase() !== it.email.toLowerCase()).map((e) => [e.toLowerCase(), e])).values()];
+        return { to: it.email, cc, bcc: bccAll.filter((e) => !cc.some((c) => c.toLowerCase() === e.toLowerCase())), subject: richPlain(fill(S.value, it.m, r, it.label, it.date)), text: richPlain(text), html: greetHtml(text) }; };
       let cur = 0;
       const sample = () => { const m = msg(cur), n = epName(items[cur].m);
         el.querySelector('#sampleTitle').textContent = `Προεπισκόπηση: όπως θα φτάσει στον ${n.first} ${n.last} (${m.to || 'χωρίς email'})`;
