@@ -1935,3 +1935,29 @@ def test_member_degree_and_office_dates(app):
       await db.save('t', (tx) => M.updateMember(tx, m.id, { lodges: [{ name: 'ΑΚΡΟΠΟΛΙΣ', number: '2', status: 'ΔΙΑΓΡΑΦΕΝ', dereg_date: '15/3/2020' }] }));
       return db.all('member_lodges').filter((l) => l.member_id === m.id).map((l) => [l.wm_date, l.dereg_date]); }""")
     assert ls == [['2014-06-01', '2020-03-15']], ls
+
+
+def test_small_lodges_members_panel(app):
+    # πάτημα σε Στοά → τα μέλη της με ιδιότητες, δυναμικά φίλτρα στις κατηγορίες, PDF μελών
+    app.connect_local()
+    add_member(app, surname='ΠΡΩΤΟΣ', first='ΑΛΕΞΑΝΔΡΟΣ', email='p1@example.com', lodges='ΑΚΡΟΠΟΛΙΣ | 2 | ΕΝΕΡΓΟ | Τακτικό | 1')
+    add_member(app, surname='ΔΕΥΤΕΡΟΣ', first='ΒΑΣΙΛΕΙΟΣ', email='p2@example.com', lodges='ΑΚΡΟΠΟΛΙΣ | 2 | ΕΝΕΡΓΟ | Μέτοικο | 2')
+    add_member(app, surname='ΤΡΙΤΟΣ', first='ΖΑΧΑΡΙΑΣ', email='p3@example.com', lodges='ΑΚΡΟΠΟΛΙΣ | 2 | ΕΝΕΡΓΟ | Επίτιμο')
+    app.go('/members/small-lodges')
+    assert app.page.locator('#slmem').is_hidden()
+    app.page.click('#slbody tr[data-no="2"] .c-name')
+    names = lambda: app.page.eval_on_selector_all('#slmbody tr td:nth-child(2)', 'xs => xs.map((x) => x.textContent.split(" ")[0])')
+    assert 'ΑΚΡΟΠΟΛΙΣ' in app.page.inner_text('#slmtitle') and names() == ['ΠΡΩΤΟΣ', 'ΔΕΥΤΕΡΟΣ', 'ΤΡΙΤΟΣ'], names()
+    assert 'Μέτοικο (1)' in app.page.inner_text('#slmf [data-m=capacity]')
+    app.page.select_option('#slmf [data-m=primary]', 'ΝΑΙ')
+    assert names() == ['ΠΡΩΤΟΣ']
+    assert app.page.eval_on_selector_all('#slmf [data-m=capacity] option', 'xs => xs.map((x) => x.textContent)') == ['Όλα', 'Τακτικό (1)']
+    app.click('✕ Φίλτρα')
+    app.page.click('#slmchips [data-cap="Επίτιμο"]')
+    assert names() == ['ΤΡΙΤΟΣ']
+    with app.page.expect_download() as d:
+        app.click('📄 PDF μελών')
+    assert Path(d.value.path()).read_bytes()[:4] == b'%PDF'
+    app.click('Κλείσιμο')
+    assert app.page.locator('#slmem').is_hidden()
+    assert not app.errors, app.errors
