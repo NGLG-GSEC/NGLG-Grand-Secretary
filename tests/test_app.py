@@ -1774,3 +1774,18 @@ def test_contacts_linked_to_registry(app, tmp_path):
     assert '✓ Μητρώο' in app.text() and 'alfa.registry@example.com' in app.text()
     g = app.page.evaluate("async () => (await import('./modules/contacts.js')).contactGroups().find((x) => x.name === 'Ομάδα Α').emails")
     assert g == ['alfa.registry@example.com', 'beta@example.com']  # το Μητρώο υπερισχύει
+
+
+def test_registry_names_accented_from_official_calendar(app):
+    app.connect_local()
+    add_member(app, surname='ΔΟΜΕΣΤΙΧΟΣ', first='ΛΟΥΚΑΣ', email='l@example.com')
+    add_member(app, surname='Παπας', first='Γεωργιος', email='g2@example.com')
+    app.page.evaluate("async () => { const {db} = await import('./core/store.js'); const m = db.all('member_registry').find((x) => x.surname === 'Παπας');"
+                      " await db.save('x', (tx) => tx.insert('epeteirida', { member_id: m.id, honorific: 'Σεβάσμιος', full_name: 'Παπάς Γεώργιος' })); }")
+    names = []
+    for _ in range(40):
+        names = app.page.evaluate("async () => (await import('./core/store.js')).db.all('member_registry').map((m) => [m.first_name, m.surname]).sort()")
+        if ['Γεώργιος', 'Παπάς'] in names and ['Λουκάς', 'ΔΟΜΕΣΤΙΧΟΣ'] in names:
+            break
+        app.page.wait_for_timeout(250)
+    assert ['Λουκάς', 'ΔΟΜΕΣΤΙΧΟΣ'] in names and ['Γεώργιος', 'Παπάς'] in names, names

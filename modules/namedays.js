@@ -138,16 +138,21 @@ setMemberTitle(titleOf);
 // (υπερισχύει) και μετά τα αξιώματα των Διαταγμάτων / Σεβάσμιο Στοάς. Ενημερώνεται μόνο όπου αλλάζει.
 export async function syncMemberTitles() {
   await db.idle();
-  const diff = db.all('member_registry').map((m) => [m.id, titleOf(m)]).filter(([id, t]) => (db.get('member_registry', id) || {}).title !== t);
+  // τίτλος από την Επετηρίδα + ονόματα με τόνους (εορτολόγιο / Επετηρίδα)
+  const diff = db.all('member_registry').map((m) => { const n = properName(m), u = {};
+    if (m.title !== titleOf(m)) u.title = titleOf(m);
+    if (n.first_name && n.first_name !== m.first_name) u.first_name = n.first_name;
+    if (n.surname && n.surname !== m.surname) u.surname = n.surname;
+    return [m.id, u]; }).filter(([, u]) => Object.keys(u).length);
   if (!diff.length) return 0;
-  await db.save(`Μητρώο: τίτλοι από την Επετηρίδα (${diff.length})`, (tx) => { for (const [id, t] of diff) tx.update('member_registry', id, { title: t }); });
+  await db.save(`Μητρώο: τίτλοι και ορθή γραφή ονομάτων (${diff.length})`, (tx) => { for (const [id, u] of diff) tx.update('member_registry', id, u); });
   return diff.length;
 }
 let titlesTimer = 0, titlesFirst = true;
 db.on((ev) => {
   const run = () => { clearTimeout(titlesTimer); titlesTimer = setTimeout(() => syncMemberTitles().catch((e) => console.warn('Τίτλοι Μητρώου:', e)), 800); };
   if (ev.type === 'refresh' && titlesFirst && db.backend) { titlesFirst = false; run(); }
-  if (ev.type === 'saved' && !/^Μητρώο: τίτλοι/.test(ev.message || '') && (ev.tables || []).some((t) => ['epeteirida', 'member_registry', 'member_degrees_offices', 'reps', 'lodges'].includes(t))) run();
+  if (ev.type === 'saved' && !/^Μητρώο: τίτλοι/.test(ev.message || '') && (ev.tables || []).some((t) => ['epeteirida', 'member_registry', 'member_degrees_offices', 'reps', 'lodges', 'namedays'].includes(t))) run();
 });
 function bccProvince(m, own = '') {
   const out = [];
@@ -169,13 +174,20 @@ function accentMap() {
   accMemo = { head: db.head, map };
   return map;
 }
-export function accentName(v) {
+// caps: και τα γραμμένα με ΚΕΦΑΛΑΙΑ γίνονται «Όνομα» με τόνο (για τη μόνιμη διόρθωση του Μητρώου)
+export function accentName(v, { caps = false } = {}) {
   return String(v || '').split(/([\s-]+)/).map((w) => {
     if (!w.trim() || /^[\s-]+$/.test(w) || hasAcc(w)) return w;
     const a = accentMap().get(foldName(w));
     if (!a) return w;
-    return w === w.toUpperCase() ? w : a.charAt(0).toUpperCase() + a.slice(1); // ΚΕΦΑΛΑΙΑ μένουν χωρίς τόνους
+    return w === w.toUpperCase() && !caps ? w : a.charAt(0).toUpperCase() + a.slice(1);
   }).join('');
+}
+// Ορθή γραφή μέλους για το Μητρώο: όνομα από το εορτολόγιο, επώνυμο από την Επετηρίδα (όπου έχει τόνους)
+export function properName(m) {
+  const first = accentName(m.first_name, { caps: true }), e = epName(m).last;
+  const last = e && hasAcc(e) && foldName(e) === foldName(m.surname) ? e : m.surname;
+  return { first_name: first || m.first_name || '', surname: last || m.surname || '' };
 }
 db.migrate('namedays-accents-2026-10', (tx) => { // τα ονόματα του εορτολογίου με τόνους, από την επίσημη ονομασία
   const map = new Map();
