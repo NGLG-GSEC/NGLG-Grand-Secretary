@@ -1851,7 +1851,8 @@ def test_small_lodges_report(app):
     app.connect_local()
     add_member(app, surname='ΜΙΚΡΟΣΤΟΪΤΗΣ', first='ΑΝΤΩΝΙΟΣ', email='ms1@example.com', lodges='ΑΚΡΟΠΟΛΙΣ | 2 | 1. ΤΑΚΤΙΚΟ\nΠΑΡΘΕΝΩΝ | 3 | 2. ΣΥΝΔΕΔΕΜΕΝΟ')
     app.go('/members')
-    app.page.click('a:has-text("Στοές με < 12 κύρια μέλη")')
+    assert app.page.locator('#mainnav a[href="#/members/small-lodges"]').count() == 1  # και στο μενού «Στοές & Μέλη»
+    app.page.click('main a:has-text("Στοές με < 12 κύρια μέλη")')
     app.page.wait_for_selector('#slbody tr')
     nums = app.page.eval_on_selector_all('#slbody .c-number', 'xs => xs.map((x) => x.textContent)')
     assert nums[:2] == ['1', '2'] and nums == sorted(nums, key=lambda n: int(n) if n.isdigit() else 10**9), nums
