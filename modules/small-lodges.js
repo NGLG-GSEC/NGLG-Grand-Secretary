@@ -1,12 +1,14 @@
 // Στοές με λίγα κύρια μέλη — κατάλογος των Στοών με πλήθος κυρίων μελών κάτω από ένα όριο (προεπιλογή 12),
 // με σειρά αρχαιότητας (αύξων αριθμός Στοάς), δυναμικά φίλτρα στις επικεφαλίδες, Excel, εκτύπωση και PDF.
-// Κύριο μέλος: ενεργό μέλος του Μητρώου με ιδιότητα στη Στοά «1. …» / ΤΑΚΤΙΚΟ / ΚΥΡΙΟ (οι ιδιότητες επιλέγονται στη σελίδα).
+// Κύριο μέλος: ενεργό μέλος του Μητρώου που έχει τη Στοά ως «Στοά πλήρους συνδρομής» (Κ. 269)· όπου δεν έχει οριστεί η συνδρομή,
+// μετρά η κατάσταση «1. …» / ΤΑΚΤΙΚΟ / ΚΥΡΙΟ (οι καταστάσεις επιλέγονται στη σελίδα). Επίτιμοι και Θεράποντες δεν μετρούν.
 import { db } from '../core/store.js';
 import { bind, toast } from '../core/app.js';
 import { esc, fold, sortBy, today, fmtDate, exportXlsx, download } from '../core/util.js';
 import { reportPaper, printPaper } from '../core/paper.js';
 import { loadScript } from '../core/pdf.js';
 import { lodgesAll, lodgeNoKey } from './lodges.js';
+import { capacityOf } from './members.js';
 
 const LIMIT = 12;
 const gone = (st) => /ΔΙΑΓΡΑΦ|ΜΕΤΕΣΘ/.test(st);
@@ -27,7 +29,8 @@ function primaryCounts(statuses) {
   const active = new Set(db.all('member_registry').filter((m) => m.active !== 0 && !Number(m.no_contact)).map((m) => m.id)), seen = new Set(), out = {};
   for (const l of db.all('member_lodges')) {
     const st = normStatus(l.member_status), k = lodgeNoKey(l.lodge_number);
-    if (!k || !active.has(l.member_id) || !statuses.has(st) || seen.has(k + ':' + l.member_id)) continue;
+    const counts = Number(l.fee_rank) ? Number(l.fee_rank) === 1 && !gone(st) : statuses.has(st);
+    if (!k || !active.has(l.member_id) || !counts || ['Επίτιμο', 'Θεράπων'].includes(capacityOf(l)) || seen.has(k + ':' + l.member_id)) continue;
     seen.add(k + ':' + l.member_id); out[k] = (out[k] || 0) + 1;
   }
   return out;
@@ -40,7 +43,8 @@ export function smallLodgesPage() {
     html: `<div class="noprint"><h1>🏛 Στοές με λίγα κύρια μέλη</h1><p><a href="#/members">← Μητρώο Μελών</a></p>
 <div class="card sl-opts"><div class="grid"><div><label for="sllimit">Πλήθος κυρίων μελών κάτω από</label><input id="sllimit" type="number" min="1" value="${LIMIT}" inputmode="numeric"></div>
 <div><label>&nbsp;</label><label class="chip"><input type="checkbox" id="slinactive"><span>Και ανενεργές Στοές</span></label></div></div>
-<fieldset class="sl-st"><legend>Ιδιότητες που μετρούν ως κύριο μέλος</legend>${choices.length ? choices.map(([s, n]) => `<label class="chip"><input type="checkbox" value="${esc(s)}"${isPrimary(s) ? ' checked' : ''}><span>${esc(s)} (${n})</span></label>`).join('') : '<span class="muted">Δεν υπάρχουν ιδιότητες μελών στις Στοές.</span>'}</fieldset></div>
+<p class="muted" style="margin:10px 0 0">Κύριο μέλος: όποιος έχει τη Στοά ως <b>Στοά πλήρους συνδρομής</b> (Κ. 269). Όπου δεν έχει οριστεί η συνδρομή, μετρούν οι καταστάσεις που επιλέγονται εδώ. Επίτιμοι και Θεράποντες δεν μετρούν.</p>
+<fieldset class="sl-st"><legend>Καταστάσεις που μετρούν (όπου δεν έχει οριστεί συνδρομή)</legend>${choices.length ? choices.map(([s, n]) => `<label class="chip"><input type="checkbox" value="${esc(s)}"${isPrimary(s) ? ' checked' : ''}><span>${esc(s)} (${n})</span></label>`).join('') : '<span class="muted">Δεν υπάρχουν ιδιότητες μελών στις Στοές.</span>'}</fieldset></div>
 <div class="toolbar"><button class="btn primary" data-act="pdf">📄 Αναφορά PDF</button><button class="btn" data-act="print">🖨 Εκτύπωση</button><button class="btn" data-act="xlsx">⬇ Excel</button>
 <button class="btn" data-act="reset">✕ Καθαρισμός φίλτρων</button><span class="muted" id="slcount" style="align-self:center"></span></div>
 <div class="card tablecard"><table class="sl-grid" id="slg"><thead><tr id="slhead"></tr><tr class="sl-f" id="slf"></tr></thead><tbody id="slbody"></tbody></table></div></div>

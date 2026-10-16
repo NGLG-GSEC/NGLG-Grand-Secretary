@@ -16,8 +16,26 @@ ROOT = Path(__file__).resolve().parents[1]
 PNG = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR4nGNkYPjPwMDAxMDAwMDAAAAOGQEDqv3yVwAAAABJRU5ErkJggg==')
 
 
+def set_lodges(app, lodges):
+    # πίνακας «Στοές του μέλους»: μία γραμμή ανά «ΟΝΟΜΑ | ΑΡΙΘΜΟΣ | ΚΑΤΑΣΤΑΣΗ [| ΙΔΙΟΤΗΤΑ | ΣΥΝΔΡΟΜΗ]»
+    for i, line in enumerate(x for x in lodges.split('\n') if x.strip()):
+        p = [x.strip() for x in line.split('|')] + [''] * 5
+        rows = app.page.locator('#mlrows tr')
+        if rows.count() <= i:
+            app.page.click('[data-act=addlodge]')
+        r = rows.nth(i)
+        r.locator('[data-k=number]').fill(p[1])
+        r.locator('[data-k=name]').fill(p[0])
+        r.locator('[data-k=status]').fill(p[2])
+        if p[3]:
+            r.locator('[data-k=capacity]').select_option(p[3])
+        if p[4]:
+            r.locator('[data-k=fee_rank]').select_option(p[4])
+
+
 def add_member(app, surname='Παπαδόπουλος', first='Γεώργιος', email='g@example.com', mobile='6944123456', lodges='ΠΑΡΘΕΝΩΝ | 3 | 1. ΤΑΚΤΙΚΟ'):
-    app.go('/members/new').fill(surname=surname, first_name=first, email=email, mobile=mobile, lodges_text=lodges)
+    app.go('/members/new').fill(surname=surname, first_name=first, email=email, mobile=mobile)
+    set_lodges(app, lodges)
     app.click('💾 Αποθήκευση')
     app.wait_saved()
 
@@ -1867,3 +1885,31 @@ def test_small_lodges_report(app):
         app.click('📄 Αναφορά PDF')
     assert d.value.suggested_filename.endswith('.pdf') and Path(d.value.path()).read_bytes()[:4] == b'%PDF'
     assert not app.errors, app.errors
+
+
+def test_member_lodge_capacity_and_fee_rank(app):
+    # Ιδιότητα μέλους κατά το Σύνταγμα (με τον κανόνα) και Στοά πλήρους συνδρομής / 2η / 3η (Κ. 269)
+    app.connect_local()
+    app.go('/members/new')
+    opts = app.page.eval_on_selector_all('#mlrows [data-k=capacity] option', 'xs => xs.map((x) => x.textContent)')
+    assert opts == ['—', 'Τακτικό — Κ. 166', 'Υιοθετημένο — Κ. 163', 'Επανελθόν — Κ. 163', 'Ομότιμο — Κ. 146', 'Επίτιμο — Κ. 146', 'Μέτοικο — Κ. 146', 'Αριστίνδην — Κ. 146', 'Ισόβιο', 'Θεράπων'], opts
+    assert 'Στοά πλήρους συνδρομής — Κ. 269' in app.page.inner_text('#mlrows [data-k=fee_rank]')
+    add_member(app, surname='ΙΔΙΟΤΗΤΑΣ', first='ΠΕΤΡΟΣ', email='cap@example.com', lodges='ΑΚΡΟΠΟΛΙΣ | 2 | ΕΝΕΡΓΟ | Υιοθετημένο | 1\nΠΑΡΘΕΝΩΝ | 3 | ΕΝΕΡΓΟ | Μέτοικο | 2')
+    ls = app.page.evaluate("""async () => { const {db} = await import('./core/store.js'); const m = db.all('member_registry').find((x) => x.email === 'cap@example.com');
+      return db.all('member_lodges').filter((l) => l.member_id === m.id).map((l) => [l.lodge_number, l.capacity, l.fee_rank]); }""")
+    assert sorted(ls) == [['2', 'Υιοθετημένο', 1], ['3', 'Μέτοικο', 2]], ls
+    assert 'Υιοθετημένο · πλήρης συνδρ.' in app.text('.memtable') and 'Μέτοικο · 2η Στοά' in app.text('.memtable')
+    # η παλιά κατάσταση «1. ΤΑΚΤΙΚΟ» προτείνει την ιδιότητα «Τακτικό»· δύο Στοές πλήρους συνδρομής δεν γίνονται δεκτές
+    add_member(app, surname='ΠΑΛΑΙΟΣ', first='ΙΩΑΝΝΗΣ', email='old@example.com')
+    mid = app.page.evaluate("async () => (await import('./core/store.js')).db.all('member_registry').find((x) => x.email === 'old@example.com').id")
+    app.go(f'/members/{mid}')
+    assert app.page.locator('#mlrows [data-k=capacity]').input_value() == 'Τακτικό'
+    set_lodges(app, 'ΠΑΡΘΕΝΩΝ | 3 | 1. ΤΑΚΤΙΚΟ | Τακτικό | 1\nΑΚΡΟΠΟΛΙΣ | 2 | ΕΝΕΡΓΟ | Τακτικό | 1')
+    app.click('💾 Αποθήκευση')
+    assert 'μόνο μία' in app.page.inner_text('body')
+    # η εισαγωγή από το Excel-πηγή (χωρίς ιδιότητα/συνδρομή) δεν σβήνει όσα ορίστηκαν
+    app.page.evaluate("""async () => { const M = await import('./modules/members.js'); const {db} = await import('./core/store.js'); const m = db.all('member_registry').find((x) => x.email === 'cap@example.com');
+      await db.save('t', (tx) => M.updateMember(tx, m.id, { lodges: [{ name: 'ΑΚΡΟΠΟΛΙΣ', number: '2', status: 'ΕΝΕΡΓΟ' }, { name: 'ΠΑΡΘΕΝΩΝ', number: '3', status: 'ΕΝΕΡΓΟ' }] })); }""")
+    ls = app.page.evaluate("""async () => { const {db} = await import('./core/store.js'); const m = db.all('member_registry').find((x) => x.email === 'cap@example.com');
+      return db.all('member_lodges').filter((l) => l.member_id === m.id).map((l) => [l.lodge_number, l.capacity, l.fee_rank]); }""")
+    assert sorted(ls) == [['2', 'Υιοθετημένο', 1], ['3', 'Μέτοικο', 2]], ls
