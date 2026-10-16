@@ -47,7 +47,7 @@ function byPerson() {
   const m = new Map();
   // και οι μη συνδεδεμένες γραμμές, όταν το ονοματεπώνυμο δείχνει με βεβαιότητα ένα μέλος του Μητρώου
   for (const r of epeteiridaAll()) {
-    const id = r.member_id || (r.full_name ? matchName(r.full_name) : null);
+    const id = r.member_id || (r.member_id == null && r.full_name ? matchName(r.full_name) : null);
     if (id) { const k = canonicalId(id); (m.get(k) || m.set(k, []).get(k)).push(r); }
   }
   memo = { head: db.head, map: m };
@@ -67,10 +67,13 @@ export function highestOfficeText(memberId) {
 
 // Αρ. Μητρώου της γραμμής: από το συνδεδεμένο μέλος (ή, αν δεν είναι συνδεδεμένη, από βέβαιη αντιστοίχιση ονόματος)
 export function epRegistryNo(r) {
-  const id = r.member_id || (r.full_name ? matchName(r.full_name) : null), p = id ? person(id) : null;
+  const id = r.member_id || (r.member_id == null && r.full_name ? matchName(r.full_name) : null), p = id ? person(id) : null;
   if (!p) return { no: null, linked: false };
   return { no: p.member.registry_no ?? p.registry_nos[0] ?? null, linked: !!r.member_id };
 }
+// Μόνιμη σύνδεση: γραμμές χωρίς σύνδεση που το ονοματεπώνυμό τους δείχνει με βεβαιότητα ένα μέλος → [id γραμμής, member_id]
+// (όσες αποσυνδέθηκαν ρητά από τον χρήστη έχουν member_id 0 και δεν ξαναδένονται αυτόματα)
+export const pendingEpLinks = () => epeteiridaAll().filter((r) => r.member_id == null && r.full_name).map((r) => [r.id, matchName(r.full_name)]).filter(([, mid]) => mid);
 const matchName = (full) => identify({ full_name: String(full || '').replace(/\(.*?\)/g, ' ').replace(/\s+του\s+\S+\s*$/i, ' ') });
 
 // Επικόλληση από Excel (με επικεφαλίδες) → αντικατάσταση του πίνακα
@@ -210,7 +213,7 @@ ${FILTERS.map(([k, l]) => `<label>${esc(l)}<select data-s="${k}">${opts(k)}</sel
         const b = e.target.closest('[data-act]'); if (!b || !grid.contains(b)) return;
         const r = rowOf(b);
         if (b.dataset.act === 'del') { if (confirmDo(`Διαγραφή της γραμμής «${r.full_name || '—'}»;`)) { removed.add(r.id); dirty.delete(r.id); refresh(); } }
-        if (b.dataset.act === 'unlink') { mark(r, { member_id: null }); renderTable(); }
+        if (b.dataset.act === 'unlink') { mark(r, { member_id: 0 }); renderTable(); }
         if (b.dataset.act === 'link') {
           const td = b.closest('td');
           td.innerHTML = '<input class="ep-link" placeholder="Επώνυμο μέλους…" autocomplete="off">';

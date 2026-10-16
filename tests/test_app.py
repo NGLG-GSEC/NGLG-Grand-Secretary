@@ -1776,6 +1776,17 @@ def test_title_from_unlinked_epeteirida_row_and_abbreviated_honorific(app):
     t = app.page.evaluate("""async () => { const {db} = await import('./core/store.js'); const n = await import('./modules/namedays.js');
       const m = db.all('member_registry').find((x) => x.email === 'dl@example.com'); return n.titleOf(m); }""")
     assert t == 'Πσεβ. Αδ.', t
+    # η γραμμή συνδέεται μόνιμα με το Μητρώο· όσες αποσυνδέθηκαν ρητά (member_id 0) μένουν ασύνδετες
+    app.page.evaluate("async () => { const {db} = await import('./core/store.js');"
+                      " await db.save('y', (tx) => tx.insert('epeteirida', { member_id: 0, honorific: 'Σεβάσμιος', full_name: 'Δομεστίχος Λουκάς' })); }")
+    links = []
+    for _ in range(40):
+        links = app.page.evaluate("async () => (await import('./core/store.js')).db.all('epeteirida').map((r) => [r.honorific, r.member_id])")
+        if any(h == 'Πσεβ.' and mid for h, mid in links):
+            break
+        app.page.wait_for_timeout(250)
+    mid = app.page.evaluate("async () => (await import('./core/store.js')).db.all('member_registry').find((x) => x.email === 'dl@example.com').id")
+    assert ['Πσεβ.', mid] in links and ['Σεβάσμιος', 0] in links, links
     lv = app.page.evaluate("async () => { const e = await import('./modules/epeteirida-table.js'); return ['Πανσεβάσμιος', 'Πσεβ. Αδ.', 'ΛΣεβ.', 'Σεβτ.', 'Σεβ.', 'Πανσεβάσμιος Αδελφός', 'κάτι'].map(e.honorificLevel); }")
     assert lv == [2, 2, 1, 3, 0, 2, None], lv
 
