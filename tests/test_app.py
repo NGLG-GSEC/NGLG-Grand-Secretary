@@ -193,12 +193,16 @@ def test_namedays_greetings(app):
     app.page.wait_for_selector('#gBody')
     sample = app.text('#sample')
     assert 'Πσεβ. Αδ. Νικόλαος ΕΟΡΤΑΖΩΝ' in sample and 'Αγαπητέ Πανσεβάσμιε Αδελφέ' in sample, sample[:300]
+    acc = app.page.evaluate("async () => { const m = await import('./modules/namedays.js'); return [m.accentName('Λουκας'), m.accentName('ΛΟΥΚΑΣ'), m.accentName('Ιωαννης-Γεωργιος'), m.accentName('Δομεστιχος'), m.accentName('Αγαπητος')]; }")
+    assert acc == ['Λουκάς', 'ΛΟΥΚΑΣ', 'Ιωάννης-Γεώργιος', 'Δομεστιχος', 'Αγαπητός'], acc
+    nd = app.page.evaluate("async () => (await import('./core/store.js')).db.all('namedays').find((x) => x.name_key === 'αγαπητοσ').name")
+    assert nd == 'Αγαπητός', nd  # το εορτολόγιο με τόνους
     app.click('2. ✓ Στάλθηκε')
     app.wait_saved()
     app.go(f'/namedays?frm={y}-01-01&to={y}-12-31')
     assert '✓ Ευχές' in app.text()
     app.go('/namedays/report')
-    assert 'Εορτάζων Νικόλαος' in app.text()
+    assert 'ΕΟΡΤΑΖΩΝ Νικόλαος' in app.text()  # όπως στην Επετηρίδα
 
 
 def test_projects_with_files(app, tmp_path):

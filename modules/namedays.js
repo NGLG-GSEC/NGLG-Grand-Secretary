@@ -135,16 +135,43 @@ function bccProvince(m, own = '') {
   }
   return out;
 }
-// Όνομα/Επώνυμο όπως γράφονται στην Επετηρίδα (υπερισχύει), αλλιώς από το Μητρώο
+// Τονισμός ονομάτων από το επίσημο εορτολόγιο (π.χ. «Λουκας» → «Λουκάς»): μόνο όταν τα γράμματα ταυτίζονται ακριβώς
+const hasAcc = (w) => /[\u0300-\u036f]/.test(String(w).normalize('NFD'));
+let accMemo = { head: null, map: null };
+function accentMap() {
+  if (accMemo.map && accMemo.head === db.head) return accMemo.map;
+  const map = new Map();
+  for (const r of db.all('namedays')) for (const w of `${r.name || ''} ${r.official || ''}`.split(/[\s,;\/()«»·-]+/)) if (w && hasAcc(w) && !map.has(foldName(w))) map.set(foldName(w), w);
+  accMemo = { head: db.head, map };
+  return map;
+}
+export function accentName(v) {
+  return String(v || '').split(/([\s-]+)/).map((w) => {
+    if (!w.trim() || /^[\s-]+$/.test(w) || hasAcc(w)) return w;
+    const a = accentMap().get(foldName(w));
+    if (!a) return w;
+    return w === w.toUpperCase() ? w : a.charAt(0).toUpperCase() + a.slice(1); // ΚΕΦΑΛΑΙΑ μένουν χωρίς τόνους
+  }).join('');
+}
+db.migrate('namedays-accents-2026-10', (tx) => { // τα ονόματα του εορτολογίου με τόνους, από την επίσημη ονομασία
+  const map = new Map();
+  for (const r of tx.all('namedays')) for (const w of `${r.name || ''} ${r.official || ''}`.split(/[\s,;\/()«»·-]+/)) if (w && hasAcc(w) && !map.has(foldName(w))) map.set(foldName(w), w);
+  for (const r of tx.all('namedays')) {
+    if (!r.name || hasAcc(r.name)) continue;
+    const n = r.name.split(/([\s-]+)/).map((w) => (w.trim() && !hasAcc(w) && map.get(foldName(w))) || w).join('');
+    if (n !== r.name) tx.update('namedays', r.id, { name: n });
+  }
+});
+// Όνομα/Επώνυμο όπως γράφονται στην Επετηρίδα (υπερισχύει), αλλιώς από το Μητρώο — με τόνους από το εορτολόγιο
 const tok = (x) => foldName(x).replace(/[^a-zα-ω0-9]/g, '');
 export function epName(m) {
-  const r = epeteiridaOf(m.id).find((x) => x.full_name), out = { first: m.first_name || '', last: m.surname || '' };
+  const r = epeteiridaOf(m.id).find((x) => x.full_name), out = { first: accentName(m.first_name), last: accentName(m.surname) };
   if (!r) return out;
   const ws = String(r.full_name).replace(/\s+/g, ' ').trim().split(' '), F = tok(m.first_name || ''), L = tok(m.surname || '');
   const li = ws.findIndex((w) => tok(w) === L);
   if (li < 0) return out;
   const rest = ws.filter((_, i) => i !== li), fi = rest.findIndex((w) => tok(w) === F || (F && tok(w).startsWith(F.slice(0, 3))));
-  return { first: fi >= 0 ? rest[fi] : out.first, last: ws[li] };
+  return { first: fi >= 0 ? accentName(rest[fi]) : out.first, last: accentName(ws[li]) };
 }
 const fill = (t, m, rk, lbl, d) => { const n = epName(m); return t.replaceAll('{Προσφώνηση}', VOC[rk + 1]).replaceAll('{Τίτλος}', TITLE[rk + 1]).replaceAll('{Όνομα}', n.first).replaceAll('{Επώνυμο}', n.last)
   .replaceAll('{Εορτή}', lbl || '').replaceAll('{Ημερομηνία Εορτής}', longDate(d)).replaceAll('{Ημερομηνία}', dayStr(d)).replaceAll('{Σήμερα}', longDate(today())); };
@@ -219,7 +246,7 @@ function greetPage() {
   if (!items.length) return '<h1>Δεν επιλέχθηκαν εορτάζοντες</h1><p><a href="#/namedays">← Εορτολόγιο</a></p>';
   items.forEach((it) => (it.rk = rankIdx(it.m)));
   const selfBcc = splitEmails(db.setting('greet_bcc_self'));
-  const rows = items.map((it, i) => [`<b>${esc(it.m.surname)} ${esc(it.m.first_name)}</b><br><small class="muted">${esc(it.label)} · ${esc(dayStr(it.date))}</small>${sent[`${it.m.id}|${it.date}`] ? `<br><span class="vwarn">έλαβε ήδη ευχές ${esc(fmtDate(sent[`${it.m.id}|${it.date}`]))}</span>` : ''}`,
+  const rows = items.map((it, i) => [`<b>${esc(epName(it.m).last)} ${esc(epName(it.m).first)}</b><br><small class="muted">${esc(it.label)} · ${esc(dayStr(it.date))}</small>${sent[`${it.m.id}|${it.date}`] ? `<br><span class="vwarn">έλαβε ήδη ευχές ${esc(fmtDate(sent[`${it.m.id}|${it.date}`]))}</span>` : ''}`,
     `${esc(it.email)}<br><small class="muted">Κρυφή κοιν. Επαρχίας: ${esc(bccProvince(it.m, it.email).join(', ') || '—')}</small>`,
     `<select data-rk="${i}" style="width:auto">${RK.map((x, j) => `<option value="${j - 1}"${it.rk === j - 1 ? ' selected' : ''}>${x}</option>`).join('')}</select>`,
     `<div class="toolbar"><button type="button" class="btn small primary" data-act="open" data-i="${i}">1. 📋 Αντιγραφή & Gmail</button><button type="button" class="btn small" data-act="done" data-i="${i}">2. ✓ Στάλθηκε</button></div><span data-res="${i}"></span>`]);
@@ -245,7 +272,8 @@ function greetPage() {
         async open(d) { const m = msg(Number(d.i)); await copyHtml(m.html, 'Εθνική Μεγάλη Στοά της Ελλάδος\n\n' + m.text); window.open(gmailUrl({ to: m.to, bcc: m.bcc, subject: m.subject, body: '', kind: 'general' }), '_blank', 'noopener'); toast('Αντιγράφηκε — επικολλήστε το στο Gmail.'); },
         async done(d) {
           const i = Number(d.i), it = items[i], m = msg(i);
-          await db.save(`Ευχές: ${it.m.surname} ${it.m.first_name}`, (tx) => tx.insert('greetings_log', { member_id: it.m.id, registry_no: it.m.registry_no ?? null, feast_date: it.date, feast: it.label, name: `${it.m.surname} ${it.m.first_name}`, email: it.email, subject: m.subject, bcc: m.bcc.join(', '), sent_on: today(), sent_at: new Date().toISOString().slice(0, 19), source: 'app' }));
+          const nm = epName(it.m);
+          await db.save(`Ευχές: ${nm.last} ${nm.first}`, (tx) => tx.insert('greetings_log', { member_id: it.m.id, registry_no: it.m.registry_no ?? null, feast_date: it.date, feast: it.label, name: `${nm.last} ${nm.first}`, email: it.email, subject: m.subject, bcc: m.bcc.join(', '), sent_on: today(), sent_at: new Date().toISOString().slice(0, 19), source: 'app' }));
           el.querySelector(`[data-res="${i}"]`).innerHTML = '<span class="vok">✓ Καταχωρίστηκε</span>';
         },
         async saveTpl() { await db.save('Ευχές: πρότυπο κειμένου', (tx) => { tx.setting('greet_subject', S.value); tx.setting('greet_body', B.value); }); toast('Το πρότυπο αποθηκεύτηκε.'); },
