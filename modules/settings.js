@@ -29,15 +29,15 @@ const GROUPS = [
   ['Διατάγματα', [['decree_cc', 'Κοινοποίηση (Cc) κάθε Διατάγματος', 'emails']]],
   ['☁ Google: Drive (PDF) και Gmail (email με συνημμένο PDF)', [['drive_folder_id', 'Φάκελος Drive (σύνδεσμος ή ID)'], ['google_client_id', 'Google OAuth Client ID (βλ. οδηγίες παρακάτω)']]],
   ['🗳 Δηλώσεις Διάθεσης Μ. Αξιωματικών', [['declarations_report_key', 'Κωδικός αναφοράς (ο ADMIN_KEY του Apps Script) — με αυτόν η αναφορά ανοίγει εδώ χωρίς κωδικό', 'secret']]],
-  ['Επισκέψεις & Ευχές', [['gm_email', 'Email Μεγάλου Διδασκάλου (κοινοποίηση στις ενημερώσεις Εγκαταστάσεων)', 'emails'], ['visit_bcc', 'Κρυφή κοινοποίηση (Bcc) σε κάθε email/επιστολή Επίσκεψης', 'emails'], ['visits_signer_name', 'Υπογραφή email: όνομα'], ['visits_signer_title', 'Υπογραφή email: τίτλος'], ['greet_bcc_self', 'Ευχές: κρυφή κοινοποίηση και σε (προαιρετικό)', 'emails']]],
+  ['Επισκέψεις & Ευχές', [['gm_email', 'Email Μεγάλου Διδασκάλου (κοινοποίηση στις ενημερώσεις Εγκαταστάσεων)', 'emails'], ['visit_bcc', 'Κρυφή κοινοποίηση (Bcc) σε κάθε email/επιστολή Επίσκεψης', 'emails'], ['visits_signer_name', 'Υπογραφή email: όνομα'], ['visits_signer_title', 'Υπογραφή email: τίτλος'], ['greet_bcc_self', 'Ευχές: κρυφή κοινοποίηση και σε (προαιρετικό)', 'emails'], ['greet_cc_rules', 'Ευχές: κανόνες κοινοποίησης — μία γραμμή ανά κανόνα «αν υπάρχει ΑΥΤΟ το email => κοινοποίηση ΚΑΙ σε ΑΥΤΟ», π.χ. athens.secretary@nglgreece.gr => άλλος@example.com', 'textarea']]],
 ];
 
 function settingsPage() {
   const b = db.backend;
   return {
     title: 'Ρυθμίσεις',
-    html: `<h1>Ρυθμίσεις</h1><form id="sf">${GROUPS.map(([g, fs]) => `<div class="card"><h2 style="margin-top:0">${esc(g)}</h2><div class="grid">${fs.map(([k, l, t]) => `<div class="${t === 'emails' ? 'full' : ''}"><label>${esc(l)}</label>
-${t === 'emails' ? `<textarea name="${k}" class="short">${esc(db.setting(k) || '')}</textarea>` : `<input name="${k}" value="${esc(db.setting(k) ?? '')}"${t === 'int' ? ' inputmode="numeric"' : t === 'email' ? ' inputmode="email"' : t === 'secret' ? ' type="password" autocomplete="off"' : ''}>`}</div>`).join('')}</div></div>`).join('')}
+    html: `<h1>Ρυθμίσεις</h1><form id="sf">${GROUPS.map(([g, fs]) => `<div class="card"><h2 style="margin-top:0">${esc(g)}</h2><div class="grid">${fs.map(([k, l, t]) => `<div class="${t === 'emails' || t === 'textarea' ? 'full' : ''}"><label>${esc(l)}</label>
+${t === 'emails' || t === 'textarea' ? `<textarea name="${k}" class="short">${esc(db.setting(k) || '')}</textarea>` : `<input name="${k}" value="${esc(db.setting(k) ?? '')}"${t === 'int' ? ' inputmode="numeric"' : t === 'email' ? ' inputmode="email"' : t === 'secret' ? ' type="password" autocomplete="off"' : ''}>`}</div>`).join('')}</div></div>`).join('')}
 <div class="toolbar"><button class="btn primary">💾 Αποθήκευση ρυθμίσεων</button></div></form>
 <div class="card"><h2 style="margin-top:0">Σύνδεση δεδομένων</h2><p>Τα δεδομένα φυλάσσονται: <b>${esc(b.kind === 'github' ? 'ιδιωτικό αποθετήριο GitHub ' + b.label : 'μόνο σε αυτόν τον browser (δοκιμή)')}</b>.</p>
 <div class="toolbar">${historyLink()}<button class="btn" data-act="backup">⬇ Αντίγραφο</button>${isSealed() ? '<button class="btn" data-act="lock">🔒 Έξοδος</button>' : ''}<button class="btn danger" data-act="logout">Αποσύνδεση από αυτή τη συσκευή</button></div></div>

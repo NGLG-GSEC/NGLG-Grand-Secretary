@@ -172,6 +172,7 @@ def test_visits_reps_and_mails(app):
 def test_namedays_greetings(app):
     app.connect_local()
     add_member(app, surname='Εορτάζων', first='Νικόλαος', email='nik@example.com')
+    app.page.evaluate("async () => { const {db} = await import('./core/store.js'); await db.save('x', (tx) => { tx.setting('gm_email', 'gm@example.com'); tx.setting('greet_cc_rules', 'piraeus.secretary@nglgreece.gr => extra@example.com\\nnone@example.com => never@example.com'); }); }")
     app.go('/namedays/calendar?q=νικολαος')
     assert 'Νικόλαος' in app.text()
     y = date.today().year
@@ -199,7 +200,9 @@ def test_namedays_greetings(app):
     nd = app.page.evaluate("async () => (await import('./core/store.js')).db.all('namedays').find((x) => x.name_key === 'αγαπητοσ').name")
     assert nd == 'Αγαπητός', nd  # το εορτολόγιο με τόνους
     # προεπισκόπηση + άμεση αποστολή από info@ (Gmail API) με την πλακέτα
-    assert 'Από: info@nglgreece.gr' in sample and 'Προς: nik@example.com' in sample
+    assert 'Από: info@nglgreece.gr' in sample and 'Προς: nik@example.com' in sample and 'Κοιν.: gm@example.com, extra@example.com' in sample and 'never@example.com' not in sample
+    subj = app.page.locator('#sample').inner_text()
+    assert 'Θέμα: Πσεβ. Αδ. Νικόλαος ΕΟΡΤΑΖΩΝ - Ευχές για την ονομαστική σας εορτή από τον Μέγα Διδάσκαλο' in subj, subj[:300]
     app.page.click('[data-act=preview]')
     app.page.wait_for_selector('.gprev-box')
     assert 'όπως θα φτάσει στον Νικόλαος' in app.page.inner_text('.gprev-bar') and 'Μπενετάτου' in app.page.inner_text('.gprev-box')
@@ -221,7 +224,7 @@ def test_namedays_greetings(app):
     raw = sent[0]['raw']
     mime = base64.urlsafe_b64decode(raw + '=' * (-len(raw) % 4)).decode()
     html = base64.b64decode(mime.split('Content-Type: text/html; charset="UTF-8"\r\nContent-Transfer-Encoding: base64\r\n\r\n')[1].split('\r\n--')[0].replace('\r\n', '')).decode()
-    assert 'From: info@nglgreece.gr' in mime and 'To: nik@example.com' in mime and 'ΕΘΝΙΚΗ ΜΕΓΑΛΗ ΣΤΟΑ' in html and 'Μπενετάτου</b>' in html and 'cid:' not in html
+    assert 'From: info@nglgreece.gr' in mime and 'To: nik@example.com' in mime and 'Cc: gm@example.com, extra@example.com' in mime and 'ΕΘΝΙΚΗ ΜΕΓΑΛΗ ΣΤΟΑ' in html and 'Μπενετάτου</b>' in html and 'cid:' not in html
     app.wait_saved()
     app.go(f'/namedays?frm={y}-01-01&to={y}-12-31')
     assert '✓ Ευχές' in app.text()
@@ -1680,7 +1683,10 @@ def test_registry_numbers_from_1200_permanent(app):
     gh.external_commit('data/settings.json', json.dumps(st, ensure_ascii=False))
     app.page.reload()
     app.page.wait_for_selector('.dash')
-    app.page.wait_for_function("async () => (await import('./core/store.js')).db.all('member_registry').every((m) => m.registry_no >= 1200)")
+    for _ in range(40):
+        if app.page.evaluate("async () => (await import('./core/store.js')).db.all('member_registry').every((m) => m.registry_no >= 1200)"):
+            break
+        app.page.wait_for_timeout(250)
     ms = {m['id']: m for m in app.page.evaluate("async () => (await import('./core/store.js')).db.all('member_registry')")}
     assert [ms[i]['registry_no'] for i in (3, 2, 4, 1)] == [1200, 1201, 1202, 1203]  # Άλφας Αθ., Άλφας Βασ. (διαγραμμένος), μέσος, Ωμέγας
     assert ms[1]['source_member_id'] == 55 and ms[2]['source_member_id'] == 7 and ms[3].get('source_member_id') is None
@@ -1691,3 +1697,16 @@ def test_registry_numbers_from_1200_permanent(app):
     app.page.evaluate("async () => { const {db} = await import('./core/store.js'); const m = await import('./modules/members.js');"
                       " await db.save('x', (tx) => m.updateMember(tx, 1, { registry_no: 1, email: 'w@example.com' })); }")
     assert app.page.evaluate("async () => (await import('./core/store.js')).db.get('member_registry', 1).registry_no") == 1203
+
+
+def test_member_title_from_epeteirida_in_registry(app):
+    app.connect_local()
+    add_member(app, surname='Τιτλοφόρος', first='Άγγελος', email='t@example.com')
+    app.page.evaluate("async () => { const {db} = await import('./core/store.js'); const m = db.all('member_registry').find((x) => x.surname === 'Τιτλοφόρος');"
+                      " await db.save('x', (tx) => tx.insert('epeteirida', { member_id: m.id, honorific: 'Λίαν Σεβάσμιος', full_name: 'Τιτλοφόρος Άγγελος' })); }")
+    for _ in range(40):
+        if app.page.evaluate("async () => (await import('./core/store.js')).db.all('member_registry').find((x) => x.surname === 'Τιτλοφόρος').title") == 'Λίαν Σεβ. Αδ.':
+            break
+        app.page.wait_for_timeout(250)
+    app.go('/members')
+    assert 'Λίαν Σεβ. Αδ.' in app.text('.memtable')

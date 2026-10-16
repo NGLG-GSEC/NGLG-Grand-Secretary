@@ -18,11 +18,18 @@ import { repRank, REP_RANKS } from './visits.js';
 const RULES = { '': '—', george: 'Αγ. Γεωργίου (μετά το Πάσχα αν πέφτει πριν)', mark: 'Αγ. Μάρκου (μετά το Πάσχα αν πέφτει πριν)' };
 const RK = ['Αδ.', 'Σεβ.', 'Λίαν Σεβ.', 'Πσεβ.', 'Σεβτ.'], TITLE = ['Αδ.', 'Σεβ. Αδ.', 'Λίαν Σεβ. Αδ.', 'Πσεβ. Αδ.', 'Σεβτ. Αδ.'];
 const VOC = ['Αδελφέ', 'Σεβάσμιε Αδελφέ', 'Λίαν Σεβάσμιε Αδελφέ', 'Πανσεβάσμιε Αδελφέ', 'Σεβασμιώτατε Αδελφέ'];
-const SUBJECT_DEFAULT = 'Χρόνια πολλά για την ονομαστική σας εορτή';
+const SUBJECT_OLD = 'Χρόνια πολλά για την ονομαστική σας εορτή';
+const SUBJECT_DEFAULT = '{Τίτλος} {Όνομα} {Επώνυμο} - Ευχές για την ονομαστική σας εορτή από τον Μέγα Διδάσκαλο';
 const BODY_OLD = 'Προς: {Τίτλος} {Όνομα} {Επώνυμο}\n\nΑγαπητέ {Προσφώνηση},\n\nΣας μεταφέρω, με ιδιαίτερη χαρά, τις θερμότερες ευχές του Σεβτ. Αδ. Ιωάννη Μπενετάτου, Μεγάλου Διδασκάλου της Εθνικής Μεγάλης Στοάς της Ελλάδος, για την ονομαστική σας εορτή.\n\nΕύχεται από καρδιάς υγεία, χαρά, οικογενειακή ευτυχία και κάθε καλό στη ζωή και στο έργο σας.\n\nΟ Μέγας Γραμματεύς\nΠσεβ. Αδ. Δημήτριος Σκιαδόπουλος';
 const BODY_DEFAULT = 'Προς: {Τίτλος} {Όνομα} {Επώνυμο}\n\nΑθήνα, {Σήμερα}\n\nΑγαπητέ {Προσφώνηση},\n\nΣας μεταφέρω, με ιδιαίτερη χαρά, τις θερμότερες ευχές του [b]Σεβτ. Αδ. Ιωάννη Μπενετάτου[/b], Μεγάλου Διδασκάλου της Εθνικής Μεγάλης Στοάς της Ελλάδος, για την ονομαστική σας εορτή της {Ημερομηνία Εορτής}.\n\nΕύχεται από καρδιάς υγεία, χαρά, οικογενειακή ευτυχία και κάθε καλό στη ζωή και στο έργο σας.\n\nΟ Μέγας Γραμματεύς\nΠσεβ. Αδ. Δημήτριος Σκιαδόπουλος';
-db.defaultSettings({ greet_subject: SUBJECT_DEFAULT, greet_body: BODY_DEFAULT, greet_bcc_self: '' });
+db.defaultSettings({ greet_subject: SUBJECT_DEFAULT, greet_body: BODY_DEFAULT, greet_bcc_self: '', greet_cc_rules: '' });
+// Κανόνες κοινοποίησης ευχών (Ρυθμίσεις): «αν το email περιέχει Χ => Κοιν. και σε Υ»
+export function ccRules(v = db.setting('greet_cc_rules')) {
+  return String(v || '').split(/\n+/).map((l) => l.split(/\s*(?:=>|→|->)\s*/)).filter((p) => p.length === 2)
+    .map(([a, b]) => [splitEmails(a).map((e) => e.toLowerCase()), splitEmails(b).filter((e) => EMAIL_RE.test(e))]).filter(([a, b]) => a.length && b.length);
+}
 // Νέο κείμενο ευχών: «Αθήνα, σημερινή ημερομηνία», ΜΔ με έντονα, ημερομηνία της εορτής
+db.migrate('greet-subject-title-2026-10', (tx) => { const v = tx.setting('greet_subject'); if (!v || v === SUBJECT_OLD) tx.setting('greet_subject', SUBJECT_DEFAULT); });
 db.migrate('greet-body-date-2026-10', (tx) => { const v = tx.setting('greet_body'); if (!v || v === BODY_OLD || !/\{Σήμερα\}/.test(v)) tx.setting('greet_body', BODY_DEFAULT); });
 
 const ndKey = (first) => (first ? foldName(String(first).split(' ')[0].split('-')[0]) : '');
@@ -125,6 +132,20 @@ function rankIdx(m) {
 // Τίτλος για το «Προς»: Αδ., Σεβ. Αδ., Λίαν Σεβ. Αδ., Πσεβ. Αδ., Σεβτ. Αδ.
 export const titleOf = (m) => TITLE[rankIdx(m) + 1];
 setMemberTitle(titleOf);
+// Ενιαίο Μητρώο: ο Τίτλος (Αδ., Σεβ. Αδ., Λίαν Σεβ. Αδ., Πσεβ. Αδ., Σεβτ. Αδ.) γράφεται σε κάθε μέλος, με σύμβουλο την Επετηρίδα
+// (υπερισχύει) και μετά τα αξιώματα των Διαταγμάτων / Σεβάσμιο Στοάς. Ενημερώνεται μόνο όπου αλλάζει.
+export async function syncMemberTitles() {
+  const diff = db.all('member_registry').map((m) => [m.id, titleOf(m)]).filter(([id, t]) => (db.get('member_registry', id) || {}).title !== t);
+  if (!diff.length) return 0;
+  await db.save(`Μητρώο: τίτλοι από την Επετηρίδα (${diff.length})`, (tx) => { for (const [id, t] of diff) tx.update('member_registry', id, { title: t }); });
+  return diff.length;
+}
+let titlesTimer = 0, titlesFirst = true;
+db.on((ev) => {
+  const run = () => { clearTimeout(titlesTimer); titlesTimer = setTimeout(() => syncMemberTitles().catch((e) => console.warn('Τίτλοι Μητρώου:', e)), 800); };
+  if (ev.type === 'refresh' && titlesFirst && db.backend) { titlesFirst = false; run(); }
+  if (ev.type === 'saved' && !/^Μητρώο: τίτλοι/.test(ev.message || '') && (ev.tables || []).some((t) => ['epeteirida', 'member_registry', 'member_degrees_offices', 'reps', 'lodges'].includes(t))) run();
+});
 function bccProvince(m, own = '') {
   const out = [];
   for (const l of m.lodges || []) {
@@ -245,7 +266,7 @@ function greetPage() {
   const items = keys.map((k) => { const [mid, d, ...l] = k.split('|'); const m = ms[mid]; return m && !noContact(m) && parseIso(d) ? { k, m: { ...m, lodges: byM[m.id] || [] }, date: d, label: l.join('|'), email: greetEmail(m) } : null; }).filter(Boolean);
   if (!items.length) return '<h1>Δεν επιλέχθηκαν εορτάζοντες</h1><p><a href="#/namedays">← Εορτολόγιο</a></p>';
   items.forEach((it) => (it.rk = rankIdx(it.m)));
-  const selfBcc = splitEmails(db.setting('greet_bcc_self'));
+  const selfBcc = splitEmails(db.setting('greet_bcc_self')), gmCc = splitEmails(db.setting('gm_email')).filter((e) => EMAIL_RE.test(e));
   const rows = items.map((it, i) => [`<b>${esc(epName(it.m).last)} ${esc(epName(it.m).first)}</b><br><small class="muted">${esc(it.label)} · ${esc(dayStr(it.date))}</small>${sent[`${it.m.id}|${it.date}`] ? `<br><span class="vwarn">έλαβε ήδη ευχές ${esc(fmtDate(sent[`${it.m.id}|${it.date}`]))}</span>` : ''}`,
     `${esc(it.email)}<br><small class="muted">Κρυφή κοιν. Επαρχίας: ${esc(bccProvince(it.m, it.email).join(', ') || '—')}</small>`,
     `<select data-rk="${i}" style="width:auto">${RK.map((x, j) => `<option value="${j - 1}"${it.rk === j - 1 ? ' selected' : ''}>${x}</option>`).join('')}</select>`,
@@ -257,7 +278,8 @@ function greetPage() {
 <div class="card"><p class="muted" style="margin-top:0">Για κάθε εορτάζοντα: <b>1.</b> πατήστε «Αντιγραφή & Gmail» — αντιγράφεται το μορφοποιημένο μήνυμα (με την πλακέτα) και ανοίγει το Gmail με παραλήπτη, κρυφή κοινοποίηση και θέμα· στο Gmail πατήστε <b>Επικόλληση</b> (Ctrl+V) στο κείμενο και «Αποστολή». <b>2.</b> Πατήστε «Στάλθηκε» για το ιστορικό.
 Τα {Τίτλος}, {Προσφώνηση}, {Όνομα}, {Επώνυμο} (από την Επετηρίδα, όπου υπάρχει), {Εορτή}, {Ημερομηνία Εορτής}, {Σήμερα} συμπληρώνονται αυτόματα.</p>
 <label>Θέμα</label><input id="gSubj" value="${esc(db.setting('greet_subject'))}"><label style="margin-top:10px">Κείμενο</label><textarea id="gBody" data-rich style="min-height:240px">${esc(db.setting('greet_body'))}</textarea>
-<div style="margin:8px 0;display:flex;flex-wrap:wrap;gap:6px 18px"><label class="chk"><input type="checkbox" id="gProv" checked> Κρυφή κοινοποίηση στη Γραμματεία και στον ΕπΜΔ της Επαρχίας</label>
+<div style="margin:8px 0;display:flex;flex-wrap:wrap;gap:6px 18px"><label class="chk"><input type="checkbox" id="gGm"${gmCc.length ? ' checked' : ' disabled'}> Κοινοποίηση (Κοιν.) στον Μέγα Διδάσκαλο: ${esc(gmCc.join(', ') || '— (Ρυθμίσεις → «Email Μεγάλου Διδασκάλου»)')}</label>
+<label class="chk"><input type="checkbox" id="gProv" checked> Κρυφή κοινοποίηση στη Γραμματεία και στον ΕπΜΔ της Επαρχίας</label>
 <label class="chk"><input type="checkbox" id="gSelf"${selfBcc.length ? ' checked' : ' disabled'}> Κρυφή κοινοποίηση και σε: ${esc(selfBcc.join(', ') || '— (ορίζεται στις Ρυθμίσεις)')}</label></div>
 <div class="toolbar"><button type="button" class="btn" data-act="saveTpl">Αποθήκευση κειμένου ως προτύπου</button><button type="button" class="btn" data-act="resetTpl">Επαναφορά αρχικού κειμένου</button></div></div>
 <h3>Παραλήπτες (${items.length})</h3>${table(['Εορτάζων', 'Email', 'Προσφώνηση', 'Ενέργειες'], rows)}<h3 id="sampleTitle">Προεπισκόπηση: όπως θα φτάσει${items.length ? ` στον ${esc(epName(items[0].m).first)} ${esc(epName(items[0].m).last)}` : ''}</h3><div class="card" id="sample"></div>`,
@@ -266,15 +288,19 @@ function greetPage() {
       const rk = (i) => Number(el.querySelector(`[data-rk="${i}"]`).value);
       const msg = (i) => { const it = items[i], r = rk(i), text = fill(B.value, it.m, r, it.label, it.date);
         const bcc = [...new Set([...(el.querySelector('#gProv').checked ? bccProvince(it.m, it.email) : []), ...(el.querySelector('#gSelf').checked ? selfBcc : [])])].filter((e) => e.toLowerCase() !== it.email.toLowerCase());
-        return { to: it.email, bcc, subject: richPlain(fill(S.value, it.m, r, it.label, it.date)), text: richPlain(text), html: greetHtml(text) }; };
+        let cc = el.querySelector('#gGm').checked ? gmCc.filter((e) => e.toLowerCase() !== it.email.toLowerCase()) : [];
+        const all = [it.email, ...cc, ...bcc].map((e) => e.toLowerCase());
+        for (const [ifs, add] of ccRules()) if (ifs.some((e) => all.includes(e))) cc = [...cc, ...add];
+        cc = [...new Map(cc.filter((e) => e.toLowerCase() !== it.email.toLowerCase()).map((e) => [e.toLowerCase(), e])).values()];
+        return { to: it.email, cc, bcc: bcc.filter((e) => !cc.some((c) => c.toLowerCase() === e.toLowerCase())), subject: richPlain(fill(S.value, it.m, r, it.label, it.date)), text: richPlain(text), html: greetHtml(text) }; };
       let cur = 0;
       const sample = () => { const m = msg(cur), n = epName(items[cur].m);
         el.querySelector('#sampleTitle').textContent = `Προεπισκόπηση: όπως θα φτάσει στον ${n.first} ${n.last} (${m.to || 'χωρίς email'})`;
-        el.querySelector('#sample').innerHTML = `<p class="muted" style="margin-top:0"><b>Από:</b> ${esc(senderFor('general'))} · <b>Προς:</b> ${esc(m.to)} · <b>Θέμα:</b> ${esc(m.subject)}${m.bcc.length ? ` · <b>Bcc:</b> ${esc(m.bcc.join(', '))}` : ''}</p>${m.html}`; };
+        el.querySelector('#sample').innerHTML = `<p class="muted" style="margin-top:0"><b>Από:</b> ${esc(senderFor('general'))} · <b>Προς:</b> ${esc(m.to)}${m.cc.length ? ` · <b>Κοιν.:</b> ${esc(m.cc.join(', '))}` : ''} · <b>Θέμα:</b> ${esc(m.subject)}${m.bcc.length ? ` · <b>Bcc:</b> ${esc(m.bcc.join(', '))}` : ''}</p>${m.html}`; };
       const logSent = async (i) => { const it = items[i], m = msg(i), nm = epName(it.m);
-        await db.save(`Ευχές: ${nm.last} ${nm.first}`, (tx) => tx.insert('greetings_log', { member_id: it.m.id, registry_no: it.m.registry_no ?? null, feast_date: it.date, feast: it.label, name: `${nm.last} ${nm.first}`, email: it.email, subject: m.subject, bcc: m.bcc.join(', '), sent_on: today(), sent_at: new Date().toISOString().slice(0, 19), source: 'app' }));
+        await db.save(`Ευχές: ${nm.last} ${nm.first}`, (tx) => tx.insert('greetings_log', { member_id: it.m.id, registry_no: it.m.registry_no ?? null, feast_date: it.date, feast: it.label, name: `${nm.last} ${nm.first}`, email: it.email, subject: m.subject, bcc: [...m.cc, ...m.bcc].join(', '), sent_on: today(), sent_at: new Date().toISOString().slice(0, 19), source: 'app' }));
         el.querySelector(`[data-res="${i}"]`).innerHTML = '<span class="vok">✓ Στάλθηκε και καταχωρίστηκε</span>'; };
-      sample(); B.addEventListener('input', sample); el.querySelectorAll('[data-rk]').forEach((s) => s.addEventListener('change', sample));
+      sample(); B.addEventListener('input', sample); el.querySelectorAll('[data-rk], #gGm, #gProv, #gSelf').forEach((s) => s.addEventListener('change', sample));
       bind(el, {
         preview(d) { // παράθυρο πάνω από τη σελίδα με το email ακριβώς όπως θα φτάσει
           cur = Number(d.i); sample();
@@ -290,15 +316,15 @@ function greetPage() {
           const i = Number(d.i), it = items[i], m = msg(i), res = el.querySelector(`[data-res="${i}"]`);
           const { driveReady } = await import('../core/drive.js');
           if (!driveReady()) { res.innerHTML = '<span class="warn">Για άμεση αποστολή χρειάζεται το Google Client ID (Ρυθμίσεις → Google). Μέχρι τότε: «ή χειροκίνητα στο Gmail».</span>'; return; }
-          if (!confirmDo(`Αποστολή ευχών τώρα από ${senderFor('general')};\n\nΠρος: ${m.to}${m.bcc.length ? `\nBcc: ${m.bcc.join(', ')}` : ''}\nΘέμα: ${m.subject}`)) return;
+          if (!confirmDo(`Αποστολή ευχών τώρα από ${senderFor('general')};\n\nΠρος: ${m.to}${m.cc.length ? `\nΚοιν.: ${m.cc.join(', ')}` : ''}${m.bcc.length ? `\nBcc: ${m.bcc.join(', ')}` : ''}\nΘέμα: ${m.subject}`)) return;
           res.innerHTML = '⏳ Αποστολή…';
           try {
             const { sendNow } = await import('../core/gmail.js');
-            await sendNow({ to: m.to, bcc: m.bcc.join(', '), subject: m.subject, body: m.text, htmlBody: `<!doctype html><html><body style="margin:0;padding:16px 8px;background:#fff">${m.html}</body></html>` }, [], 'general');
+            await sendNow({ to: m.to, cc: m.cc.join(', '), bcc: m.bcc.join(', '), subject: m.subject, body: m.text, htmlBody: `<!doctype html><html><body style="margin:0;padding:16px 8px;background:#fff">${m.html}</body></html>` }, [], 'general');
             await logSent(i);
           } catch (e) { res.innerHTML = `<span class="warn">${esc(e.message || e)}</span>`; }
         },
-        async open(d) { const m = msg(Number(d.i)); await copyHtml(m.html, 'Εθνική Μεγάλη Στοά της Ελλάδος\n\n' + m.text); window.open(gmailUrl({ to: m.to, bcc: m.bcc, subject: m.subject, body: '', kind: 'general' }), '_blank', 'noopener'); toast('Αντιγράφηκε — επικολλήστε το στο Gmail.'); },
+        async open(d) { const m = msg(Number(d.i)); await copyHtml(m.html, 'Εθνική Μεγάλη Στοά της Ελλάδος\n\n' + m.text); window.open(gmailUrl({ to: m.to, cc: m.cc, bcc: m.bcc, subject: m.subject, body: '', kind: 'general' }), '_blank', 'noopener'); toast('Αντιγράφηκε — επικολλήστε το στο Gmail.'); },
         async done(d) { await logSent(Number(d.i)); },
         async saveTpl() { await db.save('Ευχές: πρότυπο κειμένου', (tx) => { tx.setting('greet_subject', S.value); tx.setting('greet_body', B.value); }); toast('Το πρότυπο αποθηκεύτηκε.'); },
         resetTpl() { S.value = SUBJECT_DEFAULT; B.value = BODY_DEFAULT; sample(); },

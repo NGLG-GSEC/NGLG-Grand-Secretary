@@ -143,7 +143,7 @@ function listPage({ query }) {
   const rows = shown.map((x) => {
     const ls = byM[x.id] || [];
     const lod = ls.slice(0, 3).map((l) => hl(`${l.lodge_name} ${l.lodge_number}`.trim(), lq, field === 'lodge' || field === 'all')).join('<br>') + (ls.length > 3 ? `<br><small>+${ls.length - 3} ακόμη</small>` : '');
-    return [`<b>${x.id}</b>`, H(x.registry_no ?? '', 'all'), H(x.surname, 'surname') + extra(x, 'surname_variants', 'surname'), H(x.first_name, 'first_name') + extra(x, 'first_name_variants', 'first_name'),
+    return [`<b>${x.id}</b>`, H(x.registry_no ?? '', 'all'), (x.title && x.title !== 'Αδ.' ? `<small class="mtitle">${esc(x.title)}</small><br>` : '') + H(x.surname, 'surname') + extra(x, 'surname_variants', 'surname'), H(x.first_name, 'first_name') + extra(x, 'first_name_variants', 'first_name'),
       noContact(x) ? '<span class="muted">⛔</span>' : H(x.email, 'email') + extra(x, 'other_emails', 'email'), noContact(x) ? '<span class="muted">⛔</span>' : H(x.mobile, 'mobile') + extra(x, 'other_mobiles', 'mobile'), esc(x.degree), `<small>${esc(highestOfficeText(x.id))}</small>`, lod, noContact(x) ? `<span class="pill bad" title="${NO_CONTACT}">⛔ Διαγραμμένος</span>` : x.active ? 'ΝΑΙ' : 'ΟΧΙ', `<a class="btn small" href="#/members/${x.id}">Επεξεργασία</a>`];
   });
   const [qlabel, ph, itype] = HINTS[field];
@@ -203,7 +203,7 @@ function formPage(m) {
     title: m ? `Μέλος #${m.id}` : 'Νέο Μέλος',
     html: `<p><a href="#/members">← Μητρώο Μελών</a></p><h1>${m ? `${esc(m.surname)} ${esc(m.first_name)} <small class="muted">#${m.id}</small>` : 'Νέο Μέλος'}</h1>${noContact(m) ? `<div class="card nocontact">${NO_CONTACT}</div>` : ''}${m ? usesOf(m) : ''}
 <form id="mf"><div class="grid card">${isAdmin() ? f('registry_no', 'Αρ. Μητρώου <small class="muted">— μόνιμος· αλλάζει μόνο από τον διαχειριστή</small>', `inputmode="numeric"${m ? '' : ' placeholder="αυτόματα (επόμενος ελεύθερος)"'}`)
-  : `<div><label>Αρ. Μητρώου</label><input value="${esc(m ? m.registry_no ?? '' : 'αυτόματα')}" disabled><input type="hidden" name="registry_no" value="${esc(m ? m.registry_no ?? '' : '')}"></div>`}${f('surname', 'Επώνυμο', 'required')}${f('first_name', 'Όνομα', 'required')}
+  : `<div><label>Αρ. Μητρώου</label><input value="${esc(m ? m.registry_no ?? '' : 'αυτόματα')}" disabled><input type="hidden" name="registry_no" value="${esc(m ? m.registry_no ?? '' : '')}"></div>`}<div><label>Τίτλος <small class="muted">— από την Επετηρίδα (αυτόματα)</small></label><input value="${esc(x.title || '—')}" disabled></div>${f('surname', 'Επώνυμο', 'required')}${f('first_name', 'Όνομα', 'required')}
 ${f('surname_variants', 'Παραλλαγές Επωνύμου', 'placeholder="π.χ. CASTANEDA; ΚΑΣΤΑΝΕΔΑ"')}${f('first_name_variants', 'Παραλλαγές Ονόματος', 'placeholder="π.χ. CARLOS; ΚΑΡΛΟΣ"')}
 ${f('email', 'Κύριο Email', 'inputmode="email"')}${f('other_emails', 'Άλλα Email')}${f('mobile', 'Κύριο Κινητό', 'inputmode="tel"')}${f('other_mobiles', 'Άλλα Κινητά')}${f('degree', 'Τεκτονικός Βαθμός')}
 <div><label>Ενεργός</label><select name="active"><option value="1"${x.active ? ' selected' : ''}>ΝΑΙ</option><option value="0"${x.active ? '' : ' selected'}>ΟΧΙ</option></select></div>
@@ -245,8 +245,8 @@ export async function exportMembers() {
   const ms = sortBy(membersAll(), 'surname', 'first_name', 'id');
   const wb = X.utils.book_new();
   const add = (name, rows) => { const ws = X.utils.aoa_to_sheet(rows); ws['!cols'] = rows[0].map(() => ({ wch: 20 })); X.utils.book_append_sheet(wb, ws, name); };
-  add('ΜΗΤΡΩΟ ΜΕΛΩΝ', [['ID', 'Αρ. Μητρώου', 'Επώνυμο', 'Όνομα', 'Κύριο Email', 'Άλλα Email', 'Κύριο Κινητό', 'Άλλα Κινητά', 'Τεκτονικός Βαθμός', 'Ενεργός', 'Σημείωση Διαγραφής', 'Δηλωμένος Αρ. Στοών', 'Πρόσθετες Στοές', 'Γραμμή Πηγής', 'Ενημερώθηκε', 'Παραλλαγές Επωνύμου', 'Παραλλαγές Ονόματος', 'Απαγορεύεται Επικοινωνία'],
-    ...ms.map((m) => [m.id, m.registry_no ?? '', m.surname, m.first_name, m.email, m.other_emails, m.mobile, m.other_mobiles, m.degree, m.active ? 'ΝΑΙ' : 'ΟΧΙ', m.deregistered_note, m.declared_lodge_count, m.additional_lodges, m.source_row ?? '', m.updated_at, m.surname_variants || '', m.first_name_variants || '', noContact(m) ? 'ΝΑΙ' : 'ΟΧΙ'])]);
+  add('ΜΗΤΡΩΟ ΜΕΛΩΝ', [['ID', 'Αρ. Μητρώου', 'Επώνυμο', 'Όνομα', 'Κύριο Email', 'Άλλα Email', 'Κύριο Κινητό', 'Άλλα Κινητά', 'Τεκτονικός Βαθμός', 'Ενεργός', 'Σημείωση Διαγραφής', 'Δηλωμένος Αρ. Στοών', 'Πρόσθετες Στοές', 'Γραμμή Πηγής', 'Ενημερώθηκε', 'Παραλλαγές Επωνύμου', 'Παραλλαγές Ονόματος', 'Απαγορεύεται Επικοινωνία', 'Τίτλος (Επετηρίδα)'],
+    ...ms.map((m) => [m.id, m.registry_no ?? '', m.surname, m.first_name, m.email, m.other_emails, m.mobile, m.other_mobiles, m.degree, m.active ? 'ΝΑΙ' : 'ΟΧΙ', m.deregistered_note, m.declared_lodge_count, m.additional_lodges, m.source_row ?? '', m.updated_at, m.surname_variants || '', m.first_name_variants || '', noContact(m) ? 'ΝΑΙ' : 'ΟΧΙ', m.title || ''])]);
   add('ΣΤΟΕΣ ΜΕΛΩΝ', [['ID Μέλους', 'Α/Α Στοάς', 'Στοά', 'Αριθμός Στοάς', 'Κατάσταση'], ...sortBy(db.all('member_lodges'), 'member_id', 'seq').map((l) => [l.member_id, l.seq, l.lodge_name, l.lodge_number, l.member_status])]);
   add('ΒΑΘΜΟΙ & ΑΞΙΩΜΑΤΑ', [['ID', 'ID Μέλους', 'Τύπος Εγγραφής', 'Βαθμός', 'Αξίωμα', 'ID Διατάγματος', 'Αρ. Διατάγματος', 'Έτος', 'Από', 'Έως', 'Ενεργό', 'Σημειώσεις'],
     ...sortBy(db.all('member_degrees_offices'), 'member_id', 'id').map((o) => [o.id, o.member_id, o.record_type, o.degree, o.office, o.decree_id, o.decree_no, o.decree_year, o.valid_from, o.valid_to, o.is_current ? 'ΝΑΙ' : 'ΟΧΙ', o.notes])]);
