@@ -189,7 +189,8 @@ def test_namedays_greetings(app):
     # Επετηρίδα: υπερισχύει στον τίτλο/προσφώνηση και στη γραφή του ονόματος
     app.page.evaluate("async () => { const {db} = await import('./core/store.js'); const m = db.all('member_registry').find((x) => x.surname === 'Εορτάζων');"
                       " await db.save('x', (tx) => tx.insert('epeteirida', { member_id: m.id, honorific: 'Πανσεβάσμιος', full_name: 'ΕΟΡΤΑΖΩΝ Νικόλαος' })); }")
-    app.page.reload()
+    app.go('/namedays')
+    app.go('/namedays/greet')
     app.page.wait_for_selector('#gBody')
     sample = app.text('#sample')
     assert 'Πσεβ. Αδ. Νικόλαος ΕΟΡΤΑΖΩΝ' in sample and 'Αγαπητέ Πανσεβάσμιε Αδελφέ' in sample, sample[:300]
