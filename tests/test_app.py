@@ -1961,3 +1961,40 @@ def test_small_lodges_members_panel(app):
     app.click('Κλείσιμο')
     assert app.page.locator('#slmem').is_hidden()
     assert not app.errors, app.errors
+
+
+def test_letters_archive_protocol_actions_and_next_number(app):
+    # Αρχείο Επιστολών: προσθήκη/αλλαγή αρ. πρωτοκόλλου από τις Ενέργειες, και αλλαγή του «επόμενου» αριθμού
+    app.connect_local()
+    seqs = lambda: app.page.evaluate("async () => (await import('./core/store.js')).db.all('letters').map((l) => [l.subject, l.protocol_seq, l.status])")
+    app.go('/letters/new').fill(subject='Πρόχειρη', body='x').click('💾 Αποθήκευση')
+    app.page.wait_for_url('**/#/letters/1')
+    app.go('/letters')
+    assert '20545' in app.text('#protonext')
+    app.page.evaluate("window.prompt = (m, d) => d")
+    app.click('➕ Αρ. πρωτοκόλλου')
+    app.page.wait_for_selector('text=πήρε αριθμό πρωτοκόλλου')
+    assert seqs() == [['Πρόχειρη', 20545, 'ready']]
+    # χειροκίνητος αριθμός → η αρίθμηση συνεχίζει από εκεί
+    app.go('/letters')
+    app.page.evaluate("window.prompt = () => '30000'")
+    app.click('✏ Αλλαγή αρ. πρωτ.')
+    app.page.wait_for_selector('text=άλλαξε σε 30000')
+    assert '30001' in app.text('#protonext')
+    # ο «επόμενος» μπορεί να γίνει και μικρότερος· οι πιασμένοι αριθμοί παραλείπονται
+    app.page.evaluate("window.prompt = () => '29999'")
+    app.click('✏ Αλλαγή επόμενου αριθμού')
+    app.page.wait_for_selector('text=επόμενος αριθμός πρωτοκόλλου είναι 29999')
+    app.page.evaluate("window.prompt = (m, d) => d")
+    app.go('/letters/new').fill(subject='Α', body='x').click('Αποθήκευση & απόδοση')
+    app.page.wait_for_url('**/#/letters/2')
+    app.go('/letters/new').fill(subject='Β', body='x').click('Αποθήκευση & απόδοση')
+    app.page.wait_for_url('**/#/letters/3')
+    assert sorted(s for _, s, _ in seqs()) == [29999, 30000, 30001], seqs()
+    # μικρότερος χειροκίνητος αριθμός: «Άκυρο» στην ερώτηση = η αρίθμηση δεν επιστρέφει πίσω
+    app.page.evaluate("window.prompt = () => '25000'; window.confirm = () => false")
+    app.go('/letters/new').fill(subject='Γ', body='x').click('Αποθήκευση & απόδοση')
+    app.page.wait_for_url('**/#/letters/4')
+    app.go('/letters')
+    assert '30002' in app.text('#protonext')
+    assert not app.errors, app.errors

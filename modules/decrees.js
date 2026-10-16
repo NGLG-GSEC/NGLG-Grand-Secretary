@@ -11,7 +11,7 @@ import { mailButtons, senderBanner } from '../core/mail.js';
 import { attachPicker, memberItems, contactItems } from '../core/pickers.js';
 import { DECREE_KINDS, DECREE_PLACEHOLDERS, GENERAL_BODY, decreeKey, decreeTemplate, layoutOf } from './decree-templates.js';
 import { gmName } from './letter-fill.js';
-import { nextProtocol, askProtocol } from './protocol.js';
+import { nextProtocol, askProtocol, claimProtocol } from './protocol.js';
 import { findMember, insertMember } from './members.js';
 import { identify } from '../core/people.js';
 import { DEC_OFFICES, AWARD_OFFICES, AWARD_MAP, DEC_MAP, DEC_BASIS, HON_ACC_BY_SHORT, HONORIFIC_OPTIONS, OFFICE_FORMS, DEGREE_CC_DEFAULT, PRECEDENCE } from './decree-catalog.js';
@@ -333,7 +333,7 @@ function viewDecree({ params }) {
         async protocol() {
           const n = askProtocol({ table: 'decree_documents', id: d.id }, Number(d.protocol_seq));
           if (!n) return;
-          await db.save(`Διάταγμα ${decreeNo(d)}: αρ. πρωτοκόλλου ${n}`, (tx) => tx.update('decree_documents', d.id, { protocol_seq: n, protocol_no: String(n) }));
+          await db.save(`Διάταγμα ${decreeNo(d)}: αρ. πρωτοκόλλου ${n}`, (tx) => { claimProtocol(tx, n); tx.update('decree_documents', d.id, { protocol_seq: n, protocol_no: String(n) }); });
           flash(`Ο αριθμός πρωτοκόλλου άλλαξε σε ${n}.`); go(`/decrees/${d.id}`);
         },
         async del() {
