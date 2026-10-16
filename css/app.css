@@ -378,3 +378,5 @@ input[type=file]{max-width:100%;min-width:0}
 .ml-grid input,.ml-grid select{width:100%;min-width:90px;padding:5px 6px;min-height:0}.ml-grid td:nth-child(2) input{min-width:70px;max-width:90px}.ml-grid td:nth-child(3) input{min-width:160px}
 .ml-grid .ml-n{width:30px;text-align:right;color:#666}.ml-grid .lnk{border:0;background:none;cursor:pointer;color:#a3261b;font-size:1.1em}
 .ml-help{margin-top:6px}.ml-help ul{margin:6px 0 0;padding-left:20px;font-size:.92em}.ml-help li{margin:3px 0}
+.ml-grid .ml-lodge{border-bottom:2px solid #dde3ee}.ml-grid tr.ml-dates td{background:#fafbfd;border-bottom:0}
+.ml-dgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:4px 10px}.ml-dgrid label{font-size:.85em;font-weight:500;margin:0;display:flex;flex-direction:column;gap:2px}

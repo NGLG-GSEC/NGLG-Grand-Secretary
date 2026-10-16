@@ -20,7 +20,7 @@ def set_lodges(app, lodges):
     # πίνακας «Στοές του μέλους»: μία γραμμή ανά «ΟΝΟΜΑ | ΑΡΙΘΜΟΣ | ΚΑΤΑΣΤΑΣΗ [| ΙΔΙΟΤΗΤΑ | ΣΥΝΔΡΟΜΗ]»
     for i, line in enumerate(x for x in lodges.split('\n') if x.strip()):
         p = [x.strip() for x in line.split('|')] + [''] * 5
-        rows = app.page.locator('#mlrows tr')
+        rows = app.page.locator('#mlrows .ml-lodge')
         if rows.count() <= i:
             app.page.click('[data-act=addlodge]')
         r = rows.nth(i)
@@ -1913,3 +1913,25 @@ def test_member_lodge_capacity_and_fee_rank(app):
     ls = app.page.evaluate("""async () => { const {db} = await import('./core/store.js'); const m = db.all('member_registry').find((x) => x.email === 'cap@example.com');
       return db.all('member_lodges').filter((l) => l.member_id === m.id).map((l) => [l.lodge_number, l.capacity, l.fee_rank]); }""")
     assert sorted(ls) == [['2', 'Υιοθετημένο', 1], ['3', 'Μέτοικο', 2]], ls
+
+
+def test_member_degree_and_office_dates(app):
+    # ημερομηνίες βαθμών (Μαθητής, Εταίρος, Διδάσκαλος), διαγραφής, και σε κάθε Στοά: ιδιότητας, Β΄/Α΄ Επόπτη, Σεβασμίου, διαγραφής
+    app.connect_local()
+    app.go('/members/new').fill(surname='ΗΜΕΡΟΜΗΝΙΑΣ', first_name='ΚΩΣΤΑΣ', email='dates@example.com', date_ea='2005-03-10', date_fc='2006-04-12', date_mm='2007-05-14')
+    set_lodges(app, 'ΑΚΡΟΠΟΛΙΣ | 2 | ΕΝΕΡΓΟ | Υιοθετημένο | 1')
+    r = app.page.locator('#mlrows .ml-lodge').first
+    assert r.locator('.ml-capdate').inner_text() == 'Ημ. υιοθεσίας'
+    for k, v in [('capacity_date', '2010-01-20'), ('jw_date', '2012-06-01'), ('sw_date', '2013-06-01'), ('wm_date', '2014-06-01')]:
+        r.locator(f'[data-k={k}]').fill(v)
+    app.click('💾 Αποθήκευση')
+    app.wait_saved()
+    m, ls = app.page.evaluate("""async () => { const {db} = await import('./core/store.js'); const m = db.all('member_registry').find((x) => x.email === 'dates@example.com');
+      return [[m.date_ea, m.date_fc, m.date_mm], db.all('member_lodges').filter((l) => l.member_id === m.id).map((l) => [l.capacity_date, l.jw_date, l.sw_date, l.wm_date, l.dereg_date])]; }""")
+    assert m == ['2005-03-10', '2006-04-12', '2007-05-14'] and ls == [['2010-01-20', '2012-06-01', '2013-06-01', '2014-06-01', '']], (m, ls)
+    assert 'Διδ. 14/05/2007' in app.text('.memtable')
+    # η εισαγωγή χωρίς ημερομηνίες δεν τις σβήνει· οι ημερομηνίες Excel (15/3/2010) μετατρέπονται
+    ls = app.page.evaluate("""async () => { const M = await import('./modules/members.js'); const {db} = await import('./core/store.js'); const m = db.all('member_registry').find((x) => x.email === 'dates@example.com');
+      await db.save('t', (tx) => M.updateMember(tx, m.id, { lodges: [{ name: 'ΑΚΡΟΠΟΛΙΣ', number: '2', status: 'ΔΙΑΓΡΑΦΕΝ', dereg_date: '15/3/2020' }] }));
+      return db.all('member_lodges').filter((l) => l.member_id === m.id).map((l) => [l.wm_date, l.dereg_date]); }""")
+    assert ls == [['2014-06-01', '2020-03-15']], ls
