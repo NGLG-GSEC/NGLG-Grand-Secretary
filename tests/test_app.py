@@ -200,6 +200,11 @@ def test_namedays_greetings(app):
     assert nd == 'Αγαπητός', nd  # το εορτολόγιο με τόνους
     # προεπισκόπηση + άμεση αποστολή από info@ (Gmail API) με την πλακέτα
     assert 'Από: info@nglgreece.gr' in sample and 'Προς: nik@example.com' in sample
+    app.page.click('[data-act=preview]')
+    app.page.wait_for_selector('.gprev-box')
+    assert 'όπως θα φτάσει στον Νικόλαος' in app.page.inner_text('.gprev-bar') and 'Μπενετάτου' in app.page.inner_text('.gprev-box')
+    app.page.click('.gprev [data-x]')
+    assert app.page.locator('.gprev').count() == 0
     sent = []
 
     def gmail(route, request):

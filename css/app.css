@@ -360,3 +360,7 @@ input[type=file]{max-width:100%;min-width:0}
 .memtable td:last-child .btn{padding:3px 8px}
 }
 .altsend{display:inline-block;margin-left:4px}.altsend summary{cursor:pointer;font-size:.85em}.altsend[open] .btn{margin:4px 4px 0 0}
+/* Προεπισκόπηση email ευχών σε παράθυρο */
+.gprev{position:fixed;inset:0;z-index:1000;background:rgba(15,25,50,.55);display:flex;align-items:flex-start;justify-content:center;padding:24px 12px;overflow:auto}
+.gprev-box{background:#fff;border-radius:12px;max-width:760px;width:100%;padding:14px 18px 22px;box-shadow:0 20px 60px #0006}
+.gprev-bar{display:flex;gap:10px;align-items:center;justify-content:space-between;border-bottom:1px solid #e3e7ef;padding-bottom:8px;margin-bottom:10px;color:#1d2f5e}

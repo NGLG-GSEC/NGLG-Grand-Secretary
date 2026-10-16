@@ -276,7 +276,16 @@ function greetPage() {
         el.querySelector(`[data-res="${i}"]`).innerHTML = '<span class="vok">✓ Στάλθηκε και καταχωρίστηκε</span>'; };
       sample(); B.addEventListener('input', sample); el.querySelectorAll('[data-rk]').forEach((s) => s.addEventListener('change', sample));
       bind(el, {
-        preview(d) { cur = Number(d.i); sample(); el.querySelector('#sampleTitle').scrollIntoView({ behavior: 'smooth' }); },
+        preview(d) { // παράθυρο πάνω από τη σελίδα με το email ακριβώς όπως θα φτάσει
+          cur = Number(d.i); sample();
+          const ov = Object.assign(document.createElement('div'), { className: 'gprev' });
+          ov.innerHTML = `<div class="gprev-box" role="dialog" aria-label="Προεπισκόπηση email"><div class="gprev-bar"><b>${esc(el.querySelector('#sampleTitle').textContent)}</b><button type="button" class="btn small" data-x>✕ Κλείσιμο</button></div>${el.querySelector('#sample').innerHTML}</div>`;
+          const close = () => { ov.remove(); document.removeEventListener('keydown', esc_); };
+          const esc_ = (e) => { if (e.key === 'Escape') close(); };
+          ov.addEventListener('click', (e) => { if (e.target === ov || e.target.closest('[data-x]')) close(); });
+          document.addEventListener('keydown', esc_);
+          document.body.append(ov);
+        },
         async send(d, b) {
           const i = Number(d.i), it = items[i], m = msg(i), res = el.querySelector(`[data-res="${i}"]`);
           const { driveReady } = await import('../core/drive.js');
