@@ -1437,13 +1437,19 @@ def test_epeteirida_table_import_filters_edit_and_member(app):
     app.connect_local()
     mid = app.page.evaluate("""async () => { const {db} = await import('./core/store.js');
       return db.save('x', (tx) => { tx.insert('member_registry', { surname: 'Επετηριδάκης', first_name: 'Αλέξιος', active: 1 });
-        return tx.insert('member_registry', { surname: 'Δοκιμαστής', first_name: 'Βασίλειος', email: 'dok@example.com', active: 1 }).id; }); }""")
+        return tx.insert('member_registry', { registry_no: 1777, surname: 'Δοκιμαστής', first_name: 'Βασίλειος', email: 'dok@example.com', active: 1 }).id; }); }""")
     app.go('/epeteirida/pinakas')
     app.page.locator('summary:has-text("Εισαγωγή / αντικατάσταση")').click()
     app.page.fill('#epimp2 [name=paste]', EP_TSV)
     app.page.locator('#epimp2 button').click()
     app.page.wait_for_selector('text=3 εγγραφές · 2 συνδέθηκαν')
     assert 'Εμφανίζονται 3 από 3 · 2 συνδεδεμένοι' in app.text('#epcount')
+    # Αρ. Μητρώου από τον πίνακα μελών (στήλη, αναζήτηση)
+    assert app.page.locator('tr:has-text("Δοκιμαστής") .c-regno').inner_text().strip() == '1777'
+    app.page.fill('[data-f=q]', '1777')
+    assert 'Εμφανίζονται 1 από 3' in app.text('#epcount')
+    app.page.click('[data-act=reset]')
+    assert 'Αρ. Μητρώου' in app.text('#epg thead')
     # δυναμικά φίλτρα: Ενεργός = ΝΑΙ, μετά αναζήτηση
     app.page.select_option('[data-s=active]', '1')
     assert 'Εμφανίζονται 1 από 3' in app.text('#epcount') and 'Επετηριδάκης' in app.text('#epg')

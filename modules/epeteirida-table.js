@@ -65,6 +65,12 @@ export function highestOfficeText(memberId) {
   return [r.rank || r.title, d].filter(Boolean).join(' — ');
 }
 
+// Αρ. Μητρώου της γραμμής: από το συνδεδεμένο μέλος (ή, αν δεν είναι συνδεδεμένη, από βέβαιη αντιστοίχιση ονόματος)
+export function epRegistryNo(r) {
+  const id = r.member_id || (r.full_name ? matchName(r.full_name) : null), p = id ? person(id) : null;
+  if (!p) return { no: null, linked: false };
+  return { no: p.member.registry_no ?? p.registry_nos[0] ?? null, linked: !!r.member_id };
+}
 const matchName = (full) => identify({ full_name: String(full || '').replace(/\(.*?\)/g, ' ').replace(/\s+του\s+\S+\s*$/i, ' ') });
 
 // Επικόλληση από Excel (με επικεφαλίδες) → αντικατάσταση του πίνακα
@@ -128,7 +134,7 @@ function tablePage() {
       const sel = Object.fromEntries(FILTERS.map(([k]) => [k, '']));
       const live = () => rows.filter((r) => !removed.has(r.id));
       const pass = (r, skip) => {
-        if (f.q && !fold(EP_COLS.map(([k]) => r[k]).join(' ')).includes(fold(f.q))) return false;
+        if (f.q && !fold([...EP_COLS.map(([k]) => r[k]), epRegistryNo(r).no].join(' ')).includes(fold(f.q))) return false;
         if (f.from && !(Number(r.decree_year) >= Number(f.from))) return false;
         if (f.to && !(Number(r.decree_year) <= Number(f.to))) return false;
         for (const [k] of FILTERS) if (k !== skip && sel[k] !== '' && String(fval(r, k)) !== sel[k]) return false;
@@ -165,14 +171,19 @@ ${FILTERS.map(([k, l]) => `<label>${esc(l)}<select data-s="${k}">${opts(k)}</sel
         return `<td class="c-member">${p ? `<a href="#/members/${p.id}" title="${esc(p.name)}">✓ ${esc(p.member.surname || '')}</a> <button class="lnk" data-act="unlink" title="Αποσύνδεση">✕</button>`
           : '<button class="btn small" data-act="link">🔗 Σύνδεση</button>'}</td>`;
       };
+      const regCell = (r) => {
+        const { no, linked } = epRegistryNo(r);
+        if (no == null) return '<td class="c-regno muted">—</td>';
+        return linked ? `<td class="c-regno">${esc(no)}</td>` : `<td class="c-regno muted" title="Από αντιστοίχιση ονόματος — πατήστε «🔗 Σύνδεση με το Μητρώο» για μόνιμη σύνδεση"><i>${esc(no)}</i></td>`;
+      };
       const renderTable = () => {
         const xs = live().filter((r) => pass(r));
         const k = sort.k, t = (COL[k] || [])[2];
-        const key = (r) => (k === 'member' ? (r.member_id ? 0 : 1) : t === 'num' || t === 'yn' ? (Number(r[k]) || (r[k] === '' || r[k] == null ? 1e9 : 0)) : fold(r[k]));
+        const key = (r) => (k === 'regno' ? (Number(epRegistryNo(r).no) || 1e9) : k === 'member' ? (r.member_id ? 0 : 1) : t === 'num' || t === 'yn' ? (Number(r[k]) || (r[k] === '' || r[k] == null ? 1e9 : 0)) : fold(r[k]));
         const sorted = sortBy(xs, key, 'aa');
         if (sort.dir < 0) sorted.reverse();
-        el.querySelector('#epg').innerHTML = `<thead><tr>${EP_COLS.map(([c, l]) => `<th data-sort="${c}" class="c-${c}">${esc(l)}${sort.k === c ? (sort.dir > 0 ? ' ▲' : ' ▼') : ''}</th>`).join('')}<th data-sort="member">Μητρώο</th><th></th></tr></thead>
-<tbody>${sorted.map((r) => `<tr data-id="${r.id}"${dirty.has(r.id) ? ' class="dirty"' : ''}>${EP_COLS.map(([c]) => cell(r, c)).join('')}${memberCell(r)}<td><button class="lnk" data-act="del" title="Διαγραφή γραμμής">🗑</button></td></tr>`).join('')}</tbody>`;
+        el.querySelector('#epg').innerHTML = `<thead><tr>${[['aa', COL.aa[1]], ['regno', 'Αρ. Μητρώου'], ...EP_COLS.slice(1)].map(([c, l]) => `<th data-sort="${c}" class="c-${c}">${esc(l)}${sort.k === c ? (sort.dir > 0 ? ' ▲' : ' ▼') : ''}</th>`).join('')}<th data-sort="member">Μητρώο</th><th></th></tr></thead>
+<tbody>${sorted.map((r) => `<tr data-id="${r.id}"${dirty.has(r.id) ? ' class="dirty"' : ''}>${cell(r, 'aa')}${regCell(r)}${EP_COLS.slice(1).map(([c]) => cell(r, c)).join('')}${memberCell(r)}<td><button class="lnk" data-act="del" title="Διαγραφή γραμμής">🗑</button></td></tr>`).join('')}</tbody>`;
         el.querySelector('#epcount').textContent = `Εμφανίζονται ${xs.length} από ${live().length} · ${live().filter((r) => r.member_id).length} συνδεδεμένοι με το Μητρώο`;
         const n = dirty.size + removed.size, b = el.querySelector('[data-act=save]');
         b.disabled = !n; b.textContent = n ? `💾 Αποθήκευση αλλαγών (${n})` : '💾 Αποθήκευση αλλαγών';
@@ -239,12 +250,12 @@ ${FILTERS.map(([k, l]) => `<label>${esc(l)}<select data-s="${k}">${opts(k)}</sel
           });
           flash(`Αποθηκεύτηκαν ${n} αλλαγές στην Επετηρίδα.`); go('/epeteirida/pinakas');
         },
-        xlsx: () => exportXlsx(`EPETIRIDA_${today()}.xlsx`, 'Επετηρίδα', [...EP_COLS.map((c) => c[1]), 'Μητρώο'],
-          shownRows().map((r) => [...EP_COLS.map(([k, , t]) => (t === 'yn' ? (Number(r[k]) ? 'ΝΑΙ' : 'ΟΧΙ') : r[k] ?? '')), r.member_id ? `#${r.member_id}` : ''])),
+        xlsx: () => exportXlsx(`EPETIRIDA_${today()}.xlsx`, 'Επετηρίδα', [COL.aa[1], 'Αρ. Μητρώου', ...EP_COLS.slice(1).map((c) => c[1])],
+          shownRows().map((r) => [r.aa ?? '', epRegistryNo(r).no ?? '', ...EP_COLS.slice(1).map(([k, , t]) => (t === 'yn' ? (Number(r[k]) ? 'ΝΑΙ' : 'ΟΧΙ') : r[k] ?? ''))])),
         print() {
           const pa = el.querySelector('#eppa');
-          const ks = ['aa', 'active', 'title', 'honorific', 'full_name', 'rank', 'decree_no', 'decree_year', 'current'];
-          pa.innerHTML = reportPaper('ΕΠΕΤΗΡΙΔΑ ΜΕΓΑΛΩΝ ΑΞΙΩΜΑΤΙΚΩΝ', fmtDate(today()), `<table><thead><tr>${ks.map((k) => `<th>${esc(COL[k][1])}</th>`).join('')}</tr></thead><tbody>${shownRows().map((r) => `<tr>${ks.map((k) => `<td>${esc(COL[k][2] === 'yn' ? (Number(r[k]) ? 'ΝΑΙ' : 'ΟΧΙ') : r[k] ?? '')}</td>`).join('')}</tr>`).join('')}</tbody></table>`);
+          const ks = ['aa', 'regno', 'active', 'title', 'honorific', 'full_name', 'rank', 'decree_no', 'decree_year', 'current'];
+          pa.innerHTML = reportPaper('ΕΠΕΤΗΡΙΔΑ ΜΕΓΑΛΩΝ ΑΞΙΩΜΑΤΙΚΩΝ', fmtDate(today()), `<table><thead><tr>${ks.map((k) => `<th>${esc(k === 'regno' ? 'Αρ. Μητρώου' : COL[k][1])}</th>`).join('')}</tr></thead><tbody>${shownRows().map((r) => `<tr>${ks.map((k) => `<td>${esc(k === 'regno' ? epRegistryNo(r).no ?? '' : COL[k][2] === 'yn' ? (Number(r[k]) ? 'ΝΑΙ' : 'ΟΧΙ') : r[k] ?? '')}</td>`).join('')}</tr>`).join('')}</tbody></table>`);
           pa.hidden = false; printPaper('EPETIRIDA_' + today());
           window.addEventListener('afterprint', () => (pa.hidden = true), { once: true });
         },
