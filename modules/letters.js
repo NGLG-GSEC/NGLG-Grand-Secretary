@@ -11,7 +11,7 @@ import { docTitle, driveBox, saveDocToDrive } from '../core/drive.js';
 import { mailButtons, senderBanner } from '../core/mail.js';
 import { mailSheet, bccWithout } from '../core/gmail.js';
 import { attachPicker, contactItems } from '../core/pickers.js';
-import { nextProtocol, legacyDecreeLetterIds } from './protocol.js';
+import { nextProtocol, askProtocol, legacyDecreeLetterIds } from './protocol.js';
 import { lodgesAll, lodgeByNumber } from './lodges.js';
 import { provinceLetter } from './visits.js';
 import { PLACEHOLDERS, hasPlaceholders, fillPlaceholders, fillContext, lodgeRecipients, missingPlaceholders, GM_VISIT, REP_VISIT, repRecipients, dayWithArticle, dateWords } from './letter-fill.js';
@@ -30,10 +30,10 @@ const statusPill = (s) => `<span class="pill ${s === 'ready' ? 'ok' : 'warn'}">$
 export const LETTER_CATEGORIES = { ΕΠΙΣΤΟΛΗ: 'Επιστολή', ΕΠΙΣΚΕΨΗ: 'Επίσκεψη' };
 const category = (x) => (LETTER_CATEGORIES[x.category] ? x.category : 'ΕΠΙΣΤΟΛΗ');
 // Ο αριθμός πρωτοκόλλου δίνεται μόνο όταν η επιστολή οριστεί «Έτοιμη»· οι πρόχειρες δεν δεσμεύουν αριθμό.
-function assignProtocol(tx, id) {
+function assignProtocol(tx, id, manual = 0) {
   const r = tx.get('letters', id);
   if (!r || r.protocol_seq) return r;
-  const p = nextProtocol(tx);
+  const p = nextProtocol(tx, 'Επιστολή', '', manual);
   return tx.update('letters', id, { protocol_seq: p.seq, protocol_year: p.year, protocol_no: p.no, letter_date: today() });
 }
 const fileName = (x) => (x.protocol_seq ? docTitle(x.protocol_seq, category(x), x.subject) : safeFileName(`${category(x)} ${x.subject || ''}`));
@@ -161,9 +161,12 @@ function mountLetterForm(el, x, isNew) {
     if (bad.length) throw new Error('Μη έγκυρο email: ' + bad.join(', '));
     const row = { subject: d.subject.trim(), body: d.body.trim(), template_id: d.template_id ? Number(d.template_id) : null, recipient_name: d.recipient_name.trim(),
       recipient_email: emails.join(', '), recipient_member_id: d.recipient_member_id ? Number(d.recipient_member_id) : null, visit_id: Number(d.visit_id) || x.visit_id || null, cc_name: String(d.cc_name || '').trim(), closing: String(d.closing || '').trim(), category: LETTER_CATEGORIES[d.category] ? d.category : 'ΕΠΙΣΤΟΛΗ', status: d.status, signer: d.signer };
+    // «Έτοιμη» χωρίς αριθμό: πρόταση του επόμενου αριθμού πρωτοκόλλου ή χειροκίνητος
+    const manualProtocol = row.status === 'ready' && !x.protocol_seq ? askProtocol({ table: 'letters', id: x.id }) : 0;
+    if (manualProtocol === null) return;
     const id = await db.save(isNew ? `Νέα Επιστολή: ${row.subject}` : `Επιστολή ${x.protocol_no || x.id}: ενημέρωση`, (tx) => {
       const r = isNew ? tx.insert('letters', { ...row, letter_date: today(), source_letter_id: x.source_letter_id || null, visit_id: row.visit_id || x.visit_id || null }) : tx.update('letters', x.id, row);
-      if (row.status === 'ready') assignProtocol(tx, r.id);
+      if (row.status === 'ready') assignProtocol(tx, r.id, manualProtocol);
       return r.id;
     });
     flash(d.status === 'ready' ? 'Η επιστολή είναι έτοιμη και πήρε αριθμό πρωτοκόλλου.' : isNew ? 'Η επιστολή αποθηκεύτηκε ως πρόχειρη (χωρίς αριθμό πρωτοκόλλου).' : 'Αποθηκεύτηκε.');
@@ -206,12 +209,13 @@ export async function waSendPdf(x, b) {
 export async function ensureVisitLetter(v) {
   const has = sortBy(db.all('letters').filter((l) => l.visit_id === v.id && l.status === 'ready'), (l) => -(l.protocol_seq || 0))[0];
   if (has) return has;
-  if (!confirmDo('Για να επισυναφθεί το PDF, η επιστολή της Επίσκεψης θα καταχωριστεί ως «Έτοιμη» με αριθμό πρωτοκόλλου. Συνέχεια;')) throw new Error('Ακυρώθηκε.');
+  const manual = askProtocol({}, 0, 'Για να επισυναφθεί το PDF, η επιστολή της Επίσκεψης θα καταχωριστεί ως «Έτοιμη» με αριθμό πρωτοκόλλου.');
+  if (manual === null) throw new Error('Ακυρώθηκε.');
   const q = provinceLetter(v);
   const id = await db.save(`Νέα Επιστολή: ${q.subject}`, (tx) => {
     const r = tx.insert('letters', { subject: q.subject, body: q.body, template_id: q.template_id ? Number(q.template_id) : null, recipient_name: q.to_name, recipient_email: q.to_email,
       recipient_member_id: null, cc_name: q.cc_name || '', closing: q.closing || '', category: q.category || 'ΕΠΙΣΚΕΨΗ', status: 'ready', signer: actor(), letter_date: today(), visit_id: v.id });
-    assignProtocol(tx, r.id);
+    assignProtocol(tx, r.id, manual);
     return r.id;
   });
   return db.get('letters', id);
@@ -229,7 +233,7 @@ function viewLetter({ params }) {
 <button class="btn" data-act="wapdf">🟢 WhatsApp / Business με PDF</button><a class="btn" target="_blank" rel="noopener" href="${wa}">WhatsApp μήνυμα</a>${x.status === 'ready' ? '' : '<button class="btn primary" data-act="ready">✅ Έτοιμη: απόδοση αρ. πρωτοκόλλου</button>'}</div>
 ${x.status === 'ready' ? '<div class="mailsheet"></div>' : '<p class="send-help">Για αποστολή με συνημμένο PDF ορίστε πρώτα την επιστολή «✅ Έτοιμη» (αριθμός πρωτοκόλλου).</p>'}${driveBox(x, fileName(x))}</section>
 <div class="toolbar noprint"><a class="btn" href="#/letters/${x.id}/edit">Επεξεργασία</a><a class="btn" href="#/letters/new?copy_from=${x.id}">Νέα πάνω σε αυτή</a><a class="btn" href="#/letters">Αρχείο Επιστολών</a>
-<button class="btn danger" data-act="del">Διαγραφή</button> ${statusPill(x.status)}</div>
+${x.protocol_seq ? '<button class="btn" data-act="protocol">✏ Αλλαγή αρ. πρωτοκόλλου</button>' : ''}<button class="btn danger" data-act="del">Διαγραφή</button> ${statusPill(x.status)}</div>
 <div class="print-area">${letterPaper(x)}</div>`,
     mount(el) {
       if (x.status === 'ready') mailSheet(el, { kind: mailKind(x), pdfName: fileName(x), getMsg: () => ({ to: x.recipient_email, cc: '', bcc: mailBcc(x, x.recipient_email), subject: x.subject, body: x.body }),
@@ -244,7 +248,17 @@ ${x.status === 'ready' ? '<div class="mailsheet"></div>' : '<p class="send-help"
           catch (e) { b.disabled = false; b.textContent = '☁ Αποθήκευση στο Drive (PDF)'; throw e; }
         },
         form: () => openInDigitalForm(x),
-        async ready() { await db.save(`Επιστολή ${x.subject}: έτοιμη`, (tx) => { tx.update('letters', x.id, { status: 'ready' }); assignProtocol(tx, x.id); }); flash('Η επιστολή είναι έτοιμη και πήρε αριθμό πρωτοκόλλου.'); go(`/letters/${x.id}`); },
+        async ready() {
+          const manual = x.protocol_seq ? 0 : askProtocol({ table: 'letters', id: x.id });
+          if (manual === null) return;
+          await db.save(`Επιστολή ${x.subject}: έτοιμη`, (tx) => { tx.update('letters', x.id, { status: 'ready' }); assignProtocol(tx, x.id, manual); }); flash('Η επιστολή είναι έτοιμη και πήρε αριθμό πρωτοκόλλου.'); go(`/letters/${x.id}`);
+        },
+        async protocol() {
+          const n = askProtocol({ table: 'letters', id: x.id }, Number(x.protocol_seq));
+          if (!n) return;
+          await db.save(`Επιστολή ${x.subject}: αρ. πρωτοκόλλου ${n}`, (tx) => tx.update('letters', x.id, { protocol_seq: n, protocol_no: String(n) }));
+          flash(`Ο αριθμός πρωτοκόλλου άλλαξε σε ${n}.`); go(`/letters/${x.id}`);
+        },
         async del() {
           if (!confirmDo('Οριστική διαγραφή της επιστολής; Η ενέργεια δεν αναιρείται (μένει μόνο στο ιστορικό του GitHub).')) return;
           await db.save(`Διαγραφή επιστολής ${x.protocol_no}`, (tx) => { tx.remove('letters', x.id); for (const l of tx.all('letters')) if (l.source_letter_id === x.id) tx.update('letters', l.id, { source_letter_id: null }); });

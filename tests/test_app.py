@@ -1253,6 +1253,53 @@ def test_protocol_only_when_letter_is_ready(app):
     assert seqs == [20546, 20545], seqs
 
 
+
+def test_protocol_suggested_or_manual(app):
+    """Το «Έτοιμο» προτείνει τον επόμενο αριθμό πρωτοκόλλου· μπορεί να γραφτεί άλλος, και να αλλάξει αργότερα."""
+    app.connect_local()
+    add_member(app)
+    app.go('/decrees/new')
+    app.fill(matter='διορισμού Μεγάλων Αξιωματικών')
+    app.page.select_option('#dOffice', 'Μέγας Γραμματεύς')
+    app.pick('.registry-search', 'Παπαδ')
+    app.click('Έκδοση Διατάγματος')
+    app.page.wait_for_url('**/#/decrees/1')
+    app.page.evaluate("window.prompt = (m, d) => { sessionStorage.setItem('asked', JSON.stringify([m, d])); return '21000'; }")
+    app.click('✅ Έτοιμο: απόδοση αρ. πρωτοκόλλου')
+    app.page.wait_for_selector('text=πήρε αριθμό πρωτοκόλλου')
+    assert 'Αρ. Πρωτ.: 21000' in app.text()
+    asked = app.page.evaluate("JSON.parse(sessionStorage.getItem('asked'))")
+    assert 'Προτείνω αριθμό πρωτοκόλλου 20545' in asked[0] and asked[1] == '20545'
+    # η αρίθμηση συνεχίζει μετά τον χειροκίνητο αριθμό (ο προτεινόμενος γίνεται δεκτός με OK)
+    app.page.evaluate("window.prompt = (m, d) => d")
+    app.go('/letters/new').fill(subject='Επόμενη', body='x').click('Αποθήκευση & απόδοση')
+    app.page.wait_for_url('**/#/letters/1')
+    assert 'Αρ. Πρωτ.: 21001' in app.text()
+    # αλλαγή αριθμού σε ήδη αριθμημένο Διάταγμα
+    app.go('/decrees/1')
+    app.page.evaluate("window.prompt = () => '20999'")
+    app.click('✏ Αλλαγή αρ. πρωτοκόλλου')
+    app.page.wait_for_selector('text=άλλαξε σε 20999')
+    assert 'Αρ. Πρωτ.: 20999' in app.text()
+    # ακύρωση: τίποτα δεν αλλάζει
+    app.go('/letters/new').fill(subject='Ακυρωμένη', body='x')
+    app.page.evaluate("window.prompt = () => null")
+    app.click('Αποθήκευση & απόδοση')
+    app.page.wait_for_timeout(300)
+    assert app.page.url.endswith('#/letters/new')
+    # «Αποθήκευση» με Κατάσταση «Έτοιμη» ρωτά επίσης
+    app.page.evaluate("window.prompt = () => '21500'")
+    app.fill(status='ready').click('💾 Αποθήκευση')
+    app.page.wait_for_url('**/#/letters/2')
+    assert 'Αρ. Πρωτ.: 21500' in app.text()
+    # επιστολή Επίσκεψης (PDF από τη σελίδα Επισκέψεων)
+    vseq = app.page.evaluate("""async () => { const {db} = await import('./core/store.js'); window.prompt = () => '22000';
+      const id = await db.save('v', (tx) => tx.insert('visits', { lodge: 'ΑΛΦΑ', lodge_number: '1', visit_date: '2026-11-01' }).id);
+      return (await (await import('./modules/letters.js')).ensureVisitLetter(db.get('visits', id))).protocol_seq; }""")
+    assert vseq == 22000
+    seqs = app.page.evaluate("async () => { const {db} = await import('./core/store.js'); return [db.all('letters').map((l) => l.protocol_seq), db.all('decree_documents').map((d) => d.protocol_seq)]; }")
+    assert seqs == [[21001, 21500, 22000], [20999]], seqs
+
 def test_template_representative_field_and_day_article(app):
     app.connect_local()
     app.page.evaluate("""async () => { const {db} = await import('./core/store.js');
