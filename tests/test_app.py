@@ -1245,8 +1245,18 @@ def test_protocol_suggested_or_manual(app):
     app.click('Αποθήκευση & απόδοση')
     app.page.wait_for_timeout(300)
     assert app.page.url.endswith('#/letters/new')
+    # «Αποθήκευση» με Κατάσταση «Έτοιμη» ρωτά επίσης
+    app.page.evaluate("window.prompt = () => '21500'")
+    app.fill(status='ready').click('💾 Αποθήκευση')
+    app.page.wait_for_url('**/#/letters/2')
+    assert 'Αρ. Πρωτ.: 21500' in app.text()
+    # επιστολή Επίσκεψης (PDF από τη σελίδα Επισκέψεων)
+    vseq = app.page.evaluate("""async () => { const {db} = await import('./core/store.js'); window.prompt = () => '22000';
+      const id = await db.save('v', (tx) => tx.insert('visits', { lodge: 'ΑΛΦΑ', lodge_number: '1', visit_date: '2026-11-01' }).id);
+      return (await (await import('./modules/letters.js')).ensureVisitLetter(db.get('visits', id))).protocol_seq; }""")
+    assert vseq == 22000
     seqs = app.page.evaluate("async () => { const {db} = await import('./core/store.js'); return [db.all('letters').map((l) => l.protocol_seq), db.all('decree_documents').map((d) => d.protocol_seq)]; }")
-    assert seqs == [[21001], [20999]], seqs
+    assert seqs == [[21001, 21500, 22000], [20999]], seqs
 
 def test_template_representative_field_and_day_article(app):
     app.connect_local()

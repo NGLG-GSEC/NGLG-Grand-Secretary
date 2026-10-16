@@ -150,8 +150,7 @@ function mountLetterForm(el, x, isNew) {
   for (const i of [fl, fd]) i.addEventListener('change', () => { fv.value = ''; apply(true); });
   if (tpl && !box.hidden && (fv.value || !f.body.value.trim() || hasPlaceholders(f.body.value))) apply(true);
   const cur = () => ({ ...x, ...Object.fromEntries(new FormData(f)), letter_date: x.letter_date || today() });
-  let manualProtocol = 0;
-  bind(el, { ready() { const m = askProtocol({ table: 'letters', id: x.id }); if (m === null) return; manualProtocol = m; f.status.value = 'ready'; f.requestSubmit(); }, form: () => openInDigitalForm(cur()), word: () => letterDocx(cur()), preview() {
+  bind(el, { ready() { f.status.value = 'ready'; f.requestSubmit(); }, form: () => openInDigitalForm(cur()), word: () => letterDocx(cur()), preview() {
     const d = Object.fromEntries(new FormData(f));
     const pv = el.querySelector('#pv');
     pv.innerHTML = letterPaper({ ...x, ...d, letter_date: x.letter_date || today() });
@@ -162,6 +161,9 @@ function mountLetterForm(el, x, isNew) {
     if (bad.length) throw new Error('Μη έγκυρο email: ' + bad.join(', '));
     const row = { subject: d.subject.trim(), body: d.body.trim(), template_id: d.template_id ? Number(d.template_id) : null, recipient_name: d.recipient_name.trim(),
       recipient_email: emails.join(', '), recipient_member_id: d.recipient_member_id ? Number(d.recipient_member_id) : null, visit_id: Number(d.visit_id) || x.visit_id || null, cc_name: String(d.cc_name || '').trim(), closing: String(d.closing || '').trim(), category: LETTER_CATEGORIES[d.category] ? d.category : 'ΕΠΙΣΤΟΛΗ', status: d.status, signer: d.signer };
+    // «Έτοιμη» χωρίς αριθμό: πρόταση του επόμενου αριθμού πρωτοκόλλου ή χειροκίνητος
+    const manualProtocol = row.status === 'ready' && !x.protocol_seq ? askProtocol({ table: 'letters', id: x.id }) : 0;
+    if (manualProtocol === null) return;
     const id = await db.save(isNew ? `Νέα Επιστολή: ${row.subject}` : `Επιστολή ${x.protocol_no || x.id}: ενημέρωση`, (tx) => {
       const r = isNew ? tx.insert('letters', { ...row, letter_date: today(), source_letter_id: x.source_letter_id || null, visit_id: row.visit_id || x.visit_id || null }) : tx.update('letters', x.id, row);
       if (row.status === 'ready') assignProtocol(tx, r.id, manualProtocol);
@@ -207,12 +209,13 @@ export async function waSendPdf(x, b) {
 export async function ensureVisitLetter(v) {
   const has = sortBy(db.all('letters').filter((l) => l.visit_id === v.id && l.status === 'ready'), (l) => -(l.protocol_seq || 0))[0];
   if (has) return has;
-  if (!confirmDo('Για να επισυναφθεί το PDF, η επιστολή της Επίσκεψης θα καταχωριστεί ως «Έτοιμη» με αριθμό πρωτοκόλλου. Συνέχεια;')) throw new Error('Ακυρώθηκε.');
+  const manual = askProtocol({}, 0, 'Για να επισυναφθεί το PDF, η επιστολή της Επίσκεψης θα καταχωριστεί ως «Έτοιμη» με αριθμό πρωτοκόλλου.');
+  if (manual === null) throw new Error('Ακυρώθηκε.');
   const q = provinceLetter(v);
   const id = await db.save(`Νέα Επιστολή: ${q.subject}`, (tx) => {
     const r = tx.insert('letters', { subject: q.subject, body: q.body, template_id: q.template_id ? Number(q.template_id) : null, recipient_name: q.to_name, recipient_email: q.to_email,
       recipient_member_id: null, cc_name: q.cc_name || '', closing: q.closing || '', category: q.category || 'ΕΠΙΣΚΕΨΗ', status: 'ready', signer: actor(), letter_date: today(), visit_id: v.id });
-    assignProtocol(tx, r.id);
+    assignProtocol(tx, r.id, manual);
     return r.id;
   });
   return db.get('letters', id);

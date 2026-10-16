@@ -21,11 +21,11 @@ export function nextProtocol(tx, category = 'Επιστολή', topic = '', manu
 // Ένας χειροκίνητος αριθμός μεγαλύτερος από τον προτεινόμενο συνεχίζει την αρίθμηση από εκεί και πέρα.
 export const suggestedProtocol = () => nextProtocol({ setting: (k) => db.setting(k), all: (t) => db.all(t) }).seq;
 const protocolOwner = (n, self = {}) => ['letters', 'decree_documents'].flatMap((t) => db.all(t).filter((r) => Number(r.protocol_seq) === n && !(t === self.table && r.id === self.id)))[0];
-export function askProtocol(self = {}, current = 0) {
+export function askProtocol(self = {}, current = 0, intro = '') {
   const sug = suggestedProtocol();
-  const v = window.prompt(current
+  const v = window.prompt((intro ? intro + '\n\n' : '') + (current
     ? `Ο τρέχων αριθμός πρωτοκόλλου είναι ${current}.\nΠροτείνω τον ${sug} (ο επόμενος ελεύθερος).\nΓράψτε τον αριθμό που θέλετε:`
-    : `Προτείνω αριθμό πρωτοκόλλου ${sug}.\nΑν θέλετε άλλον, γράψτε τον εδώ (ή αφήστε τον προτεινόμενο και πατήστε OK):`, String(current || sug));
+    : `Προτείνω αριθμό πρωτοκόλλου ${sug}.\nΑν θέλετε άλλον, γράψτε τον εδώ (ή αφήστε τον προτεινόμενο και πατήστε OK):`), String(current || sug));
   if (v == null) return null;
   if (!String(v).trim()) return current ? null : 0; // κενό = ο προτεινόμενος
   const n = parseInt(String(v).replace(/\D/g, ''), 10);
