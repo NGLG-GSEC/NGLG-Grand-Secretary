@@ -143,6 +143,10 @@ export class Store {
     return bytes;
   }
 
+  // Αναμονή μέχρι να μην εκκρεμεί καμία αποθήκευση (για τις αυτόματες ενημερώσεις στο παρασκήνιο)
+  async idle(quiet = 400) {
+    for (let i = 0; i < 300; i++) { if (!this.busy) { await new Promise((r) => setTimeout(r, quiet)); if (!this.busy) return; } else await new Promise((r) => setTimeout(r, 100)); }
+  }
   async save(message, fn) {
     this.busy++; this.emit({ type: 'busy', busy: this.busy });
     try {

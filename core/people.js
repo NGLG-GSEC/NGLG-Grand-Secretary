@@ -95,7 +95,8 @@ export function person(id, src = db) {
 // Στοιχεία επικοινωνίας μιας εγγραφής λίστας: πρώτα όσα έχει η ίδια (αν δόθηκαν ειδικά), αλλιώς από το Μητρώο
 export function contactOf(x, src = db) {
   const p = x && x.member_id ? person(x.member_id, src) : null;
-  return { email: String((x && x.email) || '').trim() || (p ? p.email : ''), mobile: String((x && x.mobile) || '').trim() || (p ? p.mobile : ''), person: p };
+  // Ενιαίο Μητρώο: τα στοιχεία του μέλους υπερισχύουν· τα δικά της εγγραφής μόνο αν το Μητρώο δεν έχει
+  return { email: (p && p.email) || String((x && x.email) || '').trim(), mobile: (p && p.mobile) || String((x && x.mobile) || '').trim(), person: p };
 }
 
 // Ομάδες με ίδιο ονοματεπώνυμο (για έλεγχο διπλών): { ids, sure } — sure: χωρίς αντιφατικό κινητό

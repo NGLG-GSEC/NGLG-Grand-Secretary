@@ -135,6 +135,7 @@ setMemberTitle(titleOf);
 // Ενιαίο Μητρώο: ο Τίτλος (Αδ., Σεβ. Αδ., Λίαν Σεβ. Αδ., Πσεβ. Αδ., Σεβτ. Αδ.) γράφεται σε κάθε μέλος, με σύμβουλο την Επετηρίδα
 // (υπερισχύει) και μετά τα αξιώματα των Διαταγμάτων / Σεβάσμιο Στοάς. Ενημερώνεται μόνο όπου αλλάζει.
 export async function syncMemberTitles() {
+  await db.idle();
   const diff = db.all('member_registry').map((m) => [m.id, titleOf(m)]).filter(([id, t]) => (db.get('member_registry', id) || {}).title !== t);
   if (!diff.length) return 0;
   await db.save(`Μητρώο: τίτλοι από την Επετηρίδα (${diff.length})`, (tx) => { for (const [id, t] of diff) tx.update('member_registry', id, { title: t }); });

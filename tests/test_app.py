@@ -350,7 +350,7 @@ def test_github_storage_and_concurrent_edits(app):
     app.click('Αποθήκευση & απόδοση')
     app.page.wait_for_url('**/#/letters/1')
     letters = gh.read_json('data/letters.json')
-    assert letters[0]['protocol_no'] == '20545' and gh.commits[gh.ref]['message'].startswith('Νέα Επιστολή')
+    assert letters[0]['protocol_no'] == '20545' and any(c['message'].startswith('Νέα Επιστολή') for c in gh.commits.values())  # (μπορεί να ακολουθούν αυτόματες ενημερώσεις)
     # Ο Νικόλαος (άλλη συσκευή) καταχωρίζει επιστολή στο μεταξύ
     other = letters + [{**letters[0], 'id': 2, 'protocol_seq': 20546, 'protocol_no': '20546', 'subject': 'Από τον Νικόλαο'}]
     gh.external_commit('data/letters.json', '[\n' + ',\n'.join(json.dumps(r, ensure_ascii=False) for r in other) + '\n]\n')
@@ -686,6 +686,8 @@ def test_installations_table_2026_2027_loaded(app, tmp_path):
 
 def test_namedays_calendar_completed(app):
     app.connect_local()
+    app.page.wait_for_timeout(1500)  # ο ΜΔ (Εκπρόσωπος) μπαίνει στο Μητρώο· εδώ μετράμε μόνο τα μέλη της δοκιμής
+    app.page.evaluate("async () => { const {db} = await import('./core/store.js'); await db.save('x', (tx) => { tx.replace('reps', []); tx.replace('member_registry', []); tx.replace('member_lodges', []); }); }")
     for sn, fn in [('Πρώτος', 'Σέργιος'), ('Δεύτερος', 'Κώστας'), ('Τρίτος', 'Τάσος'), ('Τέταρτος', 'Ξενόφερτος')]:
         add_member(app, surname=sn, first=fn, email=f'{sn}@example.com', mobile='')
     y = date.today().year
@@ -1005,7 +1007,7 @@ def test_single_member_pool_identify_merge_and_relink(app):
     assert r['regOfMain'] == 81  # η πληρέστερη εγγραφή (email + κινητό)
     assert sorted(r['emails']) == ['a1@example.com', 'a2@example.com'] and r['lodges'] == ['3', '70']
     assert r['syn'] is None and r['syn2'] is not None  # συνώνυμοι: μόνο με κινητό/email
-    rep = [x for x in r['reps'] if x['surname'] == 'Διπλός'][0]
+    rep = [x for x in r['reps'] if x['surname'] in ('Διπλός', 'Διπλος')][0]
     assert rep['member_id'] == r['main'] and rep['email'] == '' and rep['mobile'] == '' and 'Άλλα email' not in rep['notes']
     # η επικοινωνία του εκπροσώπου έρχεται από το Μητρώο
     app.go('/reps')
@@ -1022,7 +1024,7 @@ def test_single_member_pool_identify_merge_and_relink(app):
     m = st['ms'][0]
     assert m['registry_no'] == 81 and 'a1@example.com' in m['other_emails'] and 'Αρ. Μητρώου 80' in m['merged_from'] and m['surname_variants'] == ''  # ίδιο όνομα με άλλους τόνους δεν είναι παραλλαγή
     assert sorted(l['lodge_number'] for l in st['ls'] if l['member_id'] == m['id']) == ['3', '70']
-    assert [x for x in st['reps'] if x['surname'] == 'Διπλός'][0]['member_id'] == m['id']
+    assert [x for x in st['reps'] if x['surname'] in ('Διπλός', 'Διπλος')][0]['member_id'] == m['id']
     app.go(f"/members/{m['id']}")
     assert 'Εκπρόσωπος ΜΔ: Μέγας Ευχέτης' in app.text() and 'Συγχωνεύθηκαν: Αρ. Μητρώου 80' in app.text()
 
@@ -1757,3 +1759,18 @@ def test_member_title_from_epeteirida_in_registry(app):
         app.page.wait_for_timeout(250)
     app.go('/members')
     assert 'Λίαν Σεβ. Αδ.' in app.text('.memtable')
+
+
+def test_contacts_linked_to_registry(app, tmp_path):
+    app.connect_local()
+    app.page.evaluate("""async () => { const {db} = await import('./core/store.js'); await db.save('x', (tx) => {
+      tx.insert('member_registry', { surname: 'Δοκιμαστής', first_name: 'Άλφα', email: 'alfa.registry@example.com', other_emails: 'alfa@example.com', mobile: '', active: 1 }); }); }""")
+    f = tmp_path / 'c.csv'
+    f.write_text(GOOGLE_CSV, encoding='utf-8')
+    app.go('/contacts')
+    app.page.set_input_files('#gcsv', str(f))
+    app.page.click('[data-act=imp]')
+    app.page.wait_for_selector('text=Επαφές: 3 νέες')
+    assert '✓ Μητρώο' in app.text() and 'alfa.registry@example.com' in app.text()
+    g = app.page.evaluate("async () => (await import('./modules/contacts.js')).contactGroups().find((x) => x.name === 'Ομάδα Α').emails")
+    assert g == ['alfa.registry@example.com', 'beta@example.com']  # το Μητρώο υπερισχύει

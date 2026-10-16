@@ -15,6 +15,7 @@ import { DEC_MAP, precedenceOf } from './decree-catalog.js';
 import { contactOf, person, canonicalId, identify } from '../core/people.js';
 import { fillContext, fillPlaceholders, lodgeRecipients, repRecipients, gmVisitTemplate, repVisitTemplate, gmName, GM_VISIT, REP_VISIT, setRepInfo } from './letter-fill.js';
 import { epeteiridaOf, honorificLevel } from './epeteirida-table.js';
+import { insertMember } from './members.js';
 import { parseRank, matchName, isCurrentRecord, hasActiveList, importEpeteiridaAny, hasEpeteirida } from './epeteirida-import.js';
 
 const MONTHS = ['Ιανουάριος', 'Φεβρουάριος', 'Μάρτιος', 'Απρίλιος', 'Μάιος', 'Ιούνιος', 'Ιούλιος', 'Αύγουστος', 'Σεπτέμβριος', 'Οκτώβριος', 'Νοέμβριος', 'Δεκέμβριος'];
@@ -55,6 +56,45 @@ db.migrate('reps-grand-master-2026-10', (tx) => {
   if (tx.all('reps').some((r) => baseOffices(r).includes('Μέγας Διδάσκαλος') && !isPast(r))) return;
   const full = String(tx.setting('grand_master_name') || 'Σεβτ. Αδ. Ιωάννης Μπενετάτος').replace(/^.*?Αδ\.\s*/, '').trim().split(/\s+/);
   tx.insert('reps', { name: full.slice(0, -1).join(' '), surname: full.at(-1) || '', rep_rank: 'Σεβασμιώτατος Αδ.', office: 'Μέγας Διδάσκαλος', year: '', email: '', mobile: '', member_id: null, notes: '', ext_id: '' });
+});
+
+// Ενιαίο Μητρώο: κάθε Εκπρόσωπος είναι μέλος του Μητρώου (δημιουργείται αν λείπει)· όνομα, email και κινητό
+// διαβάζονται μόνο από το Μητρώο — στον Εκπρόσωπο μένουν το αξίωμα, το έτος και οι σημειώσεις.
+export function repsIntoRegistry(tx) {
+  let n = 0;
+  for (const r of tx.all('reps')) {
+    if (!r.surname || /ουδεισ/.test(fold(`${r.surname} ${r.name}`))) continue;
+    let mid = (r.member_id && canonicalId(r.member_id, tx)) || identify({ surname: r.surname, first_name: r.name, email: r.email, mobile: r.mobile }, tx);
+    if (!mid) { // νέο πρόσωπο μόνο αν δεν υπάρχει συνώνυμο μέλος (αλλιώς η επιλογή μένει στον χρήστη)
+      const nk = (s) => fold(s).replace(/[^a-zα-ω]/g, ''), same = tx.all('member_registry').some((m) => nk(m.surname) === nk(r.surname) && nk(m.first_name).slice(0, 4) === nk(r.name).slice(0, 4));
+      if (same) continue;
+      mid = insertMember(tx, { surname: r.surname, first_name: r.name, email: r.email || '', mobile: r.mobile || '', active: 1 });
+    }
+    const m = tx.get('member_registry', mid);
+    if (!m) continue;
+    const ems = splitEmails([m.email, m.other_emails].join(' ')).map((e) => e.toLowerCase()), mob = (x) => String(x || '').replace(/\D/g, '').slice(-10);
+    const upd = {};
+    if (r.email && !ems.includes(String(r.email).toLowerCase())) { if (!m.email) upd.email = r.email; else upd.other_emails = [m.other_emails, r.email].filter(Boolean).join('; '); }
+    if (r.mobile && ![m.mobile, ...String(m.other_mobiles || '').split(/[;,]/)].some((x) => mob(x) && mob(x) === mob(r.mobile))) { if (!m.mobile) upd.mobile = r.mobile; else upd.other_mobiles = [m.other_mobiles, r.mobile].filter(Boolean).join('; '); }
+    if (Object.keys(upd).length) tx.update('member_registry', mid, upd);
+    const want = { member_id: mid, name: m.first_name || r.name, surname: m.surname || r.surname, email: '', mobile: '' };
+    if (Object.entries(want).some(([k, v]) => (r[k] ?? '') !== v)) { tx.update('reps', r.id, want); n++; }
+  }
+  return n;
+}
+db.migrate('reps-into-registry-2026-10', (tx) => { repsIntoRegistry(tx); });
+// Τα ονόματα των Εκπροσώπων ακολουθούν πάντα το Μητρώο
+let repSyncFirst = true;
+db.on((ev) => {
+  const go_ = () => setTimeout(async () => {
+    await db.idle();
+    const loose = db.all('reps').some((r) => r.surname && !/ουδεισ/.test(fold(`${r.surname} ${r.name}`)) && (!r.member_id || r.email || r.mobile));
+    if (loose) await db.save('Εκπρόσωποι: σύνδεση με το Μητρώο', (tx) => { repsIntoRegistry(tx); }).catch((e) => console.warn(e));
+    const diff = db.all('reps').filter((r) => r.member_id).map((r) => [r, db.get('member_registry', canonicalId(r.member_id))]).filter(([r, m]) => m && (r.name !== m.first_name || r.surname !== m.surname || r.member_id !== m.id));
+    if (diff.length) await db.save('Εκπρόσωποι: ονόματα από το Μητρώο', (tx) => { for (const [r, m] of diff) tx.update('reps', r.id, { member_id: m.id, name: m.first_name, surname: m.surname }); }).catch((e) => console.warn(e));
+  }, 900);
+  if (ev.type === 'refresh' && repSyncFirst && db.backend) { repSyncFirst = false; go_(); }
+  if (ev.type === 'saved' && !/^Εκπρόσωποι: (ονόματα|σύνδεση)/.test(ev.message || '') && (ev.tables || []).some((t) => ['member_registry', 'reps'].includes(t))) go_();
 });
 
 // ---------------------------------------------------------------- δεδομένα
@@ -846,8 +886,8 @@ const repFields = [
   { k: 'name', label: 'Όνομα', required: true }, { k: 'surname', label: 'Επώνυμο', required: true },
   { k: 'office', label: 'Αξίωμα', full: true, placeholder: 'π.χ. Μέγας Καγκελάριος ή Πρώην Μέγας Ευχέτης· πολλά με « · »' },
   { k: 'year', label: 'Έτος' }, { k: 'rep_rank', label: 'Βαθμός', type: 'select', empty: 'Αυτόματα από το αξίωμα', options: REP_RANKS },
-  { k: 'email', label: 'Email (μόνο αν διαφέρει από το Μητρώο Μελών)', type: 'email' }, { k: 'mobile', label: 'Κινητό (μόνο αν διαφέρει από το Μητρώο)' },
-  { k: 'member_id', label: 'Αρ. μέλους στο Μητρώο (προαιρετικό)', type: 'number', help: 'Αν λείπει email/κινητό, χρησιμοποιούνται του μέλους.' },
+  { k: 'email', label: 'Email (καταχωρίζεται στο Μητρώο Μελών)', type: 'email' }, { k: 'mobile', label: 'Κινητό (καταχωρίζεται στο Μητρώο Μελών)' },
+  { k: 'member_id', label: 'ID μέλους στο Μητρώο', type: 'number', help: 'Email, κινητό και τίτλος διαβάζονται μόνο από το Μητρώο Μελών. Ό,τι γράψετε εδώ προστίθεται στο μέλος· αν το πρόσωπο δεν υπάρχει, προστίθεται στο Μητρώο.' },
   { k: 'notes', label: 'Σημειώσεις', full: true },
 ];
 const repRoutes = crud({
@@ -866,11 +906,11 @@ const repRoutes = crud({
   validate(d) {
     delete d.member_pick; if (!REP_RANKS.includes(d.rep_rank)) d.rep_rank = '';
     d.member_id = canonicalId(Number(d.member_id) || identify({ surname: d.surname, first_name: d.name, email: d.email, mobile: d.mobile }) || null) || null;
-    const P = d.member_id && person(d.member_id); // όχι αντίγραφα: ό,τι υπάρχει ήδη στο Μητρώο δεν αποθηκεύεται ξανά
-    if (P && d.email && P.emails.some((e) => e.toLowerCase() === String(d.email).trim().toLowerCase())) d.email = '';
-    if (P && d.mobile && P.mobiles.some((m) => m.replace(/\D/g, '').slice(-10) === String(d.mobile).replace(/\D/g, '').slice(-10))) d.mobile = '';
-    return d;
+    const P = d.member_id && person(d.member_id); // όχι αντίγραφα: τα στοιχεία μένουν μόνο στο Μητρώο
+    if (P) { d.name = P.member.first_name || d.name; d.surname = P.member.surname || d.surname; }
+    return d; // email/κινητό: τα μεταφέρει στο Μητρώο το afterSave (repsIntoRegistry)
   },
+  afterSave(tx) { repsIntoRegistry(tx); }, // νέος/αλλαγμένος Εκπρόσωπος → μέλος του Μητρώου
   afterDelete(tx, r) { for (const v of tx.all('visits')) if (v.rep_id === r.id) tx.update('visits', v.id, { rep_id: null }); },
   mountForm(el) {
     attachPicker(el.querySelector('[name=member_pick]'), memberItems, (m) => {

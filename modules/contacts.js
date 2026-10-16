@@ -4,7 +4,8 @@
 import { db } from '../core/store.js';
 import { module, bind, go, flash, toast, confirmDo, table } from '../core/app.js';
 import { esc, matches, sortBy, EMAIL_RE } from '../core/util.js';
-import { addContactSource } from '../core/pickers.js';
+import { addContactSource, titledName, noContact } from '../core/pickers.js';
+import { identify, person } from '../core/people.js';
 import { emailHash } from './settings.js';
 
 const SKIP_LABELS = /^\*\s*(myContacts|starred)$/i;
@@ -48,12 +49,17 @@ export function contactsFromGoogleCsv(text) {
 }
 
 const list = (v) => (Array.isArray(v) ? v : String(v || '').split(/\s*[,;]\s*/).filter(Boolean));
+// Ενιαίο Μητρώο: η επαφή που είναι μέλος συνδέεται με αυτό· email και όνομα (με τίτλο) έρχονται από το Μητρώο
+const memberOf = (c) => { const p = c.member_id ? person(c.member_id) : null; return p && !noContact(p.member) ? p : null; };
+export const contactEmail = (c) => { const p = memberOf(c); return (p && p.email) || list(c.emails)[0] || ''; };
+export const contactName = (c) => { const p = memberOf(c); return p ? titledName(p.member) : (c.title ? `${c.name}, ${c.title}` : c.name); };
+const linkMember = (c, tx) => identify({ email: list(c.emails)[0], full_name: c.name }, tx) || list(c.emails).slice(1).map((e) => identify({ email: e }, tx)).find(Boolean) || null;
 export const contactsAll = () => sortBy(db.all('contacts'), (c) => c.name);
 export function contactGroups() {
   const g = {};
   for (const c of contactsAll()) for (const l of list(c.labels)) (g[l] ||= []).push(c);
   return Object.entries(g).sort(([a], [b]) => a.localeCompare(b, 'el')).map(([name, members]) => ({
-    name, members, emails: [...new Set(members.map((c) => list(c.emails)[0]).filter((e) => e && !removed(e)))],
+    name, members, emails: [...new Set(members.map(contactEmail).filter((e) => e && !removed(e)))],
   }));
 }
 
@@ -65,7 +71,7 @@ export async function importContacts(lists) {
     const cur = new Map(tx.all('contacts').map((c) => [key(c), c]));
     for (const c of all) {
       const k = key(c), old = cur.get(k);
-      const row = { name: c.name, title: c.title, org: c.org, emails: list(c.emails).join(', '), phones: list(c.phones).join(', '), labels: list(c.labels).join(', ') };
+      const row = { name: c.name, title: c.title, org: c.org, emails: list(c.emails).join(', '), phones: list(c.phones).join(', '), labels: list(c.labels).join(', '), member_id: linkMember(c, tx) };
       if (old) {
         const merged = { ...row, emails: [...new Set([...list(old.emails), ...list(c.emails)])].join(', '), phones: [...new Set([...list(old.phones), ...list(c.phones)])].join(', '),
           labels: [...new Set([...list(old.labels), ...list(c.labels)])].join(', '), title: c.title || old.title, org: c.org || old.org };
@@ -79,7 +85,7 @@ export async function importContacts(lists) {
 // Ομάδες και επαφές στις αναζητήσεις παραληπτών (Προς, Email, Κοιν.)
 addContactSource(() => [
   ...contactGroups().map((g) => ({ name: g.name, email: g.emails.join(', '), sub: `👥 Ομάδα επαφών · ${g.emails.length} email` })),
-  ...contactsAll().map((c) => ({ name: c.title ? `${c.name}, ${c.title}` : c.name, email: list(c.emails)[0] || '', sub: ['Επαφή Google', c.org].filter(Boolean).join(' · ') })),
+  ...contactsAll().filter((c) => !c.member_id).map((c) => ({ name: contactName(c), email: contactEmail(c), sub: ['Επαφή Google', c.org].filter(Boolean).join(' · ') })), // τα μέλη βρίσκονται ήδη από το Μητρώο
 ]);
 
 function contactsPage({ query }) {
@@ -96,7 +102,7 @@ function contactsPage({ query }) {
 <input type="file" id="gcsv" accept=".csv,text/csv" multiple> <button class="btn primary" data-act="imp">⬆ Εισαγωγή</button></div>
 <div class="card"><h2 style="margin-top:0">Ομάδες (${gs.length})</h2><div class="chips">${gs.map((g) => `<a class="pill${g.name === sel ? ' ok' : ''}" href="#/contacts?g=${encodeURIComponent(g.name)}">${esc(g.name)} · ${g.emails.length}</a>`).join(' ') || '<span class="muted">Καμία ακόμη.</span>'}${sel ? ' <a class="btn small" href="#/contacts">Όλες</a>' : ''}</div></div>
 <form class="toolbar" id="cq"><input name="q" value="${esc(query.q || '')}" placeholder="🔎 Αναζήτηση επαφής…"><button class="btn">Αναζήτηση</button>${xs.length && sel ? `<button type="button" class="btn" data-act="copy">📋 Αντιγραφή email ομάδας</button>` : ''}</form>
-${table(['Ονοματεπώνυμο', 'Τίτλος / Οργανισμός', 'Email', 'Τηλέφωνο', 'Ομάδες', ''], xs.map((c) => [esc(c.name), esc([c.title, c.org].filter(Boolean).join(' · ')), esc(c.emails), esc(c.phones), esc(c.labels),
+${table(['Ονοματεπώνυμο', 'Τίτλος / Οργανισμός', 'Email', 'Τηλέφωνο', 'Ομάδες', ''], xs.map((c) => [esc(c.name) + (memberOf(c) ? `<br><a class="pill ok" href="#/members/${memberOf(c).id}">✓ Μητρώο: ${esc(titledName(memberOf(c).member))}</a>` : ''), esc([c.title, c.org].filter(Boolean).join(' · ')), esc(contactEmail(c)) + (memberOf(c) ? '<br><small class="muted">από το Μητρώο</small>' : ''), esc(c.phones), esc(c.labels),
   `<button class="btn small danger" data-act="del" data-id="${c.id}">✕</button>`]))}
 ${contactsAll().length ? '<p><button class="btn danger" data-act="delall">Διαγραφή όλων των επαφών</button></p>' : ''}`,
     mount(el) {
@@ -117,5 +123,7 @@ ${contactsAll().length ? '<p><button class="btn danger" data-act="delall">Δια
     },
   };
 }
+
+db.migrate('contacts-link-registry-2026-10', (tx) => { for (const c of tx.all('contacts')) if (!c.member_id) { const mid = linkMember(c, tx); if (mid) tx.update('contacts', c.id, { member_id: mid }); } });
 
 module({ id: 'contacts', routes: { '/contacts': contactsPage } });
