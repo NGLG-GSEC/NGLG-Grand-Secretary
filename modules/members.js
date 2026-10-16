@@ -3,7 +3,7 @@
 // Κάθε αλλαγή μένει στο ιστορικό του GitHub, άρα και μια διαγραφή μπορεί να ανακτηθεί.
 import { db } from '../core/store.js';
 import { module, onSubmit, go, flash, bind, confirmDo, table, notice, pager, toast } from '../core/app.js';
-import { esc, fold, sortBy, readXlsx, XLSX, parsePasted } from '../core/util.js';
+import { esc, fold, sortBy, readXlsx, XLSX, parsePasted, fmtDate } from '../core/util.js';
 import { lodgeNoKey, lodgesAll } from './lodges.js';
 import { noContact, NO_CONTACT } from '../core/pickers.js';
 import { epeteiridaOf, highestOfficeText } from './epeteirida-table.js';
@@ -32,13 +32,47 @@ const HINTS = { surname: ['Γράψτε το επώνυμο', 'π.χ. Παπαδ
 const phoneDigits = (q) => { let d = String(q || '').replace(/\D/g, ''); if (d.startsWith('0030')) d = d.slice(4); else if (d.startsWith('30') && d.length > 10) d = d.slice(2); return d; };
 const digits = (v) => String(v || '').replace(/\D/g, '');
 
+// Ιδιότητα του μέλους σε κάθε Στοά, κατά το Σύνταγμα ΕΜΣτΕ (2025): [ιδιότητα, κανόνας, περιγραφή]
+export const MEMBER_CAPACITIES = [
+  ['Τακτικό', 'Κ. 166', 'Ο μυούμενος καθίσταται τακτικό μέλος της Στοάς αμέσως με τη μύησή του.'],
+  ['Υιοθετημένο', 'Κ. 163', 'Ήδη Τέκτων από άλλη Στοά που γίνεται μέλος της Στοάς με υιοθεσία· μετά αποτελεί κανονικό μέλος της.'],
+  ['Επανελθόν', 'Κ. 163', 'Πρώην μέλος που επανέρχεται στη Στοά (τρόπος επανόδου στην ιδιότητα του μέλους).'],
+  ['Ομότιμο', 'Κ. 146', 'Ενεργό μέλος της Στοάς που αναγορεύεται Ομότιμο· χωρίς ετήσια συνδρομή, με πλήρη δικαιώματα (αξίωμα, προτάσεις, ψήφος).'],
+  ['Επίτιμο', 'Κ. 146', 'Ενεργό μέλος άλλης κανονικής Στοάς· συμμετέχει στις Συνεδρίες χωρίς προτάσεις, ψήφο ή αξίωμα. Χωριστό Μητρώο Επιτίμων.'],
+  ['Μέτοικο', 'Κ. 146', 'Διαμονή >6 μήνες εκτός Ελλάδος, ή >100 χλμ. από την πλησιέστερη Στοά, ή σε νησί χωρίς Στοά· έγκριση ΣΓΥ, 1/3 της ετήσιας συνδρομής.'],
+  ['Αριστίνδην', 'Κ. 146', 'Άνω των 70 ετών με ενεργό, αδιάκοπη και συνεχή παρουσία στην ΕΜΣτΕ από την ίδρυσή της· έγκριση ΣΓΥ, απαλλαγή από συνδρομές.'],
+  ['Ισόβιο', '', 'Υφιστάμενη κατηγορία του Συντάγματος· όσοι έχουν ήδη μεταταγεί απαλλάσσονται της ετήσιας συνδρομής.'],
+  ['Θεράπων', '', 'Μυημένος για να υπηρετεί συγκεκριμένη Στοά ή τη Μεγάλη Στοά, με ειδική άδεια· τακτικό μέλος μόνο με υιοθεσία και τέλη.'],
+];
+export const capacityLabel = (c) => { const x = MEMBER_CAPACITIES.find((y) => y[0] === c); return x ? `${x[0]}${x[1] ? ' — ' + x[1] : ''}` : c || ''; };
+// Χωρίς ρητή ιδιότητα: από την παλιά «Κατάσταση» (π.χ. «1. ΤΑΚΤΙΚΟ» → Τακτικό)
+const CAP_KEYS = [['ΤΑΚΤΙΚ', 'Τακτικό'], ['ΥΙΟΘΕΤ', 'Υιοθετημένο'], ['ΕΠΑΝΕΛΘ', 'Επανελθόν'], ['ΟΜΟΤΙΜ', 'Ομότιμο'], ['ΕΠΙΤΙΜ', 'Επίτιμο'], ['ΜΕΤΟΙΚ', 'Μέτοικο'], ['ΑΡΙΣΤΙΝΔ', 'Αριστίνδην'], ['ΙΣΟΒΙ', 'Ισόβιο'], ['ΘΕΡΑΠ', 'Θεράπων']];
+export const capacityOf = (l) => l.capacity || (CAP_KEYS.find(([k]) => String(l.member_status || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().includes(k)) || [])[1] || '';
+// Στοά πλήρους συνδρομής / 2η / 3η κ.ο.κ. Στοά (Κ. 269: στη 2η, 3η κ.ο.κ. 1/10 της συνδρομής, 1/20 αν είναι ξενόγλωσση)
+export const FEE_RANKS = [1, 2, 3, 4, 5, 6];
+export const feeRankLabel = (n, long = false) => (!Number(n) ? '' : Number(n) === 1 ? 'Στοά πλήρους συνδρομής' + (long ? ' — Κ. 269' : '') : `${n}η Στοά` + (long ? ' (1/10, ή 1/20 αν ξενόγλωσση) — Κ. 269' : ''));
+const parseFeeRank = (v) => { v = String(v || '').trim(); if (!v) return ''; if (/ΠΛΗΡ|πλήρ|πληρ/i.test(v)) return 1; const m = /^(\d+)/.exec(v); return m ? Number(m[1]) : ''; };
+
+// Ημερομηνίες του μέλους: βαθμοί (Μαθητής = μύηση, Εταίρος, Διδάσκαλος) και διαγραφή από την ΕΜΣτΕ
+export const MEMBER_DATES = [['date_ea', 'Ημ. μύησης — Μαθητής (Α΄ βαθμός)'], ['date_fc', 'Ημ. Εταίρου (Β΄ βαθμός)'], ['date_mm', 'Ημ. Διδασκάλου (Γ΄ βαθμός)'], ['dereg_date', 'Ημ. διαγραφής']];
+// Ημερομηνίες σε κάθε Στοά: απόκτηση ιδιότητας, αξιώματα (Β΄ Επόπτης, Α΄ Επόπτης, Σεβάσμιος) και διαγραφή από τη Στοά
+export const LODGE_DATES = [['capacity_date', 'Ημ. απόκτησης ιδιότητας'], ['jw_date', 'Ημ. Β΄ Επόπτη'], ['sw_date', 'Ημ. Α΄ Επόπτη'], ['wm_date', 'Ημ. Σεβασμίου'], ['dereg_date', 'Ημ. διαγραφής']];
+const CAP_DATE = { Τακτικό: 'Ημ. μύησης στη Στοά', Υιοθετημένο: 'Ημ. υιοθεσίας', Επανελθόν: 'Ημ. επανόδου', Ομότιμο: 'Ημ. αναγόρευσης Ομοτίμου', Επίτιμο: 'Ημ. αναγόρευσης Επιτίμου',
+  Μέτοικο: 'Ημ. μετάταξης σε Μέτοικο', Αριστίνδην: 'Ημ. μετάταξης σε Αριστίνδην', Ισόβιο: 'Ημ. μετάταξης σε Ισόβιο', Θεράπων: 'Ημ. μύησης ως Θεράποντος' };
+export const capacityDateLabel = (c) => CAP_DATE[c] || 'Ημ. απόκτησης ιδιότητας';
+// ημερομηνία από Excel/επικόλληση: 2010-03-15, 15/3/2010, 15.03.2010 → 2010-03-15
+export const isoOf = (v) => {
+  v = String(v ?? '').trim(); if (!v) return '';
+  let m = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(v); if (m) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
+  m = /^(\d{1,2})[/.\-](\d{1,2})[/.\-](\d{4})$/.exec(v); return m ? `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}` : v;
+};
+
 export const membersAll = () => db.all('member_registry');
 export function lodgesByMember() {
   const out = {};
   for (const l of sortBy(db.all('member_lodges'), 'seq', 'id')) (out[l.member_id] ||= []).push(l);
   return out;
 }
-export const lodgesText = (ls) => (ls || []).map((x) => [x.lodge_name, x.lodge_number, x.member_status].join(' | ').replace(/[ |]+$/, '')).join('\n');
 export const memberLodgesLine = (ls) => (ls || []).filter((l) => l.lodge_name || l.lodge_number).map((l) => `${l.lodge_name} ${l.lodge_number}`.trim() + (l.member_status && !/ΕΝΕΡΓ/i.test(l.member_status) ? ` (${l.member_status})` : '')).join(', ');
 
 export function memberSearch(q, field = 'all') {
@@ -94,7 +128,7 @@ export function findMember(tx, m, freeOnly = false) {
   if (!r && sn && fn) r = all.find((x) => ok(x) && String(x.surname || '').toLowerCase() === sn && String(x.first_name || '').toLowerCase() === fn);
   return r ? r.id : null;
 }
-const MEMBER_COLS = ['registry_no', 'source_member_id', 'surname', 'first_name', 'email', 'other_emails', 'mobile', 'other_mobiles', 'degree', 'declared_lodge_count', 'deregistered_note', 'additional_lodges', 'active', 'surname_variants', 'first_name_variants', 'source_row', 'no_contact'];
+const MEMBER_COLS = ['registry_no', 'source_member_id', 'surname', 'first_name', 'email', 'other_emails', 'mobile', 'other_mobiles', 'degree', 'declared_lodge_count', 'deregistered_note', 'additional_lodges', 'active', 'surname_variants', 'first_name_variants', 'source_row', 'no_contact', ...MEMBER_DATES.map(([k]) => k)];
 export function insertMember(tx, m, id) {
   const row = Object.fromEntries(MEMBER_COLS.map((k) => [k, m[k] ?? (k === 'active' ? 1 : k === 'registry_no' || k === 'source_row' || k === 'source_member_id' ? null : '')]));
   if (row.registry_no == null) row.registry_no = nextRegistryNo(tx); // κάθε νέο μέλος παίρνει αμέσως Αρ. Μητρώου
@@ -115,10 +149,17 @@ export function updateMember(tx, id, m) {
   if (m.lodges) setMemberLodges(tx, id, m.lodges);
 }
 function setMemberLodges(tx, mid, lodges) {
+  // ιδιότητα και σειρά συνδρομής που δεν φέρνει η εισαγωγή (π.χ. Excel πηγής) κρατιούνται από την ίδια Στοά του μέλους
+  const prev = Object.fromEntries(tx.all('member_lodges').filter((l) => l.member_id === mid).map((l) => [lodgeNoKey(l.lodge_number), l]));
   tx.remove('member_lodges', (l) => l.member_id === mid);
-  lodges.forEach((l, i) => tx.insert('member_lodges', { member_id: mid, seq: Number(l.seq) || i + 1, lodge_name: String(l.name ?? l.lodge_name ?? '').trim(), lodge_number: String(l.number ?? l.lodge_number ?? '').trim(), member_status: String(l.status ?? l.member_status ?? '').trim() }));
+  lodges.forEach((l, i) => {
+    const number = String(l.number ?? l.lodge_number ?? '').trim(), old = prev[lodgeNoKey(number)] || {};
+    const fee = l.fee_rank !== undefined ? parseFeeRank(l.fee_rank) : old.fee_rank ?? '';
+    tx.insert('member_lodges', { member_id: mid, seq: Number(l.seq) || i + 1, lodge_name: String(l.name ?? l.lodge_name ?? '').trim(), lodge_number: number, member_status: String(l.status ?? l.member_status ?? '').trim(),
+      capacity: String(l.capacity !== undefined ? l.capacity : old.capacity ?? '').trim(), fee_rank: fee === '' ? '' : Number(fee),
+      ...Object.fromEntries(LODGE_DATES.map(([k]) => [k, l[k] !== undefined ? isoOf(l[k]) : old[k] ?? ''])) });
+  });
 }
-const parseLodges = (v) => String(v || '').split('\n').filter((x) => x.trim()).map((line, i) => { const p = line.split('|').map((x) => x.trim()); while (p.length < 3) p.push(''); return { seq: i + 1, name: p[0], number: p[1], status: p.slice(2).join(' | ').trim() }; });
 
 // Επετηρίδα του μέλους (από τον πίνακα «Επετηρίδα»): ανώτατο αξίωμα, διάταγμα, τίτλος
 function epCard(m) {
@@ -143,9 +184,10 @@ function listPage({ query }) {
   const extra = (x, col, f) => { const v = x[col]; if (!(q && v && (field === 'all' || field === f))) return ''; const h = hl(v, q); return h.includes('<mark>') ? `<br><small class="muted">${h}</small>` : ''; };
   const rows = shown.map((x) => {
     const ls = byM[x.id] || [];
-    const lod = ls.slice(0, 3).map((l) => hl(`${l.lodge_name} ${l.lodge_number}`.trim(), lq, field === 'lodge' || field === 'all')).join('<br>') + (ls.length > 3 ? `<br><small>+${ls.length - 3} ακόμη</small>` : '');
+    const lod = ls.slice(0, 3).map((l) => hl(`${l.lodge_name} ${l.lodge_number}`.trim(), lq, field === 'lodge' || field === 'all') + ((c, f) => (c || f ? ` <small class="muted">${esc([c, f].filter(Boolean).join(' · '))}</small>` : ''))(capacityOf(l), Number(l.fee_rank) === 1 ? 'πλήρης συνδρ.' : feeRankLabel(l.fee_rank))).join('<br>') + (ls.length > 3 ? `<br><small>+${ls.length - 3} ακόμη</small>` : '');
     return [`<b>${x.id}</b>`, H(x.registry_no ?? '', 'all'), (x.title && x.title !== 'Αδ.' ? `<small class="mtitle">${esc(x.title)}</small><br>` : '') + H(x.surname, 'surname') + extra(x, 'surname_variants', 'surname'), H(x.first_name, 'first_name') + extra(x, 'first_name_variants', 'first_name'),
-      noContact(x) ? '<span class="muted">⛔</span>' : H(x.email, 'email') + extra(x, 'other_emails', 'email'), noContact(x) ? '<span class="muted">⛔</span>' : H(x.mobile, 'mobile') + extra(x, 'other_mobiles', 'mobile'), esc(x.degree), `<small>${esc(highestOfficeText(x.id))}</small>`, lod, noContact(x) ? `<span class="pill bad" title="${NO_CONTACT}">⛔ Διαγραμμένος</span>` : x.active ? 'ΝΑΙ' : 'ΟΧΙ', `<a class="btn small" href="#/members/${x.id}">Επεξεργασία</a>`];
+      noContact(x) ? '<span class="muted">⛔</span>' : H(x.email, 'email') + extra(x, 'other_emails', 'email'), noContact(x) ? '<span class="muted">⛔</span>' : H(x.mobile, 'mobile') + extra(x, 'other_mobiles', 'mobile'),
+      esc(x.degree) + [['date_ea', 'Μαθ.'], ['date_fc', 'Εταίρ.'], ['date_mm', 'Διδ.']].filter(([k]) => x[k]).map(([k, a]) => `<br><small class="muted">${a} ${esc(fmtDate(x[k]))}</small>`).join(''), `<small>${esc(highestOfficeText(x.id))}</small>`, lod, noContact(x) ? `<span class="pill bad" title="${NO_CONTACT}">⛔ Διαγραμμένος</span>` : x.active ? 'ΝΑΙ' : 'ΟΧΙ', `<a class="btn small" href="#/members/${x.id}">Επεξεργασία</a>`];
   });
   const [qlabel, ph, itype] = HINTS[field];
   const flabel = Object.fromEntries(MEMBER_FIELDS)[field];
@@ -195,6 +237,60 @@ function usesOf(m) {
     offs.length && `Επετηρίδα: ${offs.length} εγγραφές`, gr.length && `Ευχές: ${gr.length}`, m.merged_from && `Συγχωνεύθηκαν: ${esc(m.merged_from)}`].filter(Boolean);
   return parts.length ? `<p class="muted">${parts.join(' · ')}</p>` : '';
 }
+// Πίνακας Στοών του μέλους: Αρ. Στοάς, Στοά, Ιδιότητα (Σύνταγμα), Συνδρομή (Κ. 269), Κατάσταση
+const lodgeRow = (l = {}) => {
+  const cap = capacityOf(l), fee = Number(l.fee_rank) || '';
+  return `<tbody class="ml-lodge"><tr><td class="ml-n" rowspan="2"></td><td><input data-k="number" value="${esc(l.lodge_number || '')}" list="mllodges" inputmode="numeric" placeholder="Αρ." autocomplete="off"></td>
+<td><input data-k="name" value="${esc(l.lodge_name || '')}" placeholder="Όνομα Στοάς"></td>
+<td><select data-k="capacity"><option value="">—</option>${MEMBER_CAPACITIES.map(([c, k, t]) => `<option value="${esc(c)}" title="${esc(t)}"${c === cap ? ' selected' : ''}>${esc(capacityLabel(c))}</option>`).join('')}${cap && !MEMBER_CAPACITIES.some((x) => x[0] === cap) ? `<option selected>${esc(cap)}</option>` : ''}</select></td>
+<td><select data-k="fee_rank"><option value="">—</option>${FEE_RANKS.map((n) => `<option value="${n}"${n === fee ? ' selected' : ''}>${esc(feeRankLabel(n, true))}</option>`).join('')}</select></td>
+<td><input data-k="status" value="${esc(l.member_status || '')}" list="mlstatus" placeholder="π.χ. ΕΝΕΡΓΟ, ΔΙΑΓΡΑΦΕΝ"></td>
+<td rowspan="2"><button type="button" class="lnk" data-act="rmlodge" title="Αφαίρεση Στοάς">✕</button></td></tr>
+<tr class="ml-dates"><td colspan="5"><div class="ml-dgrid">${LODGE_DATES.map(([k, lab]) => `<label><span${k === 'capacity_date' ? ' class="ml-capdate"' : ''}>${esc(k === 'capacity_date' ? capacityDateLabel(cap) : lab)}</span><input type="date" data-k="${k}" value="${esc(isoOf(l[k]))}"></label>`).join('')}</div></td></tr></tbody>`;
+};
+function lodgesEditor(ls) {
+  const statuses = [...new Set(db.all('member_lodges').map((l) => String(l.member_status || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'el'));
+  return `<div class="tablecard ml-wrap"><table class="ml-grid" id="mlrows"><thead><tr><th>Α/Α</th><th>Αρ. Στοάς</th><th>Στοά</th><th>Ιδιότητα (Σύνταγμα)</th><th>Στοά πλήρους συνδρομής / 2η / 3η κ.ο.κ.</th><th>Κατάσταση</th><th></th></tr></thead>
+${(ls.length ? ls : [{}]).map(lodgeRow).join('')}</table></div>
+<datalist id="mllodges">${lodgesAll().map((l) => `<option value="${esc(l.number)}">${esc(l.name)}</option>`).join('')}</datalist><datalist id="mlstatus">${statuses.map((x) => `<option value="${esc(x)}">`).join('')}</datalist>
+<div class="toolbar" style="margin-top:6px"><button type="button" class="btn small" data-act="addlodge">+ Στοά</button></div>
+<details class="ml-help"><summary>Ιδιότητες μελών κατά το Σύνταγμα</summary><ul>${MEMBER_CAPACITIES.map(([c, k, t]) => `<li><b>${esc(c)}</b>${k ? ` <span class="muted">(${esc(k)})</span>` : ''} — ${esc(t)}</li>`).join('')}
+<li><b>Ημερομηνίες</b> — για κάθε Στοά: απόκτησης της ιδιότητας (μύησης, υιοθεσίας, επανόδου, αναγόρευσης ή μετάταξης), Β΄ Επόπτη, Α΄ Επόπτη, Σεβασμίου και διαγραφής.</li>
+<li><b>Στοά πλήρους συνδρομής / 2η / 3η κ.ο.κ.</b> <span class="muted">(Κ. 269)</span> — δεν είναι ιδιότητα αλλά οικονομική σχέση: σε μία Στοά η πλήρης ετήσια συνδρομή, στη 2η, 3η κ.ο.κ. το 1/10 (ή το 1/20 αν είναι ξενόγλωσση).</li>
+<li class="muted">Ο Κ. 146 (μεταβολές μελών) αναφέρει ρητά τις κατηγορίες Μετοίκου, Ομοτίμου, Αριστίνδην και Επιτίμου.</li></ul></details>`;
+}
+function mountLodgesEditor(el) {
+  const body = el.querySelector('#mlrows');
+  const renumber = () => body.querySelectorAll('.ml-n').forEach((c, i) => (c.textContent = i + 1));
+  const lodges = () => body.querySelectorAll('.ml-lodge');
+  renumber();
+  el.querySelector('[data-act=addlodge]').addEventListener('click', () => {
+    const next = lodges().length + 1;
+    body.insertAdjacentHTML('beforeend', lodgeRow({ fee_rank: [...body.querySelectorAll('[data-k=fee_rank]')].some((s) => s.value) ? Math.min(next, 6) : '' }));
+    renumber(); [...lodges()].at(-1).querySelector('[data-k=number]').focus();
+  });
+  body.addEventListener('click', (e) => { if (e.target.closest('[data-act=rmlodge]')) { e.target.closest('.ml-lodge').remove(); renumber(); } });
+  // αριθμός Στοάς → όνομα από τον κατάλογο Στοών
+  body.addEventListener('change', (e) => {
+    // η ημερομηνία της ιδιότητας παίρνει το όνομά της (π.χ. «Ημ. υιοθεσίας»)
+    if (e.target.dataset.k === 'capacity') e.target.closest('.ml-lodge').querySelector('.ml-capdate').textContent = capacityDateLabel(e.target.value);
+    if (e.target.dataset.k !== 'number') return;
+    const l = lodgesAll().find((x) => lodgeNoKey(x.number) === lodgeNoKey(e.target.value)), name = e.target.closest('tr').querySelector('[data-k=name]');
+    if (l) name.value = l.name;
+  });
+}
+function readLodgesEditor(el) {
+  const out = [];
+  for (const tr of el.querySelectorAll('#mlrows .ml-lodge')) {
+    const g = (k) => tr.querySelector(`[data-k=${k}]`).value.trim();
+    if (!g('number') && !g('name')) continue;
+    out.push({ seq: out.length + 1, name: g('name'), number: lodgeNumberFor(g('name'), g('number')), status: g('status'), capacity: g('capacity'), fee_rank: g('fee_rank'), ...Object.fromEntries(LODGE_DATES.map(([k]) => [k, g(k)])) });
+  }
+  const full = out.filter((l) => Number(l.fee_rank) === 1);
+  if (full.length > 1) throw new Error(`Στοά πλήρους συνδρομής μπορεί να είναι μόνο μία (Κ. 269)· επιλέχθηκαν ${full.length}.`);
+  return out;
+}
+
 function formPage(m) {
   const ls = m ? lodgesByMember()[m.id] || [] : [];
   const x = m || { active: 1 };
@@ -209,9 +305,11 @@ ${f('surname_variants', 'Παραλλαγές Επωνύμου', 'placeholder="�
 ${f('email', 'Κύριο Email', 'inputmode="email"')}${f('other_emails', 'Άλλα Email')}${f('mobile', 'Κύριο Κινητό', 'inputmode="tel"')}${f('other_mobiles', 'Άλλα Κινητά')}${f('degree', 'Τεκτονικός Βαθμός')}
 <div><label>Ενεργός</label><select name="active"><option value="1"${x.active ? ' selected' : ''}>ΝΑΙ</option><option value="0"${x.active ? '' : ' selected'}>ΟΧΙ</option></select></div>
 <div><label>Επικοινωνία</label><select name="no_contact"><option value="0">Επιτρέπεται</option><option value="1"${noContact(x) ? ' selected' : ''}>⛔ Απαγορεύεται (διαγραμμένος)</option></select></div>
+${MEMBER_DATES.slice(0, 3).map(([k, lab]) => `<div><label>${esc(lab)}</label><input type="date" name="${k}" value="${esc(isoOf(x[k]))}"></div>`).join('')}
+<div><label>${esc(MEMBER_DATES[3][1])}</label><input type="date" name="dereg_date" value="${esc(isoOf(x.dereg_date))}"></div>
 <div class="full"><label>Σημείωση Διαγραφής</label><input name="deregistered_note" value="${esc(x.deregistered_note || '')}"></div>
 <div class="full"><label>Πρόσθετες Στοές / παλαιά πληροφορία</label><textarea name="additional_lodges" class="short">${esc(x.additional_lodges || '')}</textarea></div>
-<div class="full"><label>Στοές</label><textarea name="lodges_text" class="short" placeholder="Μία Στοά ανά γραμμή: ΟΝΟΜΑ | ΑΡΙΘΜΟΣ | ΚΑΤΑΣΤΑΣΗ">${esc(lodgesText(ls))}</textarea><small class="muted">Παράδειγμα: ΠΑΡΘΕΝΩΝ | 3 | 1. ΤΑΚΤΙΚΟ</small></div></div>
+<div class="full"><label>Στοές του μέλους</label>${lodgesEditor(ls)}</div></div>
 <div class="toolbar"><button class="btn primary">💾 Αποθήκευση</button><a class="btn" href="#/members">Ακύρωση</a>${m && !noContact(m) ? `<a class="btn" href="#/letters/new?to_name=${encodeURIComponent(`${m.first_name} ${m.surname}`)}&to_email=${encodeURIComponent(m.email || '')}">✉ Επιστολή</a>` : ''}${m ? '<button type="button" class="btn danger" data-act="del">Διαγραφή</button>' : ''}</div></form>
 ${m ? epCard(m) : ''}${offices.length ? `<h2>Ιστορικό αξιωμάτων (Διατάγματα)</h2>${table(['Έτος', 'Αξίωμα / Τίτλος', 'Διάταγμα'], offices.map((o) => [esc(o.decree_year), esc(o.office), o.decree_id ? `<a href="#/decrees/${o.decree_id}">${esc(o.decree_no)}/${esc(o.decree_year)}</a>` : esc(o.decree_no ? `${o.decree_no}/${o.decree_year}` : '')]))}` : ''}`,
     mount(el) {
@@ -219,8 +317,8 @@ ${m ? epCard(m) : ''}${offices.length ? `<h2>Ιστορικό αξιωμάτων
         const rn = isAdmin() ? String(d.registry_no || '').trim() : String(m ? m.registry_no ?? '' : '');
         if (m && isAdmin() && rn !== String(m.registry_no ?? '') && !confirmDo(`Αλλαγή του μόνιμου Αρ. Μητρώου από ${m.registry_no ?? '—'} σε ${rn || '—'};`)) return;
         if (rn && !/^\d+$/.test(rn)) throw new Error('Ο αριθμός μητρώου πρέπει να είναι αριθμός.');
-        const lodges = parseLodges(d.lodges_text);
-        const row = { ...Object.fromEntries(['surname', 'first_name', 'email', 'other_emails', 'mobile', 'other_mobiles', 'degree', 'deregistered_note', 'additional_lodges', 'surname_variants', 'first_name_variants'].map((k) => [k, String(d[k] || '').trim()])),
+        const lodges = readLodgesEditor(el);
+        const row = { ...Object.fromEntries(['surname', 'first_name', 'email', 'other_emails', 'mobile', 'other_mobiles', 'degree', 'deregistered_note', 'additional_lodges', 'surname_variants', 'first_name_variants', ...MEMBER_DATES.map(([k]) => k)].map((k) => [k, String(d[k] || '').trim()])),
           active: d.active === '1' ? 1 : 0, no_contact: d.no_contact === '1' || isDereg('', lodges[0]?.status) ? 1 : 0, registry_no: rn ? Number(rn) : null, declared_lodge_count: String(lodges.length), lodges };
         const id = await db.save(m ? `Μέλος #${m.id}: ενημέρωση` : 'Νέο μέλος', (tx) => {
           if (rn && tx.find('member_registry', (x) => x.registry_no === Number(rn) && (!m || x.id !== m.id))) throw new Error(`Ο αριθμός μητρώου ${rn} υπάρχει ήδη.`);
@@ -230,6 +328,7 @@ ${m ? epCard(m) : ''}${offices.length ? `<h2>Ιστορικό αξιωμάτων
         flash('Η εγγραφή αποθηκεύτηκε.'); go('/members', { q: row.surname, field: 'surname' });
         return id;
       });
+      mountLodgesEditor(el);
       bind(el, { async del() {
         if (!confirmDo(`Οριστική διαγραφή του μέλους ${m.surname} ${m.first_name}; (Θα κατέβει πρώτα Excel ασφαλείας.)`)) return;
         await exportMembers();
@@ -246,9 +345,9 @@ export async function exportMembers() {
   const ms = sortBy(membersAll(), 'surname', 'first_name', 'id');
   const wb = X.utils.book_new();
   const add = (name, rows) => { const ws = X.utils.aoa_to_sheet(rows); ws['!cols'] = rows[0].map(() => ({ wch: 20 })); X.utils.book_append_sheet(wb, ws, name); };
-  add('ΜΗΤΡΩΟ ΜΕΛΩΝ', [['ID', 'Αρ. Μητρώου', 'Επώνυμο', 'Όνομα', 'Κύριο Email', 'Άλλα Email', 'Κύριο Κινητό', 'Άλλα Κινητά', 'Τεκτονικός Βαθμός', 'Ενεργός', 'Σημείωση Διαγραφής', 'Δηλωμένος Αρ. Στοών', 'Πρόσθετες Στοές', 'Γραμμή Πηγής', 'Ενημερώθηκε', 'Παραλλαγές Επωνύμου', 'Παραλλαγές Ονόματος', 'Απαγορεύεται Επικοινωνία', 'Τίτλος (Επετηρίδα)'],
-    ...ms.map((m) => [m.id, m.registry_no ?? '', m.surname, m.first_name, m.email, m.other_emails, m.mobile, m.other_mobiles, m.degree, m.active ? 'ΝΑΙ' : 'ΟΧΙ', m.deregistered_note, m.declared_lodge_count, m.additional_lodges, m.source_row ?? '', m.updated_at, m.surname_variants || '', m.first_name_variants || '', noContact(m) ? 'ΝΑΙ' : 'ΟΧΙ', m.title || ''])]);
-  add('ΣΤΟΕΣ ΜΕΛΩΝ', [['ID Μέλους', 'Α/Α Στοάς', 'Στοά', 'Αριθμός Στοάς', 'Κατάσταση'], ...sortBy(db.all('member_lodges'), 'member_id', 'seq').map((l) => [l.member_id, l.seq, l.lodge_name, l.lodge_number, l.member_status])]);
+  add('ΜΗΤΡΩΟ ΜΕΛΩΝ', [['ID', 'Αρ. Μητρώου', 'Επώνυμο', 'Όνομα', 'Κύριο Email', 'Άλλα Email', 'Κύριο Κινητό', 'Άλλα Κινητά', 'Τεκτονικός Βαθμός', 'Ενεργός', 'Σημείωση Διαγραφής', 'Δηλωμένος Αρ. Στοών', 'Πρόσθετες Στοές', 'Γραμμή Πηγής', 'Ενημερώθηκε', 'Παραλλαγές Επωνύμου', 'Παραλλαγές Ονόματος', 'Απαγορεύεται Επικοινωνία', 'Τίτλος (Επετηρίδα)', ...MEMBER_DATES.map(([, l]) => l)],
+    ...ms.map((m) => [m.id, m.registry_no ?? '', m.surname, m.first_name, m.email, m.other_emails, m.mobile, m.other_mobiles, m.degree, m.active ? 'ΝΑΙ' : 'ΟΧΙ', m.deregistered_note, m.declared_lodge_count, m.additional_lodges, m.source_row ?? '', m.updated_at, m.surname_variants || '', m.first_name_variants || '', noContact(m) ? 'ΝΑΙ' : 'ΟΧΙ', m.title || '', ...MEMBER_DATES.map(([k]) => m[k] || '')])]);
+  add('ΣΤΟΕΣ ΜΕΛΩΝ', [['ID Μέλους', 'Α/Α Στοάς', 'Στοά', 'Αριθμός Στοάς', 'Κατάσταση', 'Ιδιότητα', 'Συνδρομή', ...LODGE_DATES.map(([, l]) => l)], ...sortBy(db.all('member_lodges'), 'member_id', 'seq').map((l) => [l.member_id, l.seq, l.lodge_name, l.lodge_number, l.member_status, capacityOf(l), feeRankLabel(l.fee_rank), ...LODGE_DATES.map(([k]) => l[k] || '')])]);
   add('ΒΑΘΜΟΙ & ΑΞΙΩΜΑΤΑ', [['ID', 'ID Μέλους', 'Τύπος Εγγραφής', 'Βαθμός', 'Αξίωμα', 'ID Διατάγματος', 'Αρ. Διατάγματος', 'Έτος', 'Από', 'Έως', 'Ενεργό', 'Σημειώσεις'],
     ...sortBy(db.all('member_degrees_offices'), 'member_id', 'id').map((o) => [o.id, o.member_id, o.record_type, o.degree, o.office, o.decree_id, o.decree_no, o.decree_year, o.valid_from, o.valid_to, o.is_current ? 'ΝΑΙ' : 'ΟΧΙ', o.notes])]);
   const d = new Date();
@@ -308,11 +407,13 @@ export async function importMembers(file, mode = 'merge') {
     items = sh.rows.slice(1).filter((r) => v(r, 'Επώνυμο') || v(r, 'Όνομα')).map((r) => ({ id: Number(v(r, 'ID')) || null, member: {
       surname: v(r, 'Επώνυμο'), first_name: v(r, 'Όνομα'), email: v(r, 'Κύριο Email'), other_emails: v(r, 'Άλλα Email'), mobile: v(r, 'Κύριο Κινητό'), other_mobiles: v(r, 'Άλλα Κινητά'), degree: v(r, 'Τεκτονικός Βαθμός'),
       active: yes(v(r, 'Ενεργός')), no_contact: yes(v(r, 'Απαγορεύεται Επικοινωνία')) ? 1 : 0, deregistered_note: v(r, 'Σημείωση Διαγραφής'), declared_lodge_count: v(r, 'Δηλωμένος Αρ. Στοών'), additional_lodges: v(r, 'Πρόσθετες Στοές'),
-      source_row: Number(v(r, 'Γραμμή Πηγής')) || null, registry_no: Number(v(r, 'Αρ. Μητρώου')) || null, surname_variants: v(r, 'Παραλλαγές Επωνύμου'), first_name_variants: v(r, 'Παραλλαγές Ονόματος'), lodges: [] } }));
+      source_row: Number(v(r, 'Γραμμή Πηγής')) || null, registry_no: Number(v(r, 'Αρ. Μητρώου')) || null, surname_variants: v(r, 'Παραλλαγές Επωνύμου'), first_name_variants: v(r, 'Παραλλαγές Ονόματος'),
+      ...Object.fromEntries(MEMBER_DATES.filter(([, l]) => h.includes(l)).map(([k, l]) => [k, isoOf(v(r, l))])), lodges: [] } }));
     const ls = sheets.find((s) => s.name === 'ΣΤΟΕΣ ΜΕΛΩΝ');
     if (ls) {
       const lh = ls.rows[0].map((x) => String(x).trim()), lv = (r, n) => String(r[lh.indexOf(n)] ?? '').trim(), byId = Object.fromEntries(items.filter((x) => x.id).map((x) => [x.id, x]));
-      for (const r of ls.rows.slice(1)) { const it = byId[Number(lv(r, 'ID Μέλους'))]; if (it) it.member.lodges.push({ seq: Number(lv(r, 'Α/Α Στοάς')) || 1, name: lv(r, 'Στοά'), number: lv(r, 'Αριθμός Στοάς'), status: lv(r, 'Κατάσταση') }); }
+      for (const r of ls.rows.slice(1)) { const it = byId[Number(lv(r, 'ID Μέλους'))]; if (it) it.member.lodges.push({ seq: Number(lv(r, 'Α/Α Στοάς')) || 1, name: lv(r, 'Στοά'), number: lv(r, 'Αριθμός Στοάς'), status: lv(r, 'Κατάσταση'), ...(lh.includes('Ιδιότητα') ? { capacity: lv(r, 'Ιδιότητα') } : {}), ...(lh.includes('Συνδρομή') ? { fee_rank: lv(r, 'Συνδρομή') } : {}),
+        ...Object.fromEntries(LODGE_DATES.filter(([, l]) => lh.includes(l)).map(([k, l]) => [k, lv(r, l)])) }); }
     }
   }
   return applyMemberItems(items, mode);
@@ -380,6 +481,7 @@ export function mergeMembers(tx, mainId, otherIds) {
     email: main.email || emails[0] || '', other_emails: emails.filter((e) => e.toLowerCase() !== String(main.email || emails[0] || '').toLowerCase()).join('; '),
     mobile: main.mobile || mobiles[0] || '', other_mobiles: mobiles.filter((m) => digits10(m) !== digits10(main.mobile || mobiles[0] || '')).join('; '),
     surname_variants: vars('surname', 'surname_variants'), first_name_variants: vars('first_name', 'first_name_variants'),
+    ...Object.fromEntries(MEMBER_DATES.map(([k]) => [k, main[k] || (all.find((m) => m[k]) || {})[k] || ''])),
     registry_no: main.registry_no ?? (regs.length ? Math.min(...regs) : null), degree: main.degree || (others.find((m) => m.degree) || {}).degree || '',
     no_contact: blocked ? 1 : 0, active: blocked ? 0 : all.some((m) => m.active !== 0) ? 1 : 0,
     merged_from: uniq([main.merged_from, ...others.map((m) => (m.registry_no != null ? `Αρ. Μητρώου ${m.registry_no}` : `#${m.id}`))]).join('; '),
