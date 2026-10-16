@@ -22,6 +22,9 @@ export const MONTHS_GEN = ['Ιανουαρίου', 'Φεβρουαρίου', 'Μ
 export const dayStr = (s) => { const d = parseIso(s); return d ? `${DAYS[d.getDay()]} ${fmtDate(s)}` : (s || ''); };
 export const longDate = (s) => { const d = parseIso(s); return d ? `${d.getDate()} ${MONTHS_GEN[d.getMonth()]} ${d.getFullYear()}` : (s || ''); };
 
+export const OUTGOING_PROTOCOL_URL = 'https://drive.google.com/drive/folders/1kKR7v86jjs5QJE9-K5uUebvS6nZd9J03?usp=sharing';
+export const outgoingProtocolBtn = () => `<a class="btn noprint" target="_blank" rel="noopener" href="${OUTGOING_PROTOCOL_URL}">ΠΡΩΤΟΚΟΛΛΟ ΕΞΕΡΧΟΜΕΝΩΝ</a>`;
+
 export const EMAIL_RE = /^[^@\s,;]+@[^@\s,;]+\.[^@\s,;]+$/;
 export const splitEmails = (s) => String(s || '').split(/[\s,;]+/).filter(Boolean);
 export const validEmails = (s) => splitEmails(s).filter((e) => EMAIL_RE.test(e));

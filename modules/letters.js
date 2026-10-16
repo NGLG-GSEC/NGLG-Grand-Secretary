@@ -3,7 +3,7 @@
 import { db } from '../core/store.js';
 import { module, onSubmit, go, flash, toast, bind, confirmDo, table, notice, actor, ACTORS } from '../core/app.js';
 import { crud } from '../core/crud.js';
-import { esc, today, fmtDate, matches, sortBy, safeFileName, latinFileName, EMAIL_RE, splitEmails, download } from '../core/util.js';
+import { esc, today, fmtDate, matches, sortBy, safeFileName, latinFileName, EMAIL_RE, splitEmails, download, outgoingProtocolBtn } from '../core/util.js';
 import { richPlain } from '../core/rich.js';
 import { letterPaper, printPaper, signerProfile, IMG, fitPaper } from '../core/paper.js';
 import { makeDocx, letterBlocks } from '../core/docx.js';
@@ -263,7 +263,7 @@ function archive({ query }) {
   const shown = xs.slice(0, 500);
   return {
     title: 'Αρχείο Επιστολών',
-    html: `<div class="hero"><h1>Αρχείο Επιστολών</h1><a class="btn primary" href="#/letters/new">+ Νέα Επιστολή</a></div>${notice(query.msg)}
+    html: `<div class="hero"><h1>Αρχείο Επιστολών</h1><div class="toolbar"><a class="btn primary" href="#/letters/new">+ Νέα Επιστολή</a>${outgoingProtocolBtn()}</div></div>${notice(query.msg)}
 <form class="filters" id="flt"><input name="q" value="${esc(query.q || '')}" placeholder="Αρ. πρωτ., θέμα, παραλήπτης" autofocus><input type="date" name="from" value="${esc(query.from || '')}"><input type="date" name="to" value="${esc(query.to || '')}"><button>Αναζήτηση</button></form>
 <p class="muted">${xs.length} επιστολές${xs.length > 500 ? ' (εμφανίζονται οι 500 πιο πρόσφατες)' : ''}</p>
 ${table(['Αρ. Πρωτ.', 'Ημερομηνία', 'Θέμα', 'Παραλήπτης', 'Κατάσταση', 'Ενέργειες'], shown.map((x) => [`<span class="official-number">${esc(x.protocol_no)}</span>`, esc(fmtDate(x.letter_date)), esc(x.subject), esc(x.recipient_name), statusPill(x.status),
