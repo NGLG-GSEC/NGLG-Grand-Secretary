@@ -380,3 +380,7 @@ input[type=file]{max-width:100%;min-width:0}
 .ml-help{margin-top:6px}.ml-help ul{margin:6px 0 0;padding-left:20px;font-size:.92em}.ml-help li{margin:3px 0}
 .ml-grid .ml-lodge{border-bottom:2px solid #dde3ee}.ml-grid tr.ml-dates td{background:#fafbfd;border-bottom:0}
 .ml-dgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:4px 10px}.ml-dgrid label{font-size:.85em;font-weight:500;margin:0;display:flex;flex-direction:column;gap:2px}
+.sl-grid tr.sl-row{cursor:pointer}.sl-grid tr.sl-row:hover td{background:#f5f7fb}.sl-grid tr.sl-row.sel td{background:#fff4dc;box-shadow:inset 0 -1px #b18a43}
+.sl-mem{margin-top:14px}.sl-mhead{display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between;align-items:center}
+.sl-chips{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}.chip-btn{border:1px solid #c9d2e3;background:#fff;border-radius:999px;padding:4px 10px;cursor:pointer;font:inherit;font-size:.9em}
+.chip-btn.on{background:#1d2f5e;color:#fff;border-color:#1d2f5e}.sl-mgrid tr.muted td{color:#888}
