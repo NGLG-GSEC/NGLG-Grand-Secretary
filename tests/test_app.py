@@ -1761,6 +1761,18 @@ def test_member_title_from_epeteirida_in_registry(app):
     assert 'Λίαν Σεβ. Αδ.' in app.text('.memtable')
 
 
+def test_title_from_unlinked_epeteirida_row_and_abbreviated_honorific(app):
+    # γραμμή της Επετηρίδας χωρίς σύνδεση με το Μητρώο (member_id) και προσφώνηση γραμμένη «Πσεβ.»
+    app.connect_local()
+    add_member(app, surname='ΔΟΜΕΣΤΙΧΟΣ', first='ΛΟΥΚΑΣ', email='dl@example.com')
+    app.page.evaluate("async () => { const {db} = await import('./core/store.js');"
+                      " await db.save('x', (tx) => tx.insert('epeteirida', { member_id: null, honorific: 'Πσεβ.', full_name: 'Δομεστίχος Λουκάς' })); }")
+    t = app.page.evaluate("""async () => { const {db} = await import('./core/store.js'); const n = await import('./modules/namedays.js');
+      const m = db.all('member_registry').find((x) => x.email === 'dl@example.com'); return n.titleOf(m); }""")
+    assert t == 'Πσεβ. Αδ.', t
+    lv = app.page.evaluate("async () => { const e = await import('./modules/epeteirida-table.js'); return ['Πανσεβάσμιος', 'Πσεβ. Αδ.', 'ΛΣεβ.', 'Σεβτ.', 'Σεβ.', 'Πανσεβάσμιος Αδελφός', 'κάτι'].map(e.honorificLevel); }")
+    assert lv == [2, 2, 1, 3, 0, 2, None], lv
+
 def test_contacts_linked_to_registry(app, tmp_path):
     app.connect_local()
     app.page.evaluate("""async () => { const {db} = await import('./core/store.js'); await db.save('x', (tx) => {

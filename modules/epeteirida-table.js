@@ -29,7 +29,12 @@ const COL = Object.fromEntries(EP_COLS.map((c) => [c[0], c]));
 // Ελληνικά χωρίς τόνους, πεζά (για επικεφαλίδες και προσφωνήσεις)
 const nrm = (v) => String(v ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/ς/g, 'σ').replace(/\s+/g, ' ').trim();
 const HON = { σεβασμιωτατοσ: 3, πανσεβασμιοσ: 2, 'λιαν σεβασμιοσ': 1, σεβασμιοσ: 0 };
-export const honorificLevel = (h) => HON[nrm(h)] ?? null;
+// Δέχεται και συντομογραφίες/παραλλαγές: «Πσεβ.», «Πσεβ. Αδ.», «Λίαν Σεβ.», «ΛΣεβ.», «Σεβτ.», «Πανσεβάσμιος Αδελφός»
+const HON_ABBR = { σεβτ: 3, πσεβ: 2, πανσεβ: 2, λσεβ: 1, 'λιαν σεβ': 1, σεβ: 0 };
+export const honorificLevel = (h) => {
+  const v = nrm(h).replace(/\s+(αδ|αδελφοσ|αδελφε)\.?$/, '').replace(/\.$/, '').trim();
+  return HON[v] ?? HON_ABBR[v] ?? null;
+};
 const yn = (v) => (/^(ναι|ν|1|yes|τμδ|x|✓)$/i.test(String(v || '').trim()) ? 1 : 0);
 const clean = (v) => String(v ?? '').replace(/\s+/g, ' ').trim();
 const num = (v) => { const s = clean(v); return /^\d+$/.test(s) ? Number(s) : s || null; };
@@ -40,7 +45,11 @@ let memo = { head: undefined, map: null };
 function byPerson() {
   if (memo.map && memo.head === db.head) return memo.map;
   const m = new Map();
-  for (const r of epeteiridaAll()) if (r.member_id) { const k = canonicalId(r.member_id); (m.get(k) || m.set(k, []).get(k)).push(r); }
+  // και οι μη συνδεδεμένες γραμμές, όταν το ονοματεπώνυμο δείχνει με βεβαιότητα ένα μέλος του Μητρώου
+  for (const r of epeteiridaAll()) {
+    const id = r.member_id || (r.full_name ? matchName(r.full_name) : null);
+    if (id) { const k = canonicalId(id); (m.get(k) || m.set(k, []).get(k)).push(r); }
+  }
   memo = { head: db.head, map: m };
   return m;
 }
