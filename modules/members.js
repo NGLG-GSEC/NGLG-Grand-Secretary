@@ -440,6 +440,16 @@ ${doubt.length ? `<h2>Ίδιο όνομα, διαφορετικό κινητό �
   };
 }
 
+// Εφάπαξ: διαγραφή των σίγουρων διπλοεγγραφών (ίδιο ονοματεπώνυμο, χωρίς αντιφατικό κινητό) με συγχώνευση στην κύρια εγγραφή·
+// πριν, αντίγραφο ασφαλείας του Μητρώου στα δεδομένα (files/backups/). Οι αμφίβολες (διαφορετικό κινητό) μένουν για έλεγχο.
+db.migrate('merge-sure-duplicates-2026-10', (tx) => {
+  const groups = sameNameGroups(tx).filter((g) => g.sure);
+  if (!groups.length) return;
+  const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+  tx.putFile(`backups/member_registry-before-merge-${stamp}.json`, new TextEncoder().encode(JSON.stringify({ member_registry: tx.all('member_registry'), member_lodges: tx.all('member_lodges') }, null, 1)));
+  for (const g of groups) mergeMembers(tx, g.main, g.members.map((m) => m.id));
+});
+
 // Εφάπαξ: μία δεξαμενή — κάθε λίστα δείχνει στο μέλος (κύρια εγγραφή του προσώπου) και δεν κρατά αντίγραφα email/κινητών.
 export function relinkToPool(tx) {
   const n = { linked: 0, copies: 0 };

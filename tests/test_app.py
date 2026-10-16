@@ -1789,3 +1789,29 @@ def test_registry_names_accented_from_official_calendar(app):
             break
         app.page.wait_for_timeout(250)
     assert ['Λουκάς', 'ΔΟΜΕΣΤΙΧΟΣ'] in names and ['Γεώργιος', 'Παπάς'] in names, names
+
+
+def test_sure_duplicates_merged_once_with_backup(app):
+    gh = MockGitHub()
+    connect_github(app, gh)
+    app.page.wait_for_selector('.dash')
+    rows = [{'id': 1, 'registry_no': 1200, 'surname': 'Διπλός', 'first_name': 'Αναστάσιος', 'email': 'a@example.com', 'mobile': '', 'active': 1},
+            {'id': 2, 'registry_no': 1201, 'surname': 'ΔΙΠΛΟΣ', 'first_name': 'ΑΝΑΣΤΑΣΙΟΣ', 'email': '', 'mobile': '6900000001', 'active': 1},
+            {'id': 3, 'registry_no': 1202, 'surname': 'Συνώνυμος', 'first_name': 'Γεώργιος', 'email': '', 'mobile': '6911111111', 'active': 1},
+            {'id': 4, 'registry_no': 1203, 'surname': 'Συνώνυμος', 'first_name': 'Γεώργιος', 'email': '', 'mobile': '6922222222', 'active': 1}]
+    gh.external_commit('data/member_registry.json', json.dumps(rows, ensure_ascii=False))
+    st = gh.read_json('data/settings.json')
+    st['_migrations'] = ','.join(x for x in str(st.get('_migrations', '')).split(',') if x not in ('merge-sure-duplicates-2026-10', 'registry-renumber-1200-2026-10'))
+    gh.external_commit('data/settings.json', json.dumps(st, ensure_ascii=False))
+    app.page.reload()
+    app.page.wait_for_selector('.dash')
+    ms = []
+    for _ in range(40):
+        ms = app.page.evaluate("async () => (await import('./core/store.js')).db.all('member_registry')")
+        if len(ms) == 3:
+            break
+        app.page.wait_for_timeout(250)
+    dipl = [m for m in ms if m['surname'].lower().startswith('διπλ')]
+    assert len(dipl) == 1 and 'a@example.com' in (dipl[0]['email'] + (dipl[0].get('other_emails') or '')) and '6900000001' in (dipl[0]['mobile'] + (dipl[0].get('other_mobiles') or ''))
+    assert len([m for m in ms if m['surname'] == 'Συνώνυμος']) == 2  # διαφορετικό κινητό: μένουν για έλεγχο
+    assert any(p.startswith('files/backups/member_registry-before-merge-') for p in gh.files())
