@@ -94,7 +94,8 @@ def test_decree_epeteirida_and_members(app):
     t = app.text()
     assert 'υπ’ αριθμ. 513/' in t and 'Αρ. Πρωτ.: 20546' in t  # ενιαίο πρωτόκολλο με τις Επιστολές
     body = app.text('.decbody')
-    for s in ['ΔΙΟΡΙΖΟΜΕΝ', 'ΜΕΓΑΝ ΓΡΑΜΜΑΤΕΑ', 'τον Λίαν Σεβάσμιον Αδελφόν', 'Γεώργιον Παπαδόπουλον', 'λαβόντες υπ’ όψιν τον Κανόνα 22']:
+    assert app.page.locator('.decbody [aria-label="ΔΙΟΡΙΖΟΜΕΝ"]').count() >= 1  # «ΔΙΟΡΙΖΟΜΕΝ» ως καλλιγραφική εικόνα
+    for s in ['ΜΕΓΑΝ ΓΡΑΜΜΑΤΕΑ', 'τον Λίαν Σεβάσμιον Αδελφόν', 'Γεώργιον Παπαδόπουλον', 'λαβόντες υπ’ όψιν τον Κανόνα 22']:
         assert s in body, s
     app.go('/epeteirida')
     assert 'Μέγας Γραμματεύς' in app.text() and '513/' in app.text()
@@ -1571,7 +1572,7 @@ def test_decree_templates_general_decree_and_page_design(app):
     assert doc.count('<wp:anchor ') == 2 and 'behindDoc="1"' in doc and '<a:alphaModFix amt="25000"/>' in doc
     assert '<wp:positionV relativeFrom="page"><wp:posOffset>432000</wp:posOffset>' in doc  # κεφαλίδα στα 12 mm
     assert 'Εθνική Μεγάλη Στοά της Ελλάδος</w:t>' not in doc.split('ΔΙΑΤΑΓΜΑ υπ')[0]  # χωρίς την κανονική κεφαλίδα
-    assert len([n for n in z.namelist() if n.startswith('word/media/')]) == 3  # 2 εικόνες σχεδίασης + υπογραφή
+    assert len([n for n in z.namelist() if n.startswith('word/media/')]) == 4  # 2 εικόνες σχεδίασης + «ΗΜΕΙΣ» + υπογραφή (Γενικό Διάταγμα: χωρίς «ΔΙΟΡΙΖΟΜΕΝ»)
     # Διάταγμα Διορισμού: χωρίς σχεδίαση → κανονική κεφαλίδα
     app.go('/decrees/new')
     assert app.page.locator('#appointPart').is_visible() and app.page.locator('#dprev .paper .head').count() == 1
@@ -2018,4 +2019,32 @@ def test_letters_archive_delete(app):
     app.page.wait_for_selector('text=Η επιστολή διαγράφηκε')
     assert subjects() == ['Να μείνει'] and 'Να διαγραφεί' in app.page.evaluate("sessionStorage.getItem('q')")
     assert 'Να διαγραφεί' not in app.text()
+    assert not app.errors, app.errors
+
+
+def test_decree_hmeis_artwork(app, tmp_path):
+    # «ΗΜΕΙΣ» στα Διατάγματα: καλλιγραφική εικόνα, μεγάλη, πίσω από το κείμενο, με μικρό ύψος γραμμής· και στο Word
+    import zipfile
+    app.connect_local()
+    add_member(app)
+    app.go('/decrees/new')
+    app.fill(matter='διορισμού Μεγάλων Αξιωματικών')
+    app.page.select_option('#dOffice', 'Μέγας Γραμματεύς')
+    app.pick('.registry-search', 'Παπαδ')
+    app.click('Έκδοση Διατάγματος')
+    app.page.wait_for_url('**/#/decrees/1')
+    app.page.wait_for_function("() => { const i = document.querySelector('.decbody .hmeis img'); return i && i.complete && i.naturalWidth > 0; }")
+    box = app.page.evaluate("""() => { const s = document.querySelector('.decbody .hmeis'), i = s.querySelector('img');
+      return { span: s.getBoundingClientRect().height, img: i.getBoundingClientRect().height, z: getComputedStyle(i).zIndex }; }""")
+    assert box['img'] > box['span'] * 1.5 and box['z'] == '-1', box  # η εικόνα είναι μεγαλύτερη από τον χώρο που πιάνει (πίσω από το κείμενο)
+    assert not app.text('.decbody').startswith('ΗΜΕΙΣ') and 'ΔΙΟΡΙΖΟΜΕΝ' not in app.text('.decbody')
+    assert app.page.locator('.decbody .diorizomen img[src$="img/diorizomen.png"]').count() >= 1
+    with app.page.expect_download() as dl:
+        app.click('⬇ Word')
+    f = tmp_path / 'd.docx'
+    dl.value.save_as(f)
+    with zipfile.ZipFile(f) as z:
+        sizes = [z.getinfo(n).file_size for n in z.namelist() if n.startswith('word/media/')]
+        doc = z.read('word/document.xml').decode()
+    assert all(Path(f'img/{n}.png').stat().st_size in sizes for n in ['hmeis', 'diorizomen']) and '>ΗΜΕΙΣ<' not in doc and '>ΔΙΟΡΙΖΟΜΕΝ<' not in doc, sizes
     assert not app.errors, app.errors
