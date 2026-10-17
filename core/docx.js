@@ -116,8 +116,8 @@ export function letterBlocks({ base = '', org, founded, gmTitle, gmName, number,
   if (subject) B.push({ text: `Θέμα: ${subject}`, bold: true, after: 12 });
   for (const p of paragraphs) if (String(p.text || '').trim()) for (const t of String(p.text).split(/\n\s*\n/)) {
     // λέξη στην αρχή της παραγράφου που γράφεται ως καλλιγραφική εικόνα (π.χ. «ΗΜΕΙΣ», «ΔΙΟΡΙΖΟΜΕΝ» στα Διατάγματα)
-    const w = Object.keys(artwork).find((k) => new RegExp(`^${k}(\\n|$)`).test(t.trim()));
-    if (w) { B.push({ img: artwork[w].img, width: artwork[w].width, align: 'center', after: 0 }); const rest = t.trim().slice(w.length).trim(); if (rest) B.push({ align: 'both', after: 8, ...p, bold: false, text: rest }); continue; }
+    const [first, ...more] = t.trim().split('\n'), w = Object.keys(artwork).find((k) => first.replace(/\[\/?[a-z]+(=\d+)?\]/g, '').trim() === k);
+    if (w) { B.push({ img: artwork[w].img, width: artwork[w].width, align: 'center', after: 0 }); const rest = more.join('\n').trim(); if (rest) B.push({ align: 'both', after: 8, ...p, bold: false, text: rest }); continue; }
     B.push({ align: 'both', after: 8, ...p, text: t.trim() });
   }
   if (closing) B.push({ text: closing, before: 14, after: 6 });
