@@ -101,7 +101,7 @@ export async function makeDocx(blocks, { title = '', author = '', anchors = [] }
 
 // Επιστολόχαρτο ΕΜΣτΕ: κεφαλίδα + στοιχεία + κείμενο + κλείσιμο/υπογραφή
 // noHead: χωρίς την κανονική κεφαλίδα (τη θέση της παίρνει εικόνα της Σχεδίασης σελίδας)· topSpace: κενό (pt) πάνω από το κείμενο
-export function letterBlocks({ base = '', org, founded, gmTitle, gmName, number, date, place, title, to, cc, subject, paragraphs = [], closing, signature, signer, signerTitle, noHead = false, topSpace = 0, hmeis = '' }) {
+export function letterBlocks({ base = '', org, founded, gmTitle, gmName, number, date, place, title, to, cc, subject, paragraphs = [], closing, signature, signer, signerTitle, noHead = false, topSpace = 0, artwork = {} }) {
   const B = [];
   if (!noHead) {
     B.push({ img: base + 'img/header_emblem.png', width: 3.2 }, { text: org, align: 'center', bold: true, size: 15, color: '1D2F5E', after: 0 });
@@ -115,9 +115,9 @@ export function letterBlocks({ base = '', org, founded, gmTitle, gmName, number,
   if (cc) B.push({ text: `Κοιν.: ${cc}`, bold: true, after: 6 });
   if (subject) B.push({ text: `Θέμα: ${subject}`, bold: true, after: 12 });
   for (const p of paragraphs) if (String(p.text || '').trim()) for (const t of String(p.text).split(/\n\s*\n/)) {
-    // «ΗΜΕΙΣ» στην αρχή του Διατάγματος: η καλλιγραφική εικόνα αντί για τη λέξη
-    const m = hmeis && /^ΗΜΕΙΣ(\n|$)/.exec(t.trim());
-    if (m) { B.push({ img: hmeis, width: 3.3, align: 'center', after: 0 }); const rest = t.trim().slice(m[0].length); if (rest) B.push({ align: 'both', after: 8, ...p, bold: false, text: rest }); continue; }
+    // λέξη στην αρχή της παραγράφου που γράφεται ως καλλιγραφική εικόνα (π.χ. «ΗΜΕΙΣ», «ΔΙΟΡΙΖΟΜΕΝ» στα Διατάγματα)
+    const w = Object.keys(artwork).find((k) => new RegExp(`^${k}(\\n|$)`).test(t.trim()));
+    if (w) { B.push({ img: artwork[w].img, width: artwork[w].width, align: 'center', after: 0 }); const rest = t.trim().slice(w.length).trim(); if (rest) B.push({ align: 'both', after: 8, ...p, bold: false, text: rest }); continue; }
     B.push({ align: 'both', after: 8, ...p, text: t.trim() });
   }
   if (closing) B.push({ text: closing, before: 14, after: 6 });

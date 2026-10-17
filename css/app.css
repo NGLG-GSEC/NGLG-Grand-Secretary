@@ -388,3 +388,5 @@ input[type=file]{max-width:100%;min-width:0}
 .decbody{position:relative;z-index:0}
 .decbody .hmeis{display:inline-block;position:relative;width:39mm;height:8.25mm;vertical-align:bottom}
 .decbody .hmeis img{position:absolute;left:-11mm;bottom:0;width:39mm;height:auto;z-index:-1;pointer-events:none}
+.decbody .diorizomen{display:inline-block;position:relative;width:28mm;height:6.5mm;vertical-align:bottom}
+.decbody .diorizomen img{position:absolute;left:0;bottom:0;width:28mm;height:auto;z-index:-1;pointer-events:none}
