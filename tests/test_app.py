@@ -2053,3 +2053,11 @@ def test_decree_hmeis_artwork(app, tmp_path):
     app.go('/decrees/1')
     assert app.page.locator('.decbody .aponemei img[src$="img/aponemei.png"]').count() >= 1 and 'ΑΠΟΝΕΜΕΙ' not in app.text('.decbody')
     assert not app.errors, app.errors
+
+
+def test_visits_link_to_declarations(app):
+    # Επισκέψεις Στοών: κουμπί «🗳 Δηλώσεις διάθεσης» προς την αναφορά δηλώσεων των Μ. Αξιωματικών
+    app.connect_local()
+    app.go('/visits')
+    b = app.page.locator('main a.btn', has_text='Δηλώσεις διάθεσης')
+    assert b.count() == 1 and b.get_attribute('href') == '#/declarations'
