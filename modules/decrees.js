@@ -81,7 +81,8 @@ async function layerPng(path) {
 }
 // Word του Διατάγματος (με επιστολόχαρτο ή με τη Σχεδίαση σελίδας του προτύπου), για λήψη και Drive
 // Λέξεις του Διατάγματος που γράφονται ως καλλιγραφική εικόνα (cls: θέση/μέγεθος στο css, word: πλάτος στο Word σε cm)
-const DECREE_ARTWORK = { ΗΜΕΙΣ: { img: IMG.hmeis, cls: 'hmeis', word: 3.3 }, ΔΙΟΡΙΖΟΜΕΝ: { img: IMG.diorizomen, cls: 'diorizomen', word: 2.6 } };
+const DECREE_ARTWORK = { ΗΜΕΙΣ: { img: IMG.hmeis, cls: 'hmeis', word: 3.3 }, ΔΙΟΡΙΖΟΜΕΝ: { img: IMG.diorizomen, cls: 'diorizomen', word: 2.6 },
+  ΑΠΟΝΕΜΕΙ: { img: IMG.aponemei, cls: 'aponemei', word: 3.1 } };
 async function decreeDocxBlob(d) {
   const S = (k) => db.setting(k) || '', L = layoutOf(decreeTemplate(decreeKey(d))), top = layoutTop(L);
   const anchors = [];
