@@ -390,3 +390,6 @@ input[type=file]{max-width:100%;min-width:0}
 .decbody .hmeis img{position:absolute;left:-11mm;bottom:0;width:39mm;height:auto;z-index:-1;pointer-events:none}
 .decbody .diorizomen{display:inline-block;position:relative;width:28mm;height:6.5mm;vertical-align:bottom}
 .decbody .diorizomen img{position:absolute;left:0;bottom:0;width:28mm;height:auto;z-index:-1;pointer-events:none}
+/* «ΑΠΟΝΕΜΕΙ»: τα γράμματα στη γραμμή, τα στολίδια πάνω/κάτω πίσω από το κείμενο */
+.decbody .aponemei{display:inline-block;position:relative;width:37mm;height:6mm;vertical-align:bottom}
+.decbody .aponemei img{position:absolute;left:0;bottom:-1.27mm;width:37mm;height:auto;z-index:-1;pointer-events:none}

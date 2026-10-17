@@ -10,7 +10,7 @@ db.defaultSettings({
   grand_secretary_title: 'Μέγας Γραμματέας', closing: 'Με αδελφικούς χαιρετισμούς,',
 });
 
-export const IMG = { emblem: 'img/header_emblem.png', seal: 'img/seal.png', signature: 'img/signature.png', nikolaos: 'img/signature_nikolaos.png', grandMaster: 'img/signature_grand_master.png', hmeis: 'img/hmeis.png', diorizomen: 'img/diorizomen.png' };
+export const IMG = { emblem: 'img/header_emblem.png', seal: 'img/seal.png', signature: 'img/signature.png', nikolaos: 'img/signature_nikolaos.png', grandMaster: 'img/signature_grand_master.png', hmeis: 'img/hmeis.png', diorizomen: 'img/diorizomen.png', aponemei: 'img/aponemei.png' };
 
 export function signerProfile(key) {
   if (key === 'nikolaos') return { key, name: 'Λίαν Σεβάσμιος Αδ. Νικόλαος Χατζηδημητρίου', title: 'Αν. Μέγας Γραμματέας', img: IMG.nikolaos };

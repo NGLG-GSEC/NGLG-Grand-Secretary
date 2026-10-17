@@ -2047,4 +2047,9 @@ def test_decree_hmeis_artwork(app, tmp_path):
         sizes = [z.getinfo(n).file_size for n in z.namelist() if n.startswith('word/media/')]
         doc = z.read('word/document.xml').decode()
     assert all(Path(f'img/{n}.png').stat().st_size in sizes for n in ['hmeis', 'diorizomen']) and '>ΗΜΕΙΣ<' not in doc and '>ΔΙΟΡΙΖΟΜΕΝ<' not in doc, sizes
+    # Διάταγμα απονομής: «ΑΠΟΝΕΜΕΙ» ως καλλιγραφική εικόνα
+    app.page.evaluate("""async () => { const {db} = await import('./core/store.js'); const d = db.all('decree_documents')[0];
+      await db.save('t', (tx) => tx.update('decree_documents', d.id, { body: d.body.replace('ΔΙΟΡΙΖΟΜΕΝ', 'ΑΠΟΝΕΜΕΙ') })); }""")
+    app.go('/decrees/1')
+    assert app.page.locator('.decbody .aponemei img[src$="img/aponemei.png"]').count() >= 1 and 'ΑΠΟΝΕΜΕΙ' not in app.text('.decbody')
     assert not app.errors, app.errors
