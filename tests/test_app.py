@@ -1998,3 +1998,24 @@ def test_letters_archive_protocol_actions_and_next_number(app):
     app.go('/letters')
     assert '30002' in app.text('#protonext')
     assert not app.errors, app.errors
+
+
+def test_letters_archive_delete(app):
+    # Αρχείο Επιστολών: «🗑 Διαγραφή» στις Ενέργειες, με ερώτηση επιβεβαίωσης
+    app.connect_local()
+    for subj in ['Να μείνει', 'Να διαγραφεί']:
+        app.go('/letters/new').fill(subject=subj, body='x').click('💾 Αποθήκευση')
+        app.page.wait_for_selector('text=Επεξεργασία')
+    subjects = lambda: sorted(app.page.evaluate("async () => (await import('./core/store.js')).db.all('letters').map((l) => l.subject)"))
+    app.go('/letters')
+    row = app.page.locator('tr', has_text='Να διαγραφεί')
+    app.page.evaluate("window.confirm = () => false")
+    row.locator('[data-act=dellet]').click()
+    app.page.wait_for_timeout(300)
+    assert subjects() == ['Να διαγραφεί', 'Να μείνει']
+    app.page.evaluate("window.confirm = (m) => { sessionStorage.setItem('q', m); return true; }")
+    row.locator('[data-act=dellet]').click()
+    app.page.wait_for_selector('text=Η επιστολή διαγράφηκε')
+    assert subjects() == ['Να μείνει'] and 'Να διαγραφεί' in app.page.evaluate("sessionStorage.getItem('q')")
+    assert 'Να διαγραφεί' not in app.text()
+    assert not app.errors, app.errors

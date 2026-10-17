@@ -43,6 +43,12 @@ async function changeLetterProtocol(x, back, query) {
   await db.save(`Επιστολή ${x.subject}: αρ. πρωτοκόλλου ${n}`, (tx) => { claimProtocol(tx, n); tx.update('letters', x.id, { protocol_seq: n, protocol_no: String(n) }); });
   flash(`Ο αριθμός πρωτοκόλλου άλλαξε σε ${n}.`); go(back, query);
 }
+async function deleteLetter(x, back, query) {
+  const what = [x.protocol_no && `αρ. πρωτ. ${x.protocol_no}`, x.subject && `«${x.subject}»`].filter(Boolean).join(' ');
+  if (!confirmDo(`Οριστική διαγραφή της επιστολής${what ? ' ' + what : ''}; Η ενέργεια δεν αναιρείται (μένει μόνο στο ιστορικό του GitHub).`)) return;
+  await db.save(`Διαγραφή επιστολής ${x.protocol_no || x.subject || x.id}`, (tx) => { tx.remove('letters', x.id); for (const l of tx.all('letters')) if (l.source_letter_id === x.id) tx.update('letters', l.id, { source_letter_id: null }); });
+  flash('Η επιστολή διαγράφηκε.'); go(back, query);
+}
 function assignProtocol(tx, id, manual = 0) {
   const r = tx.get('letters', id);
   if (!r || r.protocol_seq) return r;
@@ -263,11 +269,7 @@ ${x.protocol_seq ? '<button class="btn" data-act="protocol">✏ Αλλαγή α�
         form: () => openInDigitalForm(x),
         ready: () => readyLetter(x, `/letters/${x.id}`),
         protocol: () => changeLetterProtocol(x, `/letters/${x.id}`),
-        async del() {
-          if (!confirmDo('Οριστική διαγραφή της επιστολής; Η ενέργεια δεν αναιρείται (μένει μόνο στο ιστορικό του GitHub).')) return;
-          await db.save(`Διαγραφή επιστολής ${x.protocol_no}`, (tx) => { tx.remove('letters', x.id); for (const l of tx.all('letters')) if (l.source_letter_id === x.id) tx.update('letters', l.id, { source_letter_id: null }); });
-          flash('Η επιστολή διαγράφηκε.'); go('/letters');
-        },
+        del: () => deleteLetter(x, '/letters'),
       });
     },
   };
@@ -287,13 +289,14 @@ function archive({ query }) {
 <form class="filters" id="flt"><input name="q" value="${esc(query.q || '')}" placeholder="Αρ. πρωτ., θέμα, παραλήπτης" autofocus><input type="date" name="from" value="${esc(query.from || '')}"><input type="date" name="to" value="${esc(query.to || '')}"><button>Αναζήτηση</button></form>
 <p class="muted">${xs.length} επιστολές${xs.length > 500 ? ' (εμφανίζονται οι 500 πιο πρόσφατες)' : ''}</p>
 ${table(['Αρ. Πρωτ.', 'Ημερομηνία', 'Θέμα', 'Παραλήπτης', 'Κατάσταση', 'Ενέργειες'], shown.map((x) => [`<span class="official-number">${esc(x.protocol_no)}</span>`, esc(fmtDate(x.letter_date)), esc(x.subject), esc(x.recipient_name), statusPill(x.status),
-  `<a href="#/letters/${x.id}">Άνοιγμα</a> · <a href="#/letters/${x.id}/edit">Επεξεργασία</a> · <a href="#/letters/new?copy_from=${x.id}">Νέα πάνω σε αυτή</a> · ${x.protocol_seq ? `<button type="button" class="btn small" data-act="proto" data-id="${x.id}">✏ Αλλαγή αρ. πρωτ.</button>` : `<button type="button" class="btn small" data-act="addproto" data-id="${x.id}">➕ Αρ. πρωτοκόλλου</button>`} · <button type="button" class="btn wa-btn" data-act="wapdf" data-id="${x.id}">🟢 WhatsApp / Business PDF</button>`]), 'Δεν βρέθηκαν επιστολές.')}`,
+  `<a href="#/letters/${x.id}">Άνοιγμα</a> · <a href="#/letters/${x.id}/edit">Επεξεργασία</a> · <a href="#/letters/new?copy_from=${x.id}">Νέα πάνω σε αυτή</a> · ${x.protocol_seq ? `<button type="button" class="btn small" data-act="proto" data-id="${x.id}">✏ Αλλαγή αρ. πρωτ.</button>` : `<button type="button" class="btn small" data-act="addproto" data-id="${x.id}">➕ Αρ. πρωτοκόλλου</button>`} · <button type="button" class="btn wa-btn" data-act="wapdf" data-id="${x.id}">🟢 WhatsApp / Business PDF</button> · <button type="button" class="btn small danger" data-act="dellet" data-id="${x.id}">🗑 Διαγραφή</button>`]), 'Δεν βρέθηκαν επιστολές.')}`,
     mount(el) {
       onSubmit(el.querySelector('#flt'), (d) => go('/letters', d));
       const back = () => ['/letters', query];
       bind(el, {
         wapdf: (d, b) => waSendPdf(db.get('letters', d.id), b),
         proto: (d) => changeLetterProtocol(db.get('letters', d.id), ...back()),
+        dellet: (d) => deleteLetter(db.get('letters', d.id), ...back()),
         addproto(d) {
           if (!confirmDo('Η επιστολή θα οριστεί «Έτοιμη» και θα πάρει αριθμό πρωτοκόλλου. Συνέχεια;')) return;
           return readyLetter(db.get('letters', d.id), ...back());
