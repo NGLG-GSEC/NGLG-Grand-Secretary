@@ -5,6 +5,7 @@ import { boot } from './core/connect.js';
 import './modules/home.js';
 import './modules/letters.js';
 import './modules/decrees.js';
+import './modules/book.js';
 import './modules/members.js';
 import './modules/epeteirida.js';
 import './modules/provinces.js';
