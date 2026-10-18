@@ -17,6 +17,7 @@ The way in to the work of the Secretariat. Everything opens at one address: the 
 [Νέα Επιστολή](https://nglg-gsec.github.io/NGLG-Grand-Secretary/#/letters/new) · [Νέο Διάταγμα](https://nglg-gsec.github.io/NGLG-Grand-Secretary/#/decrees/new) · [Επισκέψεις Στοών](https://nglg-gsec.github.io/NGLG-Grand-Secretary/#/visits) ·
 [Εορτολόγιο](https://nglg-gsec.github.io/NGLG-Grand-Secretary/#/namedays) · [Πρότζεκτ ΜΔ](https://nglg-gsec.github.io/NGLG-Grand-Secretary/#/projects) · [Κατάλογος](https://nglg-gsec.github.io/NGLG-Grand-Secretary/#/directory) · [Μητρώο Μελών](https://nglg-gsec.github.io/NGLG-Grand-Secretary/#/members) ·
 [Βάση Δεδομένων](https://nglg-gsec.github.io/NGLG-Grand-Secretary/#/database) ·
+[Βιβλίο Εξερχομένων (PDF)](https://nglg-gsec.github.io/NGLG-Grand-Secretary/#/book) ·
 [Δηλώσεις Διάθεσης Μ. Αξιωματικών](https://nglg-gsec.github.io/NGLG-Grand-Secretary/#/declarations)
 
 ### Δηλώσεις Διάθεσης Μεγάλων Αξιωματικών
