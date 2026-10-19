@@ -6,7 +6,7 @@ import { esc, today, fmtDate, matches, sortBy, safeFileName, parseIso, MONTHS_GE
 import { makeDocx, letterBlocks } from '../core/docx.js';
 import { richHtml } from '../core/rich.js';
 import { docTitle, driveBox, saveDocToDrive } from '../core/drive.js';
-import { letterhead, IMG, printPaper, pageLayers, layoutTop, GS_NAME } from '../core/paper.js';
+import { letterhead, IMG, printPaper, pageLayers, layoutTop } from '../core/paper.js';
 import { mailButtons, senderBanner } from '../core/mail.js';
 import { attachPicker, memberItems, contactItems } from '../core/pickers.js';
 import { DECREE_KINDS, DECREE_PLACEHOLDERS, GENERAL_BODY, decreeKey, decreeTemplate, layoutOf } from './decree-templates.js';
@@ -97,7 +97,7 @@ async function decreeDocxBlob(d) {
     number: d.protocol_seq ? String(d.protocol_seq) : (d.protocol_no || ''), date: fmtDate(d.decree_date), place: 'Εν Αθήναις', title: `ΔΙΑΤΑΓΜΑ υπ’ αριθμ. ${decreeNo(d)}`,
     paragraphs: String(d.body || '').split(/\n\s*\n/).map((t) => ({ text: t.trim(), align: 'center', bold: /^(ΗΜΕΙΣ|ΔΙΟΡΙΖΟΜΕΝ|ΑΠΟΝΕΜΕΙ|ΕΥΑΡΕΣΤΟΥΜΕΘΑ)/.test(t.trim()) })),
     artwork: Object.fromEntries(Object.entries(DECREE_ARTWORK).map(([w, a]) => [w, { img: a.img, width: a.word }])),
-    signature: IMG.signature, signer: db.setting('grand_secretary_name') || GS_NAME, signerTitle: 'Ο ΜΕΓΑΣ ΓΡΑΜΜΑΤΕΥΣ' });
+    signature: IMG.signature, signer: 'Δημήτριος Σκιαδόπουλος', signerTitle: 'Ο ΜΕΓΑΣ ΓΡΑΜΜΑΤΕΑΣ' });
   return makeDocx(blocks, { title: d.subject, author: 'Μεγάλη Γραμματεία', anchors });
 }
 const nextDecreeNo = (tx) => Math.max(tx.all('decree_documents').reduce((m, d) => Math.max(m, Number(d.decree_no) || 0), 0) + 1, Number(db.setting('decree_first_no')) || 513);
@@ -115,7 +115,7 @@ export function decreePaper(d, opts = {}) {
   return `<article class="paper decree${layers ? ' has-layers' : ''}"${top != null ? ` style="--pt:${top}mm"` : ''}>${layers}${top != null ? '' : letterhead()}<div class="dec-title">ΔΙΑΤΑΓΜΑ</div>
 <div class="dec-no official-number">${action === 'service_award' ? 'υπ’ αριθ. ' : 'υπ’ αριθμ. '}${esc(decreeNo(d))}</div><div class="dec-date official-number">${esc(fmtDate(d.decree_date))}</div>
 <div class="decbody">${hmeisHtml}</div>
-<div class="decsig"><div><div class="t">Ο ΜΕΓΑΣ ΓΡΑΜΜΑΤΕΥΣ</div><img class="signature-img" src="${IMG.signature}" alt=""><div class="signature-line"></div><b>${esc(db.setting('grand_secretary_name') || GS_NAME)}</b></div>
+<div class="decsig"><div><div class="t">ΜΕΓΑΣ ΓΡΑΜΜΑΤΕΑΣ</div><img class="signature-img" src="${IMG.signature}" alt=""><div class="signature-line"></div><b>Δημήτριος Σκιαδόπουλος</b></div>
 <div><img class="seal-img" src="${IMG.seal}" alt=""></div><div><div class="t">Ο ΜΕΓΑΣ ΔΙΔΑΣΚΑΛΟΣ</div><img class="signature-img" src="${IMG.grandMaster}" alt=""><div class="signature-line"></div><b>Ιωάννης Μπενετάτος</b></div></div></article>`;
 }
 

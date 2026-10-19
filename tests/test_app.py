@@ -2068,8 +2068,52 @@ def test_declarations_single_page_report_needs_code(app):
     app.connect_local()
     app.go('/declarations')
     src = lambda: app.page.get_attribute('#declFrame', 'src')
-    assert src().endswith('?embed=1#form')
-    app.page.click('#declReport')
-    assert src().endswith('?embed=1#report')
+    assert src().endswith('?embed=1#form') and app.page.locator('.decltabs button').count() == 4
+    app.page.click('.decltabs [data-view=report]')
+    assert src().endswith('?embed=1#report') and app.page.locator('.constitution-box').is_hidden()
     app.go('/settings')
     assert 'Κωδικός αναφοράς' not in app.text()
+def test_declarations_constitution_helper_and_decree_signature(app):
+    app.connect_local()
+    app.page.route('https://script.google.com/**', lambda r: r.fulfill(json={'ok': True, 'data': {}}))
+    app.go('/declarations')
+    app.page.click('.decltabs [data-view=report]')
+    assert app.page.locator('#declFrame').get_attribute('src') == 'declarations/?embed=1#report'
+    df = app.page.frame_locator('#declFrame')
+    df.locator('#officer-filter').first.wait_for(state='attached')
+    fr = [f for f in app.page.frames if '/declarations/' in f.url][0]
+    fr.wait_for_function("() => typeof officerOf === 'function' && document.querySelectorAll('#officer-select option').length > 2")
+    assert fr.evaluate("() => getComputedStyle(document.querySelector('.nav-tabs')).display") == 'none'  # ένα μόνο μενού
+    assert fr.evaluate("() => { const o = officerOf('Λσεβ. Αδ. Χρήστος Διαβάτης, ΠΜΞ'); return o && officerValue(o); }") == 'Διαβάτης Χρήστος (Βοηθός Μέγας Γραμματεύς)'
+    assert 'ΘΕΜΙΣΤΟΚΛΗΣ 96' in fr.evaluate("() => officerValue(OFFICERS.find((o) => o.name === 'Σκιαδόπουλος Σπυρίδων του Μιχαήλ'))")
+    # Ο Μ.Δ. σε ξεχωριστό μπλε πλαίσιο· στη λίστα πρώτα οι εν ενεργεία, μετά οι Πρώην, με τη σειρά της Επετηρίδας
+    assert 'Μπενετάτος' in df.locator('.gm-line').inner_text()
+    opts = fr.evaluate("() => [...document.querySelectorAll('#officer-select option')].map((o) => [o.className, (o.parentElement.label || ''), o.textContent])")
+    heads = [i for i, o in enumerate(opts) if o[0] == 'sect']
+    assert len(heads) == 2 and 'ΕΝ ΕΝΕΡΓΕΙΑ' in opts[heads[0]][2] and 'ΠΡΩΗΝ' in opts[heads[1]][2]
+    assert not any(o[1].startswith('Πρώην') for o in opts[heads[0]:heads[1]]) and all(o[1].startswith('Πρώην') for o in opts[heads[1] + 1:])
+    ranks = lambda xs: [int(o[2].split('.')[0]) for o in xs if o[0] != 'sect']
+    assert ranks(opts[heads[0]:heads[1]]) == sorted(ranks(opts[heads[0]:heads[1]])) and ranks(opts[heads[1]:]) == sorted(ranks(opts[heads[1]:]))
+    assert not any('Μπενετάτος' in o[2] for o in opts)
+    # Αριθμοί πεδίων, χωρίς χειροκίνητο πεδίο· η αναζήτηση αφήνει μόνο τα ονόματα που ταιριάζουν (και τα αξιώματά τους)
+    assert df.locator('#officer-manual').count() == 0 and df.locator('.fno', has_text='1.2').count() == 1
+    fr.evaluate("() => buildOfficerSelect('σκιαδ')")  # η σελίδα είναι στην αναφορά· το φίλτρο καλείται απευθείας
+    left = fr.evaluate("() => { const s = document.getElementById('officer-select'); return [[...s.options].filter((o) => o.value).map((o) => o.textContent), s.querySelectorAll('optgroup').length, s.size]; }")
+    assert len(left[0]) == 3 and all('Σκιαδόπουλος' in t for t in left[0]) and left[1] == 3 and left[2] > 1, left
+    fr.evaluate("() => buildOfficerSelect('διαβατ')")
+    assert fr.evaluate("() => document.getElementById('officer-select').value") == 'Διαβάτης Χρήστος (Βοηθός Μέγας Γραμματεύς)'
+    fr.evaluate("() => buildOfficerSelect('')")
+    app.go('/declarations?view=form')  # παλιός σύνδεσμος → η μία σελίδα
+    app.page.wait_for_selector('.constitution-box')
+    assert app.page.url.endswith('#/declarations')
+    assert 'ΒΟΗΘΟΣ ΣΥΝΤΑΓΜΑΤΟΣ' in app.text() and app.page.locator('.decltabs button', has_text='Βοηθός Συντάγματος').count() == 1
+    fr = app.page.frame_locator('#constFrame')
+    fr.locator('#emptyState').first.wait_for(state='attached')
+    w = app.page.evaluate("() => { const d = document.querySelector('#constFrame').contentDocument; return [d.documentElement.scrollWidth, d.documentElement.clientWidth]; }")
+    assert w[0] <= w[1] + 1, w  # χωρίς οριζόντια υπερχείλιση
+    app.page.click('.decltabs [data-view=constitution]')
+    assert app.page.locator('#declFrame').get_attribute('src') == 'constitution/index.html'
+    assert app.page.locator('#constLink').get_attribute('href') == 'constitution/' and 'Αυτόνομη σελίδα' in app.text()
+    # Διατάγματα: η υπογραφή έμεινε ως είχε (δεν είναι χαιρετισμός)
+    html = app.page.evaluate("async () => (await import('./core/paper.js')).reportPaper('x', '', '', { signatures: true })")
+    assert 'ΜΕΓΑΣ ΓΡΑΜΜΑΤΕΑΣ' in html and 'Με αφοσίωση' not in html
