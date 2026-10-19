@@ -65,7 +65,7 @@ export function lodgeMemberCounts() {
   return out;
 }
 
-addContactSource(() => lodgesAll(true).filter(lodgeEmail).map((l) => ({ name: lodgeTitle(l), email: lodgeEmail(l), sub: `Στοά ${l.number} · ${l.provincial || ''}` })));
+addContactSource(() => lodgesAll(true).filter(lodgeEmail).map((l) => ({ name: lodgeTitle(l), email: lodgeEmail(l), sub: `Στοά ${l.number} · ${l.provincial || ''}`, lodge_number: l.number })));
 
 const rituals = () => [...new Set(db.all('lodges').map((x) => String(x.ritual || '').trim()).filter(Boolean))].sort();
 const fields = [

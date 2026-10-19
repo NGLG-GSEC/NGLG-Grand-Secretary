@@ -101,7 +101,7 @@ export async function makeDocx(blocks, { title = '', author = '', anchors = [] }
 
 // Επιστολόχαρτο ΕΜΣτΕ: κεφαλίδα + στοιχεία + κείμενο + κλείσιμο/υπογραφή
 // noHead: χωρίς την κανονική κεφαλίδα (τη θέση της παίρνει εικόνα της Σχεδίασης σελίδας)· topSpace: κενό (pt) πάνω από το κείμενο
-export function letterBlocks({ base = '', org, founded, gmTitle, gmName, number, date, place, title, to, cc, subject, paragraphs = [], closing, signature, signer, signerTitle, noHead = false, topSpace = 0, artwork = {} }) {
+export function letterBlocks({ base = '', org, founded, gmTitle, gmName, number, date, place, title, to, cc, subject, paragraphs = [], closing, signature, signer, signerTitle, noHead = false, topSpace = 0, artwork = {}, protoImg = '' }) {
   const B = [];
   if (!noHead) {
     B.push({ img: base + 'img/header_emblem.png', width: 3.2 }, { text: org, align: 'center', bold: true, size: 15, color: '1D2F5E', after: 0 });
@@ -123,5 +123,6 @@ export function letterBlocks({ base = '', org, founded, gmTitle, gmName, number,
   if (closing) B.push({ text: closing, before: 14, after: 6 });
   if (signature) B.push({ img: signature, width: 4.5, align: 'center', before: 6, after: 0 });
   B.push({ text: [signer, signerTitle, org].filter(Boolean).join('\n'), align: 'center', bold: false, after: 0 });
+  if (protoImg) B.push({ img: protoImg, width: 4, align: 'right', before: 4, after: 0 }); // «ΕΙΚΟΝΑ ΠΡΩΤΟΚΟΛΛΟΥ» του προτύπου
   return B;
 }

@@ -33,18 +33,21 @@ export function letterhead() {
 <div>${s('grand_master_title')}</div><div>${s('grand_master_name')}</div><div class="rule"></div></div>`;
 }
 
-export function signatureBlock(signer) {
+export function signatureBlock(signer, protoImg = '') {
   const p = signerProfile(signer);
-  return `<div class="sigrow"><div class="sign"><img class="signature-img" src="${p.img}" alt=""><div class="signature-line"></div>
+  return `<div class="sigrow${protoImg ? ' has-proto' : ''}"><div class="sign"><img class="signature-img" src="${p.img}" alt=""><div class="signature-line"></div>
 <b>${esc(p.name)}</b><div class="gs-title">${esc(p.title)}</div>${esc(db.setting('organization_name'))}</div>
-<div class="seal"><img class="seal-img" src="${IMG.seal}" alt=""></div></div>`;
+<div class="seal"><img class="seal-img" src="${IMG.seal}" alt=""></div>${protoImg ? `<div class="proto-stamp"><img class="proto-img" src="${esc(protoImg)}" alt=""></div>` : ''}</div>`;
 }
+// «ΕΙΚΟΝΑ ΠΡΩΤΟΚΟΛΛΟΥ» της επιστολής (π.χ. το εγκεκριμένο πρωτόκολλο-σφραγίδα): δεξιά της σφραγίδας (~150×150)
+export const protocolImage = (x) => (x && x.protocol_image) || '';
 
 // Πεδία της ίδιας της επιστολής μέσα στο κείμενο: συμπληρώνονται στο έγγραφο (σελίδα, PDF, Word, email) μόλις η επιστολή
 // πάρει αριθμό πρωτοκόλλου («Έτοιμη»)· μέχρι τότε μένουν ως {πεδίο}. Γράφονται π.χ. {Αρ. Πρωτ.} ή {Αρ. Πρωτ.: }.
 export const LETTER_FIELDS = [['Αρ. Πρωτ.', 'ο αριθμός πρωτοκόλλου της επιστολής (μπαίνει όταν οριστεί «Έτοιμη»)'], ['Ημερομηνία επιστολής', 'η ημερομηνία της επιστολής (του πρωτοκόλλου), π.χ. 19/10/2026']];
 const PROTO_RE = /\{\s*(?:αρ\.?\s*πρωτ(?:οκόλλου|\.)?|αριθμός\s+πρωτοκόλλου)\s*:?\s*\}/giu;
 const LDATE_RE = /\{\s*ημερομηνία\s+(?:επιστολής|πρωτοκόλλου)\s*:?\s*\}/giu;
+export const hasProtocolField = (text) => new RegExp(PROTO_RE.source, 'iu').test(String(text || ''));
 export function letterFields(text, x) {
   const t = String(text || '');
   if (!x || !x.protocol_seq) return t;
@@ -55,7 +58,7 @@ export function letterPaper(x) {
   return `<article class="paper">${letterhead()}
 <div class="meta"><div>Αρ. Πρωτ.: <b class="official-number">${esc(x.protocol_seq ? String(x.protocol_seq) : (x.protocol_no || 'θα δοθεί όταν οριστεί «Έτοιμη»'))}</b></div><div>Ημερομηνία: <b class="official-number">${esc(fmtDate(x.letter_date))}</b></div></div>
 ${x.recipient_name ? `<p><b>Προς:</b> ${esc(x.recipient_name)}</p>` : ''}${x.cc_name ? `<p class="cc-line"><b>Κοιν.:</b> <span>${esc(x.cc_name).replace(/\n/g, '<br>')}</span></p>` : ''}<p><b>Θέμα:</b> ${esc(x.subject)}</p>
-<div class="body">${richHtml(letterFields(x.body, x))}</div><p style="margin-top:10mm">${esc(x.closing || db.setting('closing'))}</p>${signatureBlock(x.signer)}</article>`;
+<div class="body">${richHtml(letterFields(x.body, x))}</div><p style="margin-top:10mm">${esc(x.closing || db.setting('closing'))}</p>${signatureBlock(x.signer, protocolImage(x))}</article>`;
 }
 
 // Εικόνες αποθηκευμένες στα δεδομένα (π.χ. φόντο/κεφαλίδα προτύπου Διατάγματος): <img data-dfile="templates/…">

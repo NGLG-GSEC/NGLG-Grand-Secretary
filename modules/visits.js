@@ -5,7 +5,7 @@ import { db } from '../core/store.js';
 import { module, onSubmit, go, flash, bind, confirmDo, table, notice, toast } from '../core/app.js';
 import { crud } from '../core/crud.js';
 import { esc, fold, today, fmtDate, dayStr, parseIso, sortBy, download, EMAIL_RE, splitEmails, grUpper, DAYS, isoDate, parsePasted, readXlsx, outgoingProtocolBtn } from '../core/util.js';
-import { senderBanner, copyText } from '../core/mail.js';
+import { senderBanner, copyText, withLetterCc } from '../core/mail.js';
 import { bccWithout } from '../core/gmail.js';
 import { reportPaper, printPaper, letterhead, letterPaper, IMG, GS_CLOSING, GS_NAME, GS_TITLE, gsSignatureText } from '../core/paper.js';
 import { attachPicker, contactItems, memberItems, noContact } from '../core/pickers.js';
@@ -426,6 +426,7 @@ function parseVisitLine(line) {
 
 // Σύνθεση email: ο χρήστης βλέπει/διορθώνει, ανοίγει στο Gmail και σημειώνει «στάλθηκε».
 function composePage(title, msg, { onSent, hint = '', attach = null, back = '#/visits', kind = 'general', visit = null }) {
+  msg = withLetterCc(msg);
   return {
     title,
     html: `<p><a href="${back}">← Επιστροφή</a></p><h1>${esc(title)}</h1>${senderBanner(kind)}${hint ? `<div class="card">${esc(hint)}</div>` : ''}${visit ? '<div class="mailsheet"></div><p class="muted">Παρακάτω μπορείτε να διορθώσετε παραλήπτες, θέμα και κείμενο πριν το άνοιγμα στο Gmail.</p>' : ''}
@@ -440,7 +441,9 @@ ${attach ? `<p><button type="button" class="btn" data-act="ics">📅 Λήψη ${
       const { gmailUrl, mailtoUrl } = await import('../core/mail.js');
       const cur = () => {
         if (visit) { const n = withProt(f.subject.value, visitProtocol(visit)); if (n !== f.subject.value.trim()) f.subject.value = n; }
-        return { to: f.to.value, cc: f.cc.value, bcc: f.bcc.value, subject: f.subject.value, body: f.body.value, kind };
+        const m = withLetterCc({ to: f.to.value, cc: f.cc.value, bcc: f.bcc.value, subject: f.subject.value, body: f.body.value, kind });
+        if (m.cc !== f.cc.value) f.cc.value = m.cc; // ο κανόνας κοινοποίησης φαίνεται και στο πεδίο
+        return m;
       };
       attachPicker(el.querySelector('#cPick'), contactItems, (c) => { if (c.email) f.to.value = [...splitEmails(f.to.value), c.email].join(', '); });
       bind(el, {

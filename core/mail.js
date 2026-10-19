@@ -10,7 +10,28 @@ export const MAIL_SENDERS = {
   official: { key: 'mail_from_official', def: 'grand.secretary@nglgreece.gr', label: 'Επιστολές & Διατάγματα' },
   general: { key: 'mail_from_general', def: 'info@nglgreece.gr', label: 'Γενικά εξερχόμενα' },
 };
-db.defaultSettings({ mail_from_official: MAIL_SENDERS.official.def, mail_from_general: MAIL_SENDERS.general.def });
+// Κανόνες κοινοποίησης επιστολών: όταν ένα email είναι στους παραλήπτες (Προς/Κοιν.), μπαίνει πάντα και το άλλο στην Κοιν.
+export const LETTER_CC_RULES_DEFAULT = 'ionian.secretary@nglgreece.gr => cc: spiros@rokashotels.gr';
+db.defaultSettings({ mail_from_official: MAIL_SENDERS.official.def, mail_from_general: MAIL_SENDERS.general.def, letter_cc_rules: LETTER_CC_RULES_DEFAULT });
+
+// «αν υπάρχει Χ => Υ» ανά γραμμή → [ifs, add, kind]· με «cc:» μπροστά στο Υ ορατή κοινοποίηση, αλλιώς η προεπιλογή (def)
+export function parseCcRules(v, def = 'bcc') {
+  return String(v || '').split(/\n+/).map((l) => l.split(/\s*(?:=>|→|->)\s*/)).filter((p) => p.length === 2)
+    .map(([a, b]) => [splitEmails(a).map((e) => e.toLowerCase()), splitEmails(b.replace(/^\s*(cc|bcc)\s*:/i, '')).filter((e) => EMAIL_RE.test(e)), /^\s*cc\s*:/i.test(b) ? 'cc' : /^\s*bcc\s*:/i.test(b) ? 'bcc' : def])
+    .filter(([a, b]) => a.length && b.length);
+}
+// Εφαρμογή των κανόνων κοινοποίησης επιστολών σε ένα μήνυμα (χωρίς διπλά email)
+export function withLetterCc(msg, rules = db.setting('letter_cc_rules')) {
+  const has = (x) => splitEmails(x).map((e) => e.toLowerCase());
+  let cc = splitEmails(msg.cc), bcc = splitEmails(msg.bcc);
+  for (const [ifs, add, kind] of parseCcRules(rules, 'cc')) {
+    const all = [...has(msg.to), ...has(cc.join(','))];
+    if (!ifs.some((e) => all.includes(e))) continue;
+    const seen = new Set([...all, ...has(bcc.join(','))]), extra = add.filter((e) => !seen.has(e.toLowerCase()));
+    if (kind === 'cc') cc = [...cc, ...extra]; else bcc = [...bcc, ...extra];
+  }
+  return { ...msg, cc: cc.join(', '), bcc: bcc.join(', ') };
+}
 
 export function senderFor(kind = 'general') {
   const s = MAIL_SENDERS[kind], v = String(db.setting(s.key) || '').trim();
