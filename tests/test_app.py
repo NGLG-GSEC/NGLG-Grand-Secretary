@@ -2061,3 +2061,20 @@ def test_visits_link_to_declarations(app):
     app.go('/visits')
     b = app.page.locator('main a.btn', has_text='Δηλώσεις διάθεσης')
     assert b.count() == 1 and b.get_attribute('href') == '#/declarations'
+
+
+def test_declarations_constitution_helper_and_decree_signature(app):
+    app.connect_local()
+    app.page.route('https://nglg-gsec.github.io/GrandOfficersVisitsRepresentGM/**', lambda r: r.fulfill(body='<html><body>decl</body></html>', content_type='text/html'))
+    app.go('/declarations?view=form')
+    app.page.wait_for_selector('.constitution-box')
+    assert 'ΒΟΗΘΟΣ ΣΥΝΤΑΓΜΑΤΟΣ' in app.text() and app.page.locator('.decltabs a', has_text='Βοηθός Συντάγματος').count() == 1
+    fr = app.page.frame_locator('#constFrame')
+    fr.locator('#emptyState').first.wait_for(state='attached')
+    w = app.page.evaluate("() => { const d = document.querySelector('#constFrame').contentDocument; return [d.documentElement.scrollWidth, d.documentElement.clientWidth]; }")
+    assert w[0] <= w[1] + 1, w  # χωρίς οριζόντια υπερχείλιση
+    app.go('/declarations?view=constitution')
+    assert app.page.locator('#declFrame').get_attribute('src') == 'constitution/index.html'
+    # Διατάγματα: η υπογραφή έμεινε ως είχε (δεν είναι χαιρετισμός)
+    html = app.page.evaluate("async () => (await import('./core/paper.js')).reportPaper('x', '', '', { signatures: true })")
+    assert 'ΜΕΓΑΣ ΓΡΑΜΜΑΤΕΑΣ' in html and 'Με αφοσίωση' not in html
