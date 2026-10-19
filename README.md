@@ -25,13 +25,12 @@ The way in to the work of the Secretariat. Everything opens at one address: the 
 (δήλωση, πρόγραμμα, αναφορά) — ο κώδικας ζει πλέον εδώ, στον φάκελο [`declarations/`](declarations/) (μεταφέρθηκε από το
 `GrandOfficersVisitsRepresentGM`). Δημόσια σελίδα για τους Μεγάλους Αξιωματικούς:
 https://nglg-gsec.github.io/NGLG-Grand-Secretary/declarations/#form
-μέσα στην εφαρμογή. Η αναφορά ανοίγει χωρίς κωδικό όταν στις Ρυθμίσεις έχει συμπληρωθεί ο «Κωδικός αναφοράς»
-(ο `ADMIN_KEY` του Apps Script της σελίδας).
+Στην εφαρμογή είναι μία σελίδα: τα κουμπιά (Δήλωση, Πρόγραμμα, «🔒 Διαχειριστική Αναφορά & PDF», Βοηθός Συντάγματος)
+αλλάζουν το περιεχόμενο επί τόπου. Η αναφορά ζητά πάντα τον κωδικό πρόσβασης· ο κωδικός ελέγχεται στον server της σελίδας
+(`ADMIN_KEY` στις Script Properties του Apps Script) και δεν γράφεται στον κώδικα.
 
 **📜 Βοηθός Συντάγματος:** ψηφιακό ευρετήριο των Γενικών Νόμων και Κανονισμών (`constitution/index.html`),
-ως ενότητα κάτω από τη Φόρμα δήλωσης και ως καρτέλα —
-[φόρμα](https://nglg-gsec.github.io/NGLG-Grand-Secretary/#/declarations?view=form) ·
-[καρτέλα](https://nglg-gsec.github.io/NGLG-Grand-Secretary/#/declarations?view=constitution) ·
+ως ενότητα κάτω από τη Φόρμα δήλωσης και ως κουμπί της σελίδας Δηλώσεων —
 [πλήρης σελίδα](https://nglg-gsec.github.io/NGLG-Grand-Secretary/constitution/).
 **Αυτόνομη σελίδα για αποστολή:** https://nglg-gsec.github.io/NGLG-Grand-Secretary/constitution/ — μόνο το Σύνταγμα,
 χωρίς μενού, σύνδεση ή στοιχεία της Γραμματείας (δικό της εικονίδιο και προεπισκόπηση συνδέσμου). Στην καρτέλα

@@ -1037,16 +1037,6 @@
       if (currentView() === "report") await openReport();
     }
 
-    // Μέσα στην Ψηφιακή Μεγάλη Γραμματεία: ο κωδικός της αναφοράς έρχεται από την εφαρμογή
-    window.addEventListener("message", async e => {
-      if (e.source !== window.parent || e.origin !== location.origin) return;
-      const d = e.data || {};
-      if (d.type !== "nglg-declarations-key" || typeof d.key !== "string" || !d.key) return;
-      adminKey = d.key;
-      showAdminTab();
-      if (currentView() === "report") await openReport();
-    });
-
     async function checkAuth() {
       const btn = document.getElementById("auth-btn");
       btn.disabled = true;
