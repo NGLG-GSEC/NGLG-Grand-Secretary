@@ -1,0 +1,242 @@
+From 0f2423d8ae689198b75c8556e8a7b6f2c5e0037b Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Mon, 19 Oct 2026 09:51:11 +0000
+Subject: [PATCH 1/2] =?UTF-8?q?=CE=91=CE=BD=CE=B1=CF=86=CE=BF=CF=81=CE=AC?=
+ =?UTF-8?q?=20=CE=B4=CE=B7=CE=BB=CF=8E=CF=83=CE=B5=CF=89=CE=BD:=20=CE=B1?=
+ =?UTF-8?q?=CE=BD=CE=B1=CE=B3=CE=BD=CF=8E=CF=81=CE=B9=CF=83=CE=B7=20=CE=B1?=
+ =?UTF-8?q?=CE=BE=CE=B9=CF=89=CE=BC=CE=B1=CF=84=CE=B9=CE=BA=CE=BF=CF=8D=20?=
+ =?UTF-8?q?=CE=B1=CF=80=CF=8C=20=CF=84=CE=BF=20=CE=BF=CE=BD=CE=BF=CE=BC?=
+ =?UTF-8?q?=CE=B1=CF=84=CE=B5=CF=80=CF=8E=CE=BD=CF=85=CE=BC=CE=BF=20(?=
+ =?UTF-8?q?=CF=80=CE=B1=CE=BB=CE=B9=CE=AD=CF=82/=CF=87=CE=B5=CE=B9=CF=81?=
+ =?UTF-8?q?=CE=BF=CE=BA=CE=AF=CE=BD=CE=B7=CF=84=CE=B5=CF=82=20=CE=B4=CE=B7?=
+ =?UTF-8?q?=CE=BB=CF=8E=CF=83=CE=B5=CE=B9=CF=82)=20=CE=BA=CE=B1=CE=B9=20?=
+ =?UTF-8?q?=CF=83=CE=B1=CF=86=CE=AE=CF=82=20=CF=83=CE=B5=CE=B9=CF=81=CE=AC?=
+ =?UTF-8?q?=20=C2=AB1=CE=BF=CF=82=20=C2=B7=20=CE=A0=CE=A1=CE=9F=CE=97?=
+ =?UTF-8?q?=CE=93=CE=95=CE=99=CE=A4=CE=91=CE=99=C2=BB,=20=C2=AB2=CE=BF?=
+ =?UTF-8?q?=CF=82=C2=BB=E2=80=A6?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01PhcLSSbrFGNSsY2UtDSLCg
+---
+ index.html | 60 ++++++++++++++++++++++++++++++++++++++++++++----------
+ 1 file changed, 49 insertions(+), 11 deletions(-)
+
+diff --git a/index.html b/index.html
+index 8cca30d..fdc9ee5 100644
+--- a/index.html
++++ b/index.html
+@@ -364,6 +364,25 @@
+       background: #94a3b8;
+       color: #fff;
+     }
++    .order-tag {
++      display: inline-block;
++      min-width: 34px;
++      text-align: center;
++      border: 1px solid #94a3b8;
++      color: #475569;
++      border-radius: 999px;
++      padding: 1px 8px;
++      margin-right: 6px;
++      font-size: 11px;
++      font-weight: 700;
++    }
++    .order-tag.first {
++      background: var(--gold-dark);
++      border-color: var(--gold-dark);
++      color: #fff;
++    }
++    .officer-name.first { font-weight: 700; }
++    .typed-note { color: #64748b; font-size: 11px; font-style: italic; }
+     .first-note {
+       color: var(--gold-dark);
+       font-size: 11px;
+@@ -420,7 +439,7 @@
+         border: none;
+       }
+       .report-actions, .nav-tabs, header { display: none !important; }
+-      .lodge-note, .rank-badge { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
++      .lodge-note, .rank-badge, .order-tag { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+       .table-wrap { overflow: visible; }
+       .report-table { min-width: 0; }
+       .print-header { display: block !important; text-align: center; margin-bottom: 25px; border-bottom: 2px solid #000; padding-bottom: 15px; }
+@@ -680,6 +699,16 @@
+         .toLowerCase().replace(/\s+/g, " ").trim();
+     }
+     const RANK_BY_VALUE = new Map(OFFICERS.map(o => [norm(officerValue(o)), o.rank]));
++    // Αξιωματικός μιας δήλωσης: ακριβής τιμή της λίστας, αλλιώς από το ονοματεπώνυμο (παλιές μορφές «… · Πσεβ. · 2026»,
++    // χειροκίνητες «Λσεβ. Αδ. Χρήστος Διαβάτης, ΠΜΞ»): επώνυμο και όνομα της λίστας περιέχονται στο κείμενο.
++    const nameTokens = n => norm(String(n).replace(/\s+του\s+.*$/i, "")).replace(/[^a-zα-ω0-9 ]/g, " ").split(" ").filter(w => w.length > 1);
++    function officerOf(text) {
++      const t = norm(fixTitle(text)), exact = OFFICERS.find(o => norm(officerValue(o)) === t);
++      if (exact) return exact;
++      const words = new Set(t.replace(/[^a-zα-ω0-9 ]/g, " ").split(" ").filter(Boolean));
++      const hits = OFFICERS.filter(o => { const k = nameTokens(o.name); return k.length >= 2 && k.every(w => words.has(w)); });
++      return hits.length ? hits.sort((a, b) => a.rank - b.rank)[0] : null;
++    }
+ 
+     function buildOfficerSelect(filter) {
+       const select = document.getElementById("officer-select");
+@@ -1040,10 +1069,11 @@
+           cell.appendChild(empty);
+         } else {
+           // Σειρά προβαδίσματος· χωρίς αριθμό (χειροκίνητη καταχώρηση) στο τέλος
+-          const ranked = officers.map(o => ({
+-            officer: fixTitle(o.officer),
+-            rank: RANK_BY_VALUE.get(norm(fixTitle(o.officer))) || o.rank || null
+-          })).sort((x, y) => (x.rank || Infinity) - (y.rank || Infinity));
++          const ranked = officers.map(o => {
++            const off = officerOf(o.officer);
++            // Όταν αναγνωρίζεται από τη λίστα: «Ονοματεπώνυμο (Αξίωμα)» — φαίνεται πάντα το αξίωμα
++            return { officer: off ? officerValue(off) : fixTitle(o.officer), rank: (off && off.rank) || o.rank || null, typed: !off || norm(officerValue(off)) !== norm(fixTitle(o.officer)) ? fixTitle(o.officer) : "" };
++          }).sort((x, y) => (x.rank || Infinity) - (y.rank || Infinity));
+ 
+           const list = document.createElement("ol");
+           list.className = "officer-list";
+@@ -1053,13 +1083,21 @@
+             badge.className = "rank-badge" + (o.rank ? "" : " none");
+             badge.textContent = o.rank ? o.rank : "—";
+             badge.title = o.rank ? "Α/Α προβαδίσματος" : "Χειροκίνητη καταχώρηση — χωρίς αριθμό προβαδίσματος";
++            // Σειρά προήγησης δίπλα στο όνομα: «1ος · Προηγείται», «2ος», «3ος» …
++            const order = document.createElement("span");
++            order.className = "order-tag" + (i === 0 ? " first" : "");
++            order.textContent = ranked.length > 1 ? (i === 0 ? "1ος · ΠΡΟΗΓΕΙΤΑΙ" : `${i + 1}ος`) : "Μόνος";
++            li.appendChild(order);
+             li.appendChild(badge);
+-            li.appendChild(document.createTextNode(o.officer));
+-            if (i === 0 && ranked.length > 1 && o.rank) {
+-              const first = document.createElement("span");
+-              first.className = "first-note";
+-              first.textContent = "· Προηγείται";
+-              li.appendChild(first);
++            const nm = document.createElement("span");
++            nm.className = "officer-name" + (i === 0 && ranked.length > 1 ? " first" : "");
++            nm.textContent = o.officer;
++            li.appendChild(nm);
++            if (o.typed) {
++              const t = document.createElement("span");
++              t.className = "typed-note";
++              t.textContent = ` — όπως δηλώθηκε: «${o.typed}»`;
++              li.appendChild(t);
+             }
+             list.appendChild(li);
+           });
+-- 
+2.43.0
+
+
+From 2d3e9bec491262bebffe4890b5162f946643ae13 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Mon, 19 Oct 2026 10:18:05 +0000
+Subject: [PATCH 2/2] =?UTF-8?q?=CE=A6=CF=8C=CF=81=CE=BC=CE=B1=20=CE=B4?=
+ =?UTF-8?q?=CE=AE=CE=BB=CF=89=CF=83=CE=B7=CF=82:=20=CE=B7=20=CF=87=CE=B5?=
+ =?UTF-8?q?=CE=B9=CF=81=CE=BF=CE=BA=CE=AF=CE=BD=CE=B7=CF=84=CE=B7=20=CF=80?=
+ =?UTF-8?q?=CE=BB=CE=B7=CE=BA=CF=84=CF=81=CE=BF=CE=BB=CF=8C=CE=B3=CE=B7?=
+ =?UTF-8?q?=CF=83=CE=B7=20=CE=B4=CE=B5=CE=AF=CF=87=CE=BD=CE=B5=CE=B9=20?=
+ =?UTF-8?q?=CF=80=CE=BF=CE=B9=CE=BF=CF=82=20=CE=B1=CE=BD=CF=84=CE=B9=CF=83?=
+ =?UTF-8?q?=CF=84=CE=BF=CE=B9=CF=87=CE=B5=CE=AF=20=CF=83=CF=84=CE=BF=CE=BD?=
+ =?UTF-8?q?=20=CE=BA=CE=B1=CF=84=CE=AC=CE=BB=CE=BF=CE=B3=CE=BF=20=CE=B3?=
+ =?UTF-8?q?=CE=B9=CE=B1=20=CE=B5=CF=80=CE=B9=CE=BB=CE=BF=CE=B3=CE=AE=C2=B7?=
+ =?UTF-8?q?=20=CF=8C=CF=80=CE=BF=CE=B9=CE=BF=CF=82=20=CF=85=CF=80=CE=AC?=
+ =?UTF-8?q?=CF=81=CF=87=CE=B5=CE=B9=20=CF=83=CF=84=CE=BF=CE=BD=20=CE=BA?=
+ =?UTF-8?q?=CE=B1=CF=84=CE=AC=CE=BB=CE=BF=CE=B3=CE=BF=20=CE=B4=CE=B5=CE=BD?=
+ =?UTF-8?q?=20=CE=BA=CE=B1=CF=84=CE=B1=CF=87=CF=89=CF=81=CE=AF=CE=B6=CE=B5?=
+ =?UTF-8?q?=CF=84=CE=B1=CE=B9=20=CF=87=CE=B5=CE=B9=CF=81=CE=BF=CE=BA=CE=AF?=
+ =?UTF-8?q?=CE=BD=CE=B7=CF=84=CE=B1?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01PhcLSSbrFGNSsY2UtDSLCg
+---
+ index.html | 49 ++++++++++++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 48 insertions(+), 1 deletion(-)
+
+diff --git a/index.html b/index.html
+index fdc9ee5..f4eefc9 100644
+--- a/index.html
++++ b/index.html
+@@ -364,6 +364,10 @@
+       background: #94a3b8;
+       color: #fff;
+     }
++    .manual-matches { margin-top: 8px; padding: 10px 12px; border: 1px solid var(--gold-dark); border-radius: 8px; background: #fffaf0; }
++    .manual-matches p { margin: 0 0 6px; font-size: 13px; font-weight: 700; color: var(--gold-dark); }
++    .match-btn { display: block; width: 100%; text-align: left; margin: 4px 0; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; cursor: pointer; font: inherit; }
++    .match-btn:hover { border-color: var(--gold-dark); background: #fdf6e3; }
+     .order-tag {
+       display: inline-block;
+       min-width: 34px;
+@@ -532,7 +536,8 @@
+         </div>
+         <div class="form-group">
+           <label>Ή συμπληρώστε χειροκίνητα (αν δεν είστε στην παραπάνω λίστα):</label>
+-          <input type="text" id="officer-manual" placeholder="π.χ. Παπαδόπουλος Γ. — Αξίωμα" autocomplete="off" autocorrect="off" spellcheck="false">
++          <input type="text" id="officer-manual" placeholder="π.χ. Παπαδόπουλος Γ. — Αξίωμα" autocomplete="off" autocorrect="off" spellcheck="false" oninput="showManualMatches()">
++          <div id="manual-matches" class="manual-matches" hidden></div>
+         </div>
+       </div>
+ 
+@@ -739,6 +744,41 @@
+       if (q && select.options.length === 2) select.selectedIndex = 1;
+     }
+ 
++    // Χειροκίνητη πληκτρολόγηση: δείχνει ποιος του καταλόγου αντιστοιχεί, για να επιλεγεί από εκεί
++    function manualCandidates(text) {
++      const exact = officerOf(text);
++      if (exact) return [exact];
++      const words = norm(text).replace(/[^a-zα-ω0-9 ]/g, " ").split(" ").filter(w => w.length > 2);
++      if (!words.length) return [];
++      return OFFICERS.filter(o => { const k = nameTokens(o.name); return k.length && words.includes(k[0]); }).sort((a, b) => a.rank - b.rank).slice(0, 6);
++    }
++    function pickOfficer(value) {
++      const sel = document.getElementById("officer-select");
++      document.getElementById("officer-filter").value = "";
++      buildOfficerSelect("");
++      sel.value = value;
++      document.getElementById("officer-manual").value = "";
++      showManualMatches();
++      sel.scrollIntoView({ block: "center", behavior: "smooth" });
++    }
++    function showManualMatches() {
++      const box = document.getElementById("manual-matches"), text = document.getElementById("officer-manual").value.trim();
++      const c = text.length >= 3 ? manualCandidates(text) : [];
++      box.innerHTML = "";
++      box.hidden = !c.length;
++      if (!c.length) return;
++      const h = document.createElement("p");
++      h.textContent = c.length === 1 ? "Βρέθηκε στον κατάλογο — πατήστε για να το επιλέξετε:" : "Βρέθηκαν στον κατάλογο — επιλέξτε τον εαυτό σας:";
++      box.appendChild(h);
++      c.forEach(o => {
++        const b = document.createElement("button");
++        b.type = "button"; b.className = "match-btn";
++        b.textContent = `${o.rank}. ${officerValue(o)}`;
++        b.onclick = () => pickOfficer(officerValue(o));
++        box.appendChild(b);
++      });
++    }
++
+     // Επιστρέφει { officer, rank } ή εμφανίζει μήνυμα και null
+     function readOfficerAndMeetings() {
+       const selectVal = document.getElementById("officer-select").value;
+@@ -749,6 +789,13 @@
+         showAlert("error", "Παρακαλούμε είτε επιλέξτε το όνομά σας από τον κατάλογο είτε πληκτρολογήστε το χειροκίνητα — όχι και τα δύο.");
+         return null;
+       }
++      // Όποιος υπάρχει στον κατάλογο δηλώνεται μόνο από τον κατάλογο (σωστό αξίωμα και σειρά προβαδίσματος)
++      if (manualVal && manualCandidates(manualVal).length) {
++        showManualMatches();
++        showAlert("error", "Το όνομα αυτό υπάρχει στον κατάλογο. Πατήστε το σωστό όνομα κάτω από το πεδίο για να το επιλέξετε — η χειροκίνητη δήλωση δεν καταχωρίζεται.");
++        document.getElementById("manual-matches").scrollIntoView({ block: "center", behavior: "smooth" });
++        return null;
++      }
+       const officer = manualVal || selectVal;
+       if (!officer) {
+         showAlert("error", "Παρακαλούμε επιλέξτε ή πληκτρολογήστε το ονοματεπώνυμο και το αξίωμά σας.");
+-- 
+2.43.0
+
