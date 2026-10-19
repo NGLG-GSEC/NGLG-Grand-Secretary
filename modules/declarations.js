@@ -1,11 +1,11 @@
 // Δηλώσεις Διάθεσης Μεγάλων Αξιωματικών για εκπροσώπηση του ΜΔ σε Εγκαταστάσεις.
-// Η σελίδα ζει στο αποθετήριο NGLG-GSEC/GrandOfficersVisitsRepresentGM και ανοίγει εδώ ολόκληρη (Δήλωση, Πρόγραμμα, Αναφορά),
+// Η σελίδα ζει πλέον μέσα σε αυτό το αποθετήριο (declarations/, μεταφέρθηκε από το GrandOfficersVisitsRepresentGM) και ανοίγει εδώ ολόκληρη (Δήλωση, Πρόγραμμα, Αναφορά),
 // ώστε όλα να γίνονται από την Ψηφιακή Μεγάλη Γραμματεία. Η Αναφορά ανοίγει χωρίς κωδικό: η εφαρμογή στέλνει στη σελίδα
 // τον κωδικό της αναφοράς από τις Ρυθμίσεις (μόνο όταν η σελίδα είναι στο ίδιο domain).
 import { module } from '../core/app.js';
 import { db } from '../core/store.js';
 
-export const DECLARATIONS_URL = 'https://nglg-gsec.github.io/GrandOfficersVisitsRepresentGM/';
+export const DECLARATIONS_URL = 'declarations/';
 db.defaultSettings({ declarations_report_key: '' });
 
 const TABS = [['form', 'Δήλωση Ενδιαφέροντος'], ['programme', 'Πρόγραμμα Επισκέψεων Μ.Δ.'], ['report', 'Διαχειριστική Αναφορά & PDF'], ['constitution', '📜 Βοηθός Συντάγματος']];
@@ -27,7 +27,7 @@ ${tabs}${frameHtml('declFrame', view === 'constitution' ? 'Βοηθός Συντ
 ${view === 'form' ? `<section class="card constitution-box"><h2 style="margin-top:0">📜 ΒΟΗΘΟΣ ΣΥΝΤΑΓΜΑΤΟΣ</h2><p class="muted">Αναζήτηση στους Γενικούς Νόμους και Κανονισμούς (π.χ. Κανόνες 123 και 144 για την εκπροσώπηση του Μεγάλου Διδασκάλου). <a href="${CONSTITUTION_URL}" target="_blank" rel="noopener">Άνοιγμα σε νέα καρτέλα ↗</a></p>${frameHtml('constFrame', 'Βοηθός Συντάγματος', CONSTITUTION_URL)}</section>` : ''}`,
     mount(el) {
       const frame = el.querySelector('#declFrame');
-      const target = new URL(DECLARATIONS_URL).origin;
+      const target = new URL(DECLARATIONS_URL, location.href).origin;
       const sendKey = () => {
         const key = String(db.setting('declarations_report_key') || '').trim();
         // Ο κωδικός πηγαίνει μόνο σε σελίδα του ίδιου domain (nglg-gsec.github.io)

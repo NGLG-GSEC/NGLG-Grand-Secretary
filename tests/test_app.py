@@ -2065,7 +2065,14 @@ def test_visits_link_to_declarations(app):
 
 def test_declarations_constitution_helper_and_decree_signature(app):
     app.connect_local()
-    app.page.route('https://nglg-gsec.github.io/GrandOfficersVisitsRepresentGM/**', lambda r: r.fulfill(body='<html><body>decl</body></html>', content_type='text/html'))
+    app.page.route('https://script.google.com/**', lambda r: r.fulfill(json={'ok': True, 'data': {}}))
+    app.go('/declarations?view=report')
+    assert app.page.locator('#declFrame').get_attribute('src') == 'declarations/?embed=1#report'
+    df = app.page.frame_locator('#declFrame')
+    df.locator('#officer-manual').first.wait_for(state='attached')
+    fr = [f for f in app.page.frames if '/declarations/' in f.url][0]
+    assert fr.evaluate("() => { const o = officerOf('Λσεβ. Αδ. Χρήστος Διαβάτης, ΠΜΞ'); return o && officerValue(o); }") == 'Διαβάτης Χρήστος (Βοηθός Μέγας Γραμματεύς)'
+    assert 'ΘΕΜΙΣΤΟΚΛΗΣ 96' in fr.evaluate("() => officerValue(OFFICERS.find((o) => o.name === 'Σκιαδόπουλος Σπυρίδων του Μιχαήλ'))")
     app.go('/declarations?view=form')
     app.page.wait_for_selector('.constitution-box')
     assert 'ΒΟΗΘΟΣ ΣΥΝΤΑΓΜΑΤΟΣ' in app.text() and app.page.locator('.decltabs a', has_text='Βοηθός Συντάγματος').count() == 1

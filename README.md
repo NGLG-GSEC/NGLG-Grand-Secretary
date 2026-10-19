@@ -22,7 +22,9 @@ The way in to the work of the Secretariat. Everything opens at one address: the 
 ### Δηλώσεις Διάθεσης Μεγάλων Αξιωματικών
 
 Μενού 📅 Δραστηριότητα → «🗳 Δηλώσεις Διάθεσης Μ. Αξιωματικών» (`#/declarations`): ολόκληρη η σελίδα
-[GrandOfficersVisitsRepresentGM](https://github.com/NGLG-GSEC/GrandOfficersVisitsRepresentGM) (δήλωση, πρόγραμμα, αναφορά)
+(δήλωση, πρόγραμμα, αναφορά) — ο κώδικας ζει πλέον εδώ, στον φάκελο [`declarations/`](declarations/) (μεταφέρθηκε από το
+`GrandOfficersVisitsRepresentGM`). Δημόσια σελίδα για τους Μεγάλους Αξιωματικούς:
+https://nglg-gsec.github.io/NGLG-Grand-Secretary/declarations/#form
 μέσα στην εφαρμογή. Η αναφορά ανοίγει χωρίς κωδικό όταν στις Ρυθμίσεις έχει συμπληρωθεί ο «Κωδικός αναφοράς»
 (ο `ADMIN_KEY` του Apps Script της σελίδας).
 
@@ -32,8 +34,8 @@ The way in to the work of the Secretariat. Everything opens at one address: the 
 [καρτέλα](https://nglg-gsec.github.io/NGLG-Grand-Secretary/#/declarations?view=constitution) ·
 [πλήρης σελίδα](https://nglg-gsec.github.io/NGLG-Grand-Secretary/constitution/).
 
-Εκκρεμείς διορθώσεις για τη σελίδα Δηλώσεων (άλλο αποθετήριο): `tools/patches/` (σειρά «1ος · ΠΡΟΗΓΕΙΤΑΙ»,
-αναγνώριση αξιωματικού από το όνομα, χειροκίνητη δήλωση → επιλογή από τον κατάλογο, διακριτικό συνωνύμων).
+Στη σελίδα Δηλώσεων: σειρά «1ος · ΠΡΟΗΓΕΙΤΑΙ», αναγνώριση αξιωματικού από το όνομα, χειροκίνητη δήλωση → επιλογή
+από τον κατάλογο, διακριτικό συνωνύμων («Σκιαδόπουλος Σπυρίδων του Μιχαήλ (Στ. ΘΕΜΙΣΤΟΚΛΗΣ 96)»).
 
 ### Τελευταίες αλλαγές
 - **Ενιαίο Μητρώο:** όνομα, email, κινητό και **Τίτλος** (από την Επετηρίδα) μόνο στο Μητρώο Μελών· Εκπρόσωποι και Επαφές δείχνουν στο μέλος.
