@@ -154,11 +154,23 @@
       background: #fff;
       font-family: inherit;
     }
-    #officer-manual::placeholder {
-      color: #b6c0cd;
-      font-style: italic;
-      opacity: 1;
+    /* Αριθμός πεδίου (για αναφορά σε αλλαγές) */
+    .fno {
+      display: inline-block;
+      min-width: 26px;
+      margin-right: 6px;
+      padding: 1px 7px;
+      border-radius: 10px;
+      background: #c9a64a;
+      color: #1d2f5e;
+      font: 700 11px/1.5 system-ui, sans-serif;
+      text-align: center;
+      vertical-align: middle;
+      letter-spacing: 0;
     }
+    #officer-select[size] { padding: 4px; }
+    #officer-select[size] option { padding: 4px 6px; }
+    .no-match { color: #b91c1c; font-size: 13px; margin-top: 6px; }
     select:focus, input:focus {
       outline: none;
       border-color: var(--gold);
@@ -376,8 +388,6 @@
       background: #94a3b8;
       color: #fff;
     }
-    .manual-matches { margin-top: 8px; padding: 10px 12px; border: 1px solid var(--gold-dark); border-radius: 8px; background: #fffaf0; }
-    .manual-matches p { margin: 0 0 6px; font-size: 13px; font-weight: 700; color: var(--gold-dark); }
     .match-btn { display: block; width: 100%; text-align: left; margin: 4px 0; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; cursor: pointer; font: inherit; }
     .match-btn:hover { border-color: var(--gold-dark); background: #fdf6e3; }
     .order-tag {
@@ -528,7 +538,7 @@
         <h2 class="card-title">Τι είναι αυτή η σελίδα</h2>
         <p>Σε αυτή τη σελίδα οι Μεγάλοι Αξιωματικοί δηλώνουν σε ποιες Εγκαταστάσεις Σεβασμίων Διδασκάλων μπορούν να εκπροσωπήσουν τον Σεβασμιώτατο Μεγάλο Διδάσκαλο.</p>
         <ol>
-          <li>Επιλέξτε το όνομά σας από τον κατάλογο (ή γράψτε το, αν δεν υπάρχει).</li>
+          <li>Γράψτε το όνομά σας (1.1) και επιλέξτε το από τον κατάλογο (1.2).</li>
           <li>Σημειώστε τις Στοές που μπορείτε να επισκεφθείτε.</li>
           <li>Πατήστε «Υποβολή Δήλωσης Διάθεσης». Αν αλλάξει κάτι, μπορείτε να ακυρώσετε τη δήλωσή σας.</li>
         </ol>
@@ -539,24 +549,21 @@
         <h2 class="card-title">1. Στοιχεία Αξιωματικού</h2>
         <div class="form-group">
           <p class="gm-line">Σεβασμιώτατος Αδ. Ιωάννης Μπενετάτος — Μέγας Διδάσκαλος<small>Προηγείται όλων · Ο Μέγας Διδάσκαλος δεν υποβάλλει δήλωση εκπροσώπησης</small></p>
-          <label for="officer-select">Αν δεν είστε ο Μέγας Διδάσκαλος, επιλέξτε το Ονοματεπώνυμό σας & Αξίωμα:</label>
-          <input type="text" id="officer-filter" class="officer-filter" placeholder="Αναζήτηση ονόματος…" autocomplete="off" autocorrect="off" spellcheck="false" oninput="buildOfficerSelect(this.value)">
+          <label for="officer-filter"><span class="fno">1.1</span>Αν δεν είστε ο Μέγας Διδάσκαλος, γράψτε το όνομά σας:</label>
+          <input type="text" id="officer-filter" class="officer-filter" placeholder="π.χ. Παπαδόπουλος ή Γεώργιος…" autocomplete="off" autocorrect="off" spellcheck="false" oninput="buildOfficerSelect(this.value)">
+          <label for="officer-select"><span class="fno">1.2</span>Επιλέξτε το Ονοματεπώνυμό σας & Αξίωμα:</label>
           <select id="officer-select" autocomplete="off">
             <option value="">-- Επιλέξτε από τον κατάλογο --</option>
           </select>
-          <p class="field-hint">Ο αριθμός μπροστά από κάθε όνομα είναι η σειρά προβαδίσματος (Τάξις και Προβάδισμα).</p>
-        </div>
-        <div class="form-group">
-          <label>Ή συμπληρώστε χειροκίνητα (αν δεν είστε στην παραπάνω λίστα):</label>
-          <input type="text" id="officer-manual" placeholder="π.χ. Παπαδόπουλος Γ. — Αξίωμα" autocomplete="off" autocorrect="off" spellcheck="false" oninput="showManualMatches()">
-          <div id="manual-matches" class="manual-matches" hidden></div>
+          <p id="no-match" class="no-match" hidden>Δεν βρέθηκε όνομα. Ελέγξτε την ορθογραφία ή επικοινωνήστε με τη Μεγάλη Γραμματεία.</p>
+          <p class="field-hint">Στο <b>1.2</b> εμφανίζονται μόνο τα ονόματα που ταιριάζουν με όσα γράψατε στο <b>1.1</b>. Ο αριθμός μπροστά από κάθε όνομα είναι η σειρά προβαδίσματος (Τάξις και Προβάδισμα).</p>
         </div>
       </div>
 
       <div class="card">
         <h2 class="card-title">2. Επιλογή Εργασιών Νοεμβρίου 2026 για Εκπροσώπηση</h2>
         <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 15px;">
-          Επιλέξτε μία ή περισσότερες Στοές στις οποίες έχετε τη δυνατότητα και επιθυμείτε να εκπροσωπήσετε τον Μέγα Διδάσκαλο:
+          <span class="fno">2.x</span>Επιλέξτε μία ή περισσότερες Στοές στις οποίες έχετε τη δυνατότητα και επιθυμείτε να εκπροσωπήσετε τον Μέγα Διδάσκαλο:
         </p>
 
         <div class="meetings-grid" id="meetings-list">
@@ -564,8 +571,8 @@
         </div>
 
         <div style="margin-top: 25px;">
-          <button type="button" class="btn-submit" id="submit-btn" onclick="submitDeclaration()">Υποβολη Δηλωσης Διαθεσης</button>
-          <button type="button" class="btn-cancel" id="cancel-btn" onclick="cancelDeclaration()">Ακύρωση Δήλωσης</button>
+          <button type="button" class="btn-submit" id="submit-btn" onclick="submitDeclaration()"><span class="fno">3.1</span>Υποβολη Δηλωσης Διαθεσης</button>
+          <button type="button" class="btn-cancel" id="cancel-btn" onclick="cancelDeclaration()"><span class="fno">3.2</span>Ακύρωση Δήλωσης</button>
           <p class="field-hint">Για ακύρωση: επιλέξτε το όνομά σας και τις Στοές που δεν μπορείτε πλέον να επισκεφθείτε και πατήστε «Ακύρωση Δήλωσης».</p>
         </div>
       </div>
@@ -729,19 +736,28 @@
       return hits.length ? hits.sort((a, b) => a.rank - b.rank)[0] : null;
     }
 
+    // Κάθε λέξη της αναζήτησης ταιριάζει με την αρχή μιας λέξης του ονόματος (χωρίς τόνους)
+    function nameMatches(o, q) {
+      if (!q) return true;
+      const words = norm(o.name + " " + (o.note || "")).replace(/[^a-zα-ω0-9 ]/g, " ").split(" ").filter(Boolean);
+      return q.replace(/[^a-zα-ω0-9 ]/g, " ").split(" ").filter(Boolean).every(w => words.some(x => x.startsWith(w)));
+    }
+
     function buildOfficerSelect(filter) {
       const select = document.getElementById("officer-select");
       const keep = select.value;
       const q = norm(filter || "");
-      select.length = 1;
+      // Καθαρισμός και των ομάδων (optgroup): αλλιώς έμεναν κενά αξιώματα στη λίστα
+      [...select.children].slice(1).forEach(el => el.remove());
       // Πρώτα όλοι οι εν ενεργεία Μεγάλοι Αξιωματικοί, μετά όλοι οι Πρώην — ο καθένας με τη σειρά της Επετηρίδας
       const former = o => o.group.startsWith("Πρώην ");
       [["ΕΝ ΕΝΕΡΓΕΙΑ ΜΕΓΑΛΟΙ ΑΞΙΩΜΑΤΙΚΟΙ", SELECTABLE.filter(o => !former(o))], ["ΠΡΩΗΝ ΜΕΓΑΛΟΙ ΑΞΙΩΜΑΤΙΚΟΙ", SELECTABLE.filter(former)]].forEach(([label, list]) => {
-        const shown = list.filter(o => !q || norm(o.name + " " + o.title).includes(q));
+        const shown = list.filter(o => nameMatches(o, q));
         if (!shown.length) return;
         const head = document.createElement("option");
         head.className = "sect";
         head.disabled = true;
+        head.value = "";
         head.textContent = `━━ ${label} (${shown.length}) ━━`;
         select.appendChild(head);
         let group = null, groupName = "";
@@ -761,64 +777,20 @@
       select.value = keep;
       // Με ένα μόνο αποτέλεσμα αναζήτησης, επιλέγεται αυτόματα
       const picks = [...select.options].filter(o => o.value);
+      // Με αναζήτηση, τα ονόματα που ταιριάζουν φαίνονται ανοιχτά κάτω από το 1.1
+      if (q && picks.length) select.size = Math.max(2, Math.min(select.options.length + select.querySelectorAll("optgroup").length, 12)); else select.removeAttribute("size");
       if (q && picks.length === 1) select.value = picks[0].value;
-    }
-
-    // Χειροκίνητη πληκτρολόγηση: δείχνει ποιος του καταλόγου αντιστοιχεί, για να επιλεγεί από εκεί
-    function manualCandidates(text) {
-      const exact = officerOf(text);
-      if (exact) return [exact];
-      const words = norm(text).replace(/[^a-zα-ω0-9 ]/g, " ").split(" ").filter(w => w.length > 2);
-      if (!words.length) return [];
-      return OFFICERS.filter(o => { const k = nameTokens(o.name); return k.length && words.includes(k[0]); }).sort((a, b) => a.rank - b.rank).slice(0, 6);
-    }
-    function pickOfficer(value) {
-      const sel = document.getElementById("officer-select");
-      document.getElementById("officer-filter").value = "";
-      buildOfficerSelect("");
-      sel.value = value;
-      document.getElementById("officer-manual").value = "";
-      showManualMatches();
-      sel.scrollIntoView({ block: "center", behavior: "smooth" });
-    }
-    function showManualMatches() {
-      const box = document.getElementById("manual-matches"), text = document.getElementById("officer-manual").value.trim();
-      const c = text.length >= 3 ? manualCandidates(text) : [];
-      box.innerHTML = "";
-      box.hidden = !c.length;
-      if (!c.length) return;
-      const h = document.createElement("p");
-      h.textContent = c.length === 1 ? "Βρέθηκε στον κατάλογο — πατήστε για να το επιλέξετε:" : "Βρέθηκαν στον κατάλογο — επιλέξτε τον εαυτό σας:";
-      box.appendChild(h);
-      c.forEach(o => {
-        const b = document.createElement("button");
-        b.type = "button"; b.className = "match-btn";
-        b.textContent = `${o.rank}. ${officerValue(o)}`;
-        b.onclick = () => pickOfficer(officerValue(o));
-        box.appendChild(b);
-      });
+      document.getElementById("no-match").hidden = !(q && !picks.length);
     }
 
     // Επιστρέφει { officer, rank } ή εμφανίζει μήνυμα και null
     function readOfficerAndMeetings() {
       const selectVal = document.getElementById("officer-select").value;
-      const manualVal = document.getElementById("officer-manual").value.trim();
       document.getElementById("alert-msg").style.display = "none";
 
-      if (selectVal && manualVal) {
-        showAlert("error", "Παρακαλούμε είτε επιλέξτε το όνομά σας από τον κατάλογο είτε πληκτρολογήστε το χειροκίνητα — όχι και τα δύο.");
-        return null;
-      }
-      // Όποιος υπάρχει στον κατάλογο δηλώνεται μόνο από τον κατάλογο (σωστό αξίωμα και σειρά προβαδίσματος)
-      if (manualVal && manualCandidates(manualVal).length) {
-        showManualMatches();
-        showAlert("error", "Το όνομα αυτό υπάρχει στον κατάλογο. Πατήστε το σωστό όνομα κάτω από το πεδίο για να το επιλέξετε — η χειροκίνητη δήλωση δεν καταχωρίζεται.");
-        document.getElementById("manual-matches").scrollIntoView({ block: "center", behavior: "smooth" });
-        return null;
-      }
-      const officer = manualVal || selectVal;
+      const officer = selectVal;
       if (!officer) {
-        showAlert("error", "Παρακαλούμε επιλέξτε ή πληκτρολογήστε το ονοματεπώνυμο και το αξίωμά σας.");
+        showAlert("error", "Παρακαλούμε επιλέξτε το ονοματεπώνυμο και το αξίωμά σας από τον κατάλογο (πεδίο 1.2).");
         return null;
       }
       const boxes = Array.from(document.querySelectorAll("input[name='meeting_select']:checked"));
@@ -833,7 +805,6 @@
       document.getElementById("officer-filter").value = "";
       buildOfficerSelect("");
       document.getElementById("officer-select").value = "";
-      document.getElementById("officer-manual").value = "";
       boxes.forEach(chk => chk.checked = false);
     }
 
@@ -841,13 +812,13 @@
     function initMeetingsGrid() {
       const grid = document.getElementById("meetings-list");
       grid.innerHTML = "";
-      MEETINGS.forEach(m => {
+      MEETINGS.forEach((m, i) => {
         const card = document.createElement("label");
         card.className = "meeting-card";
         card.innerHTML = `
           <input type="checkbox" name="meeting_select" value="${m.id}">
           <div class="meeting-info">
-            <span class="date-badge">${m.date}</span>
+            <span class="fno">2.${i + 1}</span><span class="date-badge">${m.date}</span>
             <h4>${m.name} Αρ. ${m.no}</h4>${m.note ? `
             <p class="lodge-note">${m.note}</p>` : ""}
             <p>${m.prov}</p>
@@ -1178,9 +1149,6 @@
     // Εκκίνηση
     // Ο browser δεν πρέπει να προσυμπληρώνει τα πεδία με παλιές τιμές
     function resetFormFields() {
-      const manual = document.getElementById("officer-manual");
-      manual.value = "";
-      manual.name = "m" + Math.random().toString(36).slice(2);
       document.getElementById("officer-filter").value = "";
       buildOfficerSelect("");
       document.getElementById("officer-select").value = "";

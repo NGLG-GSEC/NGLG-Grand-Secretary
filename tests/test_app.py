@@ -2069,7 +2069,7 @@ def test_declarations_constitution_helper_and_decree_signature(app):
     app.go('/declarations?view=report')
     assert app.page.locator('#declFrame').get_attribute('src') == 'declarations/?embed=1#report'
     df = app.page.frame_locator('#declFrame')
-    df.locator('#officer-manual').first.wait_for(state='attached')
+    df.locator('#officer-filter').first.wait_for(state='attached')
     fr = [f for f in app.page.frames if '/declarations/' in f.url][0]
     fr.wait_for_function("() => typeof officerOf === 'function' && document.querySelectorAll('#officer-select option').length > 2")
     assert fr.evaluate("() => { const o = officerOf('Λσεβ. Αδ. Χρήστος Διαβάτης, ΠΜΞ'); return o && officerValue(o); }") == 'Διαβάτης Χρήστος (Βοηθός Μέγας Γραμματεύς)'
@@ -2083,6 +2083,14 @@ def test_declarations_constitution_helper_and_decree_signature(app):
     ranks = lambda xs: [int(o[2].split('.')[0]) for o in xs if o[0] != 'sect']
     assert ranks(opts[heads[0]:heads[1]]) == sorted(ranks(opts[heads[0]:heads[1]])) and ranks(opts[heads[1]:]) == sorted(ranks(opts[heads[1]:]))
     assert not any('Μπενετάτος' in o[2] for o in opts)
+    # Αριθμοί πεδίων, χωρίς χειροκίνητο πεδίο· η αναζήτηση αφήνει μόνο τα ονόματα που ταιριάζουν (και τα αξιώματά τους)
+    assert df.locator('#officer-manual').count() == 0 and df.locator('.fno', has_text='1.2').count() == 1
+    fr.evaluate("() => buildOfficerSelect('σκιαδ')")  # η σελίδα είναι στην αναφορά· το φίλτρο καλείται απευθείας
+    left = fr.evaluate("() => { const s = document.getElementById('officer-select'); return [[...s.options].filter((o) => o.value).map((o) => o.textContent), s.querySelectorAll('optgroup').length, s.size]; }")
+    assert len(left[0]) == 3 and all('Σκιαδόπουλος' in t for t in left[0]) and left[1] == 3 and left[2] > 1, left
+    fr.evaluate("() => buildOfficerSelect('διαβατ')")
+    assert fr.evaluate("() => document.getElementById('officer-select').value") == 'Διαβάτης Χρήστος (Βοηθός Μέγας Γραμματεύς)'
+    fr.evaluate("() => buildOfficerSelect('')")
     app.go('/declarations?view=form')
     app.page.wait_for_selector('.constitution-box')
     assert 'ΒΟΗΘΟΣ ΣΥΝΤΑΓΜΑΤΟΣ' in app.text() and app.page.locator('.decltabs a', has_text='Βοηθός Συντάγματος').count() == 1
