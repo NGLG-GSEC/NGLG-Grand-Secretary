@@ -1,7 +1,7 @@
 // Εορτολόγιο — εορτάζοντες μέλη (σταθερές και κινητές εορτές από το Πάσχα), ευχές με «πλακέτα» ΕΜΣτΕ ανά πρόσωπο
 // (σωστή προσφώνηση από το αξίωμα, κρυφή κοινοποίηση στην Επαρχία), ιστορικό ευχών, αναφορά στον ΜΔ, εορτολόγιο ονομάτων.
 import { db } from '../core/store.js';
-import { module, onSubmit, go, bind, notice, toast, table, confirmDo } from '../core/app.js';
+import { module, onSubmit, go, bind, notice, toast, table } from '../core/app.js';
 import { crud } from '../core/crud.js';
 import { esc, foldName, today, addDays, parseIso, isoDate, dayStr, fmtDate, longDate, sortBy, EMAIL_RE, splitEmails, exportXlsx, DAYS } from '../core/util.js';
 import { richPlain } from '../core/rich.js';
@@ -339,11 +339,12 @@ function greetPage() {
           const i = Number(d.i), it = items[i], m = msg(i), res = el.querySelector(`[data-res="${i}"]`);
           const { driveReady } = await import('../core/drive.js');
           if (!driveReady()) { res.innerHTML = '<span class="warn">Για άμεση αποστολή χρειάζεται το Google Client ID (Ρυθμίσεις → Google). Μέχρι τότε: «ή χειροκίνητα στο Gmail».</span>'; return; }
-          if (!confirmDo(`Αποστολή ευχών τώρα από ${senderFor('general')};\n\nΠρος: ${m.to}${m.cc.length ? `\nΚοιν.: ${m.cc.join(', ')}` : ''}${m.bcc.length ? `\nBcc: ${m.bcc.join(', ')}` : ''}\nΘέμα: ${m.subject}`)) return;
+          const { sendNow, confirmSend } = await import('../core/gmail.js');
+          const out = { to: m.to, cc: m.cc.join(', '), bcc: m.bcc.join(', '), subject: m.subject, body: m.text, htmlBody: `<!doctype html><html><body style="margin:0;padding:16px 8px;background:#fff">${m.html}</body></html>` };
+          if (!await confirmSend({ from: senderFor('general'), msg: out })) return;
           res.innerHTML = '⏳ Αποστολή…';
           try {
-            const { sendNow } = await import('../core/gmail.js');
-            await sendNow({ to: m.to, cc: m.cc.join(', '), bcc: m.bcc.join(', '), subject: m.subject, body: m.text, htmlBody: `<!doctype html><html><body style="margin:0;padding:16px 8px;background:#fff">${m.html}</body></html>` }, [], 'general');
+            await sendNow(out, [], 'general');
             await logSent(i);
           } catch (e) { res.innerHTML = `<span class="warn">${esc(e.message || e)}</span>`; }
         },

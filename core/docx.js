@@ -92,7 +92,7 @@ export async function makeDocx(blocks, { title = '', author = '', anchors = [] }
   add('/word/_rels/document.xml.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
     + rels.map(([id, t, tg]) => `<Relationship Id="${id}" Type="${t}" Target="${tg}"/>`).join('') + '</Relationships>');
   add('/word/styles.xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
-    + '<w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Georgia" w:hAnsi="Georgia" w:cs="Times New Roman" w:eastAsia="Georgia"/><w:sz w:val="24"/><w:szCs w:val="24"/><w:lang w:val="el-GR"/></w:rPr></w:rPrDefault>'
+    + '<w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman" w:eastAsia="Times New Roman"/><w:sz w:val="24"/><w:szCs w:val="24"/><w:lang w:val="el-GR"/></w:rPr></w:rPrDefault>'
     + '<w:pPrDefault><w:pPr><w:spacing w:after="120" w:line="300" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults>'
     + '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style></w:styles>');
   const out = C.write(z, { fileType: 'zip', type: 'array', compression: true });
@@ -123,6 +123,6 @@ export function letterBlocks({ base = '', org, founded, gmTitle, gmName, number,
   if (closing) B.push({ text: closing, before: 14, after: 6 });
   if (signature) B.push({ img: signature, width: 4.5, align: 'center', before: 6, after: 0 });
   B.push({ text: [signer, signerTitle, org].filter(Boolean).join('\n'), align: 'center', bold: false, after: 0 });
-  if (protoImg) B.push({ img: protoImg, width: 4, align: 'right', before: 4, after: 0 }); // «ΕΙΚΟΝΑ ΠΡΩΤΟΚΟΛΛΟΥ» του προτύπου
+  if (protoImg) B.push({ img: protoImg, width: 10.6, align: 'center', before: 6, after: 0 }); // «ΕΙΚΟΝΑ ΠΡΩΤΟΚΟΛΛΟΥ», ~400×200, στο κέντρο
   return B;
 }

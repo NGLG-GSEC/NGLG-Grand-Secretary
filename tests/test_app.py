@@ -239,6 +239,9 @@ def test_namedays_greetings(app):
     app.page.on('dialog', lambda d: d.accept())
     app.page.evaluate("async () => { const {db} = await import('./core/store.js'); await db.save('x', (tx) => tx.setting('google_client_id', 'test.apps.googleusercontent.com')); }")
     app.page.click('[data-act=send]')
+    app.page.wait_for_selector('.send-preview')  # προεπισκόπηση πριν την αποστολή
+    assert 'info@nglgreece.gr' in app.page.inner_text('.send-preview') and 'nik@example.com' in app.page.inner_text('.send-preview')
+    app.page.click('.send-preview [data-yes]')
     app.page.wait_for_selector('text=Στάλθηκε και καταχωρίστηκε', timeout=30000)
     raw = sent[0]['raw']
     mime = base64.urlsafe_b64decode(raw + '=' * (-len(raw) % 4)).decode()
@@ -1308,6 +1311,66 @@ def test_ionian_letter_cc_rule(app):
     assert 'ionian.secretary@nglgreece.gr => cc: spiros@rokashotels.gr' in app.page.evaluate("async () => { const {db} = await import('./core/store.js'); return db.setting('letter_cc_rules'); }")
 
 
+def test_letter_sender_choice_and_preview_before_send(app):
+    """Επιστολή: επιλογή λογαριασμού αποστολής (grand.secretary@ ή info@)· πριν την αποστολή προεπισκόπηση και επιβεβαίωση."""
+    app.connect_local()
+    sent, profile = [], {'emailAddress': 'grand.secretary@nglgreece.gr'}
+
+    def gmail(route, request):
+        if request.url.endswith('/profile'):
+            return route.fulfill(json=profile)
+        sent.append(json.loads(request.post_data or '{}'))
+        return route.fulfill(json={'id': 'm-1'})
+    app.page.route('https://accounts.google.com/gsi/client', lambda r: r.fulfill(body=GSI_FAKE, content_type='text/javascript'))
+    app.page.route('https://gmail.googleapis.com/**', gmail)
+    tid = app.page.evaluate("""async () => { const {db} = await import('./core/store.js');
+      return db.save('x', (tx) => { tx.setting('google_client_id', 'test.apps.googleusercontent.com');
+        return tx.insert('letter_templates', { name: 'Έγκριση Κανονισμού', active: 1, subject: 'Έγκριση Κανονισμού', body: 'Εγκρίνεται ο Κανονισμός.', mail_kind: 'general' }).id; }); }""")
+    app.go(f'/templates/edit/{tid}')
+    assert app.page.input_value('[name=mail_kind]') == 'general'
+    app.go('/letters/new')
+    app.page.select_option('#tplSel', str(tid))
+    app.fill(recipient_name='Στοά', recipient_email='lodge@example.com')
+    app.click('✅ Έτοιμη: Αποθήκευση & απόδοση αρ. πρωτοκόλλου')
+    app.page.wait_for_url('**/#/letters/1')
+    app.page.wait_for_selector('[data-ms=send]')
+    # το πρότυπο ορίζει info@· αλλαγή σε grand.secretary@ για αυτή την επιστολή
+    assert app.page.input_value('[data-ms=from]') == 'general' and 'info@nglgreece.gr' in app.page.inner_text('[data-ms=send]')
+    app.page.select_option('[data-ms=from]', 'official')
+    app.page.wait_for_function("document.querySelector('[data-ms=send]') && document.querySelector('[data-ms=send]').textContent.includes('grand.secretary@')")
+    app.page.wait_for_function("import('./core/store.js').then((m) => m.db.get('letters', 1).mail_kind === 'official')")
+    app.page.wait_for_selector('[data-ms=send]')
+    assert 'grand.secretary@' in app.page.inner_text('[data-ms=send]')
+    app.page.click('[data-ms=send]')
+    app.page.wait_for_selector('.send-preview')
+    pv = app.page.inner_text('.send-preview')
+    assert 'grand.secretary@nglgreece.gr' in pv and 'lodge@example.com' in pv and 'Έγκριση Κανονισμού' in pv and '.pdf' in pv
+    assert 'Εγκρίνεται ο Κανονισμός.' in app.page.frame_locator('.send-preview-body').locator('body').inner_text()
+    app.page.click('.send-preview [data-no]')  # Άκυρο → δεν στέλνεται τίποτα
+    assert app.page.locator('.send-preview').count() == 0 and not sent
+    app.page.click('[data-ms=send]')
+    app.page.click('.send-preview [data-yes]')
+    app.page.wait_for_selector('.ms-ok', timeout=30000)
+    mime = base64.urlsafe_b64decode(sent[0]['raw'] + '=' * (-len(sent[0]['raw']) % 4)).decode()
+    assert 'From: grand.secretary@nglgreece.gr' in mime and 'To: lodge@example.com' in mime
+
+
+def test_protocol_field_in_subject_and_official_font(app):
+    """{Αριθμός Πρωτοκόλλου} και στο θέμα· τα έντυπα με Noto Serif (αριθμοί στην ίδια γραμμή)."""
+    app.connect_local()
+    app.go('/letters/new').fill(subject='Έγκριση Κανονισμού με Αρ. Πρωτ. {Αριθμός Πρωτοκόλλου} για την Στοά', body='Κείμενο.')
+    app.click('Αποθήκευση & απόδοση')
+    app.page.wait_for_url('**/#/letters/1')
+    assert 'Θέμα: Έγκριση Κανονισμού με Αρ. Πρωτ. 20545 για την Στοά' in app.page.inner_text('.print-area .paper')
+    assert 'Αρ. Πρωτ. 20545 για' in app.page.inner_text('.mailsheet')  # και στο θέμα του email
+    app.page.evaluate("document.fonts.ready")
+    ff = app.page.evaluate("getComputedStyle(document.querySelector('.print-area .paper')).fontFamily")
+    assert ff.startswith('"Noto Serif"'), ff
+    assert app.page.evaluate("document.fonts.check(\"16px 'Noto Serif'\", '20545 Αρ.')")
+    app.go('/letters')
+    assert 'Αρ. Πρωτ. 20545 για' in app.text()
+
+
 def test_protocol_suggested_or_manual(app):
     """Το «Έτοιμο» προτείνει τον επόμενο αριθμό πρωτοκόλλου· μπορεί να γραφτεί άλλος, και να αλλάξει αργότερα."""
     app.connect_local()
@@ -1368,8 +1431,8 @@ def test_recipient_lodge_fills_template_subject(app):
     assert app.page.input_value('[name=recipient_email]') == 'dioni.secretary@example.com'
 
 
-def test_letter_protocol_image_right_of_seal(app, tmp_path):
-    """Πρότυπο με {Αρ. Πρωτ.}: η νέα επιστολή ζητά «ΕΙΚΟΝΑ ΠΡΩΤΟΚΟΛΛΟΥ», που μπαίνει δεξιά της σφραγίδας, ~150×150, χωρίς επικάλυψη."""
+def test_letter_protocol_image_below_seal_centered(app, tmp_path):
+    """Πρότυπο με {Αρ. Πρωτ.}: η νέα επιστολή ζητά «ΕΙΚΟΝΑ ΠΡΩΤΟΚΟΛΛΟΥ», που μπαίνει κάτω από τη σφραγίδα, στο κέντρο, ~400×200."""
     import base64
     png = tmp_path / 'stamp.png'
     png.write_bytes(base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg=='))
@@ -1394,9 +1457,9 @@ def test_letter_protocol_image_right_of_seal(app, tmp_path):
     assert app.page.evaluate("async () => (await import('./core/store.js')).db.get('letters', 1).protocol_image").startswith('data:image/png;base64,')
     box = lambda sel: app.page.locator('.print-area .paper ' + sel).bounding_box()
     seal, proto, sign, paper = box('.seal-img'), box('.proto-img'), box('.sign'), box('')
-    assert proto['x'] >= seal['x'] + seal['width'] and seal['x'] >= sign['x'] + sign['width']  # δεξιά της σφραγίδας, χωρίς επικάλυψη
-    assert proto['x'] + proto['width'] <= paper['x'] + paper['width']
-    assert 120 <= proto['width'] <= 170 and 120 <= proto['height'] <= 170, proto
+    assert proto['y'] >= seal['y'] + seal['height'] and proto['y'] >= sign['y'] + sign['height']  # κάτω από σφραγίδα/υπογραφή, χωρίς επικάλυψη
+    assert abs((proto['x'] + proto['width'] / 2) - (paper['x'] + paper['width'] / 2)) < 3  # στο κέντρο
+    assert 380 <= proto['width'] <= 420 and 190 <= proto['height'] <= 210, proto
     # «Νέα πάνω σε αυτή» δεν παίρνει την εικόνα (κάθε έγκριση έχει τη δική της)· επιστολή χωρίς εικόνα: τίποτα δίπλα στη σφραγίδα
     app.go('/letters/new').fill(subject='Χωρίς', body='x').click('💾 Αποθήκευση')
     app.page.wait_for_url('**/#/letters/2')
@@ -1514,10 +1577,12 @@ def test_visit_email_gmail_draft_with_pdf_and_bcc(app):
     assert 'Αποστολή τώρα από info@nglgreece.gr' in app.page.inner_text('[data-ms=send]')
     assert app.page.input_value('[name=subject]').startswith('20545 - Εκπροσώπηση ΜΔ εις την Στοάν «ΔΙΩΝΗ»')
     app.page.click('[data-ms=send]')
+    app.page.click('.send-preview [data-yes]')
     app.page.wait_for_selector('.ms-state .warn', timeout=30000)
     assert 'other@example.com' in app.text('.ms-state') and not sent  # λάθος λογαριασμός → δεν στάλθηκε
     profile['emailAddress'] = 'info@nglgreece.gr'
     app.page.click('[data-ms=send]')
+    app.page.click('.send-preview [data-yes]')
     app.page.wait_for_url('**/#/visits', timeout=30000)
     assert len(sent) == 1
     mime = base64.urlsafe_b64decode(sent[0]['raw'] + '=' * (-len(sent[0]['raw']) % 4)).decode()
@@ -2081,6 +2146,19 @@ def test_letters_archive_protocol_actions_and_next_number(app):
     app.go('/letters')
     assert '30002' in app.text('#protonext')
     assert not app.errors, app.errors
+
+
+def test_letters_archive_pdf_download(app):
+    """Αρχείο Επιστολών: σε κάθε γραμμή, δίπλα στον Αρ. Πρωτ., λήψη του PDF."""
+    app.connect_local()
+    app.go('/letters/new').fill(subject='Λήψη PDF', body='Κείμενο.').click('Αποθήκευση & απόδοση')
+    app.page.wait_for_url('**/#/letters/1')
+    app.go('/letters')
+    with app.page.expect_download(timeout=60000) as dl:
+        app.page.locator('tr', has_text='Λήψη PDF').locator('[data-act=dlpdf]').click()
+    d = dl.value
+    assert d.suggested_filename.endswith('.pdf') and '20545' in d.suggested_filename
+    assert Path(d.path()).read_bytes()[:4] == b'%PDF'
 
 
 def test_letters_archive_delete(app):

@@ -12,6 +12,7 @@ export function loadScript(rel) {
 export async function paperPdf(el, { title = '', author = '' } = {}) {
   await Promise.all([loadScript('../vendor/html2canvas.min.js'), loadScript('../vendor/jspdf.umd.min.js')]);
   await (await import('./paper.js')).resolveFileImages(el);
+  if (document.fonts) await Promise.all([document.fonts.load("16px 'Noto Serif'"), document.fonts.load("bold 16px 'Noto Serif'")]).then(() => document.fonts.ready).catch(() => {}); // γραμματοσειρά των εντύπων
   await Promise.all([...el.querySelectorAll('img')].map((i) => (i.complete ? null : new Promise((r) => { i.onload = i.onerror = r; }))));
   const keep = { zoom: el.style.zoom, a4: el.classList.contains('a4') };
   el.style.zoom = '1'; el.classList.add('a4');

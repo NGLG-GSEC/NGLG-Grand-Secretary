@@ -3,7 +3,7 @@
 // με Προς / Κοιν. / Bcc / θέμα / κείμενο και το PDF συνημμένο, και ανοίγει στο Gmail (σελίδα ή εφαρμογή)· ο χρήστης πατά «Αποστολή».
 // Χωρίς Client ID: κινητό → κοινοποίηση του PDF στην εφαρμογή Gmail (οι διευθύνσεις αντιγράφονται)· υπολογιστής → λήψη PDF + Gmail έτοιμο.
 import { esc, download } from './util.js';
-import { senderFor, gmailUrl, withMailHeader, MAIL_HEADER } from './mail.js';
+import { senderFor, gmailUrl, withMailHeader, MAIL_HEADER, MAIL_SENDERS } from './mail.js';
 import { richPlain, richHtml } from './rich.js';
 import { googleToken, driveReady } from './drive.js';
 import { copyText } from './mail.js';
@@ -86,21 +86,43 @@ export const gmailAppUrl = (kind, messageId) => (isIOS() ? 'googlegmail:///'
   : isAndroid() ? `intent://mail.google.com/mail/#Intent;scheme=https;package=com.google.android.gm;S.browser_fallback_url=${encodeURIComponent(draftWebUrl(kind, messageId))};end`
     : draftWebUrl(kind, messageId));
 
+// Προεπισκόπηση πριν από κάθε άμεση αποστολή: Από / Προς / Κοιν. / Bcc / Θέμα / το κείμενο όπως θα φτάσει / συνημμένα → επιβεβαίωση
+// → Promise<boolean> (true μόνο με «Επιβεβαίωση αποστολής»)
+export function confirmSend({ from, msg, attachments = [], note = '' }) {
+  return new Promise((done) => {
+    const html = (msg.htmlBody || mailHtml(msg.body)).replace(`cid:${LOGO_CID}`, new URL('../img/header_emblem.png', import.meta.url).href);
+    const ov = Object.assign(document.createElement('div'), { className: 'gprev send-preview' });
+    ov.innerHTML = `<div class="gprev-box" role="dialog" aria-label="Προεπισκόπηση πριν την αποστολή"><div class="gprev-bar"><b>👁 Προεπισκόπηση πριν την αποστολή</b><button type="button" class="btn small" data-no>✕</button></div>
+<div class="ms-row"><span>Από</span><div><b>${esc(from)}</b></div></div><div class="ms-row"><span>Προς</span><div>${chips(msg.to)}</div></div>
+<div class="ms-row"><span>Κοιν.</span><div>${chips(msg.cc)}</div></div><div class="ms-row"><span>Bcc</span><div>${chips(msg.bcc)}</div></div>
+<div class="ms-row"><span>Θέμα</span><div><b>${esc(msg.subject || '')}</b></div></div>
+<div class="ms-row"><span>📎</span><div>${attachments.length ? attachments.map((a) => `<span class="mchip att">${esc(a)}</span>`).join('') : '<span class="muted">χωρίς συνημμένο</span>'}</div></div>
+<p class="muted" style="margin:10px 0 4px">Κείμενο του email:</p><iframe class="send-preview-body" title="Κείμενο του email" sandbox="" srcdoc="${esc(html)}"></iframe>
+${note ? `<p class="warn">${esc(note)}</p>` : ''}<div class="toolbar" style="margin-top:12px"><button type="button" class="btn primary big" data-yes>📤 Επιβεβαίωση αποστολής</button><button type="button" class="btn big" data-no>Άκυρο</button></div></div>`;
+    const close = (v) => { ov.remove(); document.removeEventListener('keydown', key); done(v); };
+    const key = (e) => { if (e.key === 'Escape') close(false); };
+    ov.addEventListener('click', (e) => { if (e.target.closest('[data-yes]')) close(true); else if (e.target === ov || e.target.closest('[data-no]')) close(false); });
+    document.addEventListener('keydown', key);
+    document.body.append(ov);
+  });
+}
+
 const blobB64 = async (blob) => b64(new Uint8Array(await blob.arrayBuffer()));
 const chips = (xs) => list(xs).map((e) => `<span class="mchip">${esc(e)}</span>`).join('') || '<span class="muted">—</span>';
 
 // Καρτέλα αποστολής: getMsg() → { to, cc, bcc, subject, body }, getPdf() → Promise<{ blob, name }>
-// onSent: καλείται μετά την άμεση αποστολή (π.χ. σημείωση «ενημερώθηκε»)
-export function mailSheet(el, { getMsg, getPdf, kind = 'general', pdfName = '', onDone = null, onSent = null }) {
+// onSent: καλείται μετά την άμεση αποστολή (π.χ. σημείωση «ενημερώθηκε»)· onKind(kind): αλλαγή λογαριασμού αποστολής
+export function mailSheet(el, { getMsg, getPdf, kind = 'general', pdfName = '', onDone = null, onSent = null, onKind = null }) {
   const box = el.querySelector('.mailsheet');
   const render = () => {
     const m = getMsg();
-    box.innerHTML = `<div class="ms-head"><span class="ms-g">M</span><div><b>Gmail</b> · <span class="muted">${esc(senderFor(kind))}</span></div></div>
+    box.innerHTML = `<div class="ms-head"><span class="ms-g">M</span><div><b>Gmail</b> · <label class="ms-from">Αποστολή από <select data-ms="from">${Object.entries(MAIL_SENDERS).map(([k, v]) => `<option value="${k}"${k === kind ? ' selected' : ''}>${esc(senderFor(k))} — ${esc(v.label)}</option>`).join('')}</select></label></div></div>
 <div class="ms-row"><span>Προς</span><div>${chips(m.to)}</div></div><div class="ms-row"><span>Κοιν.</span><div>${chips(m.cc)}</div></div><div class="ms-row"><span>Bcc</span><div>${chips(m.bcc)}</div></div>
 <div class="ms-row"><span>Θέμα</span><div><b>${esc(m.subject || '')}</b></div></div>
 <div class="ms-row"><span>📎</span><div><span class="mchip att">${esc(pdfName || 'PDF επιστολής')}.pdf</span></div></div>
 <div class="ms-acts"><button type="button" class="btn primary big" data-ms="send">📤 Αποστολή τώρα από ${esc(senderFor(kind))}</button>
 <button type="button" class="btn big" data-ms="go">✉ Άνοιγμα στο Gmail με το PDF (έλεγχος πριν την αποστολή)</button></div><div class="ms-state muted"></div>`;
+    box.querySelector('[data-ms=from]').onchange = async (e) => { kind = e.target.value; render(); if (onKind) await onKind(kind); };
     box.querySelector('[data-ms=go]').onclick = go;
     box.querySelector('[data-ms=send]').onclick = send;
   };
@@ -110,8 +132,7 @@ export function mailSheet(el, { getMsg, getPdf, kind = 'general', pdfName = '', 
     let m = getMsg();
     if (!list(m.to).length) { state('<span class="warn">Συμπληρώστε τον παραλήπτη (Προς).</span>'); return; }
     if (!driveReady()) { state('<span class="warn">Για άμεση αποστολή χρειάζεται το Google Client ID (Ρυθμίσεις → Google). Μέχρι τότε χρησιμοποιήστε «Άνοιγμα στο Gmail».</span>'); return; }
-    const n = list(m.bcc).length;
-    if (!window.confirm(`Αποστολή τώρα από ${from};\n\nΠρος: ${list(m.to).join(', ')}${list(m.cc).length ? `\nΚοιν.: ${list(m.cc).join(', ')}` : ''}${n ? `\nBcc: ${n} παραλήπτες` : ''}\nΘέμα: ${m.subject || ''}\nΣυνημμένο: ${pdfName || 'PDF επιστολής'}.pdf`)) return;
+    if (!await confirmSend({ from, msg: m, attachments: [`${pdfName || 'PDF επιστολής'}.pdf`] })) return;
     box.querySelectorAll('button').forEach((x) => { x.disabled = true; });
     try {
       state('⏳ Ετοιμάζεται το PDF…');

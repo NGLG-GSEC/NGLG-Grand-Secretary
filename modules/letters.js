@@ -8,7 +8,7 @@ import { richPlain } from '../core/rich.js';
 import { letterPaper, printPaper, signerProfile, IMG, fitPaper, letterFields, LETTER_FIELDS, protocolImage, hasProtocolField } from '../core/paper.js';
 import { makeDocx, letterBlocks } from '../core/docx.js';
 import { docTitle, driveBox, saveDocToDrive } from '../core/drive.js';
-import { mailButtons, senderBanner, withLetterCc } from '../core/mail.js';
+import { mailButtons, senderBanner, withLetterCc, senderFor, MAIL_SENDERS } from '../core/mail.js';
 import { mailSheet, bccWithout } from '../core/gmail.js';
 import { attachPicker, contactItems } from '../core/pickers.js';
 import { nextProtocol, askProtocol, askNextProtocol, claimProtocol, setNextProtocol, suggestedProtocol, legacyDecreeLetterIds } from './protocol.js';
@@ -55,22 +55,22 @@ function assignProtocol(tx, id, manual = 0) {
   const p = nextProtocol(tx, 'Επιστολή', '', manual);
   return tx.update('letters', id, { protocol_seq: p.seq, protocol_year: p.year, protocol_no: p.no, letter_date: today() });
 }
-const fileName = (x) => (x.protocol_seq ? docTitle(x.protocol_seq, category(x), x.subject) : safeFileName(`${category(x)} ${x.subject || ''}`));
+const fileName = (x) => (x.protocol_seq ? docTitle(x.protocol_seq, category(x), letterFields(x.subject, x)) : safeFileName(`${category(x)} ${letterFields(x.subject, x)}`));
 
 // Word (.docx) για επεξεργασία, με το επιστολόχαρτο της ΕΜΣτΕ
 export async function letterDocxBlob(x) {
   const S = (k) => db.setting(k) || '', p = signerProfile(x.signer);
   const blocks = letterBlocks({ org: S('organization_name'), founded: S('founded_year'), gmTitle: S('grand_master_title'), gmName: S('grand_master_name'),
-    number: x.protocol_seq ? String(x.protocol_seq) : (x.protocol_no || ''), date: fmtDate(x.letter_date || today()), place: 'Εν Αθήναις', to: x.recipient_name, cc: x.cc_name || '', subject: x.subject,
+    number: x.protocol_seq ? String(x.protocol_seq) : (x.protocol_no || ''), date: fmtDate(x.letter_date || today()), place: 'Εν Αθήναις', to: x.recipient_name, cc: x.cc_name || '', subject: letterFields(x.subject, x),
     paragraphs: [{ text: letterFields(x.body, x) }], closing: x.closing || S('closing'), signature: p.img, signer: p.name, signerTitle: p.title, protoImg: protocolImage(x) });
-  return makeDocx(blocks, { title: x.subject, author: p.name });
+  return makeDocx(blocks, { title: letterFields(x.subject, x), author: p.name });
 }
 export async function letterDocx(x) { download(fileName(x) + '.docx', await letterDocxBlob(x)); }
 // Άνοιγμα στο Ψηφιακό Έντυπο (diatagma/) με τα στοιχεία της επιστολής
 export function openInDigitalForm(x) {
   const p = signerProfile(x.signer);
   try {
-    localStorage.setItem('nglg-diatagma-prefill', JSON.stringify({ num: x.protocol_seq ? String(x.protocol_seq) : (x.protocol_no || ''), date: x.letter_date || today(), place: 'Εν Αθήναις', doctype: 'ΕΠΙΣΤΟΛΗ', subject: x.subject || '',
+    localStorage.setItem('nglg-diatagma-prefill', JSON.stringify({ num: x.protocol_seq ? String(x.protocol_seq) : (x.protocol_no || ''), date: x.letter_date || today(), place: 'Εν Αθήναις', doctype: 'ΕΠΙΣΤΟΛΗ', subject: letterFields(x.subject, x),
       p0: [x.recipient_name && `Προς: ${x.recipient_name}`, x.cc_name && `Κοιν.: ${x.cc_name}`].filter(Boolean).join('\n'), p1: richPlain(letterFields(x.body, x)), p2: '', greet: x.closing || db.setting('closing') || '', signer: p.name, sigtitle: p.title,
       useSig: p.img === IMG.signature, mailto: x.recipient_email || '' }));
   } catch { /* χωρίς localStorage: ανοίγει κενό */ }
@@ -97,9 +97,9 @@ function fillPanel(x, query) {
 }
 
 // «ΕΙΚΟΝΑ ΠΡΩΤΟΚΟΛΛΟΥ» (π.χ. το εγκεκριμένο πρωτόκολλο-σφραγίδα): φορτώνεται στην επιστολή όταν το πρότυπο τη ζητά·
-// μπαίνει δεξιά της σφραγίδας (~150×150)· αποθηκεύεται ως PNG (και για το Word)
+// μπαίνει κάτω από τη σφραγίδα, στο κέντρο (~400×200)· αποθηκεύεται ως PNG (και για το Word)
 export const asksProtoImage = (t) => !!t && (String(t.ask_proto_image ?? '') === '1' || (String(t.ask_proto_image ?? '') === '' && hasProtocolField([t.subject, t.body].join(' '))));
-async function pngDataUrl(file, max = 450) {
+async function pngDataUrl(file, max = 800) {
   const img = await createImageBitmap(file), k = Math.min(1, max / Math.max(img.width, img.height));
   const c = Object.assign(document.createElement('canvas'), { width: Math.max(1, Math.round(img.width * k)), height: Math.max(1, Math.round(img.height * k)) });
   c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
@@ -108,7 +108,7 @@ async function pngDataUrl(file, max = 450) {
 const protoPreview = (v) => (v ? `<img class="proto-img" src="${esc(v)}" alt="ΕΙΚΟΝΑ ΠΡΩΤΟΚΟΛΛΟΥ">` : '<span class="warn">Δεν έχει φορτωθεί ακόμη εικόνα.</span>');
 function protoImageBox(x) {
   const t = x.template_id ? db.get('letter_templates', x.template_id) : null;
-  return `<div class="full card proto-card" id="protoBox"${x.protocol_image || asksProtoImage(t) ? '' : ' hidden'}><b>🖼 ΕΙΚΟΝΑ ΠΡΩΤΟΚΟΛΛΟΥ</b> <small class="muted">— φορτώστε την εικόνα του εγκεκριμένου πρωτοκόλλου (σφραγίδα)· μπαίνει δεξιά της σφραγίδας, ~150×150, χωρίς να καλύπτει κείμενο.</small>
+  return `<div class="full card proto-card" id="protoBox"${x.protocol_image || asksProtoImage(t) ? '' : ' hidden'}><b>🖼 ΕΙΚΟΝΑ ΠΡΩΤΟΚΟΛΛΟΥ</b> <small class="muted">— φορτώστε την εικόνα του εγκεκριμένου πρωτοκόλλου (σφραγίδα)· μπαίνει κάτω από τη σφραγίδα της ΕΜΣτΕ, στο κέντρο, ~400×200, χωρίς να καλύπτει κείμενο.</small>
 <input type="hidden" name="protocol_image" value="${esc(x.protocol_image || '')}"><div class="proto-preview">${protoPreview(x.protocol_image)}</div>
 <div class="toolbar"><label class="btn">📤 Φόρτωση εικόνας<input type="file" id="protoImgFile" accept="image/*" hidden></label><button type="button" class="btn danger" data-act="protoImgDel">Αφαίρεση</button></div></div>`;
 }
@@ -221,7 +221,10 @@ function mountLetterForm(el, x, isNew) {
 }
 
 // Αποστολή: λογαριασμός και Bcc — οι Επιστολές Επισκέψεων από τα γενικά εξερχόμενα (info@) με το Bcc των Επισκέψεων
-const mailKind = (x) => (category(x) === 'ΕΠΙΣΚΕΨΗ' ? 'general' : 'official');
+// Λογαριασμός αποστολής: της επιστολής (επιλογή στην καρτέλα αποστολής) → του προτύπου → Επισκέψεις από info@, οι άλλες από grand.secretary@
+const MAIL_KINDS = { official: 1, general: 1 };
+const mailKind = (x) => { const t = x.template_id ? db.get('letter_templates', x.template_id) : null;
+  return MAIL_KINDS[x.mail_kind] ? x.mail_kind : t && MAIL_KINDS[t.mail_kind] ? t.mail_kind : category(x) === 'ΕΠΙΣΚΕΨΗ' ? 'general' : 'official'; };
 const mailBcc = (x, to = '', cc = '') => (category(x) === 'ΕΠΙΣΚΕΨΗ' ? bccWithout(db.setting('visit_bcc') || '', to, cc) : '');
 // PDF μιας επιστολής (χωρίς να είναι ανοιχτή στην οθόνη)
 export const letterFileName = (x) => fileName(x);
@@ -270,11 +273,11 @@ export async function ensureVisitLetter(v) {
 function viewLetter({ params }) {
   const x = db.get('letters', params.id);
   if (!x) return '<h1>Δεν βρέθηκε η επιστολή</h1>';
-  const wa = 'https://wa.me/?text=' + encodeURIComponent(`Παρακαλώ να ελέγξετε το email σας και στα spam.\n\n${db.setting('organization_name')}\nΑρ. Πρωτ.: ${x.protocol_no}\nΘέμα: ${x.subject}`);
+  const wa = 'https://wa.me/?text=' + encodeURIComponent(`Παρακαλώ να ελέγξετε το email σας και στα spam.\n\n${db.setting('organization_name')}\nΑρ. Πρωτ.: ${x.protocol_no}\nΘέμα: ${letterFields(x.subject, x)}`);
   return {
-    title: x.subject,
+    title: letterFields(x.subject, x),
     html: `<section class="card send-panel noprint"><h3>Αποστολή & Αποθήκευση</h3>${senderBanner(mailKind(x))}
-<div class="toolbar"><button class="btn primary" data-act="pdf">⬇ PDF / Εκτύπωση</button>${mailButtons(withLetterCc({ to: x.recipient_email, bcc: mailBcc(x, x.recipient_email), subject: x.subject, body: letterFields(x.body, x), kind: mailKind(x) }), '✉ Αποστολή με Email')}
+<div class="toolbar"><button class="btn primary" data-act="pdf">⬇ PDF / Εκτύπωση</button>${mailButtons(withLetterCc({ to: x.recipient_email, bcc: mailBcc(x, x.recipient_email), subject: letterFields(x.subject, x), body: letterFields(x.body, x), kind: mailKind(x) }), '✉ Αποστολή με Email')}
 <button class="btn" data-act="word">⬇ Word (επεξεργασία)</button><button class="btn" data-act="form">🖋 Ψηφιακό Έντυπο</button>
 <button class="btn" data-act="wapdf">🟢 WhatsApp / Business με PDF</button><a class="btn" target="_blank" rel="noopener" href="${wa}">WhatsApp μήνυμα</a>${x.status === 'ready' ? '' : '<button class="btn primary" data-act="ready">✅ Έτοιμη: απόδοση αρ. πρωτοκόλλου</button>'}</div>
 ${x.status === 'ready' ? '<div class="mailsheet"></div>' : '<p class="send-help">Για αποστολή με συνημμένο PDF ορίστε πρώτα την επιστολή «✅ Έτοιμη» (αριθμός πρωτοκόλλου).</p>'}${driveBox(x, fileName(x))}</section>
@@ -282,7 +285,8 @@ ${x.status === 'ready' ? '<div class="mailsheet"></div>' : '<p class="send-help"
 ${x.protocol_seq ? '<button class="btn" data-act="protocol">✏ Αλλαγή αρ. πρωτοκόλλου</button>' : ''}<button class="btn danger" data-act="del">Διαγραφή</button> ${statusPill(x.status)}</div>
 <div class="print-area">${letterPaper(x)}</div>`,
     mount(el) {
-      if (x.status === 'ready') mailSheet(el, { kind: mailKind(x), pdfName: fileName(x), getMsg: () => withLetterCc({ to: x.recipient_email, cc: '', bcc: mailBcc(x, x.recipient_email), subject: x.subject, body: letterFields(x.body, x) }),
+      if (x.status === 'ready') mailSheet(el, { kind: mailKind(x), pdfName: fileName(x),
+        onKind: async (k) => { await db.save(`Επιστολή ${x.protocol_no || x.id}: λογαριασμός αποστολής`, (tx) => { tx.update('letters', x.id, { mail_kind: k }); }); toast(`Η επιστολή θα στέλνεται από ${senderFor(k)}.`); go(`/letters/${x.id}`); }, getMsg: () => withLetterCc({ to: x.recipient_email, cc: '', bcc: mailBcc(x, x.recipient_email), subject: letterFields(x.subject, x), body: letterFields(x.body, x) }),
         getPdf: async () => ({ blob: await (await import('../core/pdf.js')).paperPdf(el.querySelector('.print-area .paper'), { title: fileName(x) }), name: fileName(x) + '.pdf' }) });
       bind(el, {
         pdf: () => printPaper(fileName(x)),
@@ -315,13 +319,17 @@ function archive({ query }) {
 <small class="muted">Ενιαία αρίθμηση Επιστολών και Διαταγμάτων. Όταν γράφετε αριθμό σε ένα έγγραφο, η αρίθμηση συνεχίζει από εκεί· οι αριθμοί που υπάρχουν ήδη παραλείπονται.</small></div>
 <form class="filters" id="flt"><input name="q" value="${esc(query.q || '')}" placeholder="Αρ. πρωτ., θέμα, παραλήπτης" autofocus><input type="date" name="from" value="${esc(query.from || '')}"><input type="date" name="to" value="${esc(query.to || '')}"><button>Αναζήτηση</button></form>
 <p class="muted">${xs.length} επιστολές${xs.length > 500 ? ' (εμφανίζονται οι 500 πιο πρόσφατες)' : ''}</p>
-${table(['Αρ. Πρωτ.', 'Ημερομηνία', 'Θέμα', 'Παραλήπτης', 'Κατάσταση', 'Ενέργειες'], shown.map((x) => [`<span class="official-number">${esc(x.protocol_no)}</span>`, esc(fmtDate(x.letter_date)), esc(x.subject), esc(x.recipient_name), statusPill(x.status),
+${table(['Αρ. Πρωτ.', 'Ημερομηνία', 'Θέμα', 'Παραλήπτης', 'Κατάσταση', 'Ενέργειες'], shown.map((x) => [`<span class="official-number">${esc(x.protocol_no)}</span> <button type="button" class="btn small" data-act="dlpdf" data-id="${x.id}" title="Λήψη PDF">⬇ PDF</button>`, esc(fmtDate(x.letter_date)), esc(letterFields(x.subject, x)), esc(x.recipient_name), statusPill(x.status),
   `<a href="#/letters/${x.id}">Άνοιγμα</a> · <a href="#/letters/${x.id}/edit">Επεξεργασία</a> · <a href="#/letters/new?copy_from=${x.id}">Νέα πάνω σε αυτή</a> · ${x.protocol_seq ? `<button type="button" class="btn small" data-act="proto" data-id="${x.id}">✏ Αλλαγή αρ. πρωτ.</button>` : `<button type="button" class="btn small" data-act="addproto" data-id="${x.id}">➕ Αρ. πρωτοκόλλου</button>`} · <button type="button" class="btn wa-btn" data-act="wapdf" data-id="${x.id}">🟢 WhatsApp / Business PDF</button> · <button type="button" class="btn small danger" data-act="dellet" data-id="${x.id}">🗑 Διαγραφή</button>`]), 'Δεν βρέθηκαν επιστολές.')}`,
     mount(el) {
       onSubmit(el.querySelector('#flt'), (d) => go('/letters', d));
       const back = () => ['/letters', query];
       bind(el, {
         wapdf: (d, b) => waSendPdf(db.get('letters', d.id), b),
+        async dlpdf(d, b) { // λήψη του PDF της επιστολής από το αρχείο
+          const old = b.textContent; b.disabled = true; b.textContent = '⏳';
+          try { const r = await letterPdf(db.get('letters', d.id)); download(r.name, r.blob, 'application/pdf'); } finally { b.disabled = false; b.textContent = old; }
+        },
         proto: (d) => changeLetterProtocol(db.get('letters', d.id), ...back()),
         dellet: (d) => deleteLetter(db.get('letters', d.id), ...back()),
         addproto(d) {
@@ -382,7 +390,8 @@ module({
       fields: [{ k: 'name', label: 'Όνομα', required: true, full: true }, { k: 'subject', label: 'Θέμα (προαιρετικό)', full: true, help: PH_HELP },
         { k: 'body', label: 'Κορμός επιστολής', type: 'textarea', full: true, help: PH_HELP }, { k: 'closing', label: 'Αποφώνηση (προαιρετική)', placeholder: 'π.χ. Με εκτίμηση και αδελφική αγάπη,' },
         { k: 'category', label: 'Κατηγορία πρωτοκόλλου', type: 'select', options: Object.entries(LETTER_CATEGORIES).map(([k]) => [k, k]) }, { k: 'active', label: 'Ενεργό', type: 'select', options: [[1, 'Ναι'], [0, 'Όχι']] },
-        { k: 'ask_proto_image', label: 'ΕΙΚΟΝΑ ΠΡΩΤΟΚΟΛΛΟΥ: ζητείται στη νέα επιστολή', type: 'select', options: [['', 'Αυτόματα — όταν το κείμενο έχει {Αρ. Πρωτ.}'], ['1', 'Ναι, πάντα'], ['0', 'Όχι']], help: 'Η εικόνα (π.χ. το εγκεκριμένο πρωτόκολλο-σφραγίδα) φορτώνεται σε κάθε επιστολή και μπαίνει δεξιά της σφραγίδας, ~150×150.' }],
+        { k: 'mail_kind', label: 'Αποστολή email από', type: 'select', options: () => [['', 'Αυτόματα (Επισκέψεις: γενικά εξερχόμενα · άλλες: Επιστολές & Διατάγματα)'], ...Object.entries(MAIL_SENDERS).map(([k, v]) => [k, `${senderFor(k)} — ${v.label}`])], help: 'Αλλάζει και ανά επιστολή, στην καρτέλα «Αποστολή».' },
+        { k: 'ask_proto_image', label: 'ΕΙΚΟΝΑ ΠΡΩΤΟΚΟΛΛΟΥ: ζητείται στη νέα επιστολή', type: 'select', options: [['', 'Αυτόματα — όταν το κείμενο έχει {Αρ. Πρωτ.}'], ['1', 'Ναι, πάντα'], ['0', 'Όχι']], help: 'Η εικόνα (π.χ. το εγκεκριμένο πρωτόκολλο-σφραγίδα) φορτώνεται σε κάθε επιστολή και μπαίνει κάτω από τη σφραγίδα, στο κέντρο, ~400×200.' }],
       defaults: { active: 1 },
       sort: (xs) => sortBy(xs.filter((t) => t.name !== 'ΔΙΑΤΑΓΜΑΤΑ'), 'id'),
       validate: (d) => ({ ...d, active: Number(d.active) ? 1 : 0 }),
