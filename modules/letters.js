@@ -8,7 +8,7 @@ import { richPlain } from '../core/rich.js';
 import { letterPaper, printPaper, signerProfile, IMG, fitPaper, letterFields, LETTER_FIELDS } from '../core/paper.js';
 import { makeDocx, letterBlocks } from '../core/docx.js';
 import { docTitle, driveBox, saveDocToDrive } from '../core/drive.js';
-import { mailButtons, senderBanner } from '../core/mail.js';
+import { mailButtons, senderBanner, withLetterCc } from '../core/mail.js';
 import { mailSheet, bccWithout } from '../core/gmail.js';
 import { attachPicker, contactItems } from '../core/pickers.js';
 import { nextProtocol, askProtocol, askNextProtocol, claimProtocol, setNextProtocol, suggestedProtocol, legacyDecreeLetterIds } from './protocol.js';
@@ -120,6 +120,8 @@ function mountLetterForm(el, x, isNew) {
   const f = el.querySelector('#lf');
   attachPicker(el.querySelector('#rcptPick'), contactItems, (c) => {
     f.recipient_name.value = c.name || ''; f.recipient_email.value = c.email || ''; f.recipient_member_id.value = c.member_id || '';
+    const l = c.lodge_number && lodgeByNumber(c.lodge_number); // Στοά ως παραλήπτης → και τα {Στοά}, {Αρ. Στοάς} του προτύπου (θέμα, κείμενο)
+    if (l) { fv.value = ''; fl.value = `${l.number} · ${l.name}`; apply(false); }
   });
   // Προσθήκη (όχι αντικατάσταση): email παραληπτών και Κοιν. από επαφές/ομάδες
   const addEmails = (v) => { f.recipient_email.value = [...new Set([...splitEmails(f.recipient_email.value), ...splitEmails(v)])].join(', '); f.recipient_email.dispatchEvent(new Event('input', { bubbles: true })); };
@@ -247,7 +249,7 @@ function viewLetter({ params }) {
   return {
     title: x.subject,
     html: `<section class="card send-panel noprint"><h3>Αποστολή & Αποθήκευση</h3>${senderBanner(mailKind(x))}
-<div class="toolbar"><button class="btn primary" data-act="pdf">⬇ PDF / Εκτύπωση</button>${mailButtons({ to: x.recipient_email, bcc: mailBcc(x, x.recipient_email), subject: x.subject, body: letterFields(x.body, x), kind: mailKind(x) }, '✉ Αποστολή με Email')}
+<div class="toolbar"><button class="btn primary" data-act="pdf">⬇ PDF / Εκτύπωση</button>${mailButtons(withLetterCc({ to: x.recipient_email, bcc: mailBcc(x, x.recipient_email), subject: x.subject, body: letterFields(x.body, x), kind: mailKind(x) }), '✉ Αποστολή με Email')}
 <button class="btn" data-act="word">⬇ Word (επεξεργασία)</button><button class="btn" data-act="form">🖋 Ψηφιακό Έντυπο</button>
 <button class="btn" data-act="wapdf">🟢 WhatsApp / Business με PDF</button><a class="btn" target="_blank" rel="noopener" href="${wa}">WhatsApp μήνυμα</a>${x.status === 'ready' ? '' : '<button class="btn primary" data-act="ready">✅ Έτοιμη: απόδοση αρ. πρωτοκόλλου</button>'}</div>
 ${x.status === 'ready' ? '<div class="mailsheet"></div>' : '<p class="send-help">Για αποστολή με συνημμένο PDF ορίστε πρώτα την επιστολή «✅ Έτοιμη» (αριθμός πρωτοκόλλου).</p>'}${driveBox(x, fileName(x))}</section>
@@ -255,7 +257,7 @@ ${x.status === 'ready' ? '<div class="mailsheet"></div>' : '<p class="send-help"
 ${x.protocol_seq ? '<button class="btn" data-act="protocol">✏ Αλλαγή αρ. πρωτοκόλλου</button>' : ''}<button class="btn danger" data-act="del">Διαγραφή</button> ${statusPill(x.status)}</div>
 <div class="print-area">${letterPaper(x)}</div>`,
     mount(el) {
-      if (x.status === 'ready') mailSheet(el, { kind: mailKind(x), pdfName: fileName(x), getMsg: () => ({ to: x.recipient_email, cc: '', bcc: mailBcc(x, x.recipient_email), subject: x.subject, body: letterFields(x.body, x) }),
+      if (x.status === 'ready') mailSheet(el, { kind: mailKind(x), pdfName: fileName(x), getMsg: () => withLetterCc({ to: x.recipient_email, cc: '', bcc: mailBcc(x, x.recipient_email), subject: x.subject, body: letterFields(x.body, x) }),
         getPdf: async () => ({ blob: await (await import('../core/pdf.js')).paperPdf(el.querySelector('.print-area .paper'), { title: fileName(x) }), name: fileName(x) + '.pdf' }) });
       bind(el, {
         pdf: () => printPaper(fileName(x)),

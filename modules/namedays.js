@@ -5,7 +5,7 @@ import { module, onSubmit, go, bind, notice, toast, table, confirmDo } from '../
 import { crud } from '../core/crud.js';
 import { esc, foldName, today, addDays, parseIso, isoDate, dayStr, fmtDate, longDate, sortBy, EMAIL_RE, splitEmails, exportXlsx, DAYS } from '../core/util.js';
 import { richPlain } from '../core/rich.js';
-import { senderBanner, gmailUrl, copyHtml, mailButtons, senderFor } from '../core/mail.js';
+import { senderBanner, gmailUrl, copyHtml, mailButtons, senderFor, parseCcRules } from '../core/mail.js';
 import { reportPaper, printPaper, gsSignatureText } from '../core/paper.js';
 import { noContact, setMemberTitle } from '../core/pickers.js';
 import { person } from '../core/people.js';
@@ -25,11 +25,7 @@ const BODY_DEFAULT = 'Προς: {Τίτλος} {Όνομα} {Επώνυμο}\n\n
 db.defaultSettings({ greet_subject: SUBJECT_DEFAULT, greet_body: BODY_DEFAULT, greet_bcc_self: '', greet_cc_rules: '' });
 // Κανόνες κοινοποίησης ευχών (Ρυθμίσεις): «αν το email περιέχει Χ => Υ» → κρυφή κοινοποίηση (Bcc) στο Υ·
 // με «cc:» μπροστά (π.χ. «Χ => cc: Υ») → ορατή κοινοποίηση (Κοιν.). → [ifs, add, kind]
-export function ccRules(v = db.setting('greet_cc_rules')) {
-  return String(v || '').split(/\n+/).map((l) => l.split(/\s*(?:=>|→|->)\s*/)).filter((p) => p.length === 2)
-    .map(([a, b]) => [splitEmails(a).map((e) => e.toLowerCase()), splitEmails(b.replace(/^\s*(cc|bcc)\s*:/i, '')).filter((e) => EMAIL_RE.test(e)), /^\s*cc\s*:/i.test(b) ? 'cc' : 'bcc'])
-    .filter(([a, b]) => a.length && b.length);
-}
+export const ccRules = (v = db.setting('greet_cc_rules')) => parseCcRules(v);
 // Νέο κείμενο ευχών: «Αθήνα, σημερινή ημερομηνία», ΜΔ με έντονα, ημερομηνία της εορτής
 db.migrate('greet-signature-unified-2026-10', (tx) => { // ενιαία αποφώνηση/υπογραφή και στις ευχές
   const v = String(tx.setting('greet_body') || ''); const n = v.replace(/\n*Ο Μέγας Γραμματεύς\s*\n\s*Πσεβ\. Αδ\. Δημήτριος Σκιαδόπουλος\s*$/, '\n\nΜε αφοσίωση και εκτίμηση,\n\nΠσεβ. Αδ. Δημήτριος Σκιαδόπουλος\nΜέγας Γραμματεύς');

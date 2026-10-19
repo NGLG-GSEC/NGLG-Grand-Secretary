@@ -1291,6 +1291,23 @@ def test_protocol_number_inside_letter_text(app):
     assert 'Πρωτοκόλλου 20545 και η ημερομηνία ' + today + ' θα' in body, body
 
 
+def test_ionian_letter_cc_rule(app):
+    """Επιστολή προς ionian.secretary@nglgreece.gr: στην κοινοποίηση (Cc) μπαίνει πάντα και το spiros@rokashotels.gr."""
+    app.connect_local()
+    app.go('/letters/new').fill(recipient_name='ΕπΜΓρ. Ιονίων Νήσων', recipient_email='ionian.secretary@nglgreece.gr', subject='Ιόνια', body='Κείμενο.')
+    app.click('💾 Αποθήκευση')
+    app.page.wait_for_url('**/#/letters/1')
+    href = app.page.get_attribute('a.btn[href*="mail.google.com"]', 'href')
+    assert 'cc=spiros%40rokashotels.gr' in href and 'to=ionian.secretary%40nglgreece.gr' in href, href
+    # άλλη Επαρχία: χωρίς την κοινοποίηση
+    app.go('/letters/new').fill(recipient_name='Αθηνών', recipient_email='athens.secretary@nglgreece.gr', subject='Αθήνα', body='Κείμενο.')
+    app.click('💾 Αποθήκευση')
+    app.page.wait_for_url('**/#/letters/2')
+    assert 'rokashotels' not in app.page.get_attribute('a.btn[href*="mail.google.com"]', 'href')
+    # ο κανόνας αλλάζει από τις Ρυθμίσεις
+    assert 'ionian.secretary@nglgreece.gr => cc: spiros@rokashotels.gr' in app.page.evaluate("async () => { const {db} = await import('./core/store.js'); return db.setting('letter_cc_rules'); }")
+
+
 def test_protocol_suggested_or_manual(app):
     """Το «Έτοιμο» προτείνει τον επόμενο αριθμό πρωτοκόλλου· μπορεί να γραφτεί άλλος, και να αλλάξει αργότερα."""
     app.connect_local()
@@ -1336,6 +1353,20 @@ def test_protocol_suggested_or_manual(app):
     assert vseq == 22000
     seqs = app.page.evaluate("async () => { const {db} = await import('./core/store.js'); return [db.all('letters').map((l) => l.protocol_seq), db.all('decree_documents').map((d) => d.protocol_seq)]; }")
     assert seqs == [[21001, 21500, 22000], [20999]], seqs
+
+def test_recipient_lodge_fills_template_subject(app):
+    """Η Στοά που επιλέγεται στον «Παραλήπτη από τον Κατάλογο» συμπληρώνει τα {Στοά} / {Αρ. Στοάς} του θέματος."""
+    app.connect_local()
+    app.page.evaluate("""async () => { const {db} = await import('./core/store.js');
+      await db.save('x', (tx) => { const l = tx.find('lodges', (x) => x.number === '32'); tx.update('lodges', l.id, { secretary_email: 'dioni.secretary@example.com' });
+        tx.insert('letter_templates', { name: 'Θέμα Στοάς', active: 1, subject: 'Ενημέρωση — Στοά «{Στοά}» αρ. {Αρ. Στοάς}', body: 'Κείμενο προς τη Στοά {Στοά}.' }); }); }""")
+    app.go('/letters/new')
+    app.page.select_option('#tplSel', label=app.page.locator('#tplSel option', has_text='. Θέμα Στοάς').last.inner_text())
+    app.pick('#rcptPick', 'ΔΙΩΝΗ')
+    assert app.page.input_value('[name=subject]') == 'Ενημέρωση — Στοά «ΔΙΩΝΗ» αρ. 32'
+    assert app.page.input_value('[name=body]') == 'Κείμενο προς τη Στοά ΔΙΩΝΗ.'
+    assert app.page.input_value('[name=recipient_email]') == 'dioni.secretary@example.com'
+
 
 def test_template_representative_field_and_day_article(app):
     app.connect_local()
