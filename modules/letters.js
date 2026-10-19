@@ -97,9 +97,9 @@ function fillPanel(x, query) {
 }
 
 // «ΕΙΚΟΝΑ ΠΡΩΤΟΚΟΛΛΟΥ» (π.χ. το εγκεκριμένο πρωτόκολλο-σφραγίδα): φορτώνεται στην επιστολή όταν το πρότυπο τη ζητά·
-// μπαίνει δεξιά της σφραγίδας (~150×150)· αποθηκεύεται ως PNG (και για το Word)
+// μπαίνει κάτω από τη σφραγίδα, στο κέντρο (~400×200)· αποθηκεύεται ως PNG (και για το Word)
 export const asksProtoImage = (t) => !!t && (String(t.ask_proto_image ?? '') === '1' || (String(t.ask_proto_image ?? '') === '' && hasProtocolField([t.subject, t.body].join(' '))));
-async function pngDataUrl(file, max = 450) {
+async function pngDataUrl(file, max = 800) {
   const img = await createImageBitmap(file), k = Math.min(1, max / Math.max(img.width, img.height));
   const c = Object.assign(document.createElement('canvas'), { width: Math.max(1, Math.round(img.width * k)), height: Math.max(1, Math.round(img.height * k)) });
   c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
@@ -108,7 +108,7 @@ async function pngDataUrl(file, max = 450) {
 const protoPreview = (v) => (v ? `<img class="proto-img" src="${esc(v)}" alt="ΕΙΚΟΝΑ ΠΡΩΤΟΚΟΛΛΟΥ">` : '<span class="warn">Δεν έχει φορτωθεί ακόμη εικόνα.</span>');
 function protoImageBox(x) {
   const t = x.template_id ? db.get('letter_templates', x.template_id) : null;
-  return `<div class="full card proto-card" id="protoBox"${x.protocol_image || asksProtoImage(t) ? '' : ' hidden'}><b>🖼 ΕΙΚΟΝΑ ΠΡΩΤΟΚΟΛΛΟΥ</b> <small class="muted">— φορτώστε την εικόνα του εγκεκριμένου πρωτοκόλλου (σφραγίδα)· μπαίνει δεξιά της σφραγίδας, ~150×150, χωρίς να καλύπτει κείμενο.</small>
+  return `<div class="full card proto-card" id="protoBox"${x.protocol_image || asksProtoImage(t) ? '' : ' hidden'}><b>🖼 ΕΙΚΟΝΑ ΠΡΩΤΟΚΟΛΛΟΥ</b> <small class="muted">— φορτώστε την εικόνα του εγκεκριμένου πρωτοκόλλου (σφραγίδα)· μπαίνει κάτω από τη σφραγίδα της ΕΜΣτΕ, στο κέντρο, ~400×200, χωρίς να καλύπτει κείμενο.</small>
 <input type="hidden" name="protocol_image" value="${esc(x.protocol_image || '')}"><div class="proto-preview">${protoPreview(x.protocol_image)}</div>
 <div class="toolbar"><label class="btn">📤 Φόρτωση εικόνας<input type="file" id="protoImgFile" accept="image/*" hidden></label><button type="button" class="btn danger" data-act="protoImgDel">Αφαίρεση</button></div></div>`;
 }
@@ -382,7 +382,7 @@ module({
       fields: [{ k: 'name', label: 'Όνομα', required: true, full: true }, { k: 'subject', label: 'Θέμα (προαιρετικό)', full: true, help: PH_HELP },
         { k: 'body', label: 'Κορμός επιστολής', type: 'textarea', full: true, help: PH_HELP }, { k: 'closing', label: 'Αποφώνηση (προαιρετική)', placeholder: 'π.χ. Με εκτίμηση και αδελφική αγάπη,' },
         { k: 'category', label: 'Κατηγορία πρωτοκόλλου', type: 'select', options: Object.entries(LETTER_CATEGORIES).map(([k]) => [k, k]) }, { k: 'active', label: 'Ενεργό', type: 'select', options: [[1, 'Ναι'], [0, 'Όχι']] },
-        { k: 'ask_proto_image', label: 'ΕΙΚΟΝΑ ΠΡΩΤΟΚΟΛΛΟΥ: ζητείται στη νέα επιστολή', type: 'select', options: [['', 'Αυτόματα — όταν το κείμενο έχει {Αρ. Πρωτ.}'], ['1', 'Ναι, πάντα'], ['0', 'Όχι']], help: 'Η εικόνα (π.χ. το εγκεκριμένο πρωτόκολλο-σφραγίδα) φορτώνεται σε κάθε επιστολή και μπαίνει δεξιά της σφραγίδας, ~150×150.' }],
+        { k: 'ask_proto_image', label: 'ΕΙΚΟΝΑ ΠΡΩΤΟΚΟΛΛΟΥ: ζητείται στη νέα επιστολή', type: 'select', options: [['', 'Αυτόματα — όταν το κείμενο έχει {Αρ. Πρωτ.}'], ['1', 'Ναι, πάντα'], ['0', 'Όχι']], help: 'Η εικόνα (π.χ. το εγκεκριμένο πρωτόκολλο-σφραγίδα) φορτώνεται σε κάθε επιστολή και μπαίνει κάτω από τη σφραγίδα, στο κέντρο, ~400×200.' }],
       defaults: { active: 1 },
       sort: (xs) => sortBy(xs.filter((t) => t.name !== 'ΔΙΑΤΑΓΜΑΤΑ'), 'id'),
       validate: (d) => ({ ...d, active: Number(d.active) ? 1 : 0 }),

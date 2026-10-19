@@ -1368,8 +1368,8 @@ def test_recipient_lodge_fills_template_subject(app):
     assert app.page.input_value('[name=recipient_email]') == 'dioni.secretary@example.com'
 
 
-def test_letter_protocol_image_right_of_seal(app, tmp_path):
-    """Πρότυπο με {Αρ. Πρωτ.}: η νέα επιστολή ζητά «ΕΙΚΟΝΑ ΠΡΩΤΟΚΟΛΛΟΥ», που μπαίνει δεξιά της σφραγίδας, ~150×150, χωρίς επικάλυψη."""
+def test_letter_protocol_image_below_seal_centered(app, tmp_path):
+    """Πρότυπο με {Αρ. Πρωτ.}: η νέα επιστολή ζητά «ΕΙΚΟΝΑ ΠΡΩΤΟΚΟΛΛΟΥ», που μπαίνει κάτω από τη σφραγίδα, στο κέντρο, ~400×200."""
     import base64
     png = tmp_path / 'stamp.png'
     png.write_bytes(base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg=='))
@@ -1394,9 +1394,9 @@ def test_letter_protocol_image_right_of_seal(app, tmp_path):
     assert app.page.evaluate("async () => (await import('./core/store.js')).db.get('letters', 1).protocol_image").startswith('data:image/png;base64,')
     box = lambda sel: app.page.locator('.print-area .paper ' + sel).bounding_box()
     seal, proto, sign, paper = box('.seal-img'), box('.proto-img'), box('.sign'), box('')
-    assert proto['x'] >= seal['x'] + seal['width'] and seal['x'] >= sign['x'] + sign['width']  # δεξιά της σφραγίδας, χωρίς επικάλυψη
-    assert proto['x'] + proto['width'] <= paper['x'] + paper['width']
-    assert 120 <= proto['width'] <= 170 and 120 <= proto['height'] <= 170, proto
+    assert proto['y'] >= seal['y'] + seal['height'] and proto['y'] >= sign['y'] + sign['height']  # κάτω από σφραγίδα/υπογραφή, χωρίς επικάλυψη
+    assert abs((proto['x'] + proto['width'] / 2) - (paper['x'] + paper['width'] / 2)) < 3  # στο κέντρο
+    assert 380 <= proto['width'] <= 420 and 190 <= proto['height'] <= 210, proto
     # «Νέα πάνω σε αυτή» δεν παίρνει την εικόνα (κάθε έγκριση έχει τη δική της)· επιστολή χωρίς εικόνα: τίποτα δίπλα στη σφραγίδα
     app.go('/letters/new').fill(subject='Χωρίς', body='x').click('💾 Αποθήκευση')
     app.page.wait_for_url('**/#/letters/2')

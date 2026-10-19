@@ -123,6 +123,6 @@ export function letterBlocks({ base = '', org, founded, gmTitle, gmName, number,
   if (closing) B.push({ text: closing, before: 14, after: 6 });
   if (signature) B.push({ img: signature, width: 4.5, align: 'center', before: 6, after: 0 });
   B.push({ text: [signer, signerTitle, org].filter(Boolean).join('\n'), align: 'center', bold: false, after: 0 });
-  if (protoImg) B.push({ img: protoImg, width: 4, align: 'right', before: 4, after: 0 }); // «ΕΙΚΟΝΑ ΠΡΩΤΟΚΟΛΛΟΥ» του προτύπου
+  if (protoImg) B.push({ img: protoImg, width: 10.6, align: 'center', before: 6, after: 0 }); // «ΕΙΚΟΝΑ ΠΡΩΤΟΚΟΛΛΟΥ», ~400×200, στο κέντρο
   return B;
 }

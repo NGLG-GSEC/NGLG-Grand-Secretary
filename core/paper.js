@@ -35,11 +35,11 @@ export function letterhead() {
 
 export function signatureBlock(signer, protoImg = '') {
   const p = signerProfile(signer);
-  return `<div class="sigrow${protoImg ? ' has-proto' : ''}"><div class="sign"><img class="signature-img" src="${p.img}" alt=""><div class="signature-line"></div>
+  return `<div class="sigrow"><div class="sign"><img class="signature-img" src="${p.img}" alt=""><div class="signature-line"></div>
 <b>${esc(p.name)}</b><div class="gs-title">${esc(p.title)}</div>${esc(db.setting('organization_name'))}</div>
-<div class="seal"><img class="seal-img" src="${IMG.seal}" alt=""></div>${protoImg ? `<div class="proto-stamp"><img class="proto-img" src="${esc(protoImg)}" alt=""></div>` : ''}</div>`;
+<div class="seal"><img class="seal-img" src="${IMG.seal}" alt=""></div></div>${protoImg ? `<div class="proto-stamp"><img class="proto-img" src="${esc(protoImg)}" alt=""></div>` : ''}`;
 }
-// «ΕΙΚΟΝΑ ΠΡΩΤΟΚΟΛΛΟΥ» της επιστολής (π.χ. το εγκεκριμένο πρωτόκολλο-σφραγίδα): δεξιά της σφραγίδας (~150×150)
+// «ΕΙΚΟΝΑ ΠΡΩΤΟΚΟΛΛΟΥ» της επιστολής (π.χ. το εγκεκριμένο πρωτόκολλο-σφραγίδα): κάτω από τη σφραγίδα, στο κέντρο (~400×200)
 export const protocolImage = (x) => (x && x.protocol_image) || '';
 
 // Πεδία της ίδιας της επιστολής μέσα στο κείμενο: συμπληρώνονται στο έγγραφο (σελίδα, PDF, Word, email) μόλις η επιστολή
