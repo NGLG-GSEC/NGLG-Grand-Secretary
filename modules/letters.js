@@ -5,7 +5,7 @@ import { module, onSubmit, go, flash, toast, bind, confirmDo, table, notice, act
 import { crud } from '../core/crud.js';
 import { esc, today, fmtDate, matches, sortBy, safeFileName, latinFileName, EMAIL_RE, splitEmails, download, outgoingProtocolBtn } from '../core/util.js';
 import { richPlain } from '../core/rich.js';
-import { letterPaper, printPaper, signerProfile, IMG, fitPaper } from '../core/paper.js';
+import { letterPaper, printPaper, signerProfile, IMG, fitPaper, letterFields, LETTER_FIELDS } from '../core/paper.js';
 import { makeDocx, letterBlocks } from '../core/docx.js';
 import { docTitle, driveBox, saveDocToDrive } from '../core/drive.js';
 import { mailButtons, senderBanner } from '../core/mail.js';
@@ -21,7 +21,7 @@ const TEMPLATE_SEED = [['Ελεύθερη επιστολή', ''], ['Επίσκε
   ['Πρόσκληση', 'Αγαπητοί Αδελφοί,\n\n[Εγκεκριμένο πρότυπο πρόσκλησης]'], ['Ανακοίνωση', 'Αγαπητοί Αδελφοί,\n\n[Εγκεκριμένο πρότυπο ανακοίνωσης]']];
 db.seed('letter_templates', () => TEMPLATE_SEED.map(([name, body], i) => ({ id: i + 1, name, body, active: 1 })));
 
-const PH_HELP = 'Πεδία που συμπληρώνονται από τη βάση: ' + PLACEHOLDERS.map(([k, d]) => `{${k}} = ${d}`).join(' · ');
+const PH_HELP = 'Πεδία που συμπληρώνονται από τη βάση: ' + PLACEHOLDERS.map(([k, d]) => `{${k}} = ${d}`).join(' · ') + ' · Πεδία της επιστολής: ' + LETTER_FIELDS.map(([k, d]) => `{${k}} = ${d}`).join(' · ');
 const templates = () => sortBy(db.all('letter_templates').filter((t) => t.active && t.name !== 'ΔΙΑΤΑΓΜΑΤΑ' && t.kind !== 'decree'), 'id');
 export const lettersAll = () => { const dec = legacyDecreeLetterIds(); return db.all('letters').filter((l) => !dec.has(l.id)); };
 const STATUS = { draft: 'Πρόχειρη', ready: 'Έτοιμη' };
@@ -62,7 +62,7 @@ export async function letterDocxBlob(x) {
   const S = (k) => db.setting(k) || '', p = signerProfile(x.signer);
   const blocks = letterBlocks({ org: S('organization_name'), founded: S('founded_year'), gmTitle: S('grand_master_title'), gmName: S('grand_master_name'),
     number: x.protocol_seq ? String(x.protocol_seq) : (x.protocol_no || ''), date: fmtDate(x.letter_date || today()), place: 'Εν Αθήναις', to: x.recipient_name, cc: x.cc_name || '', subject: x.subject,
-    paragraphs: [{ text: x.body || '' }], closing: x.closing || S('closing'), signature: p.img, signer: p.name, signerTitle: p.title });
+    paragraphs: [{ text: letterFields(x.body, x) }], closing: x.closing || S('closing'), signature: p.img, signer: p.name, signerTitle: p.title });
   return makeDocx(blocks, { title: x.subject, author: p.name });
 }
 export async function letterDocx(x) { download(fileName(x) + '.docx', await letterDocxBlob(x)); }
@@ -71,7 +71,7 @@ export function openInDigitalForm(x) {
   const p = signerProfile(x.signer);
   try {
     localStorage.setItem('nglg-diatagma-prefill', JSON.stringify({ num: x.protocol_seq ? String(x.protocol_seq) : (x.protocol_no || ''), date: x.letter_date || today(), place: 'Εν Αθήναις', doctype: 'ΕΠΙΣΤΟΛΗ', subject: x.subject || '',
-      p0: [x.recipient_name && `Προς: ${x.recipient_name}`, x.cc_name && `Κοιν.: ${x.cc_name}`].filter(Boolean).join('\n'), p1: richPlain(x.body || ''), p2: '', greet: x.closing || db.setting('closing') || '', signer: p.name, sigtitle: p.title,
+      p0: [x.recipient_name && `Προς: ${x.recipient_name}`, x.cc_name && `Κοιν.: ${x.cc_name}`].filter(Boolean).join('\n'), p1: richPlain(letterFields(x.body, x)), p2: '', greet: x.closing || db.setting('closing') || '', signer: p.name, sigtitle: p.title,
       useSig: p.img === IMG.signature, mailto: x.recipient_email || '' }));
   } catch { /* χωρίς localStorage: ανοίγει κενό */ }
   location.href = 'diatagma/';
@@ -247,7 +247,7 @@ function viewLetter({ params }) {
   return {
     title: x.subject,
     html: `<section class="card send-panel noprint"><h3>Αποστολή & Αποθήκευση</h3>${senderBanner(mailKind(x))}
-<div class="toolbar"><button class="btn primary" data-act="pdf">⬇ PDF / Εκτύπωση</button>${mailButtons({ to: x.recipient_email, bcc: mailBcc(x, x.recipient_email), subject: x.subject, body: x.body, kind: mailKind(x) }, '✉ Αποστολή με Email')}
+<div class="toolbar"><button class="btn primary" data-act="pdf">⬇ PDF / Εκτύπωση</button>${mailButtons({ to: x.recipient_email, bcc: mailBcc(x, x.recipient_email), subject: x.subject, body: letterFields(x.body, x), kind: mailKind(x) }, '✉ Αποστολή με Email')}
 <button class="btn" data-act="word">⬇ Word (επεξεργασία)</button><button class="btn" data-act="form">🖋 Ψηφιακό Έντυπο</button>
 <button class="btn" data-act="wapdf">🟢 WhatsApp / Business με PDF</button><a class="btn" target="_blank" rel="noopener" href="${wa}">WhatsApp μήνυμα</a>${x.status === 'ready' ? '' : '<button class="btn primary" data-act="ready">✅ Έτοιμη: απόδοση αρ. πρωτοκόλλου</button>'}</div>
 ${x.status === 'ready' ? '<div class="mailsheet"></div>' : '<p class="send-help">Για αποστολή με συνημμένο PDF ορίστε πρώτα την επιστολή «✅ Έτοιμη» (αριθμός πρωτοκόλλου).</p>'}${driveBox(x, fileName(x))}</section>
@@ -255,7 +255,7 @@ ${x.status === 'ready' ? '<div class="mailsheet"></div>' : '<p class="send-help"
 ${x.protocol_seq ? '<button class="btn" data-act="protocol">✏ Αλλαγή αρ. πρωτοκόλλου</button>' : ''}<button class="btn danger" data-act="del">Διαγραφή</button> ${statusPill(x.status)}</div>
 <div class="print-area">${letterPaper(x)}</div>`,
     mount(el) {
-      if (x.status === 'ready') mailSheet(el, { kind: mailKind(x), pdfName: fileName(x), getMsg: () => ({ to: x.recipient_email, cc: '', bcc: mailBcc(x, x.recipient_email), subject: x.subject, body: x.body }),
+      if (x.status === 'ready') mailSheet(el, { kind: mailKind(x), pdfName: fileName(x), getMsg: () => ({ to: x.recipient_email, cc: '', bcc: mailBcc(x, x.recipient_email), subject: x.subject, body: letterFields(x.body, x) }),
         getPdf: async () => ({ blob: await (await import('../core/pdf.js')).paperPdf(el.querySelector('.print-area .paper'), { title: fileName(x) }), name: fileName(x) + '.pdf' }) });
       bind(el, {
         pdf: () => printPaper(fileName(x)),
