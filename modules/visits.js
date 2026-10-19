@@ -7,7 +7,7 @@ import { crud } from '../core/crud.js';
 import { esc, fold, today, fmtDate, dayStr, parseIso, sortBy, download, EMAIL_RE, splitEmails, grUpper, DAYS, isoDate, parsePasted, readXlsx, outgoingProtocolBtn } from '../core/util.js';
 import { senderBanner, copyText } from '../core/mail.js';
 import { bccWithout } from '../core/gmail.js';
-import { reportPaper, printPaper, letterhead, letterPaper, IMG } from '../core/paper.js';
+import { reportPaper, printPaper, letterhead, letterPaper, IMG, GS_CLOSING, GS_NAME, GS_TITLE, gsSignatureText } from '../core/paper.js';
 import { attachPicker, contactItems, memberItems, noContact } from '../core/pickers.js';
 import { provincialChoices, provinceByShort, provinceRoles } from './provinces.js';
 import { lodgesAll, lodgeNoKey, lodgeByNumber, cleanLodgeName } from './lodges.js';
@@ -24,7 +24,7 @@ const REP_DEFAULT_RANKS = { 'Μέγας Διδάσκαλος': 3, 'Αναπλη�
   'Πρώτος Μέγας Επόπτης': 2, 'Δεύτερος Μέγας Επόπτης': 2, 'Μέγας Καγκελάριος': 1, 'Αναπληρωτής Μέγας Καγκελάριος': 1, 'Μέγας Γραμματέας': 1, 'Αναπληρωτής Μέγας Γραμματέας': 1, 'Μέγας Ευχέτης': 1,
   'Μέγας Τελετάρχης': 1, 'Μέγας Επόπτης Έργων': 1, 'Μέγας Ξιφοφόρος': 1, 'Μέγας Επιθεωρητής': 1, 'Πρόεδρος Συμβουλίου Μεγάλης Φιλανθρωπίας': 1, 'Πρόεδρος Μεγάλης Φιλανθρωπίας': 1 };
 const PUB_SUBJECT = 'Ενημέρωση Εκπροσώπησης ΜΔ στις Εγκαταστάσεις Σεβασμίων Σ. Στοών της Επαρχίας σας';
-db.defaultSettings({ visit_bcc: '', gm_email: '', visits_signer_name: 'Πσεβ. Αδ. Δημήτριος Σκιαδόπουλος', visits_signer_title: 'Μέγας Γραμματεύς', visits_rankmap: '{}' });
+db.defaultSettings({ visit_bcc: '', gm_email: '', visits_signer_name: GS_NAME, visits_signer_title: GS_TITLE, visits_rankmap: '{}' });
 
 // Εφάπαξ: Πίνακας Εγκαταστάσεων Σεβασμίων 2026–2027 (seed/installations-2026-2027.json)· ό,τι υπάρχει ήδη (ίδια Στοά, ίδια ημερομηνία) δεν διπλασιάζεται.
 db.migrate('installations-2026-2027', async (tx) => {
@@ -101,7 +101,7 @@ db.on((ev) => {
 export const repsAll = () => sortBy(db.all('reps'), (r) => fold(r.surname), (r) => fold(r.name));
 export const visitsAll = () => sortBy(db.all('visits'), 'visit_date', (v) => Number(v.lodge_number) || 0);
 const repMap = () => Object.fromEntries(db.all('reps').map((r) => [r.id, r]));
-const signature = () => `Με Τεκτονικούς χαιρετισμούς,\n\n${db.setting('visits_signer_name') || ''}\n${db.setting('visits_signer_title') || ''}`.trim();
+const signature = () => gsSignatureText();
 const rankmap = () => { try { return JSON.parse(db.setting('visits_rankmap') || '{}'); } catch { return {}; } };
 const baseOffices = (r) => String(r.office || '').split(' · ').map((o) => o.replace(/\s*\(\d{4}\)\s*$/, '').replace(/^Πρώην\s+/, '').trim()).filter(Boolean);
 // Βαθμός (τίτλος) εκπροσώπου: πρώτα η Προσφώνηση του μέλους στην Επετηρίδα (επίσημη πηγή, π.χ. Πρώην Μέγας Γραμματεύς →
@@ -484,7 +484,7 @@ const visitSubject = (v) => fillPlaceholders(visitTpl(v).subject || (isGM(repOf(
 const visitClosing = (v) => visitTpl(v).closing || GM_VISIT.closing;
 function visitBody(v, withSignature = true) {
   let b = fillPlaceholders(visitTpl(v).body, visitCtx(v));
-  if (withSignature) b += `${/,\s*$/.test(b) ? '\n' : '\n\n'}${visitClosing(v)}\n\nΟ ${db.setting('grand_secretary_title') || 'Μέγας Γραμματέας'}\n${db.setting('grand_secretary_name') || ''}`;
+  if (withSignature) b += `${/,\s*$/.test(b) ? '\n' : '\n\n'}${visitClosing(v)}\n\n${db.setting('grand_secretary_name') || GS_NAME}\n${db.setting('grand_secretary_title') || GS_TITLE}`;
   return b;
 }
 // Προς: Γραμματέας της Στοάς· Κοιν.: ΕπΜΓρ., ο Εκπρόσωπος (αν δεν είναι ο ΜΔ) και ο ΜΔ
@@ -572,15 +572,15 @@ function gmProgrammePaper(rows, { showRep = true } = {}) {
 <p class="gmp-salute">${esc(GMP_SALUTE)}</p>${GMP_TEXT.split('\n\n').map((t) => `<p class="gmp-p">${esc(t)}</p>`).join('')}
 ${rows.length ? `<table class="gmp-table"><thead><tr><th class="n">Α/Α</th><th>Ημερομηνία</th><th>Στοά</th><th>Επαρχία</th>${showRep ? '<th>Εκπρόσωπος</th>' : ''}<th>Αρ. Πρωτ.</th></tr></thead><tbody>${body}</tbody></table>`
     : '<p class="gmp-p muted"><i>Δεν έχουν οριστεί επισκέψεις για το διάστημα αυτό.</i></p>'}
-<p class="gmp-close">Με αδελφικούς χαιρετισμούς,</p>
-<div class="gmp-sign"><img class="signature-img" src="${IMG.signature}" alt=""><div class="signature-line"></div><b>Δημήτριος Σκιαδόπουλος</b><div>Μέγας Γραμματέας</div></div></article>`;
+<p class="gmp-close">${esc(GS_CLOSING)}</p>
+<div class="gmp-sign"><img class="signature-img" src="${IMG.signature}" alt=""><div class="signature-line"></div><b>${esc(db.setting('grand_secretary_name') || GS_NAME)}</b><div>${esc(db.setting('grand_secretary_title') || GS_TITLE)}</div></div></article>`;
 }
 // ---- Δημόσια σελίδα του προγράμματος (programme/): η εφαρμογή γράφει το πρόγραμμα στα δεδομένα (files/public/programme.json)
 // μετά από κάθε αλλαγή Επισκέψεων/Εκπροσώπων· η δημοσίευση (GitHub Pages) το παίρνει από εκεί. Μόνο όσα δείχνει η αναφορά.
 export const PUBLIC_PROGRAMME_URL = 'https://nglg-gsec.github.io/NGLG-Grand-Secretary/programme/';
 export function publicProgramme() {
-  return { title: 'Πρόγραμμα επισκέψεων του Σεβασμιωτάτου Μεγάλου Διδασκάλου', salute: GMP_SALUTE, text: GMP_TEXT, closing: 'Με αδελφικούς χαιρετισμούς,',
-    signer: 'Δημήτριος Σκιαδόπουλος', signer_title: 'Μέγας Γραμματέας', organization: db.setting('organization_name') || '',
+  return { title: 'Πρόγραμμα επισκέψεων του Σεβασμιωτάτου Μεγάλου Διδασκάλου', salute: GMP_SALUTE, text: GMP_TEXT, closing: GS_CLOSING,
+    signer: db.setting('grand_secretary_name') || GS_NAME, signer_title: db.setting('grand_secretary_title') || GS_TITLE, organization: db.setting('organization_name') || '',
     letters: Object.fromEntries(gmProgrammeRows(today()).filter((x) => x.letter).map(({ letter }) => [String(seqOf(letter)), { html: publicLetterHtml(letter), pdf: letter.drive_pdf || '' }])),
     rows: gmProgrammeRows(today()).map(({ v, r, prot, letter }) => ({ protocol: prot, letter_url: publicLetterUrl(letter), date: v.visit_date, lodge: v.lodge || '', no: String(v.lodge_number || ''), province: v.province || '', rep: isGM(r) ? 'Ο Μέγας Διδάσκαλος' : repFull(r), gm: isGM(r) ? 1 : 0 })) };
 }
@@ -630,7 +630,7 @@ function gmProgrammePage({ query }) {
       publishProgramme().catch(() => {});
       const { mailSheet } = await import('../core/gmail.js');
       mailSheet(el, { kind: 'general', pdfName: title, getMsg: () => ({ to: '', cc: '', bcc: db.setting('visit_bcc') || '', subject: 'Πρόγραμμα επισκέψεων του Σεβασμιωτάτου Μεγάλου Διδασκάλου',
-        body: `${GMP_SALUTE}\n\n${GMP_TEXT}\n\nΣυνημμένο: το πρόγραμμα των επισκέψεων.\n\nΜε αδελφικούς χαιρετισμούς,\n\nΔημήτριος Σκιαδόπουλος\nΜέγας Γραμματέας` }),
+        body: `${GMP_SALUTE}\n\n${GMP_TEXT}\n\nΣυνημμένο: το πρόγραμμα των επισκέψεων.\n\n${gsSignatureText()}` }),
         getPdf: async () => ({ blob: await (await import('../core/pdf.js')).paperPdf(el.querySelector('.print-area .paper'), { title }), name: title + '.pdf' }) });
     },
   };

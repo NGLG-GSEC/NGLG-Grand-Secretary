@@ -4,16 +4,26 @@ import { db } from './store.js';
 import { esc, fmtDate, linkify } from './util.js';
 import { richHtml } from './rich.js';
 
+// Ενιαία αποφώνηση και υπογραφή του Μεγάλου Γραμματέα (παντού)
+export const GS_CLOSING = 'Με αφοσίωση και εκτίμηση,', GS_NAME = 'Πσεβ. Αδ. Δημήτριος Σκιαδόπουλος', GS_TITLE = 'Μέγας Γραμματεύς';
+export const gsSignatureText = () => `${GS_CLOSING}\n\n${db.setting('grand_secretary_name') || GS_NAME}\n${db.setting('grand_secretary_title') || GS_TITLE}`;
+
 db.defaultSettings({
   organization_name: 'Εθνική Μεγάλη Στοά της Ελλάδος', founded_year: '1986', grand_master_title: 'Μέγας Διδάσκαλος',
-  grand_master_name: 'Σεβτ. Αδ. Ιωάννης Μπενετάτος', grand_secretary_name: 'Πανσεβ. Αδ. Δημήτριος Σκιαδόπουλος',
-  grand_secretary_title: 'Μέγας Γραμματέας', closing: 'Με αδελφικούς χαιρετισμούς,',
+  grand_master_name: 'Σεβτ. Αδ. Ιωάννης Μπενετάτος', grand_secretary_name: GS_NAME,
+  grand_secretary_title: GS_TITLE, closing: GS_CLOSING,
+});
+// Ενιαίος χαιρετισμός και υπογραφή σε όλες τις Επιστολές, τα Διατάγματα και τα email της Μεγάλης Γραμματείας
+db.migrate('unified-closing-signature-2026-10', (tx) => {
+  tx.setting('closing', GS_CLOSING); tx.setting('grand_secretary_name', GS_NAME); tx.setting('grand_secretary_title', GS_TITLE);
+  tx.setting('visits_signer_name', GS_NAME); tx.setting('visits_signer_title', GS_TITLE);
+  for (const t of tx.all('letter_templates')) if (t.closing && t.closing !== GS_CLOSING) tx.update('letter_templates', t.id, { closing: GS_CLOSING });
 });
 
 export const IMG = { emblem: 'img/header_emblem.png', seal: 'img/seal.png', signature: 'img/signature.png', nikolaos: 'img/signature_nikolaos.png', grandMaster: 'img/signature_grand_master.png' };
 
 export function signerProfile(key) {
-  if (key === 'nikolaos') return { key, name: 'Λίαν Σεβάσμιος Αδ. Νικόλαος Χατζηδημητρίου', title: 'Αν. Μέγας Γραμματέας', img: IMG.nikolaos };
+  if (key === 'nikolaos') return { key, name: 'Λίαν Σεβάσμιος Αδ. Νικόλαος Χατζηδημητρίου', title: 'Αν. Μέγας Γραμματεύς', img: IMG.nikolaos };
   return { key: 'dimitrios', name: db.setting('grand_secretary_name'), title: db.setting('grand_secretary_title'), img: IMG.signature };
 }
 
@@ -113,7 +123,7 @@ export function printPaper(fileName) {
 
 // Αναφορά/τεύχος πολλών σελίδων (π.χ. Επετηρίδα, αναφορές) με επίσημη κεφαλίδα.
 export function reportPaper(title, subtitle, inner, { signatures = false } = {}) {
-  const sig = signatures ? `<div class="decsig"><div><div class="t">ΜΕΓΑΣ ΓΡΑΜΜΑΤΕΑΣ</div><img class="signature-img" src="${IMG.signature}" alt=""><div class="signature-line"></div><b>Δημήτριος Σκιαδόπουλος</b></div>
+  const sig = signatures ? `<div class="decsig"><div><div class="t">Ο ΜΕΓΑΣ ΓΡΑΜΜΑΤΕΥΣ</div><img class="signature-img" src="${IMG.signature}" alt=""><div class="signature-line"></div><b>${esc(db.setting('grand_secretary_name') || GS_NAME)}</b></div>
 <div><img class="seal-img" src="${IMG.seal}" alt=""></div><div><div class="t">Ο ΜΕΓΑΣ ΔΙΔΑΣΚΑΛΟΣ</div><img class="signature-img" src="${IMG.grandMaster}" alt=""><div class="signature-line"></div><b>Ιωάννης Μπενετάτος</b></div></div>` : '';
   return `<article class="paper report">${letterhead()}<div class="dec-title">${esc(title)}</div>${subtitle ? `<div class="dec-date">${esc(subtitle)}</div>` : ''}${inner}${sig}</article>`;
 }

@@ -6,7 +6,7 @@ import { crud } from '../core/crud.js';
 import { esc, foldName, today, addDays, parseIso, isoDate, dayStr, fmtDate, longDate, sortBy, EMAIL_RE, splitEmails, exportXlsx, DAYS } from '../core/util.js';
 import { richPlain } from '../core/rich.js';
 import { senderBanner, gmailUrl, copyHtml, mailButtons, senderFor } from '../core/mail.js';
-import { reportPaper, printPaper } from '../core/paper.js';
+import { reportPaper, printPaper, gsSignatureText } from '../core/paper.js';
 import { noContact, setMemberTitle } from '../core/pickers.js';
 import { person } from '../core/people.js';
 import { epeteiridaOf, honorificLevel } from './epeteirida-table.js';
@@ -21,7 +21,7 @@ const VOC = ['Αδελφέ', 'Σεβάσμιε Αδελφέ', 'Λίαν Σεβά
 const SUBJECT_OLD = 'Χρόνια πολλά για την ονομαστική σας εορτή';
 const SUBJECT_DEFAULT = '{Τίτλος} {Όνομα} {Επώνυμο} - Ευχές για την ονομαστική σας εορτή από τον Μέγα Διδάσκαλο';
 const BODY_OLD = 'Προς: {Τίτλος} {Όνομα} {Επώνυμο}\n\nΑγαπητέ {Προσφώνηση},\n\nΣας μεταφέρω, με ιδιαίτερη χαρά, τις θερμότερες ευχές του Σεβτ. Αδ. Ιωάννη Μπενετάτου, Μεγάλου Διδασκάλου της Εθνικής Μεγάλης Στοάς της Ελλάδος, για την ονομαστική σας εορτή.\n\nΕύχεται από καρδιάς υγεία, χαρά, οικογενειακή ευτυχία και κάθε καλό στη ζωή και στο έργο σας.\n\nΟ Μέγας Γραμματεύς\nΠσεβ. Αδ. Δημήτριος Σκιαδόπουλος';
-const BODY_DEFAULT = 'Προς: {Τίτλος} {Όνομα} {Επώνυμο}\n\nΑθήνα, {Σήμερα}\n\nΑγαπητέ {Προσφώνηση},\n\nΣας μεταφέρω, με ιδιαίτερη χαρά, τις θερμότερες ευχές του [b]Σεβτ. Αδ. Ιωάννη Μπενετάτου[/b], Μεγάλου Διδασκάλου της Εθνικής Μεγάλης Στοάς της Ελλάδος, για την ονομαστική σας εορτή της {Ημερομηνία Εορτής}.\n\nΕύχεται από καρδιάς υγεία, χαρά, οικογενειακή ευτυχία και κάθε καλό στη ζωή και στο έργο σας.\n\nΟ Μέγας Γραμματεύς\nΠσεβ. Αδ. Δημήτριος Σκιαδόπουλος';
+const BODY_DEFAULT = 'Προς: {Τίτλος} {Όνομα} {Επώνυμο}\n\nΑθήνα, {Σήμερα}\n\nΑγαπητέ {Προσφώνηση},\n\nΣας μεταφέρω, με ιδιαίτερη χαρά, τις θερμότερες ευχές του [b]Σεβτ. Αδ. Ιωάννη Μπενετάτου[/b], Μεγάλου Διδασκάλου της Εθνικής Μεγάλης Στοάς της Ελλάδος, για την ονομαστική σας εορτή της {Ημερομηνία Εορτής}.\n\nΕύχεται από καρδιάς υγεία, χαρά, οικογενειακή ευτυχία και κάθε καλό στη ζωή και στο έργο σας.\n\nΜε αφοσίωση και εκτίμηση,\n\nΠσεβ. Αδ. Δημήτριος Σκιαδόπουλος\nΜέγας Γραμματεύς';
 db.defaultSettings({ greet_subject: SUBJECT_DEFAULT, greet_body: BODY_DEFAULT, greet_bcc_self: '', greet_cc_rules: '' });
 // Κανόνες κοινοποίησης ευχών (Ρυθμίσεις): «αν το email περιέχει Χ => Υ» → κρυφή κοινοποίηση (Bcc) στο Υ·
 // με «cc:» μπροστά (π.χ. «Χ => cc: Υ») → ορατή κοινοποίηση (Κοιν.). → [ifs, add, kind]
@@ -31,6 +31,10 @@ export function ccRules(v = db.setting('greet_cc_rules')) {
     .filter(([a, b]) => a.length && b.length);
 }
 // Νέο κείμενο ευχών: «Αθήνα, σημερινή ημερομηνία», ΜΔ με έντονα, ημερομηνία της εορτής
+db.migrate('greet-signature-unified-2026-10', (tx) => { // ενιαία αποφώνηση/υπογραφή και στις ευχές
+  const v = String(tx.setting('greet_body') || ''); const n = v.replace(/\n*Ο Μέγας Γραμματεύς\s*\n\s*Πσεβ\. Αδ\. Δημήτριος Σκιαδόπουλος\s*$/, '\n\nΜε αφοσίωση και εκτίμηση,\n\nΠσεβ. Αδ. Δημήτριος Σκιαδόπουλος\nΜέγας Γραμματεύς');
+  if (n !== v) tx.setting('greet_body', n);
+});
 db.migrate('greet-subject-title-2026-10', (tx) => { const v = tx.setting('greet_subject'); if (!v || v === SUBJECT_OLD) tx.setting('greet_subject', SUBJECT_DEFAULT); });
 db.migrate('greet-body-date-2026-10', (tx) => { const v = tx.setting('greet_body'); if (!v || v === BODY_OLD || !/\{Σήμερα\}/.test(v)) tx.setting('greet_body', BODY_DEFAULT); });
 
@@ -223,7 +227,10 @@ export function greetHtml(text) {
     if (/^(Αθήνα|Εν Αθήναις)\b/.test(p)) return `<p style="margin:0 0 18px;text-align:right;color:#4a5068">${p}</p>`;
     const br = p.replace(/\n/g, '<br>');
     if (/^Προς(\s|:)/.test(p)) return `<p style="margin:0 0 20px;font-size:18px"><span style="font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:#7a6a3a">Προς</span><br><b style="color:#1d2f5e">${br.replace(/^Προς\s*:?\s*/, '')}</b></p>`;
-    if (i === last && last > 1) { const [t, ...rest] = p.split('\n'); return `<p style="margin:30px 0 0;text-align:right;line-height:1.5">${rest.length ? `<span style="font-style:italic;color:#4a5068">${t}</span><br><b>${rest.join('<br>')}</b>` : t}</p>`; }
+    if (i === last && last > 1) { const [t, ...rest] = p.split('\n'); // υπογραφή: «Όνομα / Τίτλος» (ή παλαιά «Ο Τίτλος / Όνομα»)
+      if (/^Ο\s/.test(t)) return `<p style="margin:30px 0 0;text-align:right;line-height:1.5">${rest.length ? `<span style="font-style:italic;color:#4a5068">${t}</span><br><b>${rest.join('<br>')}</b>` : t}</p>`;
+      return `<p style="margin:8px 0 0;text-align:right;line-height:1.5"><b>${t}</b>${rest.length ? `<br><span style="color:#4a5068">${rest.join('<br>')}</span>` : ''}</p>`; }
+    if (i === last - 1 && /^Με\s.*,\s*$/.test(p)) return `<p style="margin:26px 0 0;text-align:right;font-style:italic;color:#4a5068">${br}</p>`;
     return `<p style="margin:0 0 14px;${p.startsWith('Αγαπητ') ? '' : 'text-align:justify'}">${br}</p>`;
   }).join('');
   return `<div style="max-width:620px;margin:0 auto;font-family:Georgia,'Times New Roman',serif;color:#1b1f2a;font-size:16px;line-height:1.6">${PLAQUE}${out}</div>`;
@@ -353,7 +360,7 @@ function greetPage() {
 function reportPage({ query }) {
   const d = query.d && parseIso(query.d) ? query.d : today(), rows = sortBy(db.all('greetings_log').filter((g) => g.sent_on === d), 'sent_at', 'name');
   const nat = provincesAll().find((p) => p.kind === 'Εθνική'), gm = nat ? provinceRoles(nat)[0].email : '';
-  const body = `Σεβασμιώτατε Μεγάλε Διδάσκαλε,\n\nσας υποβάλλω συνημμένα την αναφορά αποστολής ευχών ονομαστικής εορτής εκ μέρους σας για ${d === today() ? 'σήμερα, ' : ''}${dayStr(d)}.\n\nΑπεστάλησαν ${rows.length} email ευχών:\n` + rows.map((r, i) => `${i + 1}. ${r.name}`).join('\n') + `\n\n${db.setting('visits_signer_name') || ''}\n${db.setting('visits_signer_title') || ''}`;
+  const body = `Σεβασμιώτατε Μεγάλε Διδάσκαλε,\n\nσας υποβάλλω συνημμένα την αναφορά αποστολής ευχών ονομαστικής εορτής εκ μέρους σας για ${d === today() ? 'σήμερα, ' : ''}${dayStr(d)}.\n\nΑπεστάλησαν ${rows.length} email ευχών:\n` + rows.map((r, i) => `${i + 1}. ${r.name}`).join('\n') + `\n\n${gsSignatureText()}`;
   const tbl = `<table><thead><tr><th>Α/Α</th><th>Ονοματεπώνυμο</th><th>Email</th><th>Θέμα</th><th>Ώρα</th></tr></thead><tbody>${rows.map((r, i) => `<tr><td>${i + 1}</td><td><b>${esc(r.name)}</b></td><td>${esc(r.email)}</td><td>${esc(r.subject)}</td><td>${esc(String(r.sent_at || '').slice(11, 16))}</td></tr>`).join('') || '<tr><td colspan="5">Δεν έχουν καταχωριστεί ευχές.</td></tr>'}</tbody></table>`;
   return {
     title: 'Αναφορά ευχών',

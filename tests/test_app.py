@@ -818,7 +818,7 @@ def test_visit_letter_and_email_to_province_and_grand_master(app):
     assert 'Κοιν.: Λίαν Σεβάσμιος Αδ. Ιωάννης Εκπρόσωπος, Μέγας Καγκελάριος\nrep@example.com' in app.text('#pv .paper')
     assert 'Εκπροσώπηση του Μεγάλου Διδασκάλου' in app.page.locator('#tplSel option:checked').inner_text()
     assert 'Λίαν Σεβάσμιος Αδ. Ιωάννης Εκπρόσωπος' in app.page.input_value('[name=body]')
-    assert app.page.input_value('[name=closing]') == 'Με εκτίμηση και αδελφική αγάπη,'
+    assert app.page.input_value('[name=closing]') == 'Με αφοσίωση και εκτίμηση,'
 
 
 def test_province_summary_and_lodges_without_installation_date(app):
@@ -1045,18 +1045,18 @@ def test_grand_master_official_visit_letter_and_email(app):
     assert app.page.input_value('[name=subject]') == 'Επίσημη Επίσκεψη ΜΔ εις την Στοάν «ΔΙΩΝΗ» υπ’ αριθμ. 32 το Σάββατο, 16 Οκτωβρίου 2027'
     body = app.page.input_value('[name=body]')
     for s in ['Αγαπητέ Αδ. Γραμματεύ,', 'εργασίες της Στοάς «ΔΙΩΝΗ» υπ’ αρ. 32, το Σάββατο, 16 Οκτωβρίου 2027, και ώρα συμφώνως με την πρόσκλησή σας, θα παραστεί επισήμως ο Μέγας Διδάσκαλος',
-              'Σεβασμιώτατος Αδ. Ιωάννης Μπενετάτος.', 'Κανόνα 122', 'Κανόνα 144', 'Παρακαλούμε για την επιβεβαίωση λήψεως της παρούσης.', 'Κατ’ εντολήν του Μεγάλου Διδασκάλου,\nΜε εκτίμηση και αδελφική αγάπη,', 'Ο Μέγας Γραμματέας']:
+              'Σεβασμιώτατος Αδ. Ιωάννης Μπενετάτος.', 'Κανόνα 122', 'Κανόνα 144', 'Παρακαλούμε για την επιβεβαίωση λήψεως της παρούσης.', 'Κατ’ εντολήν του Μεγάλου Διδασκάλου,\nΜε αφοσίωση και εκτίμηση,', 'Πσεβ. Αδ. Δημήτριος Σκιαδόπουλος\nΜέγας Γραμματεύς']:
         assert s in body, s
     assert 'εκπροσωπ' not in body.lower() and '{' not in body
     app.go('/visits')
     app.page.locator('.vcard a:has-text("📄 Επιστολή")').first.click()
     app.page.wait_for_selector('#lf')
     assert app.page.input_value('[name=recipient_name]') == 'τον Γραμματέα της Στοάς «ΔΙΩΝΗ» υπ’ αριθ. 32, Αδ. Γραμματέας Δοκιμής'
-    assert 'Κατ’ εντολήν του Μεγάλου Διδασκάλου,' in app.page.input_value('[name=body]') and 'Ο Μέγας Γραμματέας' not in app.page.input_value('[name=body]')
+    assert 'Κατ’ εντολήν του Μεγάλου Διδασκάλου,' in app.page.input_value('[name=body]') and 'Μέγας Γραμματεύς' not in app.page.input_value('[name=body]')
     app.click('Αποθήκευση & απόδοση')
     app.page.wait_for_url('**/#/letters/1')
     paper = app.text('.paper')
-    assert 'Με εκτίμηση και αδελφική αγάπη,' in paper and 'Με αδελφικούς χαιρετισμούς' not in paper
+    assert 'Με αφοσίωση και εκτίμηση,' in paper and 'Με αδελφικούς χαιρετισμούς' not in paper and 'Πσεβ. Αδ. Δημήτριος Σκιαδόπουλος' in paper and 'Μέγας Γραμματεύς' in paper
 
 
 def test_smart_template_gm_visit_filled_from_database(app):
@@ -1081,7 +1081,7 @@ def test_smart_template_gm_visit_filled_from_database(app):
     assert app.page.input_value('[name=subject]') == 'Επίσημη Επίσκεψη ΜΔ εις την Στοάν «ΔΙΩΝΗ» υπ’ αριθμ. 32 την Τρίτη, 17 Μαρτίου 2099'
     assert app.page.input_value('[name=recipient_email]') == 'dioni.secretary@example.com, secretary.pr.pwg.nglgreece@gmail.com, gm@example.com'
     assert app.page.input_value('[name=recipient_name]') == 'τον Γραμματέα της Στοάς «ΔΙΩΝΗ» υπ’ αριθ. 32'
-    assert app.page.input_value('[name=closing]') == 'Με εκτίμηση και αδελφική αγάπη,' and app.page.input_value('[name=category]') == 'ΕΠΙΣΚΕΨΗ'
+    assert app.page.input_value('[name=closing]') == 'Με αφοσίωση και εκτίμηση,' and app.page.input_value('[name=category]') == 'ΕΠΙΣΚΕΨΗ'
     # από Στοά + ημερομηνία (Σάββατο → «το Σάββατο»)
     app.page.fill('#fillLodge', '1 · ΠΑΛΑΙΩΝ ΠΑΤΡΩΝ ΓΕΡΜΑΝΟΣ')
     app.page.dispatch_event('#fillLodge', 'change')
@@ -1595,7 +1595,7 @@ def test_gm_programme_report_and_public_page(app):
     app.page.locator('nav a', has_text='Αναφορά εκπροσώπησης ΜΔ').click()
     app.page.wait_for_url('**/#/visits/gm-programme')
     t = app.text('.print-area')
-    assert 'ΜΕΓΑΛΗ ΓΡΑΜΜΑΤΕΙΑ' in t and 'Σεβασμιώτατοι, Πανσεβάσμιοι, Λίαν Σεβάσμιοι και Σεβάσμιοι Αδελφοί,' in t and 'Με αδελφικούς χαιρετισμούς,' in t and 'Μέγας Γραμματέας' in t
+    assert 'ΜΕΓΑΛΗ ΓΡΑΜΜΑΤΕΙΑ' in t and 'Σεβασμιώτατοι, Πανσεβάσμιοι, Λίαν Σεβάσμιοι και Σεβάσμιοι Αδελφοί,' in t and 'Με αφοσίωση και εκτίμηση,' in t and 'Μέγας Γραμματεύς' in t
     rows = app.page.locator('.gmp-table tbody tr').all_inner_texts()
     assert len(rows) == 2 and '«ΑΛΦΑ»' in rows[0] and 'Ο Μέγας Διδάσκαλος' in rows[0] and '«ΒΗΤΑ»' in rows[1] and 'Νικολαΐδης' in rows[1], rows  # αύξουσα, χωρίς ΟΥΔΕΙΣ/παλιές
     assert 'ΚΕΝΗ' not in t and 'ΠΑΛΙΑ' not in t

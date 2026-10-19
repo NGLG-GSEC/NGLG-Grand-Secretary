@@ -117,7 +117,7 @@
       }).join('') + '</tbody></table>' : '<p class="empty">Δεν υπάρχουν προγραμματισμένες επισκέψεις.</p>';
     var salute = String(data.salute || '').replace(/Σεβαστοί/g, 'Σεβάσμιοι');
     document.getElementById('body').innerHTML = '<p class="salute">' + esc(salute) + '</p>' + paras + table
-      + '<p class="close">' + esc(data.closing || 'Με αδελφικούς χαιρετισμούς,') + '</p>'
+      + '<p class="close">' + esc(data.closing || 'Με αφοσίωση και εκτίμηση,') + '</p>'
       + '<div class="sign"><img src="../img/signature.png" alt=""><div class="line"></div><b>' + esc(data.signer || '') + '</b>' + esc(data.signer_title || '') + '</div>';
     var u = data.updated_at ? new Date(data.updated_at) : null;
     document.getElementById('foot').textContent = (u ? 'Τελευταία ενημέρωση: ' + dmy(u) + ' ' + ('0' + u.getHours()).slice(-2) + ':' + ('0' + u.getMinutes()).slice(-2) + ' · ' : '') + 'Η σελίδα ενημερώνεται αυτόματα.';
