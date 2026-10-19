@@ -255,6 +255,7 @@ input[type=file]{max-width:100%;min-width:0}
 .mailsheet .ms-g{width:34px;height:34px;border-radius:50%;background:#ea4335;color:#fff;font-weight:700;display:flex;align-items:center;justify-content:center}
 .mailsheet .ms-row{display:grid;grid-template-columns:58px minmax(0,1fr);gap:8px;padding:6px 0;border-top:1px solid #eef1f6;align-items:start}
 .mailsheet .ms-input,.mailsheet .ms-pick{width:100%;box-sizing:border-box;font:inherit;padding:5px 8px;border:1px solid #d6dce8;border-radius:6px}.mailsheet .ms-pick{margin-top:4px;font-size:.88em;background:#f8faff}
+.ms-extra{display:inline-flex;gap:6px;align-items:center;margin:2px 8px 2px 0;font-size:.9em}.reg-pdf{margin-top:12px;padding-top:10px;border-top:1px dashed #d6dce8}.approval-app .gprev-box{max-width:980px}.approval-canvas{width:100%;height:auto;border:1px solid #e1e6f0;border-radius:9px;margin-top:12px;background:#fff}
 .mailsheet .ms-row>span{color:#6b7790;font-size:.9em;padding-top:3px}
 .mchip{display:inline-block;background:#eef2fb;border-radius:999px;padding:3px 10px;margin:2px 4px 2px 0;font-size:.88em;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:top}
 .mchip.att{background:#fdecea;color:#a3261b}

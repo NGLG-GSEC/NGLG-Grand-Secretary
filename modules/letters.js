@@ -108,9 +108,23 @@ async function pngDataUrl(file, max = 800) {
 const protoPreview = (v) => (v ? `<img class="proto-img" src="${esc(v)}" alt="ΕΙΚΟΝΑ ΠΡΩΤΟΚΟΛΛΟΥ">` : '<span class="warn">Δεν έχει φορτωθεί ακόμη εικόνα.</span>');
 function protoImageBox(x) {
   const t = x.template_id ? db.get('letter_templates', x.template_id) : null;
-  return `<div class="full card proto-card" id="protoBox"${x.protocol_image || asksProtoImage(t) ? '' : ' hidden'}><b>🖼 ΕΙΚΟΝΑ ΠΡΩΤΟΚΟΛΛΟΥ</b> <small class="muted">— φορτώστε την εικόνα του εγκεκριμένου πρωτοκόλλου (σφραγίδα)· μπαίνει κάτω από τη σφραγίδα της ΕΜΣτΕ, στο κέντρο, ~400×200, χωρίς να καλύπτει κείμενο.</small>
+  return `<div class="full card proto-card" id="protoBox"${x.protocol_image || x.reg_file || asksProtoImage(t) ? '' : ' hidden'}><b>🖼 ΕΙΚΟΝΑ ΠΡΩΤΟΚΟΛΛΟΥ</b> <small class="muted">— φορτώστε την εικόνα του εγκεκριμένου πρωτοκόλλου (σφραγίδα)· μπαίνει κάτω από τη σφραγίδα της ΕΜΣτΕ, στο κέντρο, ~400×200, χωρίς να καλύπτει κείμενο.</small>
 <input type="hidden" name="protocol_image" value="${esc(x.protocol_image || '')}"><div class="proto-preview">${protoPreview(x.protocol_image)}</div>
-<div class="toolbar"><label class="btn">📤 Φόρτωση εικόνας<input type="file" id="protoImgFile" accept="image/*" hidden></label><button type="button" class="btn danger" data-act="protoImgDel">Αφαίρεση</button></div></div>`;
+<div class="toolbar"><button type="button" class="btn primary" data-act="approvalStamp">🏛 ΕΙΔΙΚΟ ΣΗΜΑ ΕΓΚΡΙΣΗΣ ΕΣΩΤ. ΚΑΝΟΝΙΣΜΟΥ</button><label class="btn">📤 Φόρτωση εικόνας<input type="file" id="protoImgFile" accept="image/*" hidden></label><button type="button" class="btn danger" data-act="protoImgDel">Αφαίρεση</button></div>
+<div class="reg-pdf"><b>📎 Εγκεκριμένος Εσωτερικός Κανονισμός (PDF)</b> <small class="muted">— δεύτερο PDF της επιστολής· επισυνάπτεται στο email όταν το επιλέξετε και φαίνεται στο Αρχείο Επιστολών μαζί με την επιστολή.</small>
+<div class="reg-name">${regLabel(x)}</div><input type="hidden" name="reg_remove" value="">
+<div class="toolbar"><label class="btn">📤 Επιλογή PDF Κανονισμού<input type="file" id="regFile" accept="application/pdf,.pdf" hidden></label><button type="button" class="btn danger" data-act="regDel">Αφαίρεση PDF</button></div></div></div>`;
+}
+const regLabel = (x, pending) => (pending ? `📄 <b>${esc(pending)}</b> <small class="muted">(θα αποθηκευτεί με την επιστολή)</small>` : x.reg_file ? `📄 <b>${esc(x.reg_name || 'Εσωτερικός Κανονισμός.pdf')}</b>` : '<span class="muted">Δεν έχει επισυναφθεί PDF.</span>');
+// Ο εγκεκριμένος Εσωτερικός Κανονισμός (PDF) μιας επιστολής → { blob, name }
+export async function regPdf(x) {
+  const bytes = x && x.reg_file ? await db.file(x.reg_file) : null;
+  if (!bytes) throw new Error('Δεν βρέθηκε το PDF του Εσωτερικού Κανονισμού.');
+  return { blob: new Blob([bytes], { type: 'application/pdf' }), name: x.reg_name || 'Εσωτερικός Κανονισμός.pdf' };
+}
+async function downloadReg(x, b) {
+  const old = b && b.textContent; if (b) { b.disabled = true; b.textContent = '⏳'; }
+  try { const r = await regPdf(x); download(r.name, r.blob, 'application/pdf'); } catch (e) { toast(e.message || String(e), 'error'); } finally { if (b) { b.disabled = false; b.textContent = old; } }
 }
 
 function letterForm(x, query = {}) {
@@ -186,9 +200,17 @@ function mountLetterForm(el, x, isNew) {
     try { setProto(await pngDataUrl(file)); } catch { toast('Δεν διαβάστηκε η εικόνα· δοκιμάστε PNG ή JPG.'); }
     e.target.value = '';
   });
+  let regPending = null; // { name, bytes } — νέο PDF Κανονισμού, αποθηκεύεται μαζί με την επιστολή
+  el.querySelector('#regFile').addEventListener('change', async (e) => {
+    const file = e.target.files[0]; e.target.value = ''; if (!file) return;
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    if (String.fromCharCode(...bytes.slice(0, 4)) !== '%PDF') { toast('Το αρχείο δεν είναι PDF.', 'error'); return; }
+    regPending = { name: file.name.replace(/\.pdf$/i, '') + '.pdf', bytes }; f.reg_remove.value = '';
+    pbox.querySelector('.reg-name').innerHTML = regLabel(x, regPending.name);
+  });
   el.querySelector('#tplSel').addEventListener('change', (e) => {
     tpl = db.get('letter_templates', e.target.value);
-    pbox.hidden = !(f.protocol_image.value || asksProtoImage(tpl));
+    pbox.hidden = !(f.protocol_image.value || x.reg_file || asksProtoImage(tpl));
     box.hidden = !(tpl && hasPlaceholders([tpl.body, tpl.subject].join(' ')));
     if (tpl) apply(false);
   });
@@ -196,7 +218,14 @@ function mountLetterForm(el, x, isNew) {
   for (const i of [fl, fd]) i.addEventListener('change', () => { fv.value = ''; apply(true); });
   if (tpl && !box.hidden && (fv.value || !f.body.value.trim() || hasPlaceholders(f.body.value))) apply(true);
   const cur = () => ({ ...x, ...Object.fromEntries(new FormData(f)), letter_date: x.letter_date || today() });
-  bind(el, { protoImgDel: () => setProto(''), ready() { f.status.value = 'ready'; f.requestSubmit(); }, form: () => openInDigitalForm(cur()), word: () => letterDocx(cur()), preview() {
+  bind(el, { protoImgDel: () => setProto(''),
+    regDel() { regPending = null; f.reg_remove.value = '1'; pbox.querySelector('.reg-name').innerHTML = '<span class="muted">Δεν έχει επισυναφθεί PDF.</span>'; },
+    async approvalStamp() { // η εφαρμογή «Έγκριση Εσωτερικού Κανονισμού»: η εικόνα μπαίνει ως ΕΙΚΟΝΑ ΠΡΩΤΟΚΟΛΛΟΥ
+      const { openApprovalStamp } = await import('./approval-stamp.js');
+      const no = String(fl.value).split('·')[0].trim() || (/(?:αριθ|αρ)\S*\s*(\d+)\s*$/i.exec(f.recipient_name.value) || [])[1] || '';
+      const v = await openApprovalStamp({ protocol: String(x.protocol_seq || suggestedProtocol()), date: x.letter_date || today(), lodge: no });
+      if (v) { setProto(v); toast('Το ειδικό σήμα μπήκε ως ΕΙΚΟΝΑ ΠΡΩΤΟΚΟΛΛΟΥ.'); }
+    }, ready() { f.status.value = 'ready'; f.requestSubmit(); }, form: () => openInDigitalForm(cur()), word: () => letterDocx(cur()), preview() {
     const d = Object.fromEntries(new FormData(f));
     const pv = el.querySelector('#pv');
     pv.innerHTML = letterPaper({ ...x, ...d, letter_date: x.letter_date || today() });
@@ -212,6 +241,8 @@ function mountLetterForm(el, x, isNew) {
     if (manualProtocol === null) return;
     const id = await db.save(isNew ? `Νέα Επιστολή: ${row.subject}` : `Επιστολή ${x.protocol_no || x.id}: ενημέρωση`, (tx) => {
       const r = isNew ? tx.insert('letters', { ...row, letter_date: today(), source_letter_id: x.source_letter_id || null, visit_id: row.visit_id || x.visit_id || null }) : tx.update('letters', x.id, row);
+      if (regPending) { const path = `letters/kanonismos-${r.id}-${Date.now()}.pdf`; tx.putFile(path, regPending.bytes); tx.update('letters', r.id, { reg_file: path, reg_name: regPending.name }); }
+      else if (d.reg_remove) tx.update('letters', r.id, { reg_file: '', reg_name: '' });
       if (row.status === 'ready') assignProtocol(tx, r.id, manualProtocol);
       return r.id;
     });
@@ -281,7 +312,7 @@ function viewLetter({ params }) {
     title: letterFields(x.subject, x),
     html: `<section class="card send-panel noprint"><h3>Αποστολή & Αποθήκευση</h3>${senderBanner(mailKind(x))}
 <div class="toolbar"><button class="btn primary" data-act="pdf">⬇ PDF / Εκτύπωση</button>${mailButtons(withLetterCc({ to: x.recipient_email, bcc: mailBcc(x, x.recipient_email), subject: letterFields(x.subject, x), body: mailBody(x), kind: mailKind(x) }), '✉ Αποστολή με Email')}
-<button class="btn" data-act="word">⬇ Word (επεξεργασία)</button><button class="btn" data-act="form">🖋 Ψηφιακό Έντυπο</button>
+${x.reg_file ? '<button class="btn" data-act="regpdf">📎 Εσωτ. Κανονισμός (PDF)</button>' : ''}<button class="btn" data-act="word">⬇ Word (επεξεργασία)</button><button class="btn" data-act="form">🖋 Ψηφιακό Έντυπο</button>
 <button class="btn" data-act="wapdf">🟢 WhatsApp / Business με PDF</button><a class="btn" target="_blank" rel="noopener" href="${wa}">WhatsApp μήνυμα</a>${x.status === 'ready' ? '' : '<button class="btn primary" data-act="ready">✅ Έτοιμη: απόδοση αρ. πρωτοκόλλου</button>'}</div>
 ${x.status === 'ready' ? '<div class="mailsheet"></div>' : '<p class="send-help">Για αποστολή με συνημμένο PDF ορίστε πρώτα την επιστολή «✅ Έτοιμη» (αριθμός πρωτοκόλλου).</p>'}${driveBox(x, fileName(x))}</section>
 <div class="toolbar noprint"><a class="btn" href="#/letters/${x.id}/edit">Επεξεργασία</a><a class="btn" href="#/letters/new?copy_from=${x.id}">Νέα πάνω σε αυτή</a><a class="btn" href="#/letters">Αρχείο Επιστολών</a>
@@ -289,12 +320,14 @@ ${x.protocol_seq ? '<button class="btn" data-act="protocol">✏ Αλλαγή α�
 <div class="print-area">${letterPaper(x)}</div>`,
     mount(el) {
       if (x.status === 'ready') mailSheet(el, { kind: mailKind(x), pdfName: fileName(x),
+        extras: x.reg_file ? [{ label: `Εσωτερικός Κανονισμός: ${x.reg_name || 'PDF'}`, name: x.reg_name || 'Εσωτερικός Κανονισμός.pdf', load: () => regPdf(x) }] : [],
         onKind: async (k) => { await db.save(`Επιστολή ${x.protocol_no || x.id}: λογαριασμός αποστολής`, (tx) => { tx.update('letters', x.id, { mail_kind: k }); }); toast(`Η επιστολή θα στέλνεται από ${senderFor(k)}.`); go(`/letters/${x.id}`); }, getMsg: () => withLetterCc({ to: x.recipient_email, cc: '', bcc: mailBcc(x, x.recipient_email), subject: letterFields(x.subject, x), body: mailBody(x) }),
         getPdf: async () => ({ blob: await (await import('../core/pdf.js')).paperPdf(el.querySelector('.print-area .paper'), { title: fileName(x) }), name: fileName(x) + '.pdf' }) });
       bind(el, {
         pdf: () => printPaper(fileName(x)),
         word: () => letterDocx(x),
         wapdf: (_, b) => waSendPdf(x, b),
+        regpdf: (_, b) => downloadReg(x, b),
         async drive(_, b) {
           b.disabled = true; b.textContent = '☁ Αποθήκευση…';
           try { await saveDocToDrive('letters', x.id, fileName(x), null, el.querySelector('.print-area .paper')); flash('Αποθηκεύτηκε στο Drive (Word + PDF).'); go(`/letters/${x.id}`); }
@@ -322,13 +355,14 @@ function archive({ query }) {
 <small class="muted">Ενιαία αρίθμηση Επιστολών και Διαταγμάτων. Όταν γράφετε αριθμό σε ένα έγγραφο, η αρίθμηση συνεχίζει από εκεί· οι αριθμοί που υπάρχουν ήδη παραλείπονται.</small></div>
 <form class="filters" id="flt"><input name="q" value="${esc(query.q || '')}" placeholder="Αρ. πρωτ., θέμα, παραλήπτης" autofocus><input type="date" name="from" value="${esc(query.from || '')}"><input type="date" name="to" value="${esc(query.to || '')}"><button>Αναζήτηση</button></form>
 <p class="muted">${xs.length} επιστολές${xs.length > 500 ? ' (εμφανίζονται οι 500 πιο πρόσφατες)' : ''}</p>
-${table(['Αρ. Πρωτ.', 'Ημερομηνία', 'Θέμα', 'Παραλήπτης', 'Κατάσταση', 'Ενέργειες'], shown.map((x) => [`<span class="official-number">${esc(x.protocol_no)}</span> <button type="button" class="btn small" data-act="dlpdf" data-id="${x.id}" title="Λήψη PDF">⬇ PDF</button>`, esc(fmtDate(x.letter_date)), esc(letterFields(x.subject, x)), esc(x.recipient_name), statusPill(x.status),
+${table(['Αρ. Πρωτ.', 'Ημερομηνία', 'Θέμα', 'Παραλήπτης', 'Κατάσταση', 'Ενέργειες'], shown.map((x) => [`<span class="official-number">${esc(x.protocol_no)}</span> <button type="button" class="btn small" data-act="dlpdf" data-id="${x.id}" title="Λήψη PDF">⬇ PDF</button>${x.reg_file ? ` <button type="button" class="btn small" data-act="regpdf" data-id="${x.id}" title="${esc(x.reg_name || '')}">📎 Κανονισμός</button>` : ''}`, esc(fmtDate(x.letter_date)), esc(letterFields(x.subject, x)), esc(x.recipient_name), statusPill(x.status),
   `<a href="#/letters/${x.id}">Άνοιγμα</a> · <a href="#/letters/${x.id}/edit">Επεξεργασία</a> · <a href="#/letters/new?copy_from=${x.id}">Νέα πάνω σε αυτή</a> · ${x.protocol_seq ? `<button type="button" class="btn small" data-act="proto" data-id="${x.id}">✏ Αλλαγή αρ. πρωτ.</button>` : `<button type="button" class="btn small" data-act="addproto" data-id="${x.id}">➕ Αρ. πρωτοκόλλου</button>`} · <button type="button" class="btn wa-btn" data-act="wapdf" data-id="${x.id}">🟢 WhatsApp / Business PDF</button> · <button type="button" class="btn small danger" data-act="dellet" data-id="${x.id}">🗑 Διαγραφή</button>`]), 'Δεν βρέθηκαν επιστολές.')}`,
     mount(el) {
       onSubmit(el.querySelector('#flt'), (d) => go('/letters', d));
       const back = () => ['/letters', query];
       bind(el, {
         wapdf: (d, b) => waSendPdf(db.get('letters', d.id), b),
+        regpdf: (d, b) => downloadReg(db.get('letters', d.id), b),
         async dlpdf(d, b) { // λήψη του PDF της επιστολής από το αρχείο
           const old = b.textContent; b.disabled = true; b.textContent = '⏳';
           try { const r = await letterPdf(db.get('letters', d.id)); download(r.name, r.blob, 'application/pdf'); } finally { b.disabled = false; b.textContent = old; }

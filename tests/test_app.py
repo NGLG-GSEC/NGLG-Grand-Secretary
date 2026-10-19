@@ -1378,6 +1378,73 @@ def test_protocol_field_in_subject_and_official_font(app):
     assert 'Αρ. Πρωτ. 20545 για' in app.text()
 
 
+def test_regulation_approval_stamp_and_pdf(app, tmp_path):
+    """Έγκριση Εσωτερικού Κανονισμού: «ΕΙΔΙΚΟ ΣΗΜΑ» → ΕΙΚΟΝΑ ΠΡΩΤΟΚΟΛΛΟΥ· δεύτερο PDF (Κανονισμός) στο email και στο Αρχείο."""
+    app.connect_local()
+    reg = tmp_path / 'Κανονισμός ΟΜΗΡΟΣ.pdf'
+    reg.write_bytes(b'%PDF-1.4\n1 0 obj<</Type/Catalog>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n')
+    sent = []
+
+    def gmail(route, request):
+        if request.url.endswith('/profile'):
+            return route.fulfill(json={'emailAddress': 'grand.secretary@nglgreece.gr'})
+        sent.append(json.loads(request.post_data or '{}'))
+        return route.fulfill(json={'id': 'm-1'})
+    app.page.route('https://accounts.google.com/gsi/client', lambda r: r.fulfill(body=GSI_FAKE, content_type='text/javascript'))
+    app.page.route('https://gmail.googleapis.com/**', gmail)
+    tid = app.page.evaluate("""async () => { const {db} = await import('./core/store.js');
+      return db.save('x', (tx) => { tx.setting('google_client_id', 'test.apps.googleusercontent.com');
+        return tx.insert('letter_templates', { name: 'Έγκριση Εσωτερικού Κανονισμού', active: 1, subject: 'Έγκριση Εσωτερικού Κανονισμού με Αρ. Πρωτ. {Αριθμός Πρωτοκόλλου}', body: 'Εγκρίνεται ο Κανονισμός με Αρ. Πρωτ. {Αρ. Πρωτ.}.' }).id; }); }""")
+    app.go('/letters/new')
+    assert app.page.locator('#protoBox').is_hidden()
+    app.page.select_option('#tplSel', str(tid))
+    assert app.page.locator('[data-act=approvalStamp]').is_visible() and 'ΕΙΔΙΚΟ ΣΗΜΑ ΕΓΚΡΙΣΗΣ ΕΣΩΤ. ΚΑΝΟΝΙΣΜΟΥ' in app.page.inner_text('#protoBox')
+    app.fill(recipient_name='Γραμματέα της Στοάς «ΟΜΗΡΟΣ» υπ’ αριθ. 59', recipient_email='omiros59@example.com')
+    app.page.click('[data-act=approvalStamp]')
+    app.page.wait_for_selector('.approval-app canvas')
+    assert app.page.input_value('.approval-app [data-k=protocol]') == '20545' and app.page.input_value('.approval-app [data-k=lodge]') == '59'
+    assert 'ΟΜΗΡΟΣ' in app.page.inner_text('.approval-detail')
+    app.page.fill('.approval-app [data-k=search]', 'ΚΑΠΟΔΙΣΤΡ')
+    assert app.page.locator('.approval-app [data-k=lodge] option').count() == 3  # κενή + η επιλεγμένη 59 + 92
+    with app.page.expect_download() as dl:
+        app.page.click('.approval-app [data-jpeg]')
+    assert dl.value.suggested_filename.startswith('ΑρΠρωτοκόλλου_20545_') and Path(dl.value.path()).read_bytes()[:3] == b'\xff\xd8\xff'
+    app.page.click('.approval-app [data-use]')
+    app.page.wait_for_selector('#protoBox .proto-preview img.proto-img')
+    assert app.page.input_value('[name=protocol_image]').startswith('data:image/png;base64,')
+    app.page.set_input_files('#regFile', str(reg))
+    assert 'Κανονισμός ΟΜΗΡΟΣ.pdf' in app.page.inner_text('#protoBox .reg-name')
+    app.click('✅ Έτοιμη: Αποθήκευση & απόδοση αρ. πρωτοκόλλου')
+    app.page.wait_for_url('**/#/letters/1')
+    l = app.page.evaluate("async () => (await import('./core/store.js')).db.get('letters', 1)")
+    assert l['reg_name'] == 'Κανονισμός ΟΜΗΡΟΣ.pdf' and l['reg_file'].startswith('letters/kanonismos-1-') and l['protocol_image']
+    assert app.page.locator('.print-area .proto-img').count() == 1
+    with app.page.expect_download() as dl:
+        app.page.click('[data-act=regpdf]')
+    assert dl.value.suggested_filename == 'Κανονισμός ΟΜΗΡΟΣ.pdf' and Path(dl.value.path()).read_bytes()[:4] == b'%PDF'
+    # email: το PDF της επιστολής και (επιλεγμένος) ο Κανονισμός
+    app.page.wait_for_selector('[data-extra="0"]')
+    assert app.page.is_checked('[data-extra="0"]')
+    app.page.click('[data-ms=send]')
+    assert 'Κανονισμός ΟΜΗΡΟΣ.pdf' in app.page.inner_text('.send-preview')
+    app.page.click('.send-preview [data-yes]')
+    app.page.wait_for_selector('.ms-ok', timeout=30000)
+    mime = base64.urlsafe_b64decode(sent[0]['raw'] + '=' * (-len(sent[0]['raw']) % 4)).decode()
+    assert mime.count('Content-Type: application/pdf') == 2 and 'Subject: =?UTF-8?B?' in mime
+    # χωρίς τον Κανονισμό όταν δεν τον θέλω
+    app.go('/letters/1'); app.page.wait_for_selector('[data-extra="0"]')
+    app.page.uncheck('[data-extra="0"]')
+    app.page.click('[data-ms=send]'); app.page.click('.send-preview [data-yes]')
+    app.page.wait_for_selector('.ms-ok', timeout=30000)
+    mime = base64.urlsafe_b64decode(sent[1]['raw'] + '=' * (-len(sent[1]['raw']) % 4)).decode()
+    assert mime.count('Content-Type: application/pdf') == 1
+    # Αρχείο Επιστολών: ο Κανονισμός μαζί με την επιστολή
+    app.go('/letters')
+    with app.page.expect_download() as dl:
+        app.page.locator('tr', has_text='ΟΜΗΡΟΣ').locator('[data-act=regpdf]').click()
+    assert dl.value.suggested_filename == 'Κανονισμός ΟΜΗΡΟΣ.pdf'
+
+
 def test_protocol_suggested_or_manual(app):
     """Το «Έτοιμο» προτείνει τον επόμενο αριθμό πρωτοκόλλου· μπορεί να γραφτεί άλλος, και να αλλάξει αργότερα."""
     app.connect_local()
