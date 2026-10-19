@@ -39,14 +39,15 @@ export function signatureBlock(signer, protoImg = '') {
 <b>${esc(p.name)}</b><div class="gs-title">${esc(p.title)}</div>${esc(db.setting('organization_name'))}</div>
 <div class="seal"><img class="seal-img" src="${IMG.seal}" alt=""></div>${protoImg ? `<div class="proto-stamp"><img class="proto-img" src="${esc(protoImg)}" alt=""></div>` : ''}</div>`;
 }
-// «ΕΙΚΟΝΑ ΠΡΩΤΟΚΟΛΛΟΥ» του προτύπου της επιστολής: δεξιά της σφραγίδας (~150×150)
-export const protocolImage = (x) => { const t = x && x.template_id ? db.get('letter_templates', x.template_id) : null; return (t && t.protocol_image) || ''; };
+// «ΕΙΚΟΝΑ ΠΡΩΤΟΚΟΛΛΟΥ» της επιστολής (π.χ. το εγκεκριμένο πρωτόκολλο-σφραγίδα): δεξιά της σφραγίδας (~150×150)
+export const protocolImage = (x) => (x && x.protocol_image) || '';
 
 // Πεδία της ίδιας της επιστολής μέσα στο κείμενο: συμπληρώνονται στο έγγραφο (σελίδα, PDF, Word, email) μόλις η επιστολή
 // πάρει αριθμό πρωτοκόλλου («Έτοιμη»)· μέχρι τότε μένουν ως {πεδίο}. Γράφονται π.χ. {Αρ. Πρωτ.} ή {Αρ. Πρωτ.: }.
 export const LETTER_FIELDS = [['Αρ. Πρωτ.', 'ο αριθμός πρωτοκόλλου της επιστολής (μπαίνει όταν οριστεί «Έτοιμη»)'], ['Ημερομηνία επιστολής', 'η ημερομηνία της επιστολής (του πρωτοκόλλου), π.χ. 19/10/2026']];
 const PROTO_RE = /\{\s*(?:αρ\.?\s*πρωτ(?:οκόλλου|\.)?|αριθμός\s+πρωτοκόλλου)\s*:?\s*\}/giu;
 const LDATE_RE = /\{\s*ημερομηνία\s+(?:επιστολής|πρωτοκόλλου)\s*:?\s*\}/giu;
+export const hasProtocolField = (text) => new RegExp(PROTO_RE.source, 'iu').test(String(text || ''));
 export function letterFields(text, x) {
   const t = String(text || '');
   if (!x || !x.protocol_seq) return t;

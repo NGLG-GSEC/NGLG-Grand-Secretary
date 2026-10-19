@@ -5,7 +5,7 @@ import { module, onSubmit, go, flash, toast, bind, confirmDo, table, notice, act
 import { crud } from '../core/crud.js';
 import { esc, today, fmtDate, matches, sortBy, safeFileName, latinFileName, EMAIL_RE, splitEmails, download, outgoingProtocolBtn } from '../core/util.js';
 import { richPlain } from '../core/rich.js';
-import { letterPaper, printPaper, signerProfile, IMG, fitPaper, letterFields, LETTER_FIELDS, protocolImage } from '../core/paper.js';
+import { letterPaper, printPaper, signerProfile, IMG, fitPaper, letterFields, LETTER_FIELDS, protocolImage, hasProtocolField } from '../core/paper.js';
 import { makeDocx, letterBlocks } from '../core/docx.js';
 import { docTitle, driveBox, saveDocToDrive } from '../core/drive.js';
 import { mailButtons, senderBanner, withLetterCc } from '../core/mail.js';
@@ -96,26 +96,21 @@ function fillPanel(x, query) {
 <p class="muted" id="fillState"></p></div>`;
 }
 
-// «ΕΙΚΟΝΑ ΠΡΩΤΟΚΟΛΛΟΥ» προτύπου: μπαίνει στις επιστολές του δεξιά της σφραγίδας (~150×150)· αποθηκεύεται ως PNG (και για το Word)
-function protoImageCard(t) {
-  return `<section class="card proto-card"><h2 style="margin-top:0">ΕΙΚΟΝΑ ΠΡΩΤΟΚΟΛΛΟΥ</h2>
-<p class="muted">Μπαίνει στις επιστολές αυτού του προτύπου δεξιά από την υπογραφή, μετά τη σφραγίδα, σε μέγεθος περίπου 150×150, χωρίς να καλύπτει κείμενο.</p>
-<div class="proto-preview">${t.protocol_image ? `<img class="proto-img" src="${esc(t.protocol_image)}" alt="ΕΙΚΟΝΑ ΠΡΩΤΟΚΟΛΛΟΥ">` : '<span class="muted">Δεν έχει οριστεί εικόνα.</span>'}</div>
-<div class="toolbar"><label class="btn">🖼 ${t.protocol_image ? 'Αλλαγή εικόνας' : 'Επιλογή εικόνας'}<input type="file" id="protoImgFile" accept="image/*" hidden></label>${t.protocol_image ? '<button type="button" class="btn danger" data-act="protoImgDel">Αφαίρεση εικόνας</button>' : ''}</div></section>`;
-}
+// «ΕΙΚΟΝΑ ΠΡΩΤΟΚΟΛΛΟΥ» (π.χ. το εγκεκριμένο πρωτόκολλο-σφραγίδα): φορτώνεται στην επιστολή όταν το πρότυπο τη ζητά·
+// μπαίνει δεξιά της σφραγίδας (~150×150)· αποθηκεύεται ως PNG (και για το Word)
+export const asksProtoImage = (t) => !!t && (String(t.ask_proto_image ?? '') === '1' || (String(t.ask_proto_image ?? '') === '' && hasProtocolField([t.subject, t.body].join(' '))));
 async function pngDataUrl(file, max = 450) {
   const img = await createImageBitmap(file), k = Math.min(1, max / Math.max(img.width, img.height));
   const c = Object.assign(document.createElement('canvas'), { width: Math.max(1, Math.round(img.width * k)), height: Math.max(1, Math.round(img.height * k)) });
   c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
   return c.toDataURL('image/png');
 }
-function mountProtoImage(el, t) {
-  const save = async (v, msg) => { await db.save(`Πρότυπο «${t.name}»: εικόνα πρωτοκόλλου`, (tx) => { tx.update('letter_templates', t.id, { protocol_image: v }); }); flash(msg); go(`/templates/edit/${t.id}`); };
-  el.querySelector('#protoImgFile').addEventListener('change', async (e) => {
-    const f = e.target.files[0]; if (!f) return;
-    try { await save(await pngDataUrl(f), 'Η εικόνα πρωτοκόλλου αποθηκεύτηκε.'); } catch { toast('Δεν διαβάστηκε η εικόνα· δοκιμάστε PNG ή JPG.'); }
-  });
-  bind(el, { async protoImgDel() { if (confirmDo('Αφαίρεση της εικόνας πρωτοκόλλου;')) await save('', 'Η εικόνα πρωτοκόλλου αφαιρέθηκε.'); } });
+const protoPreview = (v) => (v ? `<img class="proto-img" src="${esc(v)}" alt="ΕΙΚΟΝΑ ΠΡΩΤΟΚΟΛΛΟΥ">` : '<span class="warn">Δεν έχει φορτωθεί ακόμη εικόνα.</span>');
+function protoImageBox(x) {
+  const t = x.template_id ? db.get('letter_templates', x.template_id) : null;
+  return `<div class="full card proto-card" id="protoBox"${x.protocol_image || asksProtoImage(t) ? '' : ' hidden'}><b>🖼 ΕΙΚΟΝΑ ΠΡΩΤΟΚΟΛΛΟΥ</b> <small class="muted">— φορτώστε την εικόνα του εγκεκριμένου πρωτοκόλλου (σφραγίδα)· μπαίνει δεξιά της σφραγίδας, ~150×150, χωρίς να καλύπτει κείμενο.</small>
+<input type="hidden" name="protocol_image" value="${esc(x.protocol_image || '')}"><div class="proto-preview">${protoPreview(x.protocol_image)}</div>
+<div class="toolbar"><label class="btn">📤 Φόρτωση εικόνας<input type="file" id="protoImgFile" accept="image/*" hidden></label><button type="button" class="btn danger" data-act="protoImgDel">Αφαίρεση</button></div></div>`;
 }
 
 function letterForm(x, query = {}) {
@@ -131,6 +126,7 @@ ${fillPanel(x, query)}
 <div class="full"><label>Κοιν. (στο έντυπο, κάτω από το «Προς»)</label><input id="ccPick" class="subpick" placeholder="🔎 Κοιν.: επαφή ή ομάδα (μπαίνει στο έντυπο και το email της στους παραλήπτες)…" autocomplete="off"><textarea name="cc_name" rows="2" style="min-height:0">${esc(x.cc_name || '')}</textarea></div>
 <div class="full"><label>Θέμα</label><input name="subject" value="${esc(x.subject || '')}" required></div>
 <div class="full"><label>Κείμενο</label><textarea name="body" required>${esc(x.body || '')}</textarea><small class="muted">Οι σύνδεσμοι (https://… ή www.…) μένουν ενεργοί στο τελικό έγγραφο.</small></div>
+${protoImageBox(x)}
 <div><label>Κατάσταση</label><select name="status"><option value="draft"${x.status !== 'ready' ? ' selected' : ''}>Πρόχειρη</option><option value="ready"${x.status === 'ready' ? ' selected' : ''}>Έτοιμη</option></select></div>
 <div><label>Υπογράφων</label><select name="signer">${Object.entries(ACTORS).map(([k, v]) => `<option value="${k}"${(x.signer || actor()) === k ? ' selected' : ''}>${esc(v)}</option>`).join('')}</select></div>
 <div class="full toolbar"><button class="btn${x.protocol_seq ? ' primary' : ''}">💾 Αποθήκευση</button>${x.protocol_seq ? '' : '<button type="button" class="btn primary" data-act="ready">✅ Έτοιμη: Αποθήκευση & απόδοση αρ. πρωτοκόλλου</button>'}<button type="button" class="btn" data-act="preview">👁 Προεπισκόπηση</button><button type="button" class="btn" data-act="form">🖋 Ψηφιακό Έντυπο</button><button type="button" class="btn" data-act="word">⬇ Word</button>
@@ -184,8 +180,15 @@ function mountLetterForm(el, x, isNew) {
       + (miss.length ? ` — <span class="warn">λείπουν: ${miss.map((k) => '{' + esc(k) + '}').join(', ')}</span>` : '')
       + (tpl.key === GM_VISIT.key && c.lodge && !lodgeRecipients(c).lodgeMail ? ' — <span class="warn">η Στοά δεν έχει email (Συμβολικές Στοές)</span>' : '') : 'Επιλέξτε Επίσκεψη ή Στοά και ημερομηνία.';
   };
+  const pbox = el.querySelector('#protoBox'), setProto = (v) => { f.protocol_image.value = v; pbox.querySelector('.proto-preview').innerHTML = protoPreview(v); };
+  el.querySelector('#protoImgFile').addEventListener('change', async (e) => {
+    const file = e.target.files[0]; if (!file) return;
+    try { setProto(await pngDataUrl(file)); } catch { toast('Δεν διαβάστηκε η εικόνα· δοκιμάστε PNG ή JPG.'); }
+    e.target.value = '';
+  });
   el.querySelector('#tplSel').addEventListener('change', (e) => {
     tpl = db.get('letter_templates', e.target.value);
+    pbox.hidden = !(f.protocol_image.value || asksProtoImage(tpl));
     box.hidden = !(tpl && hasPlaceholders([tpl.body, tpl.subject].join(' ')));
     if (tpl) apply(false);
   });
@@ -193,7 +196,7 @@ function mountLetterForm(el, x, isNew) {
   for (const i of [fl, fd]) i.addEventListener('change', () => { fv.value = ''; apply(true); });
   if (tpl && !box.hidden && (fv.value || !f.body.value.trim() || hasPlaceholders(f.body.value))) apply(true);
   const cur = () => ({ ...x, ...Object.fromEntries(new FormData(f)), letter_date: x.letter_date || today() });
-  bind(el, { ready() { f.status.value = 'ready'; f.requestSubmit(); }, form: () => openInDigitalForm(cur()), word: () => letterDocx(cur()), preview() {
+  bind(el, { protoImgDel: () => setProto(''), ready() { f.status.value = 'ready'; f.requestSubmit(); }, form: () => openInDigitalForm(cur()), word: () => letterDocx(cur()), preview() {
     const d = Object.fromEntries(new FormData(f));
     const pv = el.querySelector('#pv');
     pv.innerHTML = letterPaper({ ...x, ...d, letter_date: x.letter_date || today() });
@@ -203,7 +206,7 @@ function mountLetterForm(el, x, isNew) {
     const emails = splitEmails(d.recipient_email), bad = emails.filter((e) => !EMAIL_RE.test(e));
     if (bad.length) throw new Error('Μη έγκυρο email: ' + bad.join(', '));
     const row = { subject: d.subject.trim(), body: d.body.trim(), template_id: d.template_id ? Number(d.template_id) : null, recipient_name: d.recipient_name.trim(),
-      recipient_email: emails.join(', '), recipient_member_id: d.recipient_member_id ? Number(d.recipient_member_id) : null, visit_id: Number(d.visit_id) || x.visit_id || null, cc_name: String(d.cc_name || '').trim(), closing: String(d.closing || '').trim(), category: LETTER_CATEGORIES[d.category] ? d.category : 'ΕΠΙΣΤΟΛΗ', status: d.status, signer: d.signer };
+      recipient_email: emails.join(', '), recipient_member_id: d.recipient_member_id ? Number(d.recipient_member_id) : null, visit_id: Number(d.visit_id) || x.visit_id || null, cc_name: String(d.cc_name || '').trim(), closing: String(d.closing || '').trim(), category: LETTER_CATEGORIES[d.category] ? d.category : 'ΕΠΙΣΤΟΛΗ', status: d.status, signer: d.signer, protocol_image: String(d.protocol_image || '') };
     // «Έτοιμη» χωρίς αριθμό: πρόταση του επόμενου αριθμού πρωτοκόλλου ή χειροκίνητος
     const manualProtocol = row.status === 'ready' && !x.protocol_seq ? askProtocol({ table: 'letters', id: x.id }) : 0;
     if (manualProtocol === null) return;
@@ -378,12 +381,11 @@ module({
       table: 'letter_templates', base: '/templates', title: 'Πρότυπα Επιστολών', one: 'Πρότυπο', name: (t) => t.name,
       fields: [{ k: 'name', label: 'Όνομα', required: true, full: true }, { k: 'subject', label: 'Θέμα (προαιρετικό)', full: true, help: PH_HELP },
         { k: 'body', label: 'Κορμός επιστολής', type: 'textarea', full: true, help: PH_HELP }, { k: 'closing', label: 'Αποφώνηση (προαιρετική)', placeholder: 'π.χ. Με εκτίμηση και αδελφική αγάπη,' },
-        { k: 'category', label: 'Κατηγορία πρωτοκόλλου', type: 'select', options: Object.entries(LETTER_CATEGORIES).map(([k]) => [k, k]) }, { k: 'active', label: 'Ενεργό', type: 'select', options: [[1, 'Ναι'], [0, 'Όχι']] }],
+        { k: 'category', label: 'Κατηγορία πρωτοκόλλου', type: 'select', options: Object.entries(LETTER_CATEGORIES).map(([k]) => [k, k]) }, { k: 'active', label: 'Ενεργό', type: 'select', options: [[1, 'Ναι'], [0, 'Όχι']] },
+        { k: 'ask_proto_image', label: 'ΕΙΚΟΝΑ ΠΡΩΤΟΚΟΛΛΟΥ: ζητείται στη νέα επιστολή', type: 'select', options: [['', 'Αυτόματα — όταν το κείμενο έχει {Αρ. Πρωτ.}'], ['1', 'Ναι, πάντα'], ['0', 'Όχι']], help: 'Η εικόνα (π.χ. το εγκεκριμένο πρωτόκολλο-σφραγίδα) φορτώνεται σε κάθε επιστολή και μπαίνει δεξιά της σφραγίδας, ~150×150.' }],
       defaults: { active: 1 },
       sort: (xs) => sortBy(xs.filter((t) => t.name !== 'ΔΙΑΤΑΓΜΑΤΑ'), 'id'),
       validate: (d) => ({ ...d, active: Number(d.active) ? 1 : 0 }),
-      extra: (t) => (t.kind === 'decree' ? '' : protoImageCard(t)),
-      mountForm: (el, t) => { if (t && t.kind !== 'decree') mountProtoImage(el, t); },
       columns: [{ label: 'Αρ.', v: (t) => `<b>${t.id}</b>` }, { label: 'Όνομα', v: (t) => `<b>${esc(t.name)}</b>${t.kind === 'decree' ? ' <span class="pill">📜 Διάταγμα</span><br><a class="btn small" href="#/templates/' + t.id + '/design">🎨 Σχεδίαση σελίδας</a>' : ''}${hasPlaceholders([t.body, t.subject].join(' ')) ? ' <span class="pill ok">⚙ από τη βάση</span>' : ''}` }, { label: 'Κορμός', v: (t) => `<small class="muted">${esc(String(t.body || '').slice(0, 120))}</small>` }, { label: 'Ενεργό', v: (t) => (t.active ? '✓' : '—') }],
     }),
   },
