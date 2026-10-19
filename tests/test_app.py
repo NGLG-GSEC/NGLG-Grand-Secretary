@@ -1275,6 +1275,22 @@ def test_protocol_only_when_letter_is_ready(app):
 
 
 
+def test_protocol_number_inside_letter_text(app):
+    """Το {Αρ. Πρωτ.} και η {Ημερομηνία επιστολής} μέσα στο κείμενο συμπληρώνονται μόλις η επιστολή γίνει «Έτοιμη»."""
+    app.connect_local()
+    app.go('/letters/new')
+    app.fill(subject='Υπενθύμιση', body='Ο αριθμός Πρωτοκόλλου {Αρ. Πρωτ.: } και η ημερομηνία {Ημερομηνία επιστολής} θα αναγραφούν.')
+    app.click('💾 Αποθήκευση')
+    app.page.wait_for_url('**/#/letters/1')
+    body = app.page.inner_text('.paper .body')
+    assert '{Αρ. Πρωτ.: }' in body and '{Ημερομηνία επιστολής}' in body, body
+    app.click('✅ Έτοιμη: απόδοση αρ. πρωτοκόλλου')
+    app.page.wait_for_selector('text=πήρε αριθμό πρωτοκόλλου')
+    body = app.page.inner_text('.paper .body')
+    today = app.page.evaluate("(() => { const d = new Date(); return String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0') + '/' + d.getFullYear(); })()")
+    assert 'Πρωτοκόλλου 20545 και η ημερομηνία ' + today + ' θα' in body, body
+
+
 def test_protocol_suggested_or_manual(app):
     """Το «Έτοιμο» προτείνει τον επόμενο αριθμό πρωτοκόλλου· μπορεί να γραφτεί άλλος, και να αλλάξει αργότερα."""
     app.connect_local()

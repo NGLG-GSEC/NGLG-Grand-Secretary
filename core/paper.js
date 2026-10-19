@@ -40,11 +40,22 @@ export function signatureBlock(signer) {
 <div class="seal"><img class="seal-img" src="${IMG.seal}" alt=""></div></div>`;
 }
 
+// Πεδία της ίδιας της επιστολής μέσα στο κείμενο: συμπληρώνονται στο έγγραφο (σελίδα, PDF, Word, email) μόλις η επιστολή
+// πάρει αριθμό πρωτοκόλλου («Έτοιμη»)· μέχρι τότε μένουν ως {πεδίο}. Γράφονται π.χ. {Αρ. Πρωτ.} ή {Αρ. Πρωτ.: }.
+export const LETTER_FIELDS = [['Αρ. Πρωτ.', 'ο αριθμός πρωτοκόλλου της επιστολής (μπαίνει όταν οριστεί «Έτοιμη»)'], ['Ημερομηνία επιστολής', 'η ημερομηνία της επιστολής (του πρωτοκόλλου), π.χ. 19/10/2026']];
+const PROTO_RE = /\{\s*(?:αρ\.?\s*πρωτ(?:οκόλλου|\.)?|αριθμός\s+πρωτοκόλλου)\s*:?\s*\}/giu;
+const LDATE_RE = /\{\s*ημερομηνία\s+(?:επιστολής|πρωτοκόλλου)\s*:?\s*\}/giu;
+export function letterFields(text, x) {
+  const t = String(text || '');
+  if (!x || !x.protocol_seq) return t;
+  return t.replace(PROTO_RE, String(x.protocol_seq)).replace(LDATE_RE, fmtDate(x.letter_date) || '');
+}
+
 export function letterPaper(x) {
   return `<article class="paper">${letterhead()}
 <div class="meta"><div>Αρ. Πρωτ.: <b class="official-number">${esc(x.protocol_seq ? String(x.protocol_seq) : (x.protocol_no || 'θα δοθεί όταν οριστεί «Έτοιμη»'))}</b></div><div>Ημερομηνία: <b class="official-number">${esc(fmtDate(x.letter_date))}</b></div></div>
 ${x.recipient_name ? `<p><b>Προς:</b> ${esc(x.recipient_name)}</p>` : ''}${x.cc_name ? `<p class="cc-line"><b>Κοιν.:</b> <span>${esc(x.cc_name).replace(/\n/g, '<br>')}</span></p>` : ''}<p><b>Θέμα:</b> ${esc(x.subject)}</p>
-<div class="body">${richHtml(x.body)}</div><p style="margin-top:10mm">${esc(x.closing || db.setting('closing'))}</p>${signatureBlock(x.signer)}</article>`;
+<div class="body">${richHtml(letterFields(x.body, x))}</div><p style="margin-top:10mm">${esc(x.closing || db.setting('closing'))}</p>${signatureBlock(x.signer)}</article>`;
 }
 
 // Εικόνες αποθηκευμένες στα δεδομένα (π.χ. φόντο/κεφαλίδα προτύπου Διατάγματος): <img data-dfile="templates/…">
