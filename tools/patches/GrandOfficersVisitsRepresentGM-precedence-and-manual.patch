@@ -1,7 +1,7 @@
 From 0f2423d8ae689198b75c8556e8a7b6f2c5e0037b Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Mon, 19 Oct 2026 09:51:11 +0000
-Subject: [PATCH 1/2] =?UTF-8?q?=CE=91=CE=BD=CE=B1=CF=86=CE=BF=CF=81=CE=AC?=
+Subject: [PATCH 1/3] =?UTF-8?q?=CE=91=CE=BD=CE=B1=CF=86=CE=BF=CF=81=CE=AC?=
  =?UTF-8?q?=20=CE=B4=CE=B7=CE=BB=CF=8E=CF=83=CE=B5=CF=89=CE=BD:=20=CE=B1?=
  =?UTF-8?q?=CE=BD=CE=B1=CE=B3=CE=BD=CF=8E=CF=81=CE=B9=CF=83=CE=B7=20=CE=B1?=
  =?UTF-8?q?=CE=BE=CE=B9=CF=89=CE=BC=CE=B1=CF=84=CE=B9=CE=BA=CE=BF=CF=8D=20?=
@@ -131,7 +131,7 @@ index 8cca30d..fdc9ee5 100644
 From 2d3e9bec491262bebffe4890b5162f946643ae13 Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Mon, 19 Oct 2026 10:18:05 +0000
-Subject: [PATCH 2/2] =?UTF-8?q?=CE=A6=CF=8C=CF=81=CE=BC=CE=B1=20=CE=B4?=
+Subject: [PATCH 2/3] =?UTF-8?q?=CE=A6=CF=8C=CF=81=CE=BC=CE=B1=20=CE=B4?=
  =?UTF-8?q?=CE=AE=CE=BB=CF=89=CF=83=CE=B7=CF=82:=20=CE=B7=20=CF=87=CE=B5?=
  =?UTF-8?q?=CE=B9=CF=81=CE=BF=CE=BA=CE=AF=CE=BD=CE=B7=CF=84=CE=B7=20=CF=80?=
  =?UTF-8?q?=CE=BB=CE=B7=CE=BA=CF=84=CF=81=CE=BF=CE=BB=CF=8C=CE=B3=CE=B7?=
@@ -237,6 +237,147 @@ index fdc9ee5..f4eefc9 100644
        const officer = manualVal || selectVal;
        if (!officer) {
          showAlert("error", "Παρακαλούμε επιλέξτε ή πληκτρολογήστε το ονοματεπώνυμο και το αξίωμά σας.");
+-- 
+2.43.0
+
+
+From fe9544c431f6ebb48ca9c03e25078d20a9bb5027 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Mon, 19 Oct 2026 10:25:21 +0000
+Subject: [PATCH 3/3] =?UTF-8?q?=CE=94=CE=B9=CE=B1=CE=BA=CF=81=CE=B9=CF=84?=
+ =?UTF-8?q?=CE=B9=CE=BA=CF=8C=20=CE=B3=CE=B9=CE=B1=20=CF=83=CF=85=CE=BD?=
+ =?UTF-8?q?=CF=8E=CE=BD=CF=85=CE=BC=CE=BF=CF=85=CF=82:=20=C2=AB=CE=A3?=
+ =?UTF-8?q?=CE=BA=CE=B9=CE=B1=CE=B4=CF=8C=CF=80=CE=BF=CF=85=CE=BB=CE=BF?=
+ =?UTF-8?q?=CF=82=20=CE=A3=CF=80=CF=85=CF=81=CE=AF=CE=B4=CF=89=CE=BD=20?=
+ =?UTF-8?q?=CF=84=CE=BF=CF=85=20=CE=9C=CE=B9=CF=87=CE=B1=CE=AE=CE=BB=20(?=
+ =?UTF-8?q?=CE=A3=CF=84.=20=CE=98=CE=95=CE=9C=CE=99=CE=A3=CE=A4=CE=9F?=
+ =?UTF-8?q?=CE=9A=CE=9B=CE=97=CE=A3=2096)=C2=BB=20(=CE=A0=CF=81=CF=8E?=
+ =?UTF-8?q?=CE=B7=CE=BD=20=CE=9C=CE=AD=CE=B3=CE=B1=CF=82=20=CE=9E=CE=B9?=
+ =?UTF-8?q?=CF=86=CE=BF=CF=86=CF=8C=CF=81=CE=BF=CF=82)=C2=B7=20README?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01PhcLSSbrFGNSsY2UtDSLCg
+---
+ README.md               | 19 ++++++++++++++++---
+ index.html              | 10 ++++++----
+ officers.js             |  3 ++-
+ tools/build_officers.py | 10 ++++++++--
+ 4 files changed, 32 insertions(+), 10 deletions(-)
+
+diff --git a/README.md b/README.md
+index a9fb05b..2c095c0 100644
+--- a/README.md
++++ b/README.md
+@@ -79,9 +79,22 @@ python3 tools/build_officers.py Taxis_kai_Provadisma.xlsx > officers.js
+ 
+ Σειρά: αξίωμα κατά το Σύνταγμα (όπως στο Excel) και, μέσα στο ίδιο αξίωμα,
+ επετηρίδα (έτος· για τους εν ενεργεία, το έτος του διατάγματος). Όσοι
+-σημειώνονται «Μετέστη» παραλείπονται. Στην αναφορά οι δηλώσεις κάθε Στοάς
+-εμφανίζονται κατά σειρά προβαδίσματος· οι χειροκίνητες καταχωρήσεις, χωρίς
+-αριθμό, στο τέλος.
++σημειώνονται «Μετέστη» παραλείπονται.
++
++**Αναφορά:** οι δηλώσεις κάθε Στοάς εμφανίζονται κατά σειρά προβαδίσματος, με
++ετικέτα δίπλα στο όνομα: «1ος · ΠΡΟΗΓΕΙΤΑΙ», «2ος», «3ος»… Ο αξιωματικός
++αναγνωρίζεται και από το ονοματεπώνυμο (παλιές μορφές δήλωσης, χειροκίνητες
++καταχωρήσεις), ώστε να φαίνονται πάντα το αξίωμα και ο αριθμός προβαδίσματος.
++
++**Χειροκίνητη δήλωση:** όταν πληκτρολογείται όνομα που υπάρχει στον κατάλογο,
++η φόρμα δείχνει ποιος αντιστοιχεί για να επιλεγεί από τον κατάλογο· όποιος
++υπάρχει στον κατάλογο δεν καταχωρίζεται χειροκίνητα. Χειροκίνητα δηλώνουν μόνο
++όσοι δεν είναι στον κατάλογο (εμφανίζονται χωρίς αριθμό, στο τέλος).
++
++**Συνώνυμοι:** διακριτικό δίπλα στο όνομα ορίζεται στο `NOTES` του
++`tools/build_officers.py` (π.χ. «Σκιαδόπουλος Σπυρίδων του Μιχαήλ (Στ. ΘΕΜΙΣΤΟΚΛΗΣ 96)»
++για τον Πρώην Μέγα Ξιφοφόρο, ώστε να ξεχωρίζει από τον Σκιαδόπουλο Σπυρίδωνα,
++Πρώην Πρώτο Μέγα Επόπτη). Οι παλιές δηλώσεις χωρίς το διακριτικό αναγνωρίζονται κανονικά.
+ 
+ ## Αλλαγή μήνα / Εργασιών
+ 
+diff --git a/index.html b/index.html
+index f4eefc9..ef504bb 100644
+--- a/index.html
++++ b/index.html
+@@ -695,7 +695,9 @@
+ 
+     // Κατάλογος αξιωματικών (officers.js) — ο Μ.Δ. δεν δηλώνει εκπροσώπηση του εαυτού του
+     const SELECTABLE = OFFICERS.filter(o => o.rank > 1);
+-    const officerValue = o => `${o.name} (${o.title})`;
++    // Με διακριτικό για συνώνυμους: «Σκιαδόπουλος Σπυρίδων του Μιχαήλ (Στ. ΘΕΜΙΣΤΟΚΛΗΣ 96) (Πρώην Μέγας Ξιφοφόρος)»
++    const officerValue = o => `${o.name}${o.note ? ` (${o.note})` : ""} (${o.title})`;
++    const legacyValue = o => `${o.name} (${o.title})`; // παλιές δηλώσεις, πριν από το διακριτικό
+     // Παλιές δηλώσεις γράφουν «Αντικαταστάτης»· ο τίτλος είναι «Αναπληρωτής Μέγας Διδάσκαλος»
+     const fixTitle = s => String(s).replace(/Αντικαταστάτης Μέγας Διδάσκαλος/g, "Αναπληρωτής Μέγας Διδάσκαλος");
+ 
+@@ -703,12 +705,12 @@
+       return String(s).normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+         .toLowerCase().replace(/\s+/g, " ").trim();
+     }
+-    const RANK_BY_VALUE = new Map(OFFICERS.map(o => [norm(officerValue(o)), o.rank]));
++    const RANK_BY_VALUE = new Map(OFFICERS.flatMap(o => [[norm(legacyValue(o)), o.rank], [norm(officerValue(o)), o.rank]]));
+     // Αξιωματικός μιας δήλωσης: ακριβής τιμή της λίστας, αλλιώς από το ονοματεπώνυμο (παλιές μορφές «… · Πσεβ. · 2026»,
+     // χειροκίνητες «Λσεβ. Αδ. Χρήστος Διαβάτης, ΠΜΞ»): επώνυμο και όνομα της λίστας περιέχονται στο κείμενο.
+     const nameTokens = n => norm(String(n).replace(/\s+του\s+.*$/i, "")).replace(/[^a-zα-ω0-9 ]/g, " ").split(" ").filter(w => w.length > 1);
+     function officerOf(text) {
+-      const t = norm(fixTitle(text)), exact = OFFICERS.find(o => norm(officerValue(o)) === t);
++      const t = norm(fixTitle(text)), exact = OFFICERS.find(o => norm(officerValue(o)) === t || norm(legacyValue(o)) === t);
+       if (exact) return exact;
+       const words = new Set(t.replace(/[^a-zα-ω0-9 ]/g, " ").split(" ").filter(Boolean));
+       const hits = OFFICERS.filter(o => { const k = nameTokens(o.name); return k.length >= 2 && k.every(w => words.has(w)); });
+@@ -736,7 +738,7 @@
+         }
+         const opt = document.createElement("option");
+         opt.value = officerValue(o);
+-        opt.textContent = `${o.rank}. ${o.name}` + (o.title !== o.group ? ` — ${o.title}` : "");
++        opt.textContent = `${o.rank}. ${o.name}` + (o.note ? ` (${o.note})` : "") + (o.title !== o.group ? ` — ${o.title}` : "");
+         group.appendChild(opt);
+       });
+       select.value = keep;
+diff --git a/officers.js b/officers.js
+index bdca1e4..96d6dfe 100644
+--- a/officers.js
++++ b/officers.js
+@@ -1174,7 +1174,8 @@ const OFFICERS = [
+ "name": "Σκιαδόπουλος Σπυρίδων του Μιχαήλ",
+ "title": "Πρώην Μέγας Ξιφοφόρος",
+ "year": 2024,
+-"group": "Πρώην Μέγας Ξιφοφόρος"
++"group": "Πρώην Μέγας Ξιφοφόρος",
++"note": "Στ. ΘΕΜΙΣΤΟΚΛΗΣ 96"
+ },
+ {
+ "rank": 169,
+diff --git a/tools/build_officers.py b/tools/build_officers.py
+index a54eaa2..856da3a 100644
+--- a/tools/build_officers.py
++++ b/tools/build_officers.py
+@@ -22,6 +22,9 @@ SAME_TIER = [
+ ]
+ 
+ 
++# Διακριτικό για συνώνυμους (εμφανίζεται δίπλα στο όνομα, π.χ. δύο «Σκιαδόπουλος Σπυρίδων»)
++NOTES = {"Σκιαδόπουλος Σπυρίδων του Μιχαήλ": "Στ. ΘΕΜΙΣΤΟΚΛΗΣ 96"}
++
+ # Ο τίτλος είναι «Αναπληρωτής Μέγας Διδάσκαλος» (το Excel γράφει «Αντικαταστάτης»)
+ RENAME = [("Αντικαταστάτης Μέγας Διδάσκαλος", "Αναπληρωτής Μέγας Διδάσκαλος")]
+ 
+@@ -66,8 +69,11 @@ def main(path):
+ 
+     out = []
+     for i, row in enumerate(rows, 1):
+-        out.append({"rank": i, "name": row["name"], "title": row["title"],
+-                    "year": row["year"], "group": tier_of(row["title"])})
++        o = {"rank": i, "name": row["name"], "title": row["title"],
++             "year": row["year"], "group": tier_of(row["title"])}
++        if row["name"] in NOTES:
++            o["note"] = NOTES[row["name"]]
++        out.append(o)
+ 
+     sys.stdout.write("// Παράγεται από tools/build_officers.py — μην το αλλάζετε με το χέρι.\n")
+     sys.stdout.write("const OFFICERS = " + json.dumps(out, ensure_ascii=False, indent=0) + ";\n")
 -- 
 2.43.0
 
