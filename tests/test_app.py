@@ -2132,6 +2132,19 @@ def test_letters_archive_protocol_actions_and_next_number(app):
     assert not app.errors, app.errors
 
 
+def test_letters_archive_pdf_download(app):
+    """Αρχείο Επιστολών: σε κάθε γραμμή, δίπλα στον Αρ. Πρωτ., λήψη του PDF."""
+    app.connect_local()
+    app.go('/letters/new').fill(subject='Λήψη PDF', body='Κείμενο.').click('Αποθήκευση & απόδοση')
+    app.page.wait_for_url('**/#/letters/1')
+    app.go('/letters')
+    with app.page.expect_download(timeout=60000) as dl:
+        app.page.locator('tr', has_text='Λήψη PDF').locator('[data-act=dlpdf]').click()
+    d = dl.value
+    assert d.suggested_filename.endswith('.pdf') and '20545' in d.suggested_filename
+    assert Path(d.path()).read_bytes()[:4] == b'%PDF'
+
+
 def test_letters_archive_delete(app):
     # Αρχείο Επιστολών: «🗑 Διαγραφή» στις Ενέργειες, με ερώτηση επιβεβαίωσης
     app.connect_local()
