@@ -2071,8 +2071,18 @@ def test_declarations_constitution_helper_and_decree_signature(app):
     df = app.page.frame_locator('#declFrame')
     df.locator('#officer-manual').first.wait_for(state='attached')
     fr = [f for f in app.page.frames if '/declarations/' in f.url][0]
+    fr.wait_for_function("() => typeof officerOf === 'function' && document.querySelectorAll('#officer-select option').length > 2")
     assert fr.evaluate("() => { const o = officerOf('Λσεβ. Αδ. Χρήστος Διαβάτης, ΠΜΞ'); return o && officerValue(o); }") == 'Διαβάτης Χρήστος (Βοηθός Μέγας Γραμματεύς)'
     assert 'ΘΕΜΙΣΤΟΚΛΗΣ 96' in fr.evaluate("() => officerValue(OFFICERS.find((o) => o.name === 'Σκιαδόπουλος Σπυρίδων του Μιχαήλ'))")
+    # Ο Μ.Δ. σε ξεχωριστό μπλε πλαίσιο· στη λίστα πρώτα οι εν ενεργεία, μετά οι Πρώην, με τη σειρά της Επετηρίδας
+    assert 'Μπενετάτος' in df.locator('.gm-line').inner_text()
+    opts = fr.evaluate("() => [...document.querySelectorAll('#officer-select option')].map((o) => [o.className, (o.parentElement.label || ''), o.textContent])")
+    heads = [i for i, o in enumerate(opts) if o[0] == 'sect']
+    assert len(heads) == 2 and 'ΕΝ ΕΝΕΡΓΕΙΑ' in opts[heads[0]][2] and 'ΠΡΩΗΝ' in opts[heads[1]][2]
+    assert not any(o[1].startswith('Πρώην') for o in opts[heads[0]:heads[1]]) and all(o[1].startswith('Πρώην') for o in opts[heads[1] + 1:])
+    ranks = lambda xs: [int(o[2].split('.')[0]) for o in xs if o[0] != 'sect']
+    assert ranks(opts[heads[0]:heads[1]]) == sorted(ranks(opts[heads[0]:heads[1]])) and ranks(opts[heads[1]:]) == sorted(ranks(opts[heads[1]:]))
+    assert not any('Μπενετάτος' in o[2] for o in opts)
     app.go('/declarations?view=form')
     app.page.wait_for_selector('.constitution-box')
     assert 'ΒΟΗΘΟΣ ΣΥΝΤΑΓΜΑΤΟΣ' in app.text() and app.page.locator('.decltabs a', has_text='Βοηθός Συντάγματος').count() == 1

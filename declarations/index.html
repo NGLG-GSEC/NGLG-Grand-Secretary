@@ -308,15 +308,27 @@
     }
     /* Ο Μέγας Διδάσκαλος στην κορυφή του καταλόγου */
     .gm-line {
-      color: #1d4ed8;
+      background: #1d2f5e;
+      color: #fff;
+      border-left: 5px solid #c9a64a;
+      border-radius: 8px;
+      padding: 12px 16px;
       font-weight: 700;
       font-size: 17px;
-      margin-bottom: 10px;
+      margin: 4px 0 14px;
+      box-shadow: 0 2px 6px rgba(29, 47, 94, .25);
     }
-    #officer-select option.gm-option {
-      color: #1d4ed8;
+    .gm-line small {
+      display: block;
+      color: #e9dcc0;
+      font-weight: 400;
+      font-size: 12px;
+      margin-top: 3px;
+    }
+    #officer-select option.sect {
+      color: #1d2f5e;
+      background: #e9eef8;
       font-weight: 700;
-      font-size: 16px;
     }
     .field-hint {
       font-size: 12px;
@@ -526,8 +538,8 @@
       <div class="card">
         <h2 class="card-title">1. Στοιχεία Αξιωματικού</h2>
         <div class="form-group">
-          <label for="officer-select">Επιλέξτε το Ονοματεπώνυμό σας & Αξίωμα:</label>
-          <p class="gm-line">Σεβασμιώτατος Αδ. Ιωάννης Μπενετάτος — Μέγας Διδάσκαλος</p>
+          <p class="gm-line">Σεβασμιώτατος Αδ. Ιωάννης Μπενετάτος — Μέγας Διδάσκαλος<small>Προηγείται όλων · Ο Μέγας Διδάσκαλος δεν υποβάλλει δήλωση εκπροσώπησης</small></p>
+          <label for="officer-select">Αν δεν είστε ο Μέγας Διδάσκαλος, επιλέξτε το Ονοματεπώνυμό σας & Αξίωμα:</label>
           <input type="text" id="officer-filter" class="officer-filter" placeholder="Αναζήτηση ονόματος…" autocomplete="off" autocorrect="off" spellcheck="false" oninput="buildOfficerSelect(this.value)">
           <select id="officer-select" autocomplete="off">
             <option value="">-- Επιλέξτε από τον κατάλογο --</option>
@@ -722,28 +734,34 @@
       const keep = select.value;
       const q = norm(filter || "");
       select.length = 1;
-      const gm = document.createElement("option");
-      gm.className = "gm-option";
-      gm.disabled = true;
-      gm.textContent = "Σεβασμιώτατος Αδ. Ιωάννης Μπενετάτος — Μέγας Διδάσκαλος";
-      select.appendChild(gm);
-      let group = null, groupName = "";
-      SELECTABLE.forEach(o => {
-        if (q && !norm(o.name + " " + o.title).includes(q)) return;
-        if (o.group !== groupName) {
-          groupName = o.group;
-          group = document.createElement("optgroup");
-          group.label = o.group;
-          select.appendChild(group);
-        }
-        const opt = document.createElement("option");
-        opt.value = officerValue(o);
-        opt.textContent = `${o.rank}. ${o.name}` + (o.note ? ` (${o.note})` : "") + (o.title !== o.group ? ` — ${o.title}` : "");
-        group.appendChild(opt);
+      // Πρώτα όλοι οι εν ενεργεία Μεγάλοι Αξιωματικοί, μετά όλοι οι Πρώην — ο καθένας με τη σειρά της Επετηρίδας
+      const former = o => o.group.startsWith("Πρώην ");
+      [["ΕΝ ΕΝΕΡΓΕΙΑ ΜΕΓΑΛΟΙ ΑΞΙΩΜΑΤΙΚΟΙ", SELECTABLE.filter(o => !former(o))], ["ΠΡΩΗΝ ΜΕΓΑΛΟΙ ΑΞΙΩΜΑΤΙΚΟΙ", SELECTABLE.filter(former)]].forEach(([label, list]) => {
+        const shown = list.filter(o => !q || norm(o.name + " " + o.title).includes(q));
+        if (!shown.length) return;
+        const head = document.createElement("option");
+        head.className = "sect";
+        head.disabled = true;
+        head.textContent = `━━ ${label} (${shown.length}) ━━`;
+        select.appendChild(head);
+        let group = null, groupName = "";
+        shown.forEach(o => {
+          if (o.group !== groupName) {
+            groupName = o.group;
+            group = document.createElement("optgroup");
+            group.label = o.group;
+            select.appendChild(group);
+          }
+          const opt = document.createElement("option");
+          opt.value = officerValue(o);
+          opt.textContent = `${o.rank}. ${o.name}` + (o.note ? ` (${o.note})` : "") + (o.title !== o.group ? ` — ${o.title}` : "");
+          group.appendChild(opt);
+        });
       });
       select.value = keep;
       // Με ένα μόνο αποτέλεσμα αναζήτησης, επιλέγεται αυτόματα
-      if (q && select.options.length === 2) select.selectedIndex = 1;
+      const picks = [...select.options].filter(o => o.value);
+      if (q && picks.length === 1) select.value = picks[0].value;
     }
 
     // Χειροκίνητη πληκτρολόγηση: δείχνει ποιος του καταλόγου αντιστοιχεί, για να επιλεγεί από εκεί
