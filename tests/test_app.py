@@ -2100,6 +2100,7 @@ def test_declarations_constitution_helper_and_decree_signature(app):
     assert w[0] <= w[1] + 1, w  # χωρίς οριζόντια υπερχείλιση
     app.go('/declarations?view=constitution')
     assert app.page.locator('#declFrame').get_attribute('src') == 'constitution/index.html'
+    assert app.page.locator('#constLink').get_attribute('href') == 'constitution/' and 'Αυτόνομη σελίδα' in app.text()
     # Διατάγματα: η υπογραφή έμεινε ως είχε (δεν είναι χαιρετισμός)
     html = app.page.evaluate("async () => (await import('./core/paper.js')).reportPaper('x', '', '', { signatures: true })")
     assert 'ΜΕΓΑΣ ΓΡΑΜΜΑΤΕΑΣ' in html and 'Με αφοσίωση' not in html

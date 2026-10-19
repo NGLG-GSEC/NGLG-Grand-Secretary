@@ -11,6 +11,7 @@ db.defaultSettings({ declarations_report_key: '' });
 const TABS = [['form', 'Δήλωση Ενδιαφέροντος'], ['programme', 'Πρόγραμμα Επισκέψεων Μ.Δ.'], ['report', 'Διαχειριστική Αναφορά & PDF'], ['constitution', '📜 Βοηθός Συντάγματος']];
 // Βοηθός Συντάγματος: ψηφιακό ευρετήριο των Γενικών Νόμων και Κανονισμών (constitution/index.html)
 export const CONSTITUTION_URL = 'constitution/index.html';
+export const CONSTITUTION_PUBLIC = 'constitution/'; // αυτόνομη σελίδα για αποστολή
 const frameHtml = (id, title, src) => `<iframe id="${id}" class="embed-frame" title="${title}" src="${src}"></iframe>`;
 
 function declarationsPage({ query }) {
@@ -23,7 +24,8 @@ function declarationsPage({ query }) {
 <p class="muted">Εκπροσώπηση του Μεγάλου Διδασκάλου σε Εγκαταστάσεις Σεβ. Διδασκάλων: οι αξιωματικοί δηλώνουν, η Γραμματεία βλέπει την αναφορά και ορίζει εκπροσώπους στις <a href="#/visits">Επισκέψεις Στοών</a>.
 ${db.setting('declarations_report_key') ? '' : ' Για να ανοίγει η αναφορά χωρίς κωδικό, συμπληρώστε τον «Κωδικό αναφοράς» στις <a href="#/settings">Ρυθμίσεις</a>.'}
 <a href="${DECLARATIONS_URL}" target="_blank" rel="noopener">Δημόσια σελίδα ↗</a></p>
-${tabs}${frameHtml('declFrame', view === 'constitution' ? 'Βοηθός Συντάγματος' : 'Δηλώσεις Διάθεσης Μεγάλων Αξιωματικών', src)}
+${tabs}${view === 'constitution' ? `<div class="card share-const"><b>🔗 Αυτόνομη σελίδα Συντάγματος (για αποστολή):</b> <a id="constLink" href="${CONSTITUTION_PUBLIC}" target="_blank" rel="noopener">${new URL(CONSTITUTION_PUBLIC, location.href).href}</a>
+<button type="button" class="btn small" data-copy-const>📋 Αντιγραφή συνδέσμου</button><br><small class="muted">Ανοίγει μόνο το Σύνταγμα, χωρίς μενού, σύνδεση ή στοιχεία της Γραμματείας.</small></div>` : ''}${frameHtml('declFrame', view === 'constitution' ? 'Βοηθός Συντάγματος' : 'Δηλώσεις Διάθεσης Μεγάλων Αξιωματικών', src)}
 ${view === 'form' ? `<section class="card constitution-box"><h2 style="margin-top:0">📜 ΒΟΗΘΟΣ ΣΥΝΤΑΓΜΑΤΟΣ</h2><p class="muted">Αναζήτηση στους Γενικούς Νόμους και Κανονισμούς (π.χ. Κανόνες 123 και 144 για την εκπροσώπηση του Μεγάλου Διδασκάλου). <a href="${CONSTITUTION_URL}" target="_blank" rel="noopener">Άνοιγμα σε νέα καρτέλα ↗</a></p>${frameHtml('constFrame', 'Βοηθός Συντάγματος', CONSTITUTION_URL)}</section>` : ''}`,
     mount(el) {
       const frame = el.querySelector('#declFrame');
@@ -41,6 +43,8 @@ ${view === 'form' ? `<section class="card constitution-box"><h2 style="margin-to
           if (h && Math.abs(h - frame.offsetHeight) > 2) frame.style.height = h + 'px';
         } catch { /* άλλο domain: σταθερό ύψος από το CSS */ }
       };
+      const cb = el.querySelector('[data-copy-const]');
+      if (cb) cb.addEventListener('click', async () => { try { await navigator.clipboard.writeText(el.querySelector('#constLink').href); cb.textContent = '✓ Αντιγράφηκε'; } catch { cb.textContent = 'Αντιγράψτε τον σύνδεσμο'; } });
       const cf = el.querySelector('#constFrame');
       const fitC = () => { if (!cf || !cf.isConnected) return; try { const h = cf.contentDocument && cf.contentDocument.documentElement.scrollHeight; if (h && Math.abs(h - cf.offsetHeight) > 2) cf.style.height = Math.min(h, 2400) + 'px'; } catch { /* */ } };
       const timer = setInterval(() => { fit(); fitC(); }, 800);

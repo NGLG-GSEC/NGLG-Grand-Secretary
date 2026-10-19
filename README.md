@@ -33,6 +33,9 @@ https://nglg-gsec.github.io/NGLG-Grand-Secretary/declarations/#form
 [φόρμα](https://nglg-gsec.github.io/NGLG-Grand-Secretary/#/declarations?view=form) ·
 [καρτέλα](https://nglg-gsec.github.io/NGLG-Grand-Secretary/#/declarations?view=constitution) ·
 [πλήρης σελίδα](https://nglg-gsec.github.io/NGLG-Grand-Secretary/constitution/).
+**Αυτόνομη σελίδα για αποστολή:** https://nglg-gsec.github.io/NGLG-Grand-Secretary/constitution/ — μόνο το Σύνταγμα,
+χωρίς μενού, σύνδεση ή στοιχεία της Γραμματείας (δικό της εικονίδιο και προεπισκόπηση συνδέσμου). Στην καρτέλα
+της εφαρμογής υπάρχει κουμπί «📋 Αντιγραφή συνδέσμου».
 
 Στη σελίδα Δηλώσεων: σειρά «1ος · ΠΡΟΗΓΕΙΤΑΙ», αναγνώριση αξιωματικού από το όνομα, δήλωση μόνο με επιλογή
 από τον κατάλογο, διακριτικό συνωνύμων («Σκιαδόπουλος Σπυρίδων του Μιχαήλ (Στ. ΘΕΜΙΣΤΟΚΛΗΣ 96)»).
