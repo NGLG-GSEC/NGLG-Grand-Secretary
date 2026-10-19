@@ -1345,14 +1345,21 @@ def test_letter_sender_choice_and_preview_before_send(app):
     app.page.wait_for_selector('.send-preview')
     pv = app.page.inner_text('.send-preview')
     assert 'grand.secretary@nglgreece.gr' in pv and 'lodge@example.com' in pv and 'Έγκριση Κανονισμού' in pv and '.pdf' in pv
-    assert 'Εγκρίνεται ο Κανονισμός.' in app.page.frame_locator('.send-preview-body').locator('body').inner_text()
+    body = app.page.frame_locator('.send-preview-body').locator('body').inner_text()
+    assert 'Εγκρίνεται ο Κανονισμός.' in body and 'Με αφοσίωση και εκτίμηση' in body, body  # με τον χαιρετισμό και την υπογραφή
     app.page.click('.send-preview [data-no]')  # Άκυρο → δεν στέλνεται τίποτα
     assert app.page.locator('.send-preview').count() == 0 and not sent
+    # χειρόγραφο email στην Κοιν. και επαφή στο Bcc
+    app.page.evaluate("async () => { const {db} = await import('./core/store.js'); await db.save('x', (tx) => tx.insert('contacts', { name: 'Σπυρίδων Ρόκας', emails: ['spiros@rokashotels.gr'], labels: [] })); }")
+    app.page.fill('.ms-input[data-f=cc]', 'manual@example.com')
+    app.pick('.ms-pick[data-pick=bcc]', 'Ρόκας')
+    assert app.page.input_value('.ms-input[data-f=bcc]') == 'spiros@rokashotels.gr'
     app.page.click('[data-ms=send]')
+    assert 'manual@example.com' in app.page.inner_text('.send-preview') and 'spiros@rokashotels.gr' in app.page.inner_text('.send-preview')
     app.page.click('.send-preview [data-yes]')
     app.page.wait_for_selector('.ms-ok', timeout=30000)
     mime = base64.urlsafe_b64decode(sent[0]['raw'] + '=' * (-len(sent[0]['raw']) % 4)).decode()
-    assert 'From: grand.secretary@nglgreece.gr' in mime and 'To: lodge@example.com' in mime
+    assert 'From: grand.secretary@nglgreece.gr' in mime and 'To: lodge@example.com' in mime and 'Cc: manual@example.com' in mime and 'Bcc: spiros@rokashotels.gr' in mime, mime[:600]
 
 
 def test_protocol_field_in_subject_and_official_font(app):
@@ -1560,7 +1567,7 @@ def test_visit_email_gmail_draft_with_pdf_and_bcc(app):
     # στην προβολή της επιστολής: ίδια καρτέλα Gmail
     app.go(f"/letters/{ls[0]['id']}")
     app.page.wait_for_selector('.mailsheet .ms-head')
-    assert 'b1@example.com' in app.text('.mailsheet')
+    assert 'b1@example.com' in app.page.input_value('.mailsheet .ms-input[data-f=bcc]')
     # άμεση αποστολή από info@: έλεγχος λογαριασμού, αποστολή, σημείωση «ενημερώθηκε»
     sent, profile = [], {'emailAddress': 'other@example.com'}
 

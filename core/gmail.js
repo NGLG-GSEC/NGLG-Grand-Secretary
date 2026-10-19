@@ -112,16 +112,29 @@ const chips = (xs) => list(xs).map((e) => `<span class="mchip">${esc(e)}</span>`
 
 // Καρτέλα αποστολής: getMsg() → { to, cc, bcc, subject, body }, getPdf() → Promise<{ blob, name }>
 // onSent: καλείται μετά την άμεση αποστολή (π.χ. σημείωση «ενημερώθηκε»)· onKind(kind): αλλαγή λογαριασμού αποστολής
-export function mailSheet(el, { getMsg, getPdf, kind = 'general', pdfName = '', onDone = null, onSent = null, onKind = null }) {
+export function mailSheet(el, { getMsg: baseMsg, getPdf, kind = 'general', pdfName = '', onDone = null, onSent = null, onKind = null }) {
   const box = el.querySelector('.mailsheet');
+  // Προς / Κοιν. / Bcc διορθώνονται εδώ (χειρόγραφα email ή από τις Επαφές) και υπερισχύουν των αρχικών
+  const edits = {}, getMsg = () => ({ ...baseMsg(), ...edits });
+  const field = (f, label, m) => `<div class="ms-row"><span>${label}</span><div><input class="ms-input" data-f="${f}" value="${esc(list(m[f]).join(', '))}" placeholder="email, χωρισμένα με κόμμα" inputmode="email" autocomplete="off">
+<input class="ms-pick" data-pick="${f}" placeholder="🔎 + από τις Επαφές (όνομα, ομάδα ή email)…" autocomplete="off"></div></div>`;
   const render = () => {
     const m = getMsg();
     box.innerHTML = `<div class="ms-head"><span class="ms-g">M</span><div><b>Gmail</b> · <label class="ms-from">Αποστολή από <select data-ms="from">${Object.entries(MAIL_SENDERS).map(([k, v]) => `<option value="${k}"${k === kind ? ' selected' : ''}>${esc(senderFor(k))} — ${esc(v.label)}</option>`).join('')}</select></label></div></div>
-<div class="ms-row"><span>Προς</span><div>${chips(m.to)}</div></div><div class="ms-row"><span>Κοιν.</span><div>${chips(m.cc)}</div></div><div class="ms-row"><span>Bcc</span><div>${chips(m.bcc)}</div></div>
+${field('to', 'Προς', m)}${field('cc', 'Κοιν.', m)}${field('bcc', 'Bcc', m)}
 <div class="ms-row"><span>Θέμα</span><div><b>${esc(m.subject || '')}</b></div></div>
 <div class="ms-row"><span>📎</span><div><span class="mchip att">${esc(pdfName || 'PDF επιστολής')}.pdf</span></div></div>
 <div class="ms-acts"><button type="button" class="btn primary big" data-ms="send">📤 Αποστολή τώρα από ${esc(senderFor(kind))}</button>
 <button type="button" class="btn big" data-ms="go">✉ Άνοιγμα στο Gmail με το PDF (έλεγχος πριν την αποστολή)</button></div><div class="ms-state muted"></div>`;
+    for (const i of box.querySelectorAll('.ms-input')) i.addEventListener('input', () => { edits[i.dataset.f] = i.value; });
+    import('./pickers.js').then(({ attachPicker, contactItems }) => {
+      for (const p of box.querySelectorAll('.ms-pick')) attachPicker(p, contactItems, (c) => {
+        const inp = box.querySelector(`.ms-input[data-f="${p.dataset.pick}"]`), add = list(c.email);
+        if (!add.length) { state('<span class="warn">Η επαφή δεν έχει email.</span>'); return; }
+        inp.value = [...new Map([...list(inp.value), ...add].map((e) => [e.toLowerCase(), e])).values()].join(', ');
+        edits[p.dataset.pick] = inp.value; p.value = '';
+      });
+    });
     box.querySelector('[data-ms=from]').onchange = async (e) => { kind = e.target.value; render(); if (onKind) await onKind(kind); };
     box.querySelector('[data-ms=go]').onclick = go;
     box.querySelector('[data-ms=send]').onclick = send;

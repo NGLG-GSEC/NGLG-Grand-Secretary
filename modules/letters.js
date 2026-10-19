@@ -221,6 +221,9 @@ function mountLetterForm(el, x, isNew) {
 }
 
 // Αποστολή: λογαριασμός και Bcc — οι Επιστολές Επισκέψεων από τα γενικά εξερχόμενα (info@) με το Bcc των Επισκέψεων
+// Κείμενο του email: το κείμενο της επιστολής, ο χαιρετισμός (αποφώνηση) και η υπογραφή, όπως στο έντυπο
+const mailBody = (x) => { const p = signerProfile(x.signer);
+  return [letterFields(x.body, x), x.closing || db.setting('closing'), [p.name, p.title, db.setting('organization_name')].filter(Boolean).join('\n')].filter((t) => String(t || '').trim()).join('\n\n'); };
 // Λογαριασμός αποστολής: της επιστολής (επιλογή στην καρτέλα αποστολής) → του προτύπου → Επισκέψεις από info@, οι άλλες από grand.secretary@
 const MAIL_KINDS = { official: 1, general: 1 };
 const mailKind = (x) => { const t = x.template_id ? db.get('letter_templates', x.template_id) : null;
@@ -277,7 +280,7 @@ function viewLetter({ params }) {
   return {
     title: letterFields(x.subject, x),
     html: `<section class="card send-panel noprint"><h3>Αποστολή & Αποθήκευση</h3>${senderBanner(mailKind(x))}
-<div class="toolbar"><button class="btn primary" data-act="pdf">⬇ PDF / Εκτύπωση</button>${mailButtons(withLetterCc({ to: x.recipient_email, bcc: mailBcc(x, x.recipient_email), subject: letterFields(x.subject, x), body: letterFields(x.body, x), kind: mailKind(x) }), '✉ Αποστολή με Email')}
+<div class="toolbar"><button class="btn primary" data-act="pdf">⬇ PDF / Εκτύπωση</button>${mailButtons(withLetterCc({ to: x.recipient_email, bcc: mailBcc(x, x.recipient_email), subject: letterFields(x.subject, x), body: mailBody(x), kind: mailKind(x) }), '✉ Αποστολή με Email')}
 <button class="btn" data-act="word">⬇ Word (επεξεργασία)</button><button class="btn" data-act="form">🖋 Ψηφιακό Έντυπο</button>
 <button class="btn" data-act="wapdf">🟢 WhatsApp / Business με PDF</button><a class="btn" target="_blank" rel="noopener" href="${wa}">WhatsApp μήνυμα</a>${x.status === 'ready' ? '' : '<button class="btn primary" data-act="ready">✅ Έτοιμη: απόδοση αρ. πρωτοκόλλου</button>'}</div>
 ${x.status === 'ready' ? '<div class="mailsheet"></div>' : '<p class="send-help">Για αποστολή με συνημμένο PDF ορίστε πρώτα την επιστολή «✅ Έτοιμη» (αριθμός πρωτοκόλλου).</p>'}${driveBox(x, fileName(x))}</section>
@@ -286,7 +289,7 @@ ${x.protocol_seq ? '<button class="btn" data-act="protocol">✏ Αλλαγή α�
 <div class="print-area">${letterPaper(x)}</div>`,
     mount(el) {
       if (x.status === 'ready') mailSheet(el, { kind: mailKind(x), pdfName: fileName(x),
-        onKind: async (k) => { await db.save(`Επιστολή ${x.protocol_no || x.id}: λογαριασμός αποστολής`, (tx) => { tx.update('letters', x.id, { mail_kind: k }); }); toast(`Η επιστολή θα στέλνεται από ${senderFor(k)}.`); go(`/letters/${x.id}`); }, getMsg: () => withLetterCc({ to: x.recipient_email, cc: '', bcc: mailBcc(x, x.recipient_email), subject: letterFields(x.subject, x), body: letterFields(x.body, x) }),
+        onKind: async (k) => { await db.save(`Επιστολή ${x.protocol_no || x.id}: λογαριασμός αποστολής`, (tx) => { tx.update('letters', x.id, { mail_kind: k }); }); toast(`Η επιστολή θα στέλνεται από ${senderFor(k)}.`); go(`/letters/${x.id}`); }, getMsg: () => withLetterCc({ to: x.recipient_email, cc: '', bcc: mailBcc(x, x.recipient_email), subject: letterFields(x.subject, x), body: mailBody(x) }),
         getPdf: async () => ({ blob: await (await import('../core/pdf.js')).paperPdf(el.querySelector('.print-area .paper'), { title: fileName(x) }), name: fileName(x) + '.pdf' }) });
       bind(el, {
         pdf: () => printPaper(fileName(x)),
