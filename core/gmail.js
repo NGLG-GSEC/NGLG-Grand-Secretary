@@ -112,16 +112,33 @@ const chips = (xs) => list(xs).map((e) => `<span class="mchip">${esc(e)}</span>`
 
 // Καρτέλα αποστολής: getMsg() → { to, cc, bcc, subject, body }, getPdf() → Promise<{ blob, name }>
 // onSent: καλείται μετά την άμεση αποστολή (π.χ. σημείωση «ενημερώθηκε»)· onKind(kind): αλλαγή λογαριασμού αποστολής
-export function mailSheet(el, { getMsg, getPdf, kind = 'general', pdfName = '', onDone = null, onSent = null, onKind = null }) {
+// extras: πρόσθετα συνημμένα [{ label, name, load: () => Promise<{ blob, name }> }] (π.χ. ο εγκεκριμένος Εσωτερικός Κανονισμός) — επιλογή με κουτάκι
+export function mailSheet(el, { getMsg: baseMsg, getPdf, kind = 'general', pdfName = '', onDone = null, onSent = null, onKind = null, extras = [] }) {
   const box = el.querySelector('.mailsheet');
+  // Προς / Κοιν. / Bcc διορθώνονται εδώ (χειρόγραφα email ή από τις Επαφές) και υπερισχύουν των αρχικών
+  const edits = {}, getMsg = () => ({ ...baseMsg(), ...edits }), extraOn = extras.map(() => true);
+  const extraFiles = async () => Promise.all(extras.filter((_, i) => extraOn[i]).map(async (x) => { const f = await x.load(); return { name: f.name || x.name, type: 'application/pdf', blob: f.blob }; }));
+  const allAttachments = async (pdf) => [{ name: pdf.name, type: 'application/pdf', b64: await blobB64(pdf.blob) }, ...await Promise.all((await extraFiles()).map(async (f) => ({ name: f.name, type: f.type, b64: await blobB64(f.blob) })))];
+  const field = (f, label, m) => `<div class="ms-row"><span>${label}</span><div><input class="ms-input" data-f="${f}" value="${esc(list(m[f]).join(', '))}" placeholder="email, χωρισμένα με κόμμα" inputmode="email" autocomplete="off">
+<input class="ms-pick" data-pick="${f}" placeholder="🔎 + από τις Επαφές (όνομα, ομάδα ή email)…" autocomplete="off"></div></div>`;
   const render = () => {
     const m = getMsg();
     box.innerHTML = `<div class="ms-head"><span class="ms-g">M</span><div><b>Gmail</b> · <label class="ms-from">Αποστολή από <select data-ms="from">${Object.entries(MAIL_SENDERS).map(([k, v]) => `<option value="${k}"${k === kind ? ' selected' : ''}>${esc(senderFor(k))} — ${esc(v.label)}</option>`).join('')}</select></label></div></div>
-<div class="ms-row"><span>Προς</span><div>${chips(m.to)}</div></div><div class="ms-row"><span>Κοιν.</span><div>${chips(m.cc)}</div></div><div class="ms-row"><span>Bcc</span><div>${chips(m.bcc)}</div></div>
+${field('to', 'Προς', m)}${field('cc', 'Κοιν.', m)}${field('bcc', 'Bcc', m)}
 <div class="ms-row"><span>Θέμα</span><div><b>${esc(m.subject || '')}</b></div></div>
-<div class="ms-row"><span>📎</span><div><span class="mchip att">${esc(pdfName || 'PDF επιστολής')}.pdf</span></div></div>
+<div class="ms-row"><span>📎</span><div><span class="mchip att">${esc(pdfName || 'PDF επιστολής')}.pdf</span>${extras.map((x, i) => `<label class="ms-extra"><input type="checkbox" data-extra="${i}"${extraOn[i] ? ' checked' : ''}> ${esc(x.label || x.name)}</label>`).join('')}</div></div>
 <div class="ms-acts"><button type="button" class="btn primary big" data-ms="send">📤 Αποστολή τώρα από ${esc(senderFor(kind))}</button>
 <button type="button" class="btn big" data-ms="go">✉ Άνοιγμα στο Gmail με το PDF (έλεγχος πριν την αποστολή)</button></div><div class="ms-state muted"></div>`;
+    for (const i of box.querySelectorAll('.ms-input')) i.addEventListener('input', () => { edits[i.dataset.f] = i.value; });
+    for (const c of box.querySelectorAll('[data-extra]')) c.addEventListener('change', () => { extraOn[Number(c.dataset.extra)] = c.checked; });
+    import('./pickers.js').then(({ attachPicker, contactItems }) => {
+      for (const p of box.querySelectorAll('.ms-pick')) attachPicker(p, contactItems, (c) => {
+        const inp = box.querySelector(`.ms-input[data-f="${p.dataset.pick}"]`), add = list(c.email);
+        if (!add.length) { state('<span class="warn">Η επαφή δεν έχει email.</span>'); return; }
+        inp.value = [...new Map([...list(inp.value), ...add].map((e) => [e.toLowerCase(), e])).values()].join(', ');
+        edits[p.dataset.pick] = inp.value; p.value = '';
+      });
+    });
     box.querySelector('[data-ms=from]').onchange = async (e) => { kind = e.target.value; render(); if (onKind) await onKind(kind); };
     box.querySelector('[data-ms=go]').onclick = go;
     box.querySelector('[data-ms=send]').onclick = send;
@@ -132,14 +149,14 @@ export function mailSheet(el, { getMsg, getPdf, kind = 'general', pdfName = '', 
     let m = getMsg();
     if (!list(m.to).length) { state('<span class="warn">Συμπληρώστε τον παραλήπτη (Προς).</span>'); return; }
     if (!driveReady()) { state('<span class="warn">Για άμεση αποστολή χρειάζεται το Google Client ID (Ρυθμίσεις → Google). Μέχρι τότε χρησιμοποιήστε «Άνοιγμα στο Gmail».</span>'); return; }
-    if (!await confirmSend({ from, msg: m, attachments: [`${pdfName || 'PDF επιστολής'}.pdf`] })) return;
+    if (!await confirmSend({ from, msg: m, attachments: [`${pdfName || 'PDF επιστολής'}.pdf`, ...extras.filter((_, i) => extraOn[i]).map((x) => x.name)] })) return;
     box.querySelectorAll('button').forEach((x) => { x.disabled = true; });
     try {
       state('⏳ Ετοιμάζεται το PDF…');
       const pdf = await getPdf();
       m = getMsg();
       state(`⏳ Αποστολή από ${esc(from)}…`);
-      await sendNow(m, [{ name: pdf.name, type: 'application/pdf', b64: await blobB64(pdf.blob) }], kind);
+      await sendNow(m, await allAttachments(pdf), kind);
       state(`<div class="ms-ok">✓ Το email στάλθηκε από <b>${esc(from)}</b> με το PDF συνημμένο (θα το βρείτε στα «Απεσταλμένα» του Gmail).</div>`);
       b.textContent = '✓ Στάλθηκε';
       if (onSent) await onSent();
@@ -159,7 +176,7 @@ export function mailSheet(el, { getMsg, getPdf, kind = 'general', pdfName = '', 
       m = getMsg(); // π.χ. ο Αρ. Πρωτ. στο θέμα, αν η επιστολή μόλις δημιουργήθηκε
       if (driveReady()) {
         state('⏳ Δημιουργείται το email στο Gmail…');
-        const d = await createDraft(m, [{ name: pdf.name, type: 'application/pdf', b64: await blobB64(pdf.blob) }], kind);
+        const d = await createDraft(m, await allAttachments(pdf), kind);
         const app = gmailAppUrl(kind, d.messageId);
         if (win) win.location.href = draftWebUrl(kind, d.messageId);
         state(`<div class="ms-ok">✓ Το email είναι έτοιμο στα <b>Πρόχειρα</b> του Gmail (${esc(senderFor(kind))}) με το PDF συνημμένο — πατήστε «Αποστολή» στο Gmail.</div>
@@ -168,16 +185,17 @@ export function mailSheet(el, { getMsg, getPdf, kind = 'general', pdfName = '', 
         return;
       }
       // Χωρίς σύνδεση Google
-      const file = new File([pdf.blob], pdf.name, { type: 'application/pdf' });
-      if (!desktop && navigator.canShare && navigator.canShare({ files: [file] })) {
+      const file = new File([pdf.blob], pdf.name, { type: 'application/pdf' }), files = [file, ...(await extraFiles()).map((x) => new File([x.blob], x.name, { type: x.type }))];
+      if (!desktop && navigator.canShare && navigator.canShare({ files })) {
         if (win) win.close();
         await copyText([m.to, m.cc, m.bcc].filter(Boolean).join(', '));
         state(`<div class="ms-ok">Οι διευθύνσεις αντιγράφηκαν. Πατήστε «Κοινοποίηση» και επιλέξτε <b>Gmail</b>· επικολλήστε τις διευθύνσεις.</div>
 <button type="button" class="btn primary" data-ms="share">📎 Κοινοποίηση PDF στο Gmail</button>`);
-        box.querySelector('[data-ms=share]').onclick = () => navigator.share({ files: [file], title: m.subject, text: richPlain(withMailHeader(m.body)) }).then(() => onDone && onDone()).catch(() => {});
+        box.querySelector('[data-ms=share]').onclick = () => navigator.share({ files, title: m.subject, text: richPlain(withMailHeader(m.body)) }).then(() => onDone && onDone()).catch(() => {});
         return;
       }
       download(pdf.name, pdf.blob, 'application/pdf');
+      for (const x of files.slice(1)) download(x.name, x, x.type);
       const url = gmailUrl({ ...m, kind });
       if (win) win.location.href = url; else window.open(url, '_blank', 'noopener');
       state('<div class="ms-ok">Το PDF κατέβηκε· σύρετέ το στο email του Gmail. <small class="muted">(Με το Google Client ID στις Ρυθμίσεις επισυνάπτεται αυτόματα.)</small></div>');
