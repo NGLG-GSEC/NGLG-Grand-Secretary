@@ -11,7 +11,7 @@ import { docTitle, driveBox, saveDocToDrive } from '../core/drive.js';
 import { mailButtons, senderBanner } from '../core/mail.js';
 import { mailSheet, bccWithout } from '../core/gmail.js';
 import { attachPicker, contactItems } from '../core/pickers.js';
-import { nextProtocol, askProtocol, legacyDecreeLetterIds } from './protocol.js';
+import { nextProtocol, askProtocol, askNextProtocol, claimProtocol, setNextProtocol, suggestedProtocol, legacyDecreeLetterIds } from './protocol.js';
 import { lodgesAll, lodgeByNumber } from './lodges.js';
 import { provinceLetter } from './visits.js';
 import { PLACEHOLDERS, hasPlaceholders, fillPlaceholders, fillContext, lodgeRecipients, missingPlaceholders, GM_VISIT, REP_VISIT, repRecipients, dayWithArticle, dateWords } from './letter-fill.js';
@@ -30,6 +30,25 @@ const statusPill = (s) => `<span class="pill ${s === 'ready' ? 'ok' : 'warn'}">$
 export const LETTER_CATEGORIES = { ΕΠΙΣΤΟΛΗ: 'Επιστολή', ΕΠΙΣΚΕΨΗ: 'Επίσκεψη' };
 const category = (x) => (LETTER_CATEGORIES[x.category] ? x.category : 'ΕΠΙΣΤΟΛΗ');
 // Ο αριθμός πρωτοκόλλου δίνεται μόνο όταν η επιστολή οριστεί «Έτοιμη»· οι πρόχειρες δεν δεσμεύουν αριθμό.
+// Ενέργειες αριθμού πρωτοκόλλου (σελίδα επιστολής και Αρχείο): προσθήκη (η επιστολή γίνεται Έτοιμη) ή αλλαγή
+async function readyLetter(x, back, query) {
+  const manual = x.protocol_seq ? 0 : askProtocol({ table: 'letters', id: x.id });
+  if (manual === null) return;
+  await db.save(`Επιστολή ${x.subject}: έτοιμη`, (tx) => { tx.update('letters', x.id, { status: 'ready' }); assignProtocol(tx, x.id, manual); });
+  flash('Η επιστολή είναι έτοιμη και πήρε αριθμό πρωτοκόλλου.'); go(back, query);
+}
+async function changeLetterProtocol(x, back, query) {
+  const n = askProtocol({ table: 'letters', id: x.id }, Number(x.protocol_seq));
+  if (!n) return;
+  await db.save(`Επιστολή ${x.subject}: αρ. πρωτοκόλλου ${n}`, (tx) => { claimProtocol(tx, n); tx.update('letters', x.id, { protocol_seq: n, protocol_no: String(n) }); });
+  flash(`Ο αριθμός πρωτοκόλλου άλλαξε σε ${n}.`); go(back, query);
+}
+async function deleteLetter(x, back, query) {
+  const what = [x.protocol_no && `αρ. πρωτ. ${x.protocol_no}`, x.subject && `«${x.subject}»`].filter(Boolean).join(' ');
+  if (!confirmDo(`Οριστική διαγραφή της επιστολής${what ? ' ' + what : ''}; Η ενέργεια δεν αναιρείται (μένει μόνο στο ιστορικό του GitHub).`)) return;
+  await db.save(`Διαγραφή επιστολής ${x.protocol_no || x.subject || x.id}`, (tx) => { tx.remove('letters', x.id); for (const l of tx.all('letters')) if (l.source_letter_id === x.id) tx.update('letters', l.id, { source_letter_id: null }); });
+  flash('Η επιστολή διαγράφηκε.'); go(back, query);
+}
 function assignProtocol(tx, id, manual = 0) {
   const r = tx.get('letters', id);
   if (!r || r.protocol_seq) return r;
@@ -248,22 +267,9 @@ ${x.protocol_seq ? '<button class="btn" data-act="protocol">✏ Αλλαγή α�
           catch (e) { b.disabled = false; b.textContent = '☁ Αποθήκευση στο Drive (PDF)'; throw e; }
         },
         form: () => openInDigitalForm(x),
-        async ready() {
-          const manual = x.protocol_seq ? 0 : askProtocol({ table: 'letters', id: x.id });
-          if (manual === null) return;
-          await db.save(`Επιστολή ${x.subject}: έτοιμη`, (tx) => { tx.update('letters', x.id, { status: 'ready' }); assignProtocol(tx, x.id, manual); }); flash('Η επιστολή είναι έτοιμη και πήρε αριθμό πρωτοκόλλου.'); go(`/letters/${x.id}`);
-        },
-        async protocol() {
-          const n = askProtocol({ table: 'letters', id: x.id }, Number(x.protocol_seq));
-          if (!n) return;
-          await db.save(`Επιστολή ${x.subject}: αρ. πρωτοκόλλου ${n}`, (tx) => tx.update('letters', x.id, { protocol_seq: n, protocol_no: String(n) }));
-          flash(`Ο αριθμός πρωτοκόλλου άλλαξε σε ${n}.`); go(`/letters/${x.id}`);
-        },
-        async del() {
-          if (!confirmDo('Οριστική διαγραφή της επιστολής; Η ενέργεια δεν αναιρείται (μένει μόνο στο ιστορικό του GitHub).')) return;
-          await db.save(`Διαγραφή επιστολής ${x.protocol_no}`, (tx) => { tx.remove('letters', x.id); for (const l of tx.all('letters')) if (l.source_letter_id === x.id) tx.update('letters', l.id, { source_letter_id: null }); });
-          flash('Η επιστολή διαγράφηκε.'); go('/letters');
-        },
+        ready: () => readyLetter(x, `/letters/${x.id}`),
+        protocol: () => changeLetterProtocol(x, `/letters/${x.id}`),
+        del: () => deleteLetter(x, '/letters'),
       });
     },
   };
@@ -278,11 +284,31 @@ function archive({ query }) {
   return {
     title: 'Αρχείο Επιστολών',
     html: `<div class="hero"><h1>Αρχείο Επιστολών</h1><div class="toolbar"><a class="btn primary" href="#/letters/new">+ Νέα Επιστολή</a>${outgoingProtocolBtn()}</div></div>${notice(query.msg)}
+<div class="card protonext"><span>Επόμενος αριθμός πρωτοκόλλου: <b class="official-number" id="protonext">${suggestedProtocol()}</b></span><button type="button" class="btn small" data-act="nextproto">✏ Αλλαγή επόμενου αριθμού</button>
+<small class="muted">Ενιαία αρίθμηση Επιστολών και Διαταγμάτων. Όταν γράφετε αριθμό σε ένα έγγραφο, η αρίθμηση συνεχίζει από εκεί· οι αριθμοί που υπάρχουν ήδη παραλείπονται.</small></div>
 <form class="filters" id="flt"><input name="q" value="${esc(query.q || '')}" placeholder="Αρ. πρωτ., θέμα, παραλήπτης" autofocus><input type="date" name="from" value="${esc(query.from || '')}"><input type="date" name="to" value="${esc(query.to || '')}"><button>Αναζήτηση</button></form>
 <p class="muted">${xs.length} επιστολές${xs.length > 500 ? ' (εμφανίζονται οι 500 πιο πρόσφατες)' : ''}</p>
 ${table(['Αρ. Πρωτ.', 'Ημερομηνία', 'Θέμα', 'Παραλήπτης', 'Κατάσταση', 'Ενέργειες'], shown.map((x) => [`<span class="official-number">${esc(x.protocol_no)}</span>`, esc(fmtDate(x.letter_date)), esc(x.subject), esc(x.recipient_name), statusPill(x.status),
-  `<a href="#/letters/${x.id}">Άνοιγμα</a> · <a href="#/letters/${x.id}/edit">Επεξεργασία</a> · <a href="#/letters/new?copy_from=${x.id}">Νέα πάνω σε αυτή</a> · <button type="button" class="btn wa-btn" data-act="wapdf" data-id="${x.id}">🟢 WhatsApp / Business PDF</button>`]), 'Δεν βρέθηκαν επιστολές.')}`,
-    mount(el) { onSubmit(el.querySelector('#flt'), (d) => go('/letters', d)); bind(el, { wapdf: (d, b) => waSendPdf(db.get('letters', d.id), b) }); },
+  `<a href="#/letters/${x.id}">Άνοιγμα</a> · <a href="#/letters/${x.id}/edit">Επεξεργασία</a> · <a href="#/letters/new?copy_from=${x.id}">Νέα πάνω σε αυτή</a> · ${x.protocol_seq ? `<button type="button" class="btn small" data-act="proto" data-id="${x.id}">✏ Αλλαγή αρ. πρωτ.</button>` : `<button type="button" class="btn small" data-act="addproto" data-id="${x.id}">➕ Αρ. πρωτοκόλλου</button>`} · <button type="button" class="btn wa-btn" data-act="wapdf" data-id="${x.id}">🟢 WhatsApp / Business PDF</button> · <button type="button" class="btn small danger" data-act="dellet" data-id="${x.id}">🗑 Διαγραφή</button>`]), 'Δεν βρέθηκαν επιστολές.')}`,
+    mount(el) {
+      onSubmit(el.querySelector('#flt'), (d) => go('/letters', d));
+      const back = () => ['/letters', query];
+      bind(el, {
+        wapdf: (d, b) => waSendPdf(db.get('letters', d.id), b),
+        proto: (d) => changeLetterProtocol(db.get('letters', d.id), ...back()),
+        dellet: (d) => deleteLetter(db.get('letters', d.id), ...back()),
+        addproto(d) {
+          if (!confirmDo('Η επιστολή θα οριστεί «Έτοιμη» και θα πάρει αριθμό πρωτοκόλλου. Συνέχεια;')) return;
+          return readyLetter(db.get('letters', d.id), ...back());
+        },
+        async nextproto() {
+          const n = askNextProtocol();
+          if (!n) return;
+          await db.save(`Επόμενος αριθμός πρωτοκόλλου: ${n}`, (tx) => setNextProtocol(tx, n));
+          flash(`Ο επόμενος αριθμός πρωτοκόλλου είναι ${suggestedProtocol()}.`); go(...back());
+        },
+      });
+    },
   };
 }
 

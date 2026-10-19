@@ -101,7 +101,7 @@ export async function makeDocx(blocks, { title = '', author = '', anchors = [] }
 
 // Επιστολόχαρτο ΕΜΣτΕ: κεφαλίδα + στοιχεία + κείμενο + κλείσιμο/υπογραφή
 // noHead: χωρίς την κανονική κεφαλίδα (τη θέση της παίρνει εικόνα της Σχεδίασης σελίδας)· topSpace: κενό (pt) πάνω από το κείμενο
-export function letterBlocks({ base = '', org, founded, gmTitle, gmName, number, date, place, title, to, cc, subject, paragraphs = [], closing, signature, signer, signerTitle, noHead = false, topSpace = 0 }) {
+export function letterBlocks({ base = '', org, founded, gmTitle, gmName, number, date, place, title, to, cc, subject, paragraphs = [], closing, signature, signer, signerTitle, noHead = false, topSpace = 0, artwork = {} }) {
   const B = [];
   if (!noHead) {
     B.push({ img: base + 'img/header_emblem.png', width: 3.2 }, { text: org, align: 'center', bold: true, size: 15, color: '1D2F5E', after: 0 });
@@ -114,7 +114,12 @@ export function letterBlocks({ base = '', org, founded, gmTitle, gmName, number,
   if (to) B.push({ text: `Προς: ${to}`, bold: true, after: cc ? 2 : 6 });
   if (cc) B.push({ text: `Κοιν.: ${cc}`, bold: true, after: 6 });
   if (subject) B.push({ text: `Θέμα: ${subject}`, bold: true, after: 12 });
-  for (const p of paragraphs) if (String(p.text || '').trim()) for (const t of String(p.text).split(/\n\s*\n/)) B.push({ align: 'both', after: 8, ...p, text: t.trim() });
+  for (const p of paragraphs) if (String(p.text || '').trim()) for (const t of String(p.text).split(/\n\s*\n/)) {
+    // λέξη στην αρχή της παραγράφου που γράφεται ως καλλιγραφική εικόνα (π.χ. «ΗΜΕΙΣ», «ΔΙΟΡΙΖΟΜΕΝ» στα Διατάγματα)
+    const [first, ...more] = t.trim().split('\n'), w = Object.keys(artwork).find((k) => first.replace(/\[\/?[a-z]+(=\d+)?\]/g, '').trim() === k);
+    if (w) { B.push({ img: artwork[w].img, width: artwork[w].width, align: 'center', after: 0 }); const rest = more.join('\n').trim(); if (rest) B.push({ align: 'both', after: 8, ...p, bold: false, text: rest }); continue; }
+    B.push({ align: 'both', after: 8, ...p, text: t.trim() });
+  }
   if (closing) B.push({ text: closing, before: 14, after: 6 });
   if (signature) B.push({ img: signature, width: 4.5, align: 'center', before: 6, after: 0 });
   B.push({ text: [signer, signerTitle, org].filter(Boolean).join('\n'), align: 'center', bold: false, after: 0 });

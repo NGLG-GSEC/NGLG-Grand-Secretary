@@ -20,7 +20,7 @@ db.migrate('unified-closing-signature-2026-10', (tx) => {
   for (const t of tx.all('letter_templates')) if (t.closing && t.closing !== GS_CLOSING) tx.update('letter_templates', t.id, { closing: GS_CLOSING });
 });
 
-export const IMG = { emblem: 'img/header_emblem.png', seal: 'img/seal.png', signature: 'img/signature.png', nikolaos: 'img/signature_nikolaos.png', grandMaster: 'img/signature_grand_master.png' };
+export const IMG = { emblem: 'img/header_emblem.png', seal: 'img/seal.png', signature: 'img/signature.png', nikolaos: 'img/signature_nikolaos.png', grandMaster: 'img/signature_grand_master.png', hmeis: 'img/hmeis.png', diorizomen: 'img/diorizomen.png', aponemei: 'img/aponemei.png' };
 
 export function signerProfile(key) {
   if (key === 'nikolaos') return { key, name: 'Λίαν Σεβάσμιος Αδ. Νικόλαος Χατζηδημητρίου', title: 'Αν. Μέγας Γραμματεύς', img: IMG.nikolaos };

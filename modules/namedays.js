@@ -9,7 +9,7 @@ import { senderBanner, gmailUrl, copyHtml, mailButtons, senderFor } from '../cor
 import { reportPaper, printPaper, gsSignatureText } from '../core/paper.js';
 import { noContact, setMemberTitle } from '../core/pickers.js';
 import { person } from '../core/people.js';
-import { epeteiridaOf, honorificLevel } from './epeteirida-table.js';
+import { epeteiridaOf, honorificLevel, pendingEpLinks } from './epeteirida-table.js';
 import { lodgesByMember, memberLodgesLine } from './members.js';
 import { lodgeByNumber } from './lodges.js';
 import { provinceByShort, provinceRoles, provincesAll } from './provinces.js';
@@ -142,6 +142,9 @@ setMemberTitle(titleOf);
 // (υπερισχύει) και μετά τα αξιώματα των Διαταγμάτων / Σεβάσμιο Στοάς. Ενημερώνεται μόνο όπου αλλάζει.
 export async function syncMemberTitles() {
   await db.idle();
+  // πρώτα: μόνιμη σύνδεση των γραμμών της Επετηρίδας με το Μητρώο (βέβαιη αντιστοίχιση ονόματος)
+  const links = pendingEpLinks();
+  if (links.length) await db.save(`Μητρώο: τίτλοι — σύνδεση Επετηρίδας (${links.length})`, (tx) => { for (const [id, mid] of links) tx.update('epeteirida', id, { member_id: mid }); });
   // τίτλος από την Επετηρίδα + ονόματα με τόνους (εορτολόγιο / Επετηρίδα)
   const diff = db.all('member_registry').map((m) => { const n = properName(m), u = {};
     if (m.title !== titleOf(m)) u.title = titleOf(m);

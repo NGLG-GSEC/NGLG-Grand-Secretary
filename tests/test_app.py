@@ -16,8 +16,26 @@ ROOT = Path(__file__).resolve().parents[1]
 PNG = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR4nGNkYPjPwMDAxMDAwMDAAAAOGQEDqv3yVwAAAABJRU5ErkJggg==')
 
 
+def set_lodges(app, lodges):
+    # πίνακας «Στοές του μέλους»: μία γραμμή ανά «ΟΝΟΜΑ | ΑΡΙΘΜΟΣ | ΚΑΤΑΣΤΑΣΗ [| ΙΔΙΟΤΗΤΑ | ΣΥΝΔΡΟΜΗ]»
+    for i, line in enumerate(x for x in lodges.split('\n') if x.strip()):
+        p = [x.strip() for x in line.split('|')] + [''] * 5
+        rows = app.page.locator('#mlrows .ml-lodge')
+        if rows.count() <= i:
+            app.page.click('[data-act=addlodge]')
+        r = rows.nth(i)
+        r.locator('[data-k=number]').fill(p[1])
+        r.locator('[data-k=name]').fill(p[0])
+        r.locator('[data-k=status]').fill(p[2])
+        if p[3]:
+            r.locator('[data-k=capacity]').select_option(p[3])
+        if p[4]:
+            r.locator('[data-k=fee_rank]').select_option(p[4])
+
+
 def add_member(app, surname='Παπαδόπουλος', first='Γεώργιος', email='g@example.com', mobile='6944123456', lodges='ΠΑΡΘΕΝΩΝ | 3 | 1. ΤΑΚΤΙΚΟ'):
-    app.go('/members/new').fill(surname=surname, first_name=first, email=email, mobile=mobile, lodges_text=lodges)
+    app.go('/members/new').fill(surname=surname, first_name=first, email=email, mobile=mobile)
+    set_lodges(app, lodges)
     app.click('💾 Αποθήκευση')
     app.wait_saved()
 
@@ -76,7 +94,8 @@ def test_decree_epeteirida_and_members(app):
     t = app.text()
     assert 'υπ’ αριθμ. 513/' in t and 'Αρ. Πρωτ.: 20546' in t  # ενιαίο πρωτόκολλο με τις Επιστολές
     body = app.text('.decbody')
-    for s in ['ΔΙΟΡΙΖΟΜΕΝ', 'ΜΕΓΑΝ ΓΡΑΜΜΑΤΕΑ', 'τον Λίαν Σεβάσμιον Αδελφόν', 'Γεώργιον Παπαδόπουλον', 'λαβόντες υπ’ όψιν τον Κανόνα 22']:
+    assert app.page.locator('.decbody [aria-label="ΔΙΟΡΙΖΟΜΕΝ"]').count() >= 1  # «ΔΙΟΡΙΖΟΜΕΝ» ως καλλιγραφική εικόνα
+    for s in ['ΜΕΓΑΝ ΓΡΑΜΜΑΤΕΑ', 'τον Λίαν Σεβάσμιον Αδελφόν', 'Γεώργιον Παπαδόπουλον', 'λαβόντες υπ’ όψιν τον Κανόνα 22']:
         assert s in body, s
     app.go('/epeteirida')
     assert 'Μέγας Γραμματεύς' in app.text() and '513/' in app.text()
@@ -1437,13 +1456,19 @@ def test_epeteirida_table_import_filters_edit_and_member(app):
     app.connect_local()
     mid = app.page.evaluate("""async () => { const {db} = await import('./core/store.js');
       return db.save('x', (tx) => { tx.insert('member_registry', { surname: 'Επετηριδάκης', first_name: 'Αλέξιος', active: 1 });
-        return tx.insert('member_registry', { surname: 'Δοκιμαστής', first_name: 'Βασίλειος', email: 'dok@example.com', active: 1 }).id; }); }""")
+        return tx.insert('member_registry', { registry_no: 1777, surname: 'Δοκιμαστής', first_name: 'Βασίλειος', email: 'dok@example.com', active: 1 }).id; }); }""")
     app.go('/epeteirida/pinakas')
     app.page.locator('summary:has-text("Εισαγωγή / αντικατάσταση")').click()
     app.page.fill('#epimp2 [name=paste]', EP_TSV)
     app.page.locator('#epimp2 button').click()
     app.page.wait_for_selector('text=3 εγγραφές · 2 συνδέθηκαν')
     assert 'Εμφανίζονται 3 από 3 · 2 συνδεδεμένοι' in app.text('#epcount')
+    # Αρ. Μητρώου από τον πίνακα μελών (στήλη, αναζήτηση)
+    assert app.page.locator('tr:has-text("Δοκιμαστής") .c-regno').inner_text().strip() == '1777'
+    app.page.fill('[data-f=q]', '1777')
+    assert 'Εμφανίζονται 1 από 3' in app.text('#epcount')
+    app.page.click('[data-act=reset]')
+    assert 'Αρ. Μητρώου' in app.text('#epg thead')
     # δυναμικά φίλτρα: Ενεργός = ΝΑΙ, μετά αναζήτηση
     app.page.select_option('[data-s=active]', '1')
     assert 'Εμφανίζονται 1 από 3' in app.text('#epcount') and 'Επετηριδάκης' in app.text('#epg')
@@ -1547,7 +1572,7 @@ def test_decree_templates_general_decree_and_page_design(app):
     assert doc.count('<wp:anchor ') == 2 and 'behindDoc="1"' in doc and '<a:alphaModFix amt="25000"/>' in doc
     assert '<wp:positionV relativeFrom="page"><wp:posOffset>432000</wp:posOffset>' in doc  # κεφαλίδα στα 12 mm
     assert 'Εθνική Μεγάλη Στοά της Ελλάδος</w:t>' not in doc.split('ΔΙΑΤΑΓΜΑ υπ')[0]  # χωρίς την κανονική κεφαλίδα
-    assert len([n for n in z.namelist() if n.startswith('word/media/')]) == 3  # 2 εικόνες σχεδίασης + υπογραφή
+    assert len([n for n in z.namelist() if n.startswith('word/media/')]) == 4  # 2 εικόνες σχεδίασης + «ΗΜΕΙΣ» + υπογραφή (Γενικό Διάταγμα: χωρίς «ΔΙΟΡΙΖΟΜΕΝ»)
     # Διάταγμα Διορισμού: χωρίς σχεδίαση → κανονική κεφαλίδα
     app.go('/decrees/new')
     assert app.page.locator('#appointPart').is_visible() and app.page.locator('#dprev .paper .head').count() == 1
@@ -1761,6 +1786,29 @@ def test_member_title_from_epeteirida_in_registry(app):
     assert 'Λίαν Σεβ. Αδ.' in app.text('.memtable')
 
 
+def test_title_from_unlinked_epeteirida_row_and_abbreviated_honorific(app):
+    # γραμμή της Επετηρίδας χωρίς σύνδεση με το Μητρώο (member_id) και προσφώνηση γραμμένη «Πσεβ.»
+    app.connect_local()
+    add_member(app, surname='ΔΟΜΕΣΤΙΧΟΣ', first='ΛΟΥΚΑΣ', email='dl@example.com')
+    app.page.evaluate("async () => { const {db} = await import('./core/store.js');"
+                      " await db.save('x', (tx) => tx.insert('epeteirida', { member_id: null, honorific: 'Πσεβ.', full_name: 'Δομεστίχος Λουκάς' })); }")
+    t = app.page.evaluate("""async () => { const {db} = await import('./core/store.js'); const n = await import('./modules/namedays.js');
+      const m = db.all('member_registry').find((x) => x.email === 'dl@example.com'); return n.titleOf(m); }""")
+    assert t == 'Πσεβ. Αδ.', t
+    # η γραμμή συνδέεται μόνιμα με το Μητρώο· όσες αποσυνδέθηκαν ρητά (member_id 0) μένουν ασύνδετες
+    app.page.evaluate("async () => { const {db} = await import('./core/store.js');"
+                      " await db.save('y', (tx) => tx.insert('epeteirida', { member_id: 0, honorific: 'Σεβάσμιος', full_name: 'Δομεστίχος Λουκάς' })); }")
+    links = []
+    for _ in range(40):
+        links = app.page.evaluate("async () => (await import('./core/store.js')).db.all('epeteirida').map((r) => [r.honorific, r.member_id])")
+        if any(h == 'Πσεβ.' and mid for h, mid in links):
+            break
+        app.page.wait_for_timeout(250)
+    mid = app.page.evaluate("async () => (await import('./core/store.js')).db.all('member_registry').find((x) => x.email === 'dl@example.com').id")
+    assert ['Πσεβ.', mid] in links and ['Σεβάσμιος', 0] in links, links
+    lv = app.page.evaluate("async () => { const e = await import('./modules/epeteirida-table.js'); return ['Πανσεβάσμιος', 'Πσεβ. Αδ.', 'ΛΣεβ.', 'Σεβτ.', 'Σεβ.', 'Πανσεβάσμιος Αδελφός', 'κάτι'].map(e.honorificLevel); }")
+    assert lv == [2, 2, 1, 3, 0, 2, None], lv
+
 def test_contacts_linked_to_registry(app, tmp_path):
     app.connect_local()
     app.page.evaluate("""async () => { const {db} = await import('./core/store.js'); await db.save('x', (tx) => {
@@ -1815,3 +1863,201 @@ def test_sure_duplicates_merged_once_with_backup(app):
     assert len(dipl) == 1 and 'a@example.com' in (dipl[0]['email'] + (dipl[0].get('other_emails') or '')) and '6900000001' in (dipl[0]['mobile'] + (dipl[0].get('other_mobiles') or ''))
     assert len([m for m in ms if m['surname'] == 'Συνώνυμος']) == 2  # διαφορετικό κινητό: μένουν για έλεγχο
     assert any(p.startswith('files/backups/member_registry-before-merge-') for p in gh.files())
+
+
+def test_small_lodges_report(app):
+    # Στοές με λιγότερα από 12 κύρια μέλη: σειρά αρχαιότητας, δυναμικά φίλτρα στις επικεφαλίδες, PDF
+    app.connect_local()
+    add_member(app, surname='ΜΙΚΡΟΣΤΟΪΤΗΣ', first='ΑΝΤΩΝΙΟΣ', email='ms1@example.com', lodges='ΑΚΡΟΠΟΛΙΣ | 2 | 1. ΤΑΚΤΙΚΟ\nΠΑΡΘΕΝΩΝ | 3 | 2. ΣΥΝΔΕΔΕΜΕΝΟ')
+    app.go('/members')
+    assert app.page.locator('#mainnav a[href="#/members/small-lodges"]').count() == 1  # και στο μενού «Στοές & Μέλη»
+    app.page.click('main a:has-text("Στοές με < 12 κύρια μέλη")')
+    app.page.wait_for_selector('#slbody tr')
+    nums = app.page.eval_on_selector_all('#slbody .c-number', 'xs => xs.map((x) => x.textContent)')
+    assert nums[:2] == ['1', '2'] and nums == sorted(nums, key=lambda n: int(n) if n.isdigit() else 10**9), nums
+    cnt = lambda n: app.page.eval_on_selector_all('#slbody tr', f"rs => rs.filter((r) => r.querySelector('.c-number').textContent === '{n}').map((r) => r.querySelector('.c-count').textContent)")
+    assert cnt('2') == ['1'] and cnt('3') == ['0']  # μόνο το «1. ΤΑΚΤΙΚΟ» μετρά ως κύριο μέλος
+    app.page.fill('#slf [data-f="number"]', '2-3')
+    assert app.page.eval_on_selector_all('#slbody .c-number', 'xs => xs.map((x) => x.textContent)') == ['2', '3']
+    app.page.select_option('#slf [data-f="count"]', '1')
+    assert app.page.eval_on_selector_all('#slbody .c-number', 'xs => xs.map((x) => x.textContent)') == ['2']
+    assert '(1)' in app.page.inner_text('#slf [data-f="provincial"]')
+    with app.page.expect_download() as d:
+        app.click('📄 Αναφορά PDF')
+    assert d.value.suggested_filename.endswith('.pdf') and Path(d.value.path()).read_bytes()[:4] == b'%PDF'
+    assert not app.errors, app.errors
+
+
+def test_member_lodge_capacity_and_fee_rank(app):
+    # Ιδιότητα μέλους κατά το Σύνταγμα (με τον κανόνα) και Στοά πλήρους συνδρομής / 2η / 3η (Κ. 269)
+    app.connect_local()
+    app.go('/members/new')
+    opts = app.page.eval_on_selector_all('#mlrows [data-k=capacity] option', 'xs => xs.map((x) => x.textContent)')
+    assert opts == ['—', 'Τακτικό — Κ. 166', 'Υιοθετημένο — Κ. 163', 'Επανελθόν — Κ. 163', 'Ομότιμο — Κ. 146', 'Επίτιμο — Κ. 146', 'Μέτοικο — Κ. 146', 'Αριστίνδην — Κ. 146', 'Ισόβιο', 'Θεράπων'], opts
+    assert 'Στοά πλήρους συνδρομής — Κ. 269' in app.page.inner_text('#mlrows [data-k=fee_rank]')
+    add_member(app, surname='ΙΔΙΟΤΗΤΑΣ', first='ΠΕΤΡΟΣ', email='cap@example.com', lodges='ΑΚΡΟΠΟΛΙΣ | 2 | ΕΝΕΡΓΟ | Υιοθετημένο | 1\nΠΑΡΘΕΝΩΝ | 3 | ΕΝΕΡΓΟ | Μέτοικο | 2')
+    ls = app.page.evaluate("""async () => { const {db} = await import('./core/store.js'); const m = db.all('member_registry').find((x) => x.email === 'cap@example.com');
+      return db.all('member_lodges').filter((l) => l.member_id === m.id).map((l) => [l.lodge_number, l.capacity, l.fee_rank]); }""")
+    assert sorted(ls) == [['2', 'Υιοθετημένο', 1], ['3', 'Μέτοικο', 2]], ls
+    assert 'Υιοθετημένο · πλήρης συνδρ.' in app.text('.memtable') and 'Μέτοικο · 2η Στοά' in app.text('.memtable')
+    # η παλιά κατάσταση «1. ΤΑΚΤΙΚΟ» προτείνει την ιδιότητα «Τακτικό»· δύο Στοές πλήρους συνδρομής δεν γίνονται δεκτές
+    add_member(app, surname='ΠΑΛΑΙΟΣ', first='ΙΩΑΝΝΗΣ', email='old@example.com')
+    mid = app.page.evaluate("async () => (await import('./core/store.js')).db.all('member_registry').find((x) => x.email === 'old@example.com').id")
+    app.go(f'/members/{mid}')
+    assert app.page.locator('#mlrows [data-k=capacity]').input_value() == 'Τακτικό'
+    set_lodges(app, 'ΠΑΡΘΕΝΩΝ | 3 | 1. ΤΑΚΤΙΚΟ | Τακτικό | 1\nΑΚΡΟΠΟΛΙΣ | 2 | ΕΝΕΡΓΟ | Τακτικό | 1')
+    app.click('💾 Αποθήκευση')
+    assert 'μόνο μία' in app.page.inner_text('body')
+    # η εισαγωγή από το Excel-πηγή (χωρίς ιδιότητα/συνδρομή) δεν σβήνει όσα ορίστηκαν
+    app.page.evaluate("""async () => { const M = await import('./modules/members.js'); const {db} = await import('./core/store.js'); const m = db.all('member_registry').find((x) => x.email === 'cap@example.com');
+      await db.save('t', (tx) => M.updateMember(tx, m.id, { lodges: [{ name: 'ΑΚΡΟΠΟΛΙΣ', number: '2', status: 'ΕΝΕΡΓΟ' }, { name: 'ΠΑΡΘΕΝΩΝ', number: '3', status: 'ΕΝΕΡΓΟ' }] })); }""")
+    ls = app.page.evaluate("""async () => { const {db} = await import('./core/store.js'); const m = db.all('member_registry').find((x) => x.email === 'cap@example.com');
+      return db.all('member_lodges').filter((l) => l.member_id === m.id).map((l) => [l.lodge_number, l.capacity, l.fee_rank]); }""")
+    assert sorted(ls) == [['2', 'Υιοθετημένο', 1], ['3', 'Μέτοικο', 2]], ls
+
+
+def test_member_degree_and_office_dates(app):
+    # ημερομηνίες βαθμών (Μαθητής, Εταίρος, Διδάσκαλος), διαγραφής, και σε κάθε Στοά: ιδιότητας, Β΄/Α΄ Επόπτη, Σεβασμίου, διαγραφής
+    app.connect_local()
+    app.go('/members/new').fill(surname='ΗΜΕΡΟΜΗΝΙΑΣ', first_name='ΚΩΣΤΑΣ', email='dates@example.com', date_ea='2005-03-10', date_fc='2006-04-12', date_mm='2007-05-14')
+    set_lodges(app, 'ΑΚΡΟΠΟΛΙΣ | 2 | ΕΝΕΡΓΟ | Υιοθετημένο | 1')
+    r = app.page.locator('#mlrows .ml-lodge').first
+    assert r.locator('.ml-capdate').inner_text() == 'Ημ. υιοθεσίας'
+    for k, v in [('capacity_date', '2010-01-20'), ('jw_date', '2012-06-01'), ('sw_date', '2013-06-01'), ('wm_date', '2014-06-01')]:
+        r.locator(f'[data-k={k}]').fill(v)
+    app.click('💾 Αποθήκευση')
+    app.wait_saved()
+    m, ls = app.page.evaluate("""async () => { const {db} = await import('./core/store.js'); const m = db.all('member_registry').find((x) => x.email === 'dates@example.com');
+      return [[m.date_ea, m.date_fc, m.date_mm], db.all('member_lodges').filter((l) => l.member_id === m.id).map((l) => [l.capacity_date, l.jw_date, l.sw_date, l.wm_date, l.dereg_date])]; }""")
+    assert m == ['2005-03-10', '2006-04-12', '2007-05-14'] and ls == [['2010-01-20', '2012-06-01', '2013-06-01', '2014-06-01', '']], (m, ls)
+    assert 'Διδ. 14/05/2007' in app.text('.memtable')
+    # η εισαγωγή χωρίς ημερομηνίες δεν τις σβήνει· οι ημερομηνίες Excel (15/3/2010) μετατρέπονται
+    ls = app.page.evaluate("""async () => { const M = await import('./modules/members.js'); const {db} = await import('./core/store.js'); const m = db.all('member_registry').find((x) => x.email === 'dates@example.com');
+      await db.save('t', (tx) => M.updateMember(tx, m.id, { lodges: [{ name: 'ΑΚΡΟΠΟΛΙΣ', number: '2', status: 'ΔΙΑΓΡΑΦΕΝ', dereg_date: '15/3/2020' }] }));
+      return db.all('member_lodges').filter((l) => l.member_id === m.id).map((l) => [l.wm_date, l.dereg_date]); }""")
+    assert ls == [['2014-06-01', '2020-03-15']], ls
+
+
+def test_small_lodges_members_panel(app):
+    # πάτημα σε Στοά → τα μέλη της με ιδιότητες, δυναμικά φίλτρα στις κατηγορίες, PDF μελών
+    app.connect_local()
+    add_member(app, surname='ΠΡΩΤΟΣ', first='ΑΛΕΞΑΝΔΡΟΣ', email='p1@example.com', lodges='ΑΚΡΟΠΟΛΙΣ | 2 | ΕΝΕΡΓΟ | Τακτικό | 1')
+    add_member(app, surname='ΔΕΥΤΕΡΟΣ', first='ΒΑΣΙΛΕΙΟΣ', email='p2@example.com', lodges='ΑΚΡΟΠΟΛΙΣ | 2 | ΕΝΕΡΓΟ | Μέτοικο | 2')
+    add_member(app, surname='ΤΡΙΤΟΣ', first='ΖΑΧΑΡΙΑΣ', email='p3@example.com', lodges='ΑΚΡΟΠΟΛΙΣ | 2 | ΕΝΕΡΓΟ | Επίτιμο')
+    app.go('/members/small-lodges')
+    assert app.page.locator('#slmem').is_hidden()
+    app.page.click('#slbody tr[data-no="2"] .c-name')
+    names = lambda: app.page.eval_on_selector_all('#slmbody tr td:nth-child(2)', 'xs => xs.map((x) => x.textContent.split(" ")[0])')
+    assert 'ΑΚΡΟΠΟΛΙΣ' in app.page.inner_text('#slmtitle') and names() == ['ΠΡΩΤΟΣ', 'ΔΕΥΤΕΡΟΣ', 'ΤΡΙΤΟΣ'], names()
+    assert 'Μέτοικο (1)' in app.page.inner_text('#slmf [data-m=capacity]')
+    app.page.select_option('#slmf [data-m=primary]', 'ΝΑΙ')
+    assert names() == ['ΠΡΩΤΟΣ']
+    assert app.page.eval_on_selector_all('#slmf [data-m=capacity] option', 'xs => xs.map((x) => x.textContent)') == ['Όλα', 'Τακτικό (1)']
+    app.click('✕ Φίλτρα')
+    app.page.click('#slmchips [data-cap="Επίτιμο"]')
+    assert names() == ['ΤΡΙΤΟΣ']
+    with app.page.expect_download() as d:
+        app.click('📄 PDF μελών')
+    assert Path(d.value.path()).read_bytes()[:4] == b'%PDF'
+    app.click('Κλείσιμο')
+    assert app.page.locator('#slmem').is_hidden()
+    assert not app.errors, app.errors
+
+
+def test_letters_archive_protocol_actions_and_next_number(app):
+    # Αρχείο Επιστολών: προσθήκη/αλλαγή αρ. πρωτοκόλλου από τις Ενέργειες, και αλλαγή του «επόμενου» αριθμού
+    app.connect_local()
+    seqs = lambda: app.page.evaluate("async () => (await import('./core/store.js')).db.all('letters').map((l) => [l.subject, l.protocol_seq, l.status])")
+    app.go('/letters/new').fill(subject='Πρόχειρη', body='x').click('💾 Αποθήκευση')
+    app.page.wait_for_url('**/#/letters/1')
+    app.go('/letters')
+    assert '20545' in app.text('#protonext')
+    app.page.evaluate("window.prompt = (m, d) => d")
+    app.click('➕ Αρ. πρωτοκόλλου')
+    app.page.wait_for_selector('text=πήρε αριθμό πρωτοκόλλου')
+    assert seqs() == [['Πρόχειρη', 20545, 'ready']]
+    # χειροκίνητος αριθμός → η αρίθμηση συνεχίζει από εκεί
+    app.go('/letters')
+    app.page.evaluate("window.prompt = () => '30000'")
+    app.click('✏ Αλλαγή αρ. πρωτ.')
+    app.page.wait_for_selector('text=άλλαξε σε 30000')
+    assert '30001' in app.text('#protonext')
+    # ο «επόμενος» μπορεί να γίνει και μικρότερος· οι πιασμένοι αριθμοί παραλείπονται
+    app.page.evaluate("window.prompt = () => '29999'")
+    app.click('✏ Αλλαγή επόμενου αριθμού')
+    app.page.wait_for_selector('text=επόμενος αριθμός πρωτοκόλλου είναι 29999')
+    app.page.evaluate("window.prompt = (m, d) => d")
+    app.go('/letters/new').fill(subject='Α', body='x').click('Αποθήκευση & απόδοση')
+    app.page.wait_for_url('**/#/letters/2')
+    app.go('/letters/new').fill(subject='Β', body='x').click('Αποθήκευση & απόδοση')
+    app.page.wait_for_url('**/#/letters/3')
+    assert sorted(s for _, s, _ in seqs()) == [29999, 30000, 30001], seqs()
+    # μικρότερος χειροκίνητος αριθμός: «Άκυρο» στην ερώτηση = η αρίθμηση δεν επιστρέφει πίσω
+    app.page.evaluate("window.prompt = () => '25000'; window.confirm = () => false")
+    app.go('/letters/new').fill(subject='Γ', body='x').click('Αποθήκευση & απόδοση')
+    app.page.wait_for_url('**/#/letters/4')
+    app.go('/letters')
+    assert '30002' in app.text('#protonext')
+    assert not app.errors, app.errors
+
+
+def test_letters_archive_delete(app):
+    # Αρχείο Επιστολών: «🗑 Διαγραφή» στις Ενέργειες, με ερώτηση επιβεβαίωσης
+    app.connect_local()
+    for subj in ['Να μείνει', 'Να διαγραφεί']:
+        app.go('/letters/new').fill(subject=subj, body='x').click('💾 Αποθήκευση')
+        app.page.wait_for_selector('text=Επεξεργασία')
+    subjects = lambda: sorted(app.page.evaluate("async () => (await import('./core/store.js')).db.all('letters').map((l) => l.subject)"))
+    app.go('/letters')
+    row = app.page.locator('tr', has_text='Να διαγραφεί')
+    app.page.evaluate("window.confirm = () => false")
+    row.locator('[data-act=dellet]').click()
+    app.page.wait_for_timeout(300)
+    assert subjects() == ['Να διαγραφεί', 'Να μείνει']
+    app.page.evaluate("window.confirm = (m) => { sessionStorage.setItem('q', m); return true; }")
+    row.locator('[data-act=dellet]').click()
+    app.page.wait_for_selector('text=Η επιστολή διαγράφηκε')
+    assert subjects() == ['Να μείνει'] and 'Να διαγραφεί' in app.page.evaluate("sessionStorage.getItem('q')")
+    assert 'Να διαγραφεί' not in app.text()
+    assert not app.errors, app.errors
+
+
+def test_decree_hmeis_artwork(app, tmp_path):
+    # «ΗΜΕΙΣ» στα Διατάγματα: καλλιγραφική εικόνα, μεγάλη, πίσω από το κείμενο, με μικρό ύψος γραμμής· και στο Word
+    import zipfile
+    app.connect_local()
+    add_member(app)
+    app.go('/decrees/new')
+    app.fill(matter='διορισμού Μεγάλων Αξιωματικών')
+    app.page.select_option('#dOffice', 'Μέγας Γραμματεύς')
+    app.pick('.registry-search', 'Παπαδ')
+    app.click('Έκδοση Διατάγματος')
+    app.page.wait_for_url('**/#/decrees/1')
+    app.page.wait_for_function("() => { const i = document.querySelector('.decbody .hmeis img'); return i && i.complete && i.naturalWidth > 0; }")
+    box = app.page.evaluate("""() => { const s = document.querySelector('.decbody .hmeis'), i = s.querySelector('img');
+      return { span: s.getBoundingClientRect().height, img: i.getBoundingClientRect().height, z: getComputedStyle(i).zIndex }; }""")
+    assert box['img'] > box['span'] * 1.5 and box['z'] == '-1', box  # η εικόνα είναι μεγαλύτερη από τον χώρο που πιάνει (πίσω από το κείμενο)
+    assert not app.text('.decbody').startswith('ΗΜΕΙΣ') and 'ΔΙΟΡΙΖΟΜΕΝ' not in app.text('.decbody')
+    assert app.page.locator('.decbody .diorizomen img[src$="img/diorizomen.png"]').count() >= 1
+    with app.page.expect_download() as dl:
+        app.click('⬇ Word')
+    f = tmp_path / 'd.docx'
+    dl.value.save_as(f)
+    with zipfile.ZipFile(f) as z:
+        sizes = [z.getinfo(n).file_size for n in z.namelist() if n.startswith('word/media/')]
+        doc = z.read('word/document.xml').decode()
+    assert all(Path(f'img/{n}.png').stat().st_size in sizes for n in ['hmeis', 'diorizomen']) and '>ΗΜΕΙΣ<' not in doc and '>ΔΙΟΡΙΖΟΜΕΝ<' not in doc, sizes
+    # Διάταγμα απονομής: «ΑΠΟΝΕΜΕΙ» ως καλλιγραφική εικόνα
+    app.page.evaluate("""async () => { const {db} = await import('./core/store.js'); const d = db.all('decree_documents')[0];
+      await db.save('t', (tx) => tx.update('decree_documents', d.id, { body: d.body.replace('ΔΙΟΡΙΖΟΜΕΝ', 'ΑΠΟΝΕΜΕΙ') })); }""")
+    app.go('/decrees/1')
+    assert app.page.locator('.decbody .aponemei img[src$="img/aponemei.png"]').count() >= 1 and 'ΑΠΟΝΕΜΕΙ' not in app.text('.decbody')
+    assert not app.errors, app.errors
+
+
+def test_visits_link_to_declarations(app):
+    # Επισκέψεις Στοών: κουμπί «🗳 Δηλώσεις διάθεσης» προς την αναφορά δηλώσεων των Μ. Αξιωματικών
+    app.connect_local()
+    app.go('/visits')
+    b = app.page.locator('main a.btn', has_text='Δηλώσεις διάθεσης')
+    assert b.count() == 1 and b.get_attribute('href') == '#/declarations'

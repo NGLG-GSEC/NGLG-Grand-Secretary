@@ -8,19 +8,48 @@ db.defaultSettings({ protocol_start: String(PROTOCOL_START_DEFAULT) });
 
 export const protocolTopic = (t) => String(t || '').replace(/[\\/:*?"<>|\r\n\t]+/g, ' ').replace(/\s+/g, ' ').replace(/^[ ._-]+|[ ._-]+$/g, '').slice(0, 60).trim() || 'Χωρίς θέμα';
 
+// Επόμενος αριθμός: ο «επόμενος» της ρύθμισης protocol_next (αν έχει οριστεί), αλλιώς ο μεγαλύτερος υπάρχων + 1·
+// όσοι αριθμοί είναι ήδη πιασμένοι παραλείπονται. Κάθε αριθμός που δίνεται (αυτόματα ή χειροκίνητα) μετακινεί τον «επόμενο»
+// στον αμέσως επόμενο, άρα η αρίθμηση συνεχίζει από τον τελευταίο αριθμό που γράψατε.
+const intOf = (v) => parseInt(String(v ?? '').replace(/\D/g, ''), 10) || 0;
+function nextFree(tx) {
+  const used = new Set(['letters', 'decree_documents'].flatMap((t) => tx.all(t).map((r) => Number(r.protocol_seq) || 0)).filter(Boolean));
+  const start = intOf(tx.setting('protocol_start') ?? db.setting('protocol_start')) || PROTOCOL_START_DEFAULT;
+  // ο «Πρώτος αριθμός πρωτοκόλλου» των Ρυθμίσεων μένει κατώτατο όριο
+  let n = Math.max(start, intOf(tx.setting('protocol_next') ?? db.setting('protocol_next')) || Math.max(start - 1, ...used) + 1);
+  while (used.has(n)) n++;
+  return n;
+}
+// Αριθμοί που ο χρήστης γράφει μικρότερους από τον προτεινόμενο και επέλεξε η αρίθμηση να συνεχίσει από αυτούς
+const continueFrom = new Set();
+// Χρήση αριθμού n (μέσα στην αποθήκευση): ο «επόμενος» γίνεται n + 1 όταν ο n δεν είναι μικρότερος από τον προτεινόμενο
+// ή όταν επιλέχθηκε ρητά «συνέχεια από εδώ».
+export function claimProtocol(tx, n) {
+  if (n >= nextFree(tx) || continueFrom.has(n)) tx.setting('protocol_next', String(n + 1));
+  continueFrom.delete(n);
+}
+export function setNextProtocol(tx, n) { tx.setting('protocol_next', String(n)); }
 export function nextProtocol(tx, category = 'Επιστολή', topic = '', manual = 0) {
-  if (manual) return { seq: manual, year: new Date().getFullYear(), no: String(manual) };
-  const start = parseInt(String(tx.setting('protocol_start') ?? db.setting('protocol_start')).replace(/\D/g, ''), 10) || PROTOCOL_START_DEFAULT;
-  const max = (t) => tx.all(t).reduce((m, r) => Math.max(m, Number(r.protocol_seq) || 0), 0);
-  const n = Math.max(start - 1, max('letters'), max('decree_documents')) + 1;
-  const y = new Date().getFullYear();
-  return { seq: n, year: y, no: String(n) };
+  const n = manual || nextFree(tx);
+  claimProtocol(tx, n);
+  return { seq: n, year: new Date().getFullYear(), no: String(n) };
 }
 // Πρόταση αριθμού πρωτοκόλλου: η εφαρμογή προτείνει τον επόμενο, αλλά μπορείτε να γράψετε άλλον (χειροκίνητα).
 // Επιστρέφει null (ακύρωση), 0 (δεκτός ο προτεινόμενος — υπολογίζεται ξανά μέσα στην αποθήκευση) ή τον αριθμό που γράψατε.
 // Ένας χειροκίνητος αριθμός μεγαλύτερος από τον προτεινόμενο συνεχίζει την αρίθμηση από εκεί και πέρα.
-export const suggestedProtocol = () => nextProtocol({ setting: (k) => db.setting(k), all: (t) => db.all(t) }).seq;
+export const suggestedProtocol = () => nextFree({ setting: (k) => db.setting(k), all: (t) => db.all(t) });
 const protocolOwner = (n, self = {}) => ['letters', 'decree_documents'].flatMap((t) => db.all(t).filter((r) => Number(r.protocol_seq) === n && !(t === self.table && r.id === self.id)))[0];
+// Αλλαγή του «επόμενου» αριθμού πρωτοκόλλου (μπορεί να είναι και μικρότερος — οι πιασμένοι αριθμοί παραλείπονται)
+export function askNextProtocol() {
+  const start = intOf(db.setting('protocol_start')) || PROTOCOL_START_DEFAULT;
+  const sug = suggestedProtocol();
+  const v = window.prompt(`Ο επόμενος αριθμός πρωτοκόλλου είναι ${sug}.\nΓράψτε από ποιον αριθμό να συνεχίσει η αρίθμηση:`, String(sug));
+  if (v == null || !String(v).trim()) return null;
+  const n = intOf(v);
+  if (!n) throw new Error('Μη έγκυρος αριθμός πρωτοκόλλου.');
+  if (n < start) throw new Error(`Ο αριθμός είναι μικρότερος από τον «Πρώτο αριθμό πρωτοκόλλου» των Ρυθμίσεων (${start}).`);
+  return n === sug ? null : n;
+}
 export function askProtocol(self = {}, current = 0, intro = '') {
   const sug = suggestedProtocol();
   const v = window.prompt((intro ? intro + '\n\n' : '') + (current
@@ -32,6 +61,8 @@ export function askProtocol(self = {}, current = 0, intro = '') {
   if (!n) throw new Error('Μη έγκυρος αριθμός πρωτοκόλλου.');
   if (n === current) return null;
   if (protocolOwner(n, self) && !window.confirm(`Ο αριθμός πρωτοκόλλου ${n} υπάρχει ήδη σε άλλο έγγραφο. Να χρησιμοποιηθεί παρ’ όλα αυτά;`)) return null;
+  // μεγαλύτερος από τον προτεινόμενο: η αρίθμηση συνεχίζει αυτόματα από εκεί· μικρότερος: ερώτηση
+  if (n < sug && window.confirm(`Ο ${n} είναι μικρότερος από τον προτεινόμενο ${sug}.\n\nOK = η αρίθμηση να συνεχίσει από τον ${n + 1} (επόμενος ελεύθερος)\nΆκυρο = μόνο αυτό το έγγραφο· η αρίθμηση συνεχίζει από τον ${sug}`)) continueFrom.add(n);
   return n === sug && !current ? 0 : n;
 }
 // Ο αριθμός πρωτοκόλλου στο έγγραφο είναι μόνο ο αριθμός (π.χ. 20545)· η κατηγορία και το θέμα μπαίνουν μόνο στο όνομα αρχείου.
