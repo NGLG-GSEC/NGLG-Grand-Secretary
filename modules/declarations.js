@@ -1,33 +1,27 @@
 // Δηλώσεις Διάθεσης Μεγάλων Αξιωματικών για εκπροσώπηση του ΜΔ σε Εγκαταστάσεις.
-// Η σελίδα ζει στο αποθετήριο NGLG-GSEC/GrandOfficersVisitsRepresentGM και ανοίγει εδώ ολόκληρη (Δήλωση, Πρόγραμμα, Αναφορά),
-// ώστε όλα να γίνονται από την Ψηφιακή Μεγάλη Γραμματεία. Η Αναφορά ανοίγει χωρίς κωδικό: η εφαρμογή στέλνει στη σελίδα
-// τον κωδικό της αναφοράς από τις Ρυθμίσεις (μόνο όταν η σελίδα είναι στο ίδιο domain).
+// Μία σελίδα (#/declarations): η σελίδα του αποθετηρίου NGLG-GSEC/GrandOfficersVisitsRepresentGM (Δήλωση, Πρόγραμμα)
+// ανοίγει εδώ ολόκληρη. Η «Διαχειριστική Αναφορά & PDF» ζητά πάντα τον κωδικό πρόσβασης· ο έλεγχος γίνεται στον server
+// της σελίδας (ADMIN_KEY του Apps Script), ώστε ο κωδικός να μη γράφεται πουθενά στον δημόσιο κώδικα.
 import { module } from '../core/app.js';
 import { db } from '../core/store.js';
 
+// Ο παλιός «Κωδικός αναφοράς» (άνοιγμα της αναφοράς χωρίς κωδικό) καταργήθηκε· σβήνεται και από τα δεδομένα
+db.migrate('declarations-key-removed-2026-10', (tx) => { if (tx.setting('declarations_report_key')) tx.setting('declarations_report_key', ''); });
+
 export const DECLARATIONS_URL = 'https://nglg-gsec.github.io/GrandOfficersVisitsRepresentGM/';
-db.defaultSettings({ declarations_report_key: '' });
 
-const TABS = [['form', 'Δήλωση Ενδιαφέροντος'], ['programme', 'Πρόγραμμα Επισκέψεων Μ.Δ.'], ['report', 'Διαχειριστική Αναφορά & PDF']];
-
-function declarationsPage({ query }) {
-  const view = TABS.some(([v]) => v === query.view) ? query.view : 'report';
-  const src = `${DECLARATIONS_URL}?embed=1#${view}`;
+function declarationsPage() {
   return {
     title: 'Δηλώσεις Διάθεσης Μ. Αξιωματικών',
     html: `<h1>Δηλώσεις Διάθεσης Μεγάλων Αξιωματικών</h1>
-<p class="muted">Εκπροσώπηση του Μεγάλου Διδασκάλου σε Εγκαταστάσεις Σεβ. Διδασκάλων: οι αξιωματικοί δηλώνουν, η Γραμματεία βλέπει την αναφορά και ορίζει εκπροσώπους στις <a href="#/visits">Επισκέψεις Στοών</a>.
-${db.setting('declarations_report_key') ? '' : ' Για να ανοίγει η αναφορά χωρίς κωδικό, συμπληρώστε τον «Κωδικό αναφοράς» στις <a href="#/settings">Ρυθμίσεις</a>.'}
+<p class="muted">Εκπροσώπηση του Μεγάλου Διδασκάλου σε Εγκαταστάσεις Σεβ. Διδασκάλων: οι αξιωματικοί δηλώνουν και η Γραμματεία ορίζει εκπροσώπους στις <a href="#/visits">Επισκέψεις Στοών</a>.
 <a href="${DECLARATIONS_URL}" target="_blank" rel="noopener">Δημόσια σελίδα ↗</a></p>
-<iframe id="declFrame" class="embed-frame" title="Δηλώσεις Διάθεσης Μεγάλων Αξιωματικών" src="${src}"></iframe>`,
+<div class="toolbar"><button type="button" class="btn primary" id="declReport">🔒 Διαχειριστική Αναφορά & PDF</button><span class="muted" style="align-self:center">Ανοίγει με τον κωδικό πρόσβασης.</span></div>
+<iframe id="declFrame" class="embed-frame" title="Δηλώσεις Διάθεσης Μεγάλων Αξιωματικών" src="${DECLARATIONS_URL}?embed=1#form"></iframe>`,
     mount(el) {
       const frame = el.querySelector('#declFrame');
-      const target = new URL(DECLARATIONS_URL).origin;
-      const sendKey = () => {
-        const key = String(db.setting('declarations_report_key') || '').trim();
-        // Ο κωδικός πηγαίνει μόνο σε σελίδα του ίδιου domain (nglg-gsec.github.io)
-        if (key && target === location.origin) frame.contentWindow.postMessage({ type: 'nglg-declarations-key', key }, target);
-      };
+      // Η αναφορά είναι καρτέλα της ίδιας σελίδας: εκεί ζητείται ο κωδικός (ή είσοδος Google της Γραμματείας)
+      el.querySelector('#declReport').addEventListener('click', () => { frame.src = `${DECLARATIONS_URL}?embed=1#report`; frame.scrollIntoView({ behavior: 'smooth' }); });
       // Ύψος = ύψος περιεχομένου, χωρίς δεύτερη μπάρα κύλισης (όταν επιτρέπεται, δηλαδή στο ίδιο domain)
       const fit = () => {
         if (!frame.isConnected) { clearInterval(timer); return; }
@@ -37,7 +31,7 @@ ${db.setting('declarations_report_key') ? '' : ' Για να ανοίγει η �
         } catch { /* άλλο domain: σταθερό ύψος από το CSS */ }
       };
       const timer = setInterval(fit, 800);
-      frame.addEventListener('load', () => { sendKey(); fit(); });
+      frame.addEventListener('load', fit);
     },
   };
 }
@@ -46,5 +40,5 @@ module({
   id: 'declarations',
   routes: { '/declarations': declarationsPage },
   tile: { order: 31, render: () => `<div class="dtile"><h3><a href="#/declarations">Δηλώσεις Διάθεσης Μ. Αξιωματικών</a></h3><div class="muted">Εκπροσώπηση ΜΔ σε Εγκαταστάσεις — δηλώσεις, πρόγραμμα, αναφορά</div>
-<div class="acts"><a class="btn primary" href="#/declarations">Αναφορά δηλώσεων</a><a class="btn" href="#/declarations?view=form">Φόρμα δήλωσης</a></div></div>` },
+<div class="acts"><a class="btn primary" href="#/declarations">Άνοιγμα</a></div></div>` },
 });

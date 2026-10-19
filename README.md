@@ -23,8 +23,8 @@ The way in to the work of the Secretariat. Everything opens at one address: the 
 
 Μενού 📅 Δραστηριότητα → «🗳 Δηλώσεις Διάθεσης Μ. Αξιωματικών» (`#/declarations`): ολόκληρη η σελίδα
 [GrandOfficersVisitsRepresentGM](https://github.com/NGLG-GSEC/GrandOfficersVisitsRepresentGM) (δήλωση, πρόγραμμα, αναφορά)
-μέσα στην εφαρμογή. Η αναφορά ανοίγει χωρίς κωδικό όταν στις Ρυθμίσεις έχει συμπληρωθεί ο «Κωδικός αναφοράς»
-(ο `ADMIN_KEY` του Apps Script της σελίδας).
+μέσα στην εφαρμογή, σε μία σελίδα. Το κουμπί «🔒 Διαχειριστική Αναφορά & PDF» ζητά πάντα τον κωδικό πρόσβασης· ο κωδικός
+ελέγχεται στον server της σελίδας (`ADMIN_KEY` στις Script Properties του Apps Script) και δεν γράφεται στον κώδικα.
 
 ## Main sections
 

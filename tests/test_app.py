@@ -2061,3 +2061,15 @@ def test_visits_link_to_declarations(app):
     app.go('/visits')
     b = app.page.locator('main a.btn', has_text='Δηλώσεις διάθεσης')
     assert b.count() == 1 and b.get_attribute('href') == '#/declarations'
+
+
+def test_declarations_single_page_report_needs_code(app):
+    # Μία σελίδα δηλώσεων· η «Διαχειριστική Αναφορά & PDF» ανοίγει την καρτέλα της αναφοράς, όπου ζητείται κωδικός
+    app.connect_local()
+    app.go('/declarations')
+    src = lambda: app.page.get_attribute('#declFrame', 'src')
+    assert src().endswith('?embed=1#form')
+    app.page.click('#declReport')
+    assert src().endswith('?embed=1#report')
+    app.go('/settings')
+    assert 'Κωδικός αναφοράς' not in app.text()
