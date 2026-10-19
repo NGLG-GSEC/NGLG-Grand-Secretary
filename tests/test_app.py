@@ -2072,6 +2072,7 @@ def test_declarations_constitution_helper_and_decree_signature(app):
     df.locator('#officer-filter').first.wait_for(state='attached')
     fr = [f for f in app.page.frames if '/declarations/' in f.url][0]
     fr.wait_for_function("() => typeof officerOf === 'function' && document.querySelectorAll('#officer-select option').length > 2")
+    assert fr.evaluate("() => getComputedStyle(document.querySelector('.nav-tabs')).display") == 'none'  # ένα μόνο μενού
     assert fr.evaluate("() => { const o = officerOf('Λσεβ. Αδ. Χρήστος Διαβάτης, ΠΜΞ'); return o && officerValue(o); }") == 'Διαβάτης Χρήστος (Βοηθός Μέγας Γραμματεύς)'
     assert 'ΘΕΜΙΣΤΟΚΛΗΣ 96' in fr.evaluate("() => officerValue(OFFICERS.find((o) => o.name === 'Σκιαδόπουλος Σπυρίδων του Μιχαήλ'))")
     # Ο Μ.Δ. σε ξεχωριστό μπλε πλαίσιο· στη λίστα πρώτα οι εν ενεργεία, μετά οι Πρώην, με τη σειρά της Επετηρίδας
