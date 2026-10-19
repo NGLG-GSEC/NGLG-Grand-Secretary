@@ -1355,6 +1355,22 @@ def test_letter_sender_choice_and_preview_before_send(app):
     assert 'From: grand.secretary@nglgreece.gr' in mime and 'To: lodge@example.com' in mime
 
 
+def test_protocol_field_in_subject_and_official_font(app):
+    """{Αριθμός Πρωτοκόλλου} και στο θέμα· τα έντυπα με Noto Serif (αριθμοί στην ίδια γραμμή)."""
+    app.connect_local()
+    app.go('/letters/new').fill(subject='Έγκριση Κανονισμού με Αρ. Πρωτ. {Αριθμός Πρωτοκόλλου} για την Στοά', body='Κείμενο.')
+    app.click('Αποθήκευση & απόδοση')
+    app.page.wait_for_url('**/#/letters/1')
+    assert 'Θέμα: Έγκριση Κανονισμού με Αρ. Πρωτ. 20545 για την Στοά' in app.page.inner_text('.print-area .paper')
+    assert 'Αρ. Πρωτ. 20545 για' in app.page.inner_text('.mailsheet')  # και στο θέμα του email
+    app.page.evaluate("document.fonts.ready")
+    ff = app.page.evaluate("getComputedStyle(document.querySelector('.print-area .paper')).fontFamily")
+    assert ff.startswith('"Noto Serif"'), ff
+    assert app.page.evaluate("document.fonts.check(\"16px 'Noto Serif'\", '20545 Αρ.')")
+    app.go('/letters')
+    assert 'Αρ. Πρωτ. 20545 για' in app.text()
+
+
 def test_protocol_suggested_or_manual(app):
     """Το «Έτοιμο» προτείνει τον επόμενο αριθμό πρωτοκόλλου· μπορεί να γραφτεί άλλος, και να αλλάξει αργότερα."""
     app.connect_local()
