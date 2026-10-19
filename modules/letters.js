@@ -5,7 +5,7 @@ import { module, onSubmit, go, flash, toast, bind, confirmDo, table, notice, act
 import { crud } from '../core/crud.js';
 import { esc, today, fmtDate, matches, sortBy, safeFileName, latinFileName, EMAIL_RE, splitEmails, download, outgoingProtocolBtn } from '../core/util.js';
 import { richPlain } from '../core/rich.js';
-import { letterPaper, printPaper, signerProfile, IMG, fitPaper, letterFields, LETTER_FIELDS } from '../core/paper.js';
+import { letterPaper, printPaper, signerProfile, IMG, fitPaper, letterFields, LETTER_FIELDS, protocolImage } from '../core/paper.js';
 import { makeDocx, letterBlocks } from '../core/docx.js';
 import { docTitle, driveBox, saveDocToDrive } from '../core/drive.js';
 import { mailButtons, senderBanner, withLetterCc } from '../core/mail.js';
@@ -62,7 +62,7 @@ export async function letterDocxBlob(x) {
   const S = (k) => db.setting(k) || '', p = signerProfile(x.signer);
   const blocks = letterBlocks({ org: S('organization_name'), founded: S('founded_year'), gmTitle: S('grand_master_title'), gmName: S('grand_master_name'),
     number: x.protocol_seq ? String(x.protocol_seq) : (x.protocol_no || ''), date: fmtDate(x.letter_date || today()), place: 'Εν Αθήναις', to: x.recipient_name, cc: x.cc_name || '', subject: x.subject,
-    paragraphs: [{ text: letterFields(x.body, x) }], closing: x.closing || S('closing'), signature: p.img, signer: p.name, signerTitle: p.title });
+    paragraphs: [{ text: letterFields(x.body, x) }], closing: x.closing || S('closing'), signature: p.img, signer: p.name, signerTitle: p.title, protoImg: protocolImage(x) });
   return makeDocx(blocks, { title: x.subject, author: p.name });
 }
 export async function letterDocx(x) { download(fileName(x) + '.docx', await letterDocxBlob(x)); }
@@ -94,6 +94,28 @@ function fillPanel(x, query) {
 <div><label>Στοά</label><input id="fillLodge" list="fillLodges" placeholder="αριθμός ή όνομα" autocomplete="off"><datalist id="fillLodges">${lodgesAll(true).map((l) => `<option value="${esc(l.number)} · ${esc(l.name)}">`).join('')}</datalist></div>
 <div><label>Ημερομηνία εργασιών</label><input id="fillDate" type="date"></div></div>
 <p class="muted" id="fillState"></p></div>`;
+}
+
+// «ΕΙΚΟΝΑ ΠΡΩΤΟΚΟΛΛΟΥ» προτύπου: μπαίνει στις επιστολές του δεξιά της σφραγίδας (~150×150)· αποθηκεύεται ως PNG (και για το Word)
+function protoImageCard(t) {
+  return `<section class="card proto-card"><h2 style="margin-top:0">ΕΙΚΟΝΑ ΠΡΩΤΟΚΟΛΛΟΥ</h2>
+<p class="muted">Μπαίνει στις επιστολές αυτού του προτύπου δεξιά από την υπογραφή, μετά τη σφραγίδα, σε μέγεθος περίπου 150×150, χωρίς να καλύπτει κείμενο.</p>
+<div class="proto-preview">${t.protocol_image ? `<img class="proto-img" src="${esc(t.protocol_image)}" alt="ΕΙΚΟΝΑ ΠΡΩΤΟΚΟΛΛΟΥ">` : '<span class="muted">Δεν έχει οριστεί εικόνα.</span>'}</div>
+<div class="toolbar"><label class="btn">🖼 ${t.protocol_image ? 'Αλλαγή εικόνας' : 'Επιλογή εικόνας'}<input type="file" id="protoImgFile" accept="image/*" hidden></label>${t.protocol_image ? '<button type="button" class="btn danger" data-act="protoImgDel">Αφαίρεση εικόνας</button>' : ''}</div></section>`;
+}
+async function pngDataUrl(file, max = 450) {
+  const img = await createImageBitmap(file), k = Math.min(1, max / Math.max(img.width, img.height));
+  const c = Object.assign(document.createElement('canvas'), { width: Math.max(1, Math.round(img.width * k)), height: Math.max(1, Math.round(img.height * k)) });
+  c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+  return c.toDataURL('image/png');
+}
+function mountProtoImage(el, t) {
+  const save = async (v, msg) => { await db.save(`Πρότυπο «${t.name}»: εικόνα πρωτοκόλλου`, (tx) => { tx.update('letter_templates', t.id, { protocol_image: v }); }); flash(msg); go(`/templates/edit/${t.id}`); };
+  el.querySelector('#protoImgFile').addEventListener('change', async (e) => {
+    const f = e.target.files[0]; if (!f) return;
+    try { await save(await pngDataUrl(f), 'Η εικόνα πρωτοκόλλου αποθηκεύτηκε.'); } catch { toast('Δεν διαβάστηκε η εικόνα· δοκιμάστε PNG ή JPG.'); }
+  });
+  bind(el, { async protoImgDel() { if (confirmDo('Αφαίρεση της εικόνας πρωτοκόλλου;')) await save('', 'Η εικόνα πρωτοκόλλου αφαιρέθηκε.'); } });
 }
 
 function letterForm(x, query = {}) {
@@ -360,6 +382,8 @@ module({
       defaults: { active: 1 },
       sort: (xs) => sortBy(xs.filter((t) => t.name !== 'ΔΙΑΤΑΓΜΑΤΑ'), 'id'),
       validate: (d) => ({ ...d, active: Number(d.active) ? 1 : 0 }),
+      extra: (t) => (t.kind === 'decree' ? '' : protoImageCard(t)),
+      mountForm: (el, t) => { if (t && t.kind !== 'decree') mountProtoImage(el, t); },
       columns: [{ label: 'Αρ.', v: (t) => `<b>${t.id}</b>` }, { label: 'Όνομα', v: (t) => `<b>${esc(t.name)}</b>${t.kind === 'decree' ? ' <span class="pill">📜 Διάταγμα</span><br><a class="btn small" href="#/templates/' + t.id + '/design">🎨 Σχεδίαση σελίδας</a>' : ''}${hasPlaceholders([t.body, t.subject].join(' ')) ? ' <span class="pill ok">⚙ από τη βάση</span>' : ''}` }, { label: 'Κορμός', v: (t) => `<small class="muted">${esc(String(t.body || '').slice(0, 120))}</small>` }, { label: 'Ενεργό', v: (t) => (t.active ? '✓' : '—') }],
     }),
   },

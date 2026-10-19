@@ -1368,6 +1368,39 @@ def test_recipient_lodge_fills_template_subject(app):
     assert app.page.input_value('[name=recipient_email]') == 'dioni.secretary@example.com'
 
 
+def test_template_protocol_image_right_of_seal(app, tmp_path):
+    """«ΕΙΚΟΝΑ ΠΡΩΤΟΚΟΛΛΟΥ» του προτύπου: στην επιστολή δεξιά της σφραγίδας, ~150×150, χωρίς επικάλυψη."""
+    import base64
+    png = tmp_path / 'stamp.png'
+    png.write_bytes(base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg=='))
+    app.connect_local()
+    tid = app.page.evaluate("""async () => { const {db} = await import('./core/store.js');
+      return db.save('x', (tx) => tx.insert('letter_templates', { name: 'Με εικόνα', active: 1, subject: 'Έγκριση', body: 'Κείμενο.' }).id); }""")
+    app.go(f'/templates/edit/{tid}')
+    assert 'ΕΙΚΟΝΑ ΠΡΩΤΟΚΟΛΛΟΥ' in app.text()
+    app.page.set_input_files('#protoImgFile', str(png))
+    app.page.wait_for_selector('.proto-preview img.proto-img')
+    img = app.page.evaluate(f"async () => (await import('./core/store.js')).db.get('letter_templates', {tid}).protocol_image")
+    assert img.startswith('data:image/png;base64,')
+    # το υπόλοιπο πρότυπο αποθηκεύεται χωρίς να χάνεται η εικόνα
+    app.click('💾 Αποθήκευση')
+    assert app.page.evaluate(f"async () => (await import('./core/store.js')).db.get('letter_templates', {tid}).protocol_image") == img
+    app.go('/letters/new')
+    app.page.select_option('#tplSel', str(tid))
+    app.fill(recipient_name='Παραλήπτης')
+    app.click('💾 Αποθήκευση')
+    app.page.wait_for_url('**/#/letters/1')
+    box = lambda sel: app.page.locator('.print-area .paper ' + sel).bounding_box()
+    seal, proto, sign, paper = box('.seal-img'), box('.proto-img'), box('.sign'), box('')
+    assert proto['x'] >= seal['x'] + seal['width'] and seal['x'] >= sign['x'] + sign['width']  # δεξιά της σφραγίδας, χωρίς επικάλυψη
+    assert proto['x'] + proto['width'] <= paper['x'] + paper['width']
+    assert 120 <= proto['width'] <= 170 and 120 <= proto['height'] <= 170, proto
+    # επιστολή χωρίς πρότυπο: χωρίς εικόνα
+    app.go('/letters/new').fill(subject='Χωρίς', body='x').click('💾 Αποθήκευση')
+    app.page.wait_for_url('**/#/letters/2')
+    assert app.page.locator('.print-area .proto-img').count() == 0
+
+
 def test_template_representative_field_and_day_article(app):
     app.connect_local()
     app.page.evaluate("""async () => { const {db} = await import('./core/store.js');
