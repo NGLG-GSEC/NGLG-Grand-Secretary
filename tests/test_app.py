@@ -239,6 +239,9 @@ def test_namedays_greetings(app):
     app.page.on('dialog', lambda d: d.accept())
     app.page.evaluate("async () => { const {db} = await import('./core/store.js'); await db.save('x', (tx) => tx.setting('google_client_id', 'test.apps.googleusercontent.com')); }")
     app.page.click('[data-act=send]')
+    app.page.wait_for_selector('.send-preview')  # προεπισκόπηση πριν την αποστολή
+    assert 'info@nglgreece.gr' in app.page.inner_text('.send-preview') and 'nik@example.com' in app.page.inner_text('.send-preview')
+    app.page.click('.send-preview [data-yes]')
     app.page.wait_for_selector('text=Στάλθηκε και καταχωρίστηκε', timeout=30000)
     raw = sent[0]['raw']
     mime = base64.urlsafe_b64decode(raw + '=' * (-len(raw) % 4)).decode()
@@ -1308,6 +1311,50 @@ def test_ionian_letter_cc_rule(app):
     assert 'ionian.secretary@nglgreece.gr => cc: spiros@rokashotels.gr' in app.page.evaluate("async () => { const {db} = await import('./core/store.js'); return db.setting('letter_cc_rules'); }")
 
 
+def test_letter_sender_choice_and_preview_before_send(app):
+    """Επιστολή: επιλογή λογαριασμού αποστολής (grand.secretary@ ή info@)· πριν την αποστολή προεπισκόπηση και επιβεβαίωση."""
+    app.connect_local()
+    sent, profile = [], {'emailAddress': 'grand.secretary@nglgreece.gr'}
+
+    def gmail(route, request):
+        if request.url.endswith('/profile'):
+            return route.fulfill(json=profile)
+        sent.append(json.loads(request.post_data or '{}'))
+        return route.fulfill(json={'id': 'm-1'})
+    app.page.route('https://accounts.google.com/gsi/client', lambda r: r.fulfill(body=GSI_FAKE, content_type='text/javascript'))
+    app.page.route('https://gmail.googleapis.com/**', gmail)
+    tid = app.page.evaluate("""async () => { const {db} = await import('./core/store.js');
+      return db.save('x', (tx) => { tx.setting('google_client_id', 'test.apps.googleusercontent.com');
+        return tx.insert('letter_templates', { name: 'Έγκριση Κανονισμού', active: 1, subject: 'Έγκριση Κανονισμού', body: 'Εγκρίνεται ο Κανονισμός.', mail_kind: 'general' }).id; }); }""")
+    app.go(f'/templates/edit/{tid}')
+    assert app.page.input_value('[name=mail_kind]') == 'general'
+    app.go('/letters/new')
+    app.page.select_option('#tplSel', str(tid))
+    app.fill(recipient_name='Στοά', recipient_email='lodge@example.com')
+    app.click('✅ Έτοιμη: Αποθήκευση & απόδοση αρ. πρωτοκόλλου')
+    app.page.wait_for_url('**/#/letters/1')
+    app.page.wait_for_selector('[data-ms=send]')
+    # το πρότυπο ορίζει info@· αλλαγή σε grand.secretary@ για αυτή την επιστολή
+    assert app.page.input_value('[data-ms=from]') == 'general' and 'info@nglgreece.gr' in app.page.inner_text('[data-ms=send]')
+    app.page.select_option('[data-ms=from]', 'official')
+    app.page.wait_for_function("document.querySelector('[data-ms=send]') && document.querySelector('[data-ms=send]').textContent.includes('grand.secretary@')")
+    app.page.wait_for_function("import('./core/store.js').then((m) => m.db.get('letters', 1).mail_kind === 'official')")
+    app.page.wait_for_selector('[data-ms=send]')
+    assert 'grand.secretary@' in app.page.inner_text('[data-ms=send]')
+    app.page.click('[data-ms=send]')
+    app.page.wait_for_selector('.send-preview')
+    pv = app.page.inner_text('.send-preview')
+    assert 'grand.secretary@nglgreece.gr' in pv and 'lodge@example.com' in pv and 'Έγκριση Κανονισμού' in pv and '.pdf' in pv
+    assert 'Εγκρίνεται ο Κανονισμός.' in app.page.frame_locator('.send-preview-body').locator('body').inner_text()
+    app.page.click('.send-preview [data-no]')  # Άκυρο → δεν στέλνεται τίποτα
+    assert app.page.locator('.send-preview').count() == 0 and not sent
+    app.page.click('[data-ms=send]')
+    app.page.click('.send-preview [data-yes]')
+    app.page.wait_for_selector('.ms-ok', timeout=30000)
+    mime = base64.urlsafe_b64decode(sent[0]['raw'] + '=' * (-len(sent[0]['raw']) % 4)).decode()
+    assert 'From: grand.secretary@nglgreece.gr' in mime and 'To: lodge@example.com' in mime
+
+
 def test_protocol_suggested_or_manual(app):
     """Το «Έτοιμο» προτείνει τον επόμενο αριθμό πρωτοκόλλου· μπορεί να γραφτεί άλλος, και να αλλάξει αργότερα."""
     app.connect_local()
@@ -1514,10 +1561,12 @@ def test_visit_email_gmail_draft_with_pdf_and_bcc(app):
     assert 'Αποστολή τώρα από info@nglgreece.gr' in app.page.inner_text('[data-ms=send]')
     assert app.page.input_value('[name=subject]').startswith('20545 - Εκπροσώπηση ΜΔ εις την Στοάν «ΔΙΩΝΗ»')
     app.page.click('[data-ms=send]')
+    app.page.click('.send-preview [data-yes]')
     app.page.wait_for_selector('.ms-state .warn', timeout=30000)
     assert 'other@example.com' in app.text('.ms-state') and not sent  # λάθος λογαριασμός → δεν στάλθηκε
     profile['emailAddress'] = 'info@nglgreece.gr'
     app.page.click('[data-ms=send]')
+    app.page.click('.send-preview [data-yes]')
     app.page.wait_for_url('**/#/visits', timeout=30000)
     assert len(sent) == 1
     mime = base64.urlsafe_b64decode(sent[0]['raw'] + '=' * (-len(sent[0]['raw']) % 4)).decode()

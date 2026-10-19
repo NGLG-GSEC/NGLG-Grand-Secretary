@@ -8,7 +8,7 @@ import { richPlain } from '../core/rich.js';
 import { letterPaper, printPaper, signerProfile, IMG, fitPaper, letterFields, LETTER_FIELDS, protocolImage, hasProtocolField } from '../core/paper.js';
 import { makeDocx, letterBlocks } from '../core/docx.js';
 import { docTitle, driveBox, saveDocToDrive } from '../core/drive.js';
-import { mailButtons, senderBanner, withLetterCc } from '../core/mail.js';
+import { mailButtons, senderBanner, withLetterCc, senderFor, MAIL_SENDERS } from '../core/mail.js';
 import { mailSheet, bccWithout } from '../core/gmail.js';
 import { attachPicker, contactItems } from '../core/pickers.js';
 import { nextProtocol, askProtocol, askNextProtocol, claimProtocol, setNextProtocol, suggestedProtocol, legacyDecreeLetterIds } from './protocol.js';
@@ -221,7 +221,10 @@ function mountLetterForm(el, x, isNew) {
 }
 
 // Αποστολή: λογαριασμός και Bcc — οι Επιστολές Επισκέψεων από τα γενικά εξερχόμενα (info@) με το Bcc των Επισκέψεων
-const mailKind = (x) => (category(x) === 'ΕΠΙΣΚΕΨΗ' ? 'general' : 'official');
+// Λογαριασμός αποστολής: της επιστολής (επιλογή στην καρτέλα αποστολής) → του προτύπου → Επισκέψεις από info@, οι άλλες από grand.secretary@
+const MAIL_KINDS = { official: 1, general: 1 };
+const mailKind = (x) => { const t = x.template_id ? db.get('letter_templates', x.template_id) : null;
+  return MAIL_KINDS[x.mail_kind] ? x.mail_kind : t && MAIL_KINDS[t.mail_kind] ? t.mail_kind : category(x) === 'ΕΠΙΣΚΕΨΗ' ? 'general' : 'official'; };
 const mailBcc = (x, to = '', cc = '') => (category(x) === 'ΕΠΙΣΚΕΨΗ' ? bccWithout(db.setting('visit_bcc') || '', to, cc) : '');
 // PDF μιας επιστολής (χωρίς να είναι ανοιχτή στην οθόνη)
 export const letterFileName = (x) => fileName(x);
@@ -282,7 +285,8 @@ ${x.status === 'ready' ? '<div class="mailsheet"></div>' : '<p class="send-help"
 ${x.protocol_seq ? '<button class="btn" data-act="protocol">✏ Αλλαγή αρ. πρωτοκόλλου</button>' : ''}<button class="btn danger" data-act="del">Διαγραφή</button> ${statusPill(x.status)}</div>
 <div class="print-area">${letterPaper(x)}</div>`,
     mount(el) {
-      if (x.status === 'ready') mailSheet(el, { kind: mailKind(x), pdfName: fileName(x), getMsg: () => withLetterCc({ to: x.recipient_email, cc: '', bcc: mailBcc(x, x.recipient_email), subject: x.subject, body: letterFields(x.body, x) }),
+      if (x.status === 'ready') mailSheet(el, { kind: mailKind(x), pdfName: fileName(x),
+        onKind: async (k) => { await db.save(`Επιστολή ${x.protocol_no || x.id}: λογαριασμός αποστολής`, (tx) => { tx.update('letters', x.id, { mail_kind: k }); }); toast(`Η επιστολή θα στέλνεται από ${senderFor(k)}.`); go(`/letters/${x.id}`); }, getMsg: () => withLetterCc({ to: x.recipient_email, cc: '', bcc: mailBcc(x, x.recipient_email), subject: x.subject, body: letterFields(x.body, x) }),
         getPdf: async () => ({ blob: await (await import('../core/pdf.js')).paperPdf(el.querySelector('.print-area .paper'), { title: fileName(x) }), name: fileName(x) + '.pdf' }) });
       bind(el, {
         pdf: () => printPaper(fileName(x)),
@@ -382,6 +386,7 @@ module({
       fields: [{ k: 'name', label: 'Όνομα', required: true, full: true }, { k: 'subject', label: 'Θέμα (προαιρετικό)', full: true, help: PH_HELP },
         { k: 'body', label: 'Κορμός επιστολής', type: 'textarea', full: true, help: PH_HELP }, { k: 'closing', label: 'Αποφώνηση (προαιρετική)', placeholder: 'π.χ. Με εκτίμηση και αδελφική αγάπη,' },
         { k: 'category', label: 'Κατηγορία πρωτοκόλλου', type: 'select', options: Object.entries(LETTER_CATEGORIES).map(([k]) => [k, k]) }, { k: 'active', label: 'Ενεργό', type: 'select', options: [[1, 'Ναι'], [0, 'Όχι']] },
+        { k: 'mail_kind', label: 'Αποστολή email από', type: 'select', options: () => [['', 'Αυτόματα (Επισκέψεις: γενικά εξερχόμενα · άλλες: Επιστολές & Διατάγματα)'], ...Object.entries(MAIL_SENDERS).map(([k, v]) => [k, `${senderFor(k)} — ${v.label}`])], help: 'Αλλάζει και ανά επιστολή, στην καρτέλα «Αποστολή».' },
         { k: 'ask_proto_image', label: 'ΕΙΚΟΝΑ ΠΡΩΤΟΚΟΛΛΟΥ: ζητείται στη νέα επιστολή', type: 'select', options: [['', 'Αυτόματα — όταν το κείμενο έχει {Αρ. Πρωτ.}'], ['1', 'Ναι, πάντα'], ['0', 'Όχι']], help: 'Η εικόνα (π.χ. το εγκεκριμένο πρωτόκολλο-σφραγίδα) φορτώνεται σε κάθε επιστολή και μπαίνει κάτω από τη σφραγίδα, στο κέντρο, ~400×200.' }],
       defaults: { active: 1 },
       sort: (xs) => sortBy(xs.filter((t) => t.name !== 'ΔΙΑΤΑΓΜΑΤΑ'), 'id'),
