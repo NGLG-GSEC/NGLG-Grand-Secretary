@@ -17,19 +17,14 @@ const MAX_MEETINGS = 50;
 
 const MAX_OFFICER_LENGTH = 200;
 
-// Λογαριασμοί Google που βλέπουν την αναφορά χωρίς κωδικό. Μπορεί να αλλάξει
-// χωρίς νέα ανάπτυξη με την ιδιότητα ADMIN_EMAILS (χωρισμένα με κόμμα).
+// Λογαριασμοί Google που βλέπουν την αναφορά χωρίς κωδικό: ΜΟΝΟ η ιδιότητα ADMIN_EMAILS
+// στις Script Properties (χωρισμένα με κόμμα) — ο κώδικας είναι δημόσιος και δεν περιέχει email.
+// Χωρίς ADMIN_EMAILS η αναφορά ανοίγει μόνο με τον κωδικό ADMIN_KEY.
 // Με Client ID τύπου «External» (δικό του έργο Google Cloud) περνούν και λογαριασμοί @gmail.com.
-const DEFAULT_ADMIN_EMAILS = [
-  'dskiad@gmail.com',
-  'i.benetatos@gmail.com',
-  'grand.secretary@nglgreece.gr',
-  'info@nglgreece.gr'
-];
 const MAX_RANK = 10000;
 
 // Έκδοση του κώδικα: φαίνεται ανοίγοντας το URL /exec στον browser
-const VERSION = 2;
+const VERSION = 3;
 
 // Έλεγχος εγκατάστασης: ανοίξτε το URL /exec στον browser.
 // Δείχνει μόνο αν υπάρχουν οι ρυθμίσεις, όχι τις τιμές τους.
@@ -160,7 +155,7 @@ function googleAdmin_(idToken) {
 
 function adminEmails_() {
   const p = prop_('ADMIN_EMAILS');
-  const list = p ? p.split(/[,;\s]+/) : DEFAULT_ADMIN_EMAILS;
+  const list = p ? p.split(/[,;\s]+/) : [];
   return list.map(e => e.trim().toLowerCase()).filter(Boolean);
 }
 

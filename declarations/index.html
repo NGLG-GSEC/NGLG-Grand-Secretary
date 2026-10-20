@@ -676,9 +676,8 @@
     // Διακριτικό «Σύνδεση με Google» (μόνο στη μνήμη· ο server το επαληθεύει σε κάθε αίτημα)
     let idToken = "";
 
-    // Ποιοι βλέπουν την αναφορά χωρίς κωδικό. Η απόφαση παίρνεται στον server
-    // (apps-script/Code.gs)· εδώ η λίστα χρησιμεύει μόνο για τα μηνύματα της σελίδας.
-    const ADMIN_EMAILS = ["dskiad@gmail.com", "i.benetatos@gmail.com", "grand.secretary@nglgreece.gr", "info@nglgreece.gr"];
+    // Ποιοι βλέπουν την αναφορά χωρίς κωδικό: αποφασίζει μόνο ο server (ιδιότητα ADMIN_EMAILS στο Apps Script)·
+    // ο δημόσιος κώδικας δεν περιέχει λίστα λογαριασμών.
     // Σε αυτόν τον browser έχει γίνει ήδη είσοδος διαχειριστή: φαίνεται η καρτέλα της αναφοράς
     const ADMIN_HINT = "nglg-declarations-admin";
     const IS_EMBED = new URLSearchParams(location.search).has("embed");
@@ -1026,7 +1025,9 @@
     }
     async function onGoogleCredential(resp) {
       const email = tokenEmail(resp.credential || "");
-      if (ADMIN_EMAILS.indexOf(email) === -1) {
+      let check;
+      try { check = await callApi({ action: "report", idToken: resp.credential }); } catch (e) { authStatus(apiErrorText(e), true); return; }
+      if (!check.ok) {
         authStatus(`Ο λογαριασμός ${email || "Google"} δεν έχει πρόσβαση στην αναφορά.`, true);
         return;
       }

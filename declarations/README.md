@@ -22,10 +22,10 @@
 https://nglg-gsec.github.io/NGLG-Grand-Secretary/programme/ ενσωματωμένη.
 
 **Αναφορά χωρίς κωδικό.** Η καρτέλα της αναφοράς είναι κρυφή. Ανοίγει με
-«Σύνδεση με Google» για τους λογαριασμούς:
-dskiad@gmail.com, i.benetatos@gmail.com, grand.secretary@nglgreece.gr,
-info@nglgreece.gr (λίστα `DEFAULT_ADMIN_EMAILS` στο `Code.gs`, ή ιδιότητα
-`ADMIN_EMAILS`). Μετά την πρώτη είσοδο σε έναν browser, η καρτέλα φαίνεται
+«Σύνδεση με Google» για τους λογαριασμούς της ιδιότητας `ADMIN_EMAILS`
+(Script Properties του Apps Script, χωρισμένοι με κόμμα). Ο κώδικας είναι δημόσιος
+και **δεν περιέχει email**· η λίστα υπάρχει μόνο στις Script Properties
+(από την έκδοση 3 του `Code.gs`· χωρίς `ADMIN_EMAILS` η αναφορά ανοίγει μόνο με τον κωδικό `ADMIN_KEY`). Μετά την πρώτη είσοδο σε έναν browser, η καρτέλα φαίνεται
 και η είσοδος γίνεται αυτόματα όταν ο browser (π.χ. προφίλ Chrome) είναι
 συνδεδεμένος με τον ίδιο λογαριασμό. Ο κωδικός `ADMIN_KEY` μένει ως
 εναλλακτική («Είσοδος με κωδικό»).
