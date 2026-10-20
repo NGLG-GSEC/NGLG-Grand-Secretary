@@ -2351,3 +2351,51 @@ def test_declarations_constitution_helper_and_decree_signature(app):
     # Διατάγματα: η υπογραφή έμεινε ως είχε (δεν είναι χαιρετισμός)
     html = app.page.evaluate("async () => (await import('./core/paper.js')).reportPaper('x', '', '', { signatures: true })")
     assert 'ΜΕΓΑΣ ΓΡΑΜΜΑΤΕΑΣ' in html and 'Με αφοσίωση' not in html
+
+
+def test_declarations_gm_decision_on_the_spot(browser, base_url):
+    # Αναφορά (με κωδικό): ο Μ.Δ. επιλέγει εκπρόσωπο ανάμεσα σε όσους δήλωσαν ή «αυτοπροσώπως»·
+    # η απόφαση φαίνεται δημόσια στο «Πρόγραμμα Επισκέψεων Μ.Δ.» και στις κάρτες της Δήλωσης
+    import json
+    decided = {}
+
+    def api(route):
+        b = json.loads(route.request.post_data or '{}')
+        a = b.get('action')
+        if a == 'report':
+            out = {'ok': b.get('key') == 'test-key', 'decisions': decided,
+                   'data': {'atlas_118': [{'officer': 'Διαβάτης Χρήστος (Βοηθός Μέγας Γραμματεύς)', 'rank': 283}]}}
+        elif a == 'decide':
+            assert b.get('key') == 'test-key'
+            decided[b['meeting']] = b['representative']
+            out = {'ok': True, 'decisions': decided}
+        elif a == 'decisions':
+            out = {'ok': True, 'decisions': decided}
+        else:
+            out = {'ok': True}
+        route.fulfill(json=out)
+
+    page = browser.new_page()
+    page.route('https://script.google.com/**', api)
+    page.route('https://accounts.google.com/**', lambda r: r.abort())
+    page.goto(base_url + 'declarations/#report')
+    page.evaluate("document.getElementById('auth-alt').open = true")
+    page.fill('#admin-pass', 'test-key')
+    page.click('#auth-btn')
+    sel = page.locator('#report-table-body tr').nth(1).locator('.decide-select')
+    sel.wait_for()
+    opts = sel.locator('option').all_inner_texts()
+    assert 'Χωρίς απόφαση' in opts[0] and 'αυτοπροσώπως' in opts[1] and 'Διαβάτης' in opts[2]
+    sel.select_option('Διαβάτης Χρήστος (Βοηθός Μέγας Γραμματεύς)')
+    page.wait_for_selector('.decide-state.ok')
+    page.locator('#report-table-body tr').nth(0).locator('.decide-select').select_option('Ο Μέγας Διδάσκαλος (αυτοπροσώπως)')
+    page.wait_for_function("document.querySelectorAll('.decide-state.ok').length === 2")
+    assert decided == {'atlas_118': 'Διαβάτης Χρήστος (Βοηθός Μέγας Γραμματεύς)', 'akropolis_104': 'Ο Μέγας Διδάσκαλος (αυτοπροσώπως)'}
+    page.goto(base_url + 'declarations/#programme')
+    page.wait_for_function("document.getElementById('decisions-body').innerText.includes('Διαβάτης')")
+    txt = page.locator('#decisions-body').inner_text()
+    assert 'αυτοπροσώπως' in txt and 'Εκκρεμεί απόφαση' in txt
+    page.goto(base_url + 'declarations/#form')
+    page.wait_for_selector('.meeting-decision')
+    assert 'Διαβάτης' in page.locator('.meeting-card', has_text='ΑΤΛΑΣ').inner_text()
+    page.close()

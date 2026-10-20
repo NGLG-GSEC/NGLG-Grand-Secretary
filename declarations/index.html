@@ -409,6 +409,18 @@
     }
     .officer-name.first { font-weight: 700; }
     .typed-note { color: #64748b; font-size: 11px; font-style: italic; }
+    /* Απόφαση του Μεγάλου Διδασκάλου */
+    .decide-select { width: 100%; min-width: 180px; padding: 8px; font-size: 13px; border: 2px solid #c9a64a; border-radius: 6px; background: #fffaf0; }
+    .decide-select.done { border-color: #15803d; background: #f0fdf4; font-weight: 700; }
+    .decide-state { display: block; font-size: 11px; margin-top: 4px; color: #64748b; }
+    .decide-state.ok { color: #15803d; }
+    .decide-state.err { color: #b91c1c; }
+    .decide-print { display: block; margin-top: 4px; font-size: 12px; font-weight: 700; color: #1d2f5e; }
+    .decisions-card h2 { margin-bottom: 6px; }
+    .decision-rep { font-weight: 700; color: #1d2f5e; }
+    .decision-rep.gm { color: #8a6d1d; }
+    .decision-pending { color: #94a3b8; font-style: italic; }
+    .meeting-decision { margin-top: 6px; font-size: 12px; font-weight: 700; color: #15803d; }
     .first-note {
       color: var(--gold-dark);
       font-size: 11px;
@@ -468,6 +480,8 @@
       .lodge-note, .rank-badge, .order-tag { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
       .table-wrap { overflow: visible; }
       .report-table { min-width: 0; }
+      .decide-select, .decide-state { display: none !important; }
+      .decide-print { display: block !important; }
       .print-header { display: block !important; text-align: center; margin-bottom: 25px; border-bottom: 2px solid #000; padding-bottom: 15px; }
       .print-header h1 { font-size: 18px; margin-bottom: 5px; }
       .print-header h2 { font-size: 14px; font-weight: normal; margin-bottom: 5px; }
@@ -581,6 +595,16 @@
 
     <!-- VIEW 2: Πρόγραμμα επισκέψεων του Μ.Δ. (ζωντανή σελίδα της Μεγάλης Γραμματείας) -->
     <div id="programme-view" style="display: none;">
+      <div class="card decisions-card">
+        <h2 class="card-title">Αποφάσεις Μεγάλου Διδασκάλου — Εκπρόσωποι</h2>
+        <p class="field-hint" style="margin-bottom: 12px;">Ποιος εκπροσωπεί τον Μέγα Διδάσκαλο σε κάθε Εγκατάσταση, όπως αποφάσισε ο Σεβασμιώτατος.</p>
+        <div class="table-wrap">
+          <table class="report-table">
+            <thead><tr><th>Ημερομηνία</th><th>Σ.Σ. & Αριθμός</th><th>Επαρχιακή Μεγάλη Στοά</th><th>Εκπρόσωπος</th></tr></thead>
+            <tbody id="decisions-body"><tr><td colspan="4" class="decision-pending">Φόρτωση…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
       <div class="programme-bar">
         <a id="programme-link" target="_blank" rel="noopener">Άνοιγμα σε νέα καρτέλα ↗</a>
       </div>
@@ -623,14 +647,16 @@
             <span style="font-size: 12px; color: var(--text-muted);">Μήνας: <strong>Νοέμβριος 2026</strong></span>
           </div>
 
+          <p class="field-hint" style="margin-bottom: 12px;">Στη στήλη «Απόφαση Μ.Δ.» ο Μέγας Διδάσκαλος επιλέγει επί τόπου εκπρόσωπο ανάμεσα σε όσους δήλωσαν, «αυτοπροσώπως», ή άλλον Μεγάλο Αξιωματικό. Η επιλογή αποθηκεύεται αμέσως και εμφανίζεται στο «Πρόγραμμα Επισκέψεων Μ.Δ.» για όλους.</p>
           <div class="table-wrap">
           <table class="report-table">
             <thead>
               <tr>
-                <th style="width: 22%;">Ημερομηνία</th>
-                <th style="width: 28%;">Σ.Σ. & Αριθμός</th>
-                <th style="width: 25%;">Επαρχιακή Μεγάλη Στοά</th>
-                <th style="width: 25%;">Δηλώσεις Αξιωματικών</th>
+                <th style="width: 15%;">Ημερομηνία</th>
+                <th style="width: 22%;">Σ.Σ. & Αριθμός</th>
+                <th style="width: 15%;">Επαρχιακή Μεγάλη Στοά</th>
+                <th style="width: 26%;">Δηλώσεις Αξιωματικών</th>
+                <th style="width: 22%;">Απόφαση Μ.Δ. — Εκπρόσωπος</th>
               </tr>
             </thead>
             <tbody id="report-table-body">
@@ -854,7 +880,85 @@
     // Το πρόγραμμα είναι η ζωντανή σελίδα της Μεγάλης Γραμματείας (ίδιο domain),
     // ώστε να υπάρχει μία μόνο πηγή: ό,τι ενημερώνεται εκεί φαίνεται και εδώ.
     const PROGRAMME_URL = "https://nglg-gsec.github.io/NGLG-Grand-Secretary/programme/";
+    // ---- Αποφάσεις του Μεγάλου Διδασκάλου ----
+    const GM_SELF = "Ο Μέγας Διδάσκαλος (αυτοπροσώπως)";
+    let decisions = {};
+    async function loadDecisions() {
+      try {
+        const r = await callApi({ action: "decisions" });
+        if (r && r.ok) decisions = r.decisions || {};
+      } catch (e) { /* χωρίς σύνδεση: μένουν οι τελευταίες γνωστές */ }
+      renderDecisions();
+      return decisions;
+    }
+    function renderDecisions() {
+      const body = document.getElementById("decisions-body");
+      body.innerHTML = "";
+      MEETINGS.forEach(m => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td><strong>${m.date}</strong></td><td><strong>${m.name}</strong> (Αρ. ${m.no})${m.note ? `<br><span class="lodge-note">${m.note}</span>` : ""}</td><td>${m.prov}</td><td></td>`;
+        const cell = tr.lastElementChild, rep = decisions[m.id];
+        const span = document.createElement("span");
+        span.className = rep ? "decision-rep" + (rep === GM_SELF ? " gm" : "") : "decision-pending";
+        span.textContent = rep || "Εκκρεμεί απόφαση";
+        cell.appendChild(span);
+        body.appendChild(tr);
+      });
+      // και στις κάρτες της Δήλωσης
+      document.querySelectorAll("#meetings-list .meeting-card").forEach(card => {
+        const id = card.querySelector("input").value, rep = decisions[id];
+        let d = card.querySelector(".meeting-decision");
+        if (!rep) { if (d) d.remove(); return; }
+        if (!d) { d = document.createElement("p"); d.className = "meeting-decision"; card.querySelector(".meeting-info").appendChild(d); }
+        d.textContent = "✔ Εκπρόσωπος: " + rep;
+      });
+    }
+    async function decide(meetingId, sel, state) {
+      state.className = "decide-state"; state.textContent = "Αποθήκευση…";
+      sel.disabled = true;
+      try {
+        const r = await callApi(Object.assign({ action: "decide", meeting: meetingId, representative: sel.value }, reportAuth()));
+        if (!r.ok) throw new Error(r.error || "error");
+        decisions = r.decisions || {};
+        state.className = "decide-state ok"; state.textContent = sel.value ? "✓ Αποθηκεύτηκε" : "✓ Χωρίς απόφαση";
+        sel.classList.toggle("done", !!sel.value);
+        sel.parentElement.querySelector(".decide-print").textContent = sel.value;
+        renderDecisions();
+      } catch (e) {
+        state.className = "decide-state err";
+        state.textContent = e.message === "unknown_action" ? "Χρειάζεται η νέα έκδοση του Code.gs (v4) στο Apps Script." : e.message === "unauthorized" ? "Η σύνδεση έληξε — ανανεώστε." : "Δεν αποθηκεύτηκε — δοκιμάστε ξανά.";
+        sel.value = decisions[meetingId] || "";
+      }
+      sel.disabled = false;
+    }
+    // Επιλογές απόφασης: όσοι δήλωσαν (με σειρά προβαδίσματος), αυτοπροσώπως, ή άλλος από τον κατάλογο
+    function decisionSelect(m, ranked, current) {
+      const wrap = document.createElement("div");
+      const sel = document.createElement("select");
+      sel.className = "decide-select" + (current ? " done" : "");
+      const add = (parent, value, text) => { const o = document.createElement("option"); o.value = value; o.textContent = text; parent.appendChild(o); return o; };
+      add(sel, "", "— Χωρίς απόφαση —");
+      add(sel, GM_SELF, "★ " + GM_SELF);
+      const declared = ranked.map(o => o.officer);
+      if (declared.length) {
+        const g = document.createElement("optgroup"); g.label = "Δήλωσαν διάθεση";
+        ranked.forEach(o => add(g, o.officer, (o.rank ? o.rank + ". " : "") + o.officer));
+        sel.appendChild(g);
+      }
+      const others = document.createElement("optgroup"); others.label = "Άλλος Μεγάλος Αξιωματικός";
+      SELECTABLE.forEach(o => { const v = officerValue(o); if (declared.indexOf(v) === -1) add(others, v, `${o.rank}. ${v}`); });
+      sel.appendChild(others);
+      if (current && ![...sel.options].some(o => o.value === current)) add(sel, current, current);
+      sel.value = current || "";
+      const state = document.createElement("span"); state.className = "decide-state";
+      const pr = document.createElement("span"); pr.className = "decide-print"; pr.textContent = current || "";
+      sel.addEventListener("change", () => decide(m.id, sel, state));
+      wrap.append(sel, state, pr);
+      return wrap;
+    }
+
     function loadProgramme() {
+      loadDecisions();
       const frame = document.getElementById("programme-frame");
       if (frame.src) return;
       document.getElementById("programme-link").href = PROGRAMME_URL;
@@ -1075,6 +1179,7 @@
       }
 
       const store = result.data || {};
+      if (result.decisions) { decisions = result.decisions; renderDecisions(); }
       const tbody = document.getElementById("report-table-body");
       tbody.innerHTML = "";
       document.getElementById("print-date").innerText = new Date().toLocaleDateString('el-GR');
@@ -1088,10 +1193,12 @@
           <td><div class="lodge-cell">${m.logo ? `<img class="lodge-logo" src="${m.logo}" alt="Θυρεός ${m.name}">` : ""}<div><strong>${m.name}</strong> (Αρ. ${m.no})${m.note ? `<br><span class="lodge-note">${m.note}</span>` : ""}</div></div></td>
           <td>${m.prov}</td>
           <td></td>
+          <td></td>
         `;
 
         // Τα ονόματα προέρχονται από τους χρήστες: textContent, όχι innerHTML
-        const cell = tr.lastElementChild;
+        const cell = tr.children[3];
+        let ranked = [];
         if (officers.length === 0) {
           const empty = document.createElement("span");
           empty.className = "empty-note";
@@ -1099,7 +1206,7 @@
           cell.appendChild(empty);
         } else {
           // Σειρά προβαδίσματος· χωρίς αριθμό (χειροκίνητη καταχώρηση) στο τέλος
-          const ranked = officers.map(o => {
+          ranked = officers.map(o => {
             const off = officerOf(o.officer);
             // Όταν αναγνωρίζεται από τη λίστα: «Ονοματεπώνυμο (Αξίωμα)» — φαίνεται πάντα το αξίωμα
             return { officer: off ? officerValue(off) : fixTitle(o.officer), rank: (off && off.rank) || o.rank || null, typed: !off || norm(officerValue(off)) !== norm(fixTitle(o.officer)) ? fixTitle(o.officer) : "" };
@@ -1133,6 +1240,7 @@
           });
           cell.appendChild(list);
         }
+        tr.children[4].appendChild(decisionSelect(m, ranked, decisions[m.id] || ""));
         tbody.appendChild(tr);
       });
       return true;
@@ -1149,6 +1257,7 @@
 
     window.onload = function() {
       initMeetingsGrid();
+      loadDecisions();
       resetFormFields();
       if (IS_EMBED) document.body.classList.add("embed");
       if (adminHint()) { showAdminTab(); promptGoogle(); }

@@ -24,7 +24,7 @@ const MAX_OFFICER_LENGTH = 200;
 const MAX_RANK = 10000;
 
 // Έκδοση του κώδικα: φαίνεται ανοίγοντας το URL /exec στον browser
-const VERSION = 3;
+const VERSION = 4;
 
 // Έλεγχος εγκατάστασης: ανοίξτε το URL /exec στον browser.
 // Δείχνει μόνο αν υπάρχουν οι ρυθμίσεις, όχι τις τιμές τους.
@@ -50,6 +50,8 @@ function doPost(e) {
   if (body.action === 'cancel') return cancel_(body);
   if (body.action === 'report') return report_(body);
   if (body.action === 'config') return config_();
+  if (body.action === 'decide') return decide_(body);
+  if (body.action === 'decisions') return json_({ ok: true, decisions: readDecisions_() });
   return json_({ ok: false, error: 'unknown_action' });
 }
 
@@ -120,19 +122,69 @@ function config_() {
   return json_({ ok: true, version: VERSION, googleClientId: prop_('GOOGLE_CLIENT_ID') });
 }
 
-function report_(body) {
+// Ποιος ζητά: κωδικός ADMIN_KEY ή «Σύνδεση με Google» λογαριασμού της ADMIN_EMAILS· αλλιώς ''
+function admin_(body) {
   const adminKey = prop_('ADMIN_KEY');
-  const byKey = !!adminKey && !!body.key && String(body.key) === adminKey;
-  const email = byKey ? '' : googleAdmin_(body.idToken);
-  if (!byKey && !email) {
-    Utilities.sleep(1000); // επιβράδυνση δοκιμών κωδικού
-    return json_({ ok: false, error: 'unauthorized' });
-  }
+  if (adminKey && body.key && String(body.key) === adminKey) return 'κωδικός';
+  const email = googleAdmin_(body.idToken);
+  if (email) return email;
+  Utilities.sleep(1000); // επιβράδυνση δοκιμών κωδικού
+  return '';
+}
+
+function report_(body) {
+  if (!admin_(body)) return json_({ ok: false, error: 'unauthorized' });
   const byMeeting = {};
   readRows_(getSheet_()).filter(r => !r.cancelled).forEach(r => {
     (byMeeting[r.meetingId] = byMeeting[r.meetingId] || []).push({ officer: r.officer, rank: r.rank });
   });
-  return json_({ ok: true, data: byMeeting });
+  return json_({ ok: true, data: byMeeting, decisions: readDecisions_() });
+}
+
+// ---- Απόφαση του Μεγάλου Διδασκάλου: ποιος εκπροσωπεί σε κάθε Εργασία (φύλλο «Αποφάσεις Μ.Δ.») ----
+// Μία γραμμή ανά Εργασία· κενός εκπρόσωπος = χωρίς απόφαση. Οι αποφάσεις είναι δημόσιες (action 'decisions'),
+// ώστε οι Μεγάλοι Αξιωματικοί να βλέπουν το πρόγραμμα· δηλώσεις και ποιος αποφάσισε μένουν μόνο στην αναφορά.
+const DECISION_HEADERS = ['Κωδικός Εργασίας', 'Εκπρόσωπος', 'Χρονοσήμανση', 'Από'];
+const DECISION_SHEET = 'Αποφάσεις Μ.Δ.';
+
+function decide_(body) {
+  const by = admin_(body);
+  if (!by) return json_({ ok: false, error: 'unauthorized' });
+  const id = String(body.meeting || '');
+  const rep = String(body.representative || '').trim();
+  if (!MEETING_ID_PATTERN.test(id)) return json_({ ok: false, error: 'invalid_meetings' });
+  if (rep.length > MAX_OFFICER_LENGTH) return json_({ ok: false, error: 'invalid_officer' });
+  return withLock_(() => {
+    const sheet = getDecisionSheet_();
+    const last = sheet.getLastRow();
+    const ids = last < 2 ? [] : sheet.getRange(2, 1, last - 1, 1).getValues().map(r => String(r[0]));
+    const i = ids.indexOf(id);
+    const row = [id, rep, new Date(), by];
+    if (i === -1) sheet.appendRow(row);
+    else sheet.getRange(i + 2, 1, 1, DECISION_HEADERS.length).setValues([row]);
+    return json_({ ok: true, decisions: readDecisions_() });
+  });
+}
+
+function getDecisionSheet_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(DECISION_SHEET) || ss.insertSheet(DECISION_SHEET, ss.getSheets().length); // στο τέλος: οι δηλώσεις μένουν το 1ο φύλλο
+  const header = sheet.getRange(1, 1, 1, DECISION_HEADERS.length);
+  if (header.getValues()[0].join('|') !== DECISION_HEADERS.join('|')) header.setValues([DECISION_HEADERS]);
+  sheet.setFrozenRows(1);
+  return sheet;
+}
+
+// { meetingId: "Εκπρόσωπος" } — μόνο όσες έχουν απόφαση
+function readDecisions_() {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(DECISION_SHEET);
+  if (!sheet || sheet.getLastRow() < 2) return {};
+  const out = {};
+  sheet.getRange(2, 1, sheet.getLastRow() - 1, 2).getValues().forEach(r => {
+    const id = String(r[0]), rep = String(r[1]).trim();
+    if (id && rep) out[id] = rep;
+  });
+  return out;
 }
 
 // Επαληθεύει το διακριτικό «Σύνδεση με Google» στην Google και επιστρέφει
