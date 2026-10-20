@@ -2400,3 +2400,28 @@ def test_declarations_gm_decision_on_the_spot(browser, base_url):
     page.wait_for_selector('.meeting-decision')
     assert 'Διαβάτης' in page.locator('.meeting-card', has_text='ΑΤΛΑΣ').inner_text()
     page.close()
+
+
+def test_gm_decisions_applied_to_visits(app):
+    # Αποφάσεις Μ.Δ. (Apps Script των Δηλώσεων) → εκπρόσωπος στις Επισκέψεις Στοών· η επίσκεψη που λείπει δημιουργείται
+    app.connect_local()
+    decisions = {'atlas_118': 'Διαβάτης Χρήστος (Βοηθός Μέγας Γραμματεύς)', 'akropolis_104': 'Ο Μέγας Διδάσκαλος (αυτοπροσώπως)',
+                 'isotis_97': 'Ανύπαρκτος Κάποιος (Μέγας Στεγαστής)'}
+    app.page.route('https://script.google.com/**', lambda r: r.fulfill(json={'ok': True, 'decisions': decisions}))
+    app.page.evaluate("""async () => { const {db} = await import('./core/store.js');
+      await db.save('x', (tx) => { tx.replace('visits', []);
+        tx.insert('reps', { name: 'Χρήστος', surname: 'Διαβάτης', office: 'Βοηθός Μέγας Γραμματεύς', email: '', mobile: '' });
+        tx.insert('visits', { visit_date: '2026-11-02', lodge: 'ΑΤΛΑΣ', lodge_number: '118', location: '', province: '', rep_id: null, notes: '' }); }); }""")
+    app.go('/visits')
+    app.page.click('a.btn:has-text("🗳 Αποφάσεις Μ.Δ.")')
+    app.page.wait_for_selector('#gmdApply')
+    t = app.text()
+    assert 'Θα οριστεί' in t and 'Νέα επίσκεψη + ορισμός' in t and 'Δεν βρέθηκε στους Εκπροσώπους' in t and 'Εκκρεμεί απόφαση' in t
+    app.page.click('#gmdApply')
+    app.page.wait_for_url('**/#/visits')
+    st = app.page.evaluate("async () => { const {db} = await import('./core/store.js'); return db.all('visits').map((v) => [v.lodge_number, v.visit_date, (db.get('reps', v.rep_id) || {}).surname, (db.get('reps', v.rep_id) || {}).office]); }")
+    by = {s[0]: s for s in st}
+    assert by['118'][2] == 'Διαβάτης' and by['104'][1] == '2026-11-02' and by['104'][3] == 'Μέγας Διδάσκαλος' and '97' not in by, st
+    app.go('/visits/decisions')
+    app.page.wait_for_selector('#gmdApply')
+    assert app.text().count('Ήδη ορισμένος') == 2 and app.page.locator('#gmdApply').is_disabled()

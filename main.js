@@ -13,6 +13,7 @@ import './modules/directory.js';
 import './modules/contacts.js';
 import './modules/visits.js';
 import './modules/declarations.js';
+import './modules/gm-decisions.js';
 import './modules/namedays.js';
 import './modules/epeteirida-table.js';
 import './modules/projects.js';

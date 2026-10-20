@@ -141,7 +141,7 @@ export function repCandidates() {
   // πρώτα το εν ενεργεία αξίωμα, μετά οι «Πρώην» κατά προβάδισμα
   return Object.values(by).map((c) => ({ ...c, offices: sortBy(c.offices, (o) => (/^Πρώην /.test(o) ? 1 : 0), (o) => precedenceOf(o) ?? 999) }));
 }
-const candRep = (c) => ({ name: c.name, surname: c.surname, rep_rank: c.rank || '', office: c.offices.join(' · '), year: c.year, email: '', mobile: '', member_id: c.member_id, notes: 'Από την Επετηρίδα', ext_id: '' });
+export const candRep = (c) => ({ name: c.name, surname: c.surname, rep_rank: c.rank || '', office: c.offices.join(' · '), year: c.year, email: '', mobile: '', member_id: c.member_id, notes: 'Από την Επετηρίδα', ext_id: '' });
 // Ετικέτα επιλογής: πρώτα ονοματεπώνυμο, μετά αξίωμα(τα), τίτλος, έτος
 const RANK_SHORT = { 'Σεβάσμιος Αδ.': 'Σεβ.', 'Λίαν Σεβάσμιος Αδ.': 'ΛΣεβ.', 'Πανσεβάσμιος Αδ.': 'Πσεβ.', 'Σεβασμιώτατος Αδ.': 'Σεβτ.' };
 const repOptionLabel = (r, rm) => { const os = String(r.office || '').split(' · ').filter(Boolean); return `${r.surname || ''} ${r.name || ''} — ${os.slice(0, 2).join(' · ')}${os.length > 2 ? ' …' : ''}${repRank(r, rm) ? ' · ' + RANK_SHORT[repRank(r, rm)] : ''}${r.year ? ' · ' + r.year : ''}`; };
@@ -171,7 +171,7 @@ function repOptions(sel, rm = rankmap()) {
   return none + (html || '<option value="" disabled>Δεν υπάρχουν υποψήφιοι — Εκπρόσωποι → «Επικόλληση πίνακα» ή Επετηρίδα → «Εισαγωγή»</option>');
 }
 // Τιμή επιλογής → id εκπροσώπου (μέσα σε συναλλαγή)· υποψήφιος της Επετηρίδας καταχωρείται πρώτα στους «Εκπροσώπους»
-function repIdIn(tx, value, cands) {
+export function repIdIn(tx, value, cands) {
   if (!value) return null;
   if (!String(value).startsWith('e:')) return Number(value) || null;
   const c = cands.find((x) => 'e:' + x.key === value);
@@ -316,7 +316,7 @@ function visitsPage({ query }) {
     html: `<div class="hero"><h1>Επισκέψεις Στοών</h1>${outgoingProtocolBtn()}</div>${notice(query.msg)}${hasEpeteirida() ? '' : `<div class="card nocontact noprint"><b>Οι υποψήφιοι εκπρόσωποι προέρχονται από την Επετηρίδα, που δεν έχει περαστεί ακόμη σε αυτή τη βάση.</b>
 <p style="margin:6px 0">Ανεβάστε το αρχείο Excel της Επετηρίδας (π.χ. «Επετηρίδα 2026») — μετά επικολλήστε και τον κατάλογο εν ενεργεία στην <a href="#/epeteirida?imp=1">Επετηρίδα → Εισαγωγή</a>.</p>
 <label class="btn primary" style="cursor:pointer">⬆ Αρχείο Επετηρίδας (.xlsx)<input type="file" id="epFile" accept=".xlsx,.xls" hidden></label></div>`}<div class="toolbar"><a class="btn primary" href="#/visits/new">+ Νέα επίσκεψη</a><a class="btn" href="#/visits/import">Επικόλληση λίστας</a>
-<a class="btn" href="#/visits/publish${query.prov ? '?prov=' + encodeURIComponent(query.prov) : ''}">Ενημέρωση Επαρχίας</a><a class="btn" href="#/visits/report">Αναφορά</a><a class="btn" href="#/reps">Εκπρόσωποι</a><a class="btn" href="#/declarations">🗳 Δηλώσεις διάθεσης</a><a class="btn${sumAll.total - sumAll.declared ? ' warnbtn' : ''}" href="#/visits/missing${query.prov ? '?prov=' + encodeURIComponent(query.prov) : ''}">⚠ Στοές χωρίς ημερομηνία (${sumAll.total - sumAll.declared})</a></div>
+<a class="btn" href="#/visits/publish${query.prov ? '?prov=' + encodeURIComponent(query.prov) : ''}">Ενημέρωση Επαρχίας</a><a class="btn" href="#/visits/report">Αναφορά</a><a class="btn" href="#/reps">Εκπρόσωποι</a><a class="btn" href="#/declarations">🗳 Δηλώσεις διάθεσης</a><a class="btn" href="#/visits/decisions">🗳 Αποφάσεις Μ.Δ.</a><a class="btn${sumAll.total - sumAll.declared ? ' warnbtn' : ''}" href="#/visits/missing${query.prov ? '?prov=' + encodeURIComponent(query.prov) : ''}">⚠ Στοές χωρίς ημερομηνία (${sumAll.total - sumAll.declared})</a></div>
 <details class="card fold vsum"${query.sum ? ' open' : ''}><summary><b>Σύνοψη Επαρχιών · τεκτονικό έτος ${yr.label}</b> — ${sumAll.declared} από ${sumAll.total} Στοές δήλωσαν ημερομηνία Εγκατάστασης</summary>
 ${table(['Επαρχία', 'Ενεργές Στοές', 'Δήλωσαν ημερομηνία', 'Χωρίς ημερομηνία', ''], summary.map((o) => [`<b>${esc(o.prov)}</b>`, o.total,
   `${o.declared} <span class="bar"><i style="width:${o.total ? Math.round(100 * o.declared / o.total) : 0}%"></i></span>`, o.missing.length ? `<span class="vwarn">${o.missing.length}</span>` : '<span class="vok">✓</span>',
