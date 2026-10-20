@@ -416,10 +416,6 @@
     .decide-state.ok { color: #15803d; }
     .decide-state.err { color: #b91c1c; }
     .decide-print { display: block; margin-top: 4px; font-size: 12px; font-weight: 700; color: #1d2f5e; }
-    .decisions-card h2 { margin-bottom: 6px; }
-    .decision-rep { font-weight: 700; color: #1d2f5e; }
-    .decision-rep.gm { color: #8a6d1d; }
-    .decision-pending { color: #94a3b8; font-style: italic; }
     .meeting-decision { margin-top: 6px; font-size: 12px; font-weight: 700; color: #15803d; }
     .first-note {
       color: var(--gold-dark);
@@ -595,16 +591,6 @@
 
     <!-- VIEW 2: Πρόγραμμα επισκέψεων του Μ.Δ. (ζωντανή σελίδα της Μεγάλης Γραμματείας) -->
     <div id="programme-view" style="display: none;">
-      <div class="card decisions-card">
-        <h2 class="card-title">Αποφάσεις Μεγάλου Διδασκάλου — Εκπρόσωποι</h2>
-        <p class="field-hint" style="margin-bottom: 12px;">Ποιος εκπροσωπεί τον Μέγα Διδάσκαλο σε κάθε Εγκατάσταση, όπως αποφάσισε ο Σεβασμιώτατος.</p>
-        <div class="table-wrap">
-          <table class="report-table">
-            <thead><tr><th>Ημερομηνία</th><th>Σ.Σ. & Αριθμός</th><th>Επαρχιακή Μεγάλη Στοά</th><th>Εκπρόσωπος</th></tr></thead>
-            <tbody id="decisions-body"><tr><td colspan="4" class="decision-pending">Φόρτωση…</td></tr></tbody>
-          </table>
-        </div>
-      </div>
       <div class="programme-bar">
         <a id="programme-link" target="_blank" rel="noopener">Άνοιγμα σε νέα καρτέλα ↗</a>
       </div>
@@ -647,7 +633,7 @@
             <span style="font-size: 12px; color: var(--text-muted);">Μήνας: <strong>Νοέμβριος 2026</strong></span>
           </div>
 
-          <p class="field-hint" style="margin-bottom: 12px;">Στη στήλη «Απόφαση Μ.Δ.» ο Μέγας Διδάσκαλος επιλέγει επί τόπου εκπρόσωπο ανάμεσα σε όσους δήλωσαν, «αυτοπροσώπως», ή άλλον Μεγάλο Αξιωματικό. Η επιλογή αποθηκεύεται αμέσως και εμφανίζεται στο «Πρόγραμμα Επισκέψεων Μ.Δ.» για όλους.</p>
+          <p class="field-hint" style="margin-bottom: 12px;">Στη στήλη «Απόφαση Μ.Δ.» ο Μέγας Διδάσκαλος επιλέγει επί τόπου εκπρόσωπο ανάμεσα σε όσους δήλωσαν, «αυτοπροσώπως», ή άλλον Μεγάλο Αξιωματικό. Η επιλογή αποθηκεύεται αμέσως και εμφανίζεται στις κάρτες των Στοών της Δήλωσης («✔ Εκπρόσωπος»).</p>
           <div class="table-wrap">
           <table class="report-table">
             <thead>
@@ -892,19 +878,7 @@
       return decisions;
     }
     function renderDecisions() {
-      const body = document.getElementById("decisions-body");
-      body.innerHTML = "";
-      MEETINGS.forEach(m => {
-        const tr = document.createElement("tr");
-        tr.innerHTML = `<td><strong>${m.date}</strong></td><td><strong>${m.name}</strong> (Αρ. ${m.no})${m.note ? `<br><span class="lodge-note">${m.note}</span>` : ""}</td><td>${m.prov}</td><td></td>`;
-        const cell = tr.lastElementChild, rep = decisions[m.id];
-        const span = document.createElement("span");
-        span.className = rep ? "decision-rep" + (rep === GM_SELF ? " gm" : "") : "decision-pending";
-        span.textContent = rep || "Εκκρεμεί απόφαση";
-        cell.appendChild(span);
-        body.appendChild(tr);
-      });
-      // και στις κάρτες της Δήλωσης
+      // Η απόφαση φαίνεται στις κάρτες των Στοών της Δήλωσης
       document.querySelectorAll("#meetings-list .meeting-card").forEach(card => {
         const id = card.querySelector("input").value, rep = decisions[id];
         let d = card.querySelector(".meeting-decision");
@@ -958,7 +932,6 @@
     }
 
     function loadProgramme() {
-      loadDecisions();
       const frame = document.getElementById("programme-frame");
       if (frame.src) return;
       document.getElementById("programme-link").href = PROGRAMME_URL;

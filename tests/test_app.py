@@ -2355,7 +2355,7 @@ def test_declarations_constitution_helper_and_decree_signature(app):
 
 def test_declarations_gm_decision_on_the_spot(browser, base_url):
     # Αναφορά (με κωδικό): ο Μ.Δ. επιλέγει εκπρόσωπο ανάμεσα σε όσους δήλωσαν ή «αυτοπροσώπως»·
-    # η απόφαση φαίνεται δημόσια στο «Πρόγραμμα Επισκέψεων Μ.Δ.» και στις κάρτες της Δήλωσης
+    # η απόφαση φαίνεται στις κάρτες της Δήλωσης (όχι πίνακας στο «Πρόγραμμα Επισκέψεων Μ.Δ.»)
     import json
     decided = {}
 
@@ -2392,9 +2392,7 @@ def test_declarations_gm_decision_on_the_spot(browser, base_url):
     page.wait_for_function("document.querySelectorAll('.decide-state.ok').length === 2")
     assert decided == {'atlas_118': 'Διαβάτης Χρήστος (Βοηθός Μέγας Γραμματεύς)', 'akropolis_104': 'Ο Μέγας Διδάσκαλος (αυτοπροσώπως)'}
     page.goto(base_url + 'declarations/#programme')
-    page.wait_for_function("document.getElementById('decisions-body').innerText.includes('Διαβάτης')")
-    txt = page.locator('#decisions-body').inner_text()
-    assert 'αυτοπροσώπως' in txt and 'Εκκρεμεί απόφαση' in txt
+    assert page.locator('#decisions-body').count() == 0 and 'Αποφάσεις Μεγάλου Διδασκάλου' not in page.locator('#programme-view').inner_text()
     page.goto(base_url + 'declarations/#form')
     page.wait_for_selector('.meeting-decision')
     assert 'Διαβάτης' in page.locator('.meeting-card', has_text='ΑΤΛΑΣ').inner_text()
