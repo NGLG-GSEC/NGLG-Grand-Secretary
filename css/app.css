@@ -399,4 +399,4 @@ input[type=file]{max-width:100%;min-width:0}
 .decbody .aponemei{display:inline-block;position:relative;width:37mm;height:6mm;vertical-align:bottom}
 .decbody .aponemei img{position:absolute;left:0;bottom:-1.27mm;width:37mm;height:auto;z-index:-1;pointer-events:none}
 .decltabs{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0 12px}
-.constitution-box{margin-top:18px}.constitution-box .embed-frame{min-height:900px}
+

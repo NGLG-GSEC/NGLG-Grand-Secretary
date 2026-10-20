@@ -2302,9 +2302,9 @@ def test_declarations_single_page_report_needs_code(app):
     app.connect_local()
     app.go('/declarations')
     src = lambda: app.page.get_attribute('#declFrame', 'src')
-    assert src().endswith('?embed=1#form') and app.page.locator('.decltabs button').count() == 4
+    assert src().endswith('?embed=1#form') and app.page.locator('.decltabs button').count() == 3
     app.page.click('.decltabs [data-view=report]')
-    assert src().endswith('?embed=1#report') and app.page.locator('.constitution-box').is_hidden()
+    assert src().endswith('?embed=1#report')
     app.go('/settings')
     assert 'Κωδικός αναφοράς' not in app.text()
 def test_declarations_constitution_helper_and_decree_signature(app):
@@ -2338,16 +2338,19 @@ def test_declarations_constitution_helper_and_decree_signature(app):
     assert fr.evaluate("() => document.getElementById('officer-select').value") == 'Διαβάτης Χρήστος (Βοηθός Μέγας Γραμματεύς)'
     fr.evaluate("() => buildOfficerSelect('')")
     app.go('/declarations?view=form')  # παλιός σύνδεσμος → η μία σελίδα
-    app.page.wait_for_selector('.constitution-box')
+    app.page.wait_for_selector('#declFrame')
     assert app.page.url.endswith('#/declarations')
-    assert 'ΒΟΗΘΟΣ ΣΥΝΤΑΓΜΑΤΟΣ' in app.text() and app.page.locator('.decltabs button', has_text='Βοηθός Συντάγματος').count() == 1
-    fr = app.page.frame_locator('#constFrame')
-    fr.locator('#emptyState').first.wait_for(state='attached')
-    w = app.page.evaluate("() => { const d = document.querySelector('#constFrame').contentDocument; return [d.documentElement.scrollWidth, d.documentElement.clientWidth]; }")
+    # Το Σύνταγμα δεν εμφανίζεται πουθενά στην εφαρμογή· μόνο η αυτόνομη σελίδα constitution/
+    assert 'Συντάγματ' not in app.text() and app.page.locator('#constFrame, .constitution-box, #constLink').count() == 0
+    app.go('/portal')
+    assert app.page.locator('a[href*="constitution"]').count() == 0
+    cp = app.page.context.new_page()
+    cp.goto(app.page.url.split('#')[0] + 'constitution/')
+    cp.locator('#emptyState').first.wait_for(state='attached')
+    w = cp.evaluate("() => [document.documentElement.scrollWidth, document.documentElement.clientWidth]")
     assert w[0] <= w[1] + 1, w  # χωρίς οριζόντια υπερχείλιση
-    app.page.click('.decltabs [data-view=constitution]')
-    assert app.page.locator('#declFrame').get_attribute('src') == 'constitution/index.html'
-    assert app.page.locator('#constLink').get_attribute('href') == 'constitution/' and 'Αυτόνομη σελίδα' in app.text()
+    assert cp.locator('a[href*="#/"]').count() == 0  # χωρίς συνδέσμους προς την εφαρμογή
+    cp.close()
     # Διατάγματα: η υπογραφή έμεινε ως είχε (δεν είναι χαιρετισμός)
     html = app.page.evaluate("async () => (await import('./core/paper.js')).reportPaper('x', '', '', { signatures: true })")
     assert 'ΜΕΓΑΣ ΓΡΑΜΜΑΤΕΑΣ' in html and 'Με αφοσίωση' not in html
