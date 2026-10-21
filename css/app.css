@@ -393,8 +393,6 @@ input[type=file]{max-width:100%;min-width:0}
 .decbody{position:relative;z-index:0}
 .decbody .hmeis{display:inline-block;position:relative;width:39mm;height:8.25mm;vertical-align:bottom}
 .decbody .hmeis img{position:absolute;left:-11mm;bottom:0;width:39mm;height:auto;z-index:-1;pointer-events:none}
-.decbody .diorizomen{display:inline-block;position:relative;width:28mm;height:5.8mm;vertical-align:bottom}
-.decbody .diorizomen img{position:absolute;left:0;bottom:0;width:28mm;height:auto;z-index:-1;pointer-events:none}
 /* «ΑΠΟΝΕΜΕΙ»: τα γράμματα στη γραμμή, τα στολίδια πάνω/κάτω πίσω από το κείμενο */
 .decbody .aponemei{display:inline-block;position:relative;width:37mm;height:6mm;vertical-align:bottom}
 .decbody .aponemei img{position:absolute;left:0;bottom:-1.27mm;width:37mm;height:auto;z-index:-1;pointer-events:none}
@@ -416,3 +414,8 @@ input[type=file]{max-width:100%;min-width:0}
 .dz-box.dz-office .dz-tag{background:#15803d}.dz-box.dz-office .dz-h{background:#15803d}
 /* Όνομα του Αδελφού στο Διάταγμα: έντονα 20px, με αρκετό διάστιχο ώστε να μην ακουμπά τις διπλανές γραμμές */
 .decbody .dec-name{display:inline-block;font-weight:700;font-size:20px;line-height:1.35;margin:1mm 0}
+/* ΔΙΟΡΙΖΟΜΕΝ (εικόνα της πράξης): μέγεθος/θέση από τη Σχεδίαση σελίδας, πάντα στο κέντρο */
+.decbody .act-art{display:inline-block;position:relative;vertical-align:bottom}
+.decbody .act-art img{position:absolute;left:0;top:0;width:100%;height:100%;object-fit:fill;pointer-events:none}
+.dz-box.dz-dior{outline-color:#7c3aed;background:rgba(124,58,237,.05);cursor:ns-resize}
+.dz-box.dz-dior .dz-tag,.dz-box.dz-dior .dz-h{background:#7c3aed}

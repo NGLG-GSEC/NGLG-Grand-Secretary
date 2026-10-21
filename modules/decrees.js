@@ -86,8 +86,18 @@ async function layerPng(path) {
 // Λέξεις του Διατάγματος που γράφονται ως καλλιγραφική εικόνα (cls: θέση/μέγεθος στο css, word: πλάτος στο Word σε cm)
 const DECREE_ARTWORK = { ΗΜΕΙΣ: { img: IMG.hmeis, cls: 'hmeis', word: 3.3 }, ΔΙΟΡΙΖΟΜΕΝ: { img: IMG.diorizomen, cls: 'diorizomen', word: 2.6 },
   ΑΠΟΝΕΜΕΙ: { img: IMG.aponemei, cls: 'aponemei', word: 3.1 } };
+// «ΔΙΟΡΙΖΟΜΕΝ» (εικόνα της πράξης): πλάτος/ύψος σε mm, πάντα στο κέντρο, κάθετη μετατόπιση dy (mm)·
+// προαιρετικά δική του εικόνα ανά πρότυπο (Σχεδίαση σελίδας → layout.dior.file)
+export const DIOR_DEFAULT = { w: 45, h: 20.7, dy: 0 }, DIOR_RATIO = 0.4608;
+const diorOf = (L) => ({ ...DIOR_DEFAULT, ...((L && L.dior) || {}) });
+const diorStyle = (o) => `width:${Math.max(5, +o.w || DIOR_DEFAULT.w)}mm;height:${Math.max(3, +o.h || DIOR_DEFAULT.h)}mm;top:${+o.dy || 0}mm`;
+function diorHtml(L, urls = {}) {
+  const o = diorOf(L), src = urls.dior ? ` src="${esc(urls.dior)}"` : o.file ? ` data-dfile="${esc(o.file)}"` : ` src="${IMG.diorizomen}"`;
+  return `<span class="act-art diorizomen" role="img" aria-label="ΔΙΟΡΙΖΟΜΕΝ" style="${diorStyle(o)}"><img alt=""${src}></span>`;
+}
 async function decreeDocxBlob(d) {
-  const S = (k) => db.setting(k) || '', L = layoutOf(decreeTemplate(decreeKey(d))), top = layoutTop(L);
+  const S = (k) => db.setting(k) || '', L = layoutOf(decreeTemplate(decreeKey(d))), top = layoutTop(L), dio = diorOf(L);
+  const dioPng = dio.file ? await layerPng(dio.file) : null, dioImg = dioPng ? URL.createObjectURL(new Blob([dioPng], { type: 'image/png' })) : IMG.diorizomen;
   const anchors = [];
   for (const k of ['bg', 'header']) {
     const x = L[k];
@@ -99,7 +109,7 @@ async function decreeDocxBlob(d) {
   const blocks = letterBlocks({ noHead: top != null, topSpace: top != null ? (top - MARGIN_TOP) * PT : 0, org: S('organization_name'), founded: S('founded_year'), gmTitle: S('grand_master_title'), gmName: S('grand_master_name'),
     number: d.protocol_seq ? String(d.protocol_seq) : (d.protocol_no || ''), date: fmtDate(d.decree_date), place: 'Εν Αθήναις', title: `ΔΙΑΤΑΓΜΑ υπ’ αριθμ. ${decreeNo(d)}`,
     paragraphs: (decreeKey(d) === 'decree-general' ? String(d.body || '') : markNames(d.body, (n) => `[b][size=15]${n}[/size][/b]`)).split(/\n\s*\n/).map((t) => ({ text: t.trim(), align: 'center', bold: /^(ΗΜΕΙΣ|ΔΙΟΡΙΖΟΜΕΝ|ΑΠΟΝΕΜΕΙ|ΕΥΑΡΕΣΤΟΥΜΕΘΑ)/.test(t.trim()) })),
-    artwork: Object.fromEntries(Object.entries(DECREE_ARTWORK).map(([w, a]) => [w, { img: a.img, width: a.word }])),
+    artwork: Object.fromEntries(Object.entries(DECREE_ARTWORK).map(([w, a]) => [w, w === 'ΔΙΟΡΙΖΟΜΕΝ' ? { img: dioImg, width: +(Math.max(5, +dio.w) / 10).toFixed(2) } : { img: a.img, width: a.word }])),
     signature: IMG.signature, signer: 'Δημήτριος Σκιαδόπουλος', signerTitle: 'Ο ΜΕΓΑΣ ΓΡΑΜΜΑΤΕΑΣ',
     head: headOn(L.head) ? { ...L.head, lines: L.head.lines.map((l) => ({ ...l, hex: (HEAD_COLORS[l.color] || HEAD_COLORS.navy).slice(1).toUpperCase() })) } : null });
   return makeDocx(blocks, { title: d.subject, author: 'Μεγάλη Γραμματεία', anchors });
@@ -115,7 +125,8 @@ export function decreePaper(d, opts = {}) {
     : markNames(richHtml(d.body, { links: false }).replace(/^(ΗΜΕΙΣ|ΔΙΟΡΙΖΟΜΕΝ|ΑΠΟΝΕΜΕΙ|ΕΥΑΡΕΣΤΟΥΜΕΘΑ ΝΑ ΑΠΟΝΕΙΜΩΜΕΝ)$/gm, '<b>$1</b>'), (n) => `<span class="dec-name">${n}</span>`);
   // «ΗΜΕΙΣ» / «ΔΙΟΡΙΖΟΜΕΝ»: καλλιγραφικές εικόνες, μεγάλες και πίσω από το κείμενο (πιάνουν λίγο ύψος — το κεφαλαίο απλώνεται προς τα πάνω)
   // η γραμμή μόνο με τη λέξη (ό,τι μορφοποίηση κι αν έχει: έντονα, μέγεθος, κενά) γίνεται εικόνα
-  const hmeisHtml = Object.entries(DECREE_ARTWORK).reduce((h, [w, a]) => h.replace(new RegExp(`^(?:<[^>]+>|[ \\t])*${w}(?:</[^>]+>|[ \\t])*$`, 'm'), `<span class="${a.cls}" role="img" aria-label="${w}"><img src="${a.img}" alt=""></span>`), bodyHtml);
+  const hmeisHtml = Object.entries(DECREE_ARTWORK).reduce((h, [w, a]) => h.replace(new RegExp(`^(?:<[^>]+>|[ \\t])*${w}(?:</[^>]+>|[ \\t])*$`, 'm'),
+    w === 'ΔΙΟΡΙΖΟΜΕΝ' ? diorHtml(L, urls) : `<span class="${a.cls}" role="img" aria-label="${w}"><img src="${a.img}" alt=""></span>`), bodyHtml);
   const withOffice = officeImage(hmeisHtml, L, urls);
   return `<article class="paper decree${layers ? ' has-layers' : ''}"${top != null ? ` style="--pt:${top}mm"` : ''}>${layers}${top != null ? '' : headOn(L.head) ? customHead(L.head) : letterhead()}<div class="dec-title">ΔΙΑΤΑΓΜΑ</div>
 <div class="dec-no official-number">${action === 'service_award' ? 'υπ’ αριθ. ' : 'υπ’ αριθμ. '}${esc(decreeNo(d))}, ημερ. ${esc(fmtDate(d.decree_date))}</div>
@@ -224,6 +235,9 @@ function mountDecreeForm(el, d, m0) {
     el.querySelector('#officeLabel').textContent = award ? 'Πρώην Μέγας Αξιωματικός' : 'Ενεργός Μέγας Αξιωματικός';
     el.querySelector('#periodCard').hidden = a !== 'appoint';
     el.querySelector('#matterWrap').hidden = service;
+    const mt = f.querySelector('[name=matter]'); // ΔΙΟΡΙΖΟΜΕΝ → «περί Διορισμού Μεγάλων Αξιωματικών»
+    if (a === 'appoint' && !mt.value.trim()) { mt.value = APPOINT_MATTER; mt.dispatchEvent(new Event('input', { bubbles: true })); }
+    if (a !== 'appoint' && mt.value === APPOINT_MATTER) { mt.value = ''; mt.dispatchEvent(new Event('input', { bubbles: true })); }
     el.querySelector('#serviceText').hidden = !service;
     el.querySelectorAll('.member-honorific,.member-former-office').forEach((x) => (x.hidden = service));
     el.querySelector('#peopleHead').textContent = service ? 'Στοιχεία Αδελφού που θα λάβει την Τάξη του Μεγάλου Διδασκάλου' : award ? 'Αδελφοί προς Απονομή' : 'Διοριζόμενοι Αδελφοί';
@@ -376,10 +390,11 @@ function viewDecree({ params }) {
 // Εικόνα κεφαλίδας και εικόνα φόντου: ανέβασμα, θέση και διαστάσεις (mm) πάνω στο Α4 — με σύρσιμο ή με αριθμούς.
 const A4 = { w: 210, h: 297 };
 const LAYER_LABEL = { header: 'Κεφαλίδα (εικόνα στην κορυφή)', bg: 'Φόντο (εικόνα πίσω από το κείμενο)' };
+export const APPOINT_MATTER = 'Διορισμού Μεγάλων Αξιωματικών'; // «Περί» όταν η πράξη είναι ΔΙΟΡΙΖΟΜΕΝ
 function sampleDecree(key) {
   const date = today(), year = new Date().getFullYear(), no = Math.max(db.all('decree_documents').reduce((x, y) => Math.max(x, Number(y.decree_no) || 0), 0) + 1, Number(db.setting('decree_first_no')) || 513);
   if (key === 'decree-general') return { template_key: key, decree_no: no, decree_year: year, decree_date: date, rules: '{"action":"general"}', body: fillGeneral(decreeTemplate(key).body || GENERAL_BODY, { matter: 'ιδρύσεως της Στοάς «Δείγμα»', date, no: `${no}/${year}` }) };
-  const { body } = decreeBody('διορισμού Μεγάλων Αξιωματικών', [{ first_name: 'Ιωάννης', last_name: 'Παπαδόπουλος', office: 'Μέγας Γραμματεύς', honorific: 'Πσεβ. Αδ.', rule: (DEC_MAP['Μέγας Γραμματεύς'] || {}).rule || '' }], date, 'appoint', '', `${year} - ${year + 1}`);
+  const { body } = decreeBody(APPOINT_MATTER, [{ first_name: 'Ιωάννης', last_name: 'Παπαδόπουλος', office: 'Μέγας Γραμματεύς', honorific: 'Πσεβ. Αδ.', rule: (DEC_MAP['Μέγας Γραμματεύς'] || {}).rule || '' }], date, 'appoint', '', `${year} - ${year + 1}`);
   return { template_key: key, decree_no: no, decree_year: year, decree_date: date, rules: '{"action":"appoint"}', body };
 }
 function designPage({ params }) {
@@ -405,11 +420,18 @@ ${k === 'bg' ? '<label>Διαφάνεια<input type="range" min="0.05" max="1" 
 <small class="muted">Στην προεπισκόπηση: σύρετε την εικόνα (πλαίσιο «Αξίωμα») για μετακίνηση και τη γωνία ◢ για μέγεθος.</small>
 <div class="toolbar"><button type="button" class="btn small" data-opreset="default">90×90 · κέντρο-δεξιά</button><button type="button" class="btn small danger" data-preset="office:remove">Αφαίρεση εικόνας</button></div></div>
 <small class="muted" data-none="office">Χωρίς εικόνα. Μπαίνει στο ύψος της γραμμής του αξιώματος, στο δεξί μισό της σελίδας, χωρίς να ακουμπά το κείμενο.</small></div>`;
+  const diorCard = `<div class="card dz-layer" data-layer="dior"><h3 style="margin-top:0">ΔΙΟΡΙΖΟΜΕΝ (εικόνα της πράξης)</h3>
+<label class="dz-file">🖼 Άλλη εικόνα για το ΔΙΟΡΙΖΟΜΕΝ (PNG, JPEG)<input type="file" accept="image/png,image/jpeg,image/webp" data-up="dior"></label>
+<div class="dz-nums"><label>Πλάτος (mm)<input type="number" step="0.5" data-a="w"></label><label>Ύψος (mm)<input type="number" step="0.5" data-a="h"></label>
+<label>Κάθετη μετατόπιση (mm, + κάτω)<input type="number" step="0.5" data-a="dy"></label></div>
+<div><label class="chk"><input type="checkbox" id="dLock" checked> Διατήρηση αναλογιών</label></div>
+<div class="toolbar"><button type="button" class="btn small" data-apreset="default">↺ Προεπιλεγμένο μέγεθος</button><button type="button" class="btn small" data-apreset="orig" id="dOrig">Αρχική εικόνα</button></div>
+<small class="muted">Πάντα στο κέντρο της σελίδας. Στην προεπισκόπηση: σύρετε πάνω-κάτω (πλαίσιο «ΔΙΟΡΙΖΟΜΕΝ») και τη γωνία ◢ για μέγεθος.</small></div>`;
   return {
     title: 'Σχεδίαση σελίδας',
     html: `<p><a href="#/templates">← Πρότυπα</a></p><h1>🎨 Σχεδίαση σελίδας — ${esc(t.name)}</h1>
 <p class="muted">Ανεβάστε εικόνα κεφαλίδας και φόντου και τοποθετήστε τες στη σελίδα Α4 (210 × 297 mm): σύρετε την εικόνα για να τη μετακινήσετε και τη γωνία ◢ για να αλλάξετε μέγεθος — ή γράψτε τις τιμές σε mm. Ισχύει για κάθε Διάταγμα αυτού του είδους (οθόνη, εκτύπωση, PDF).</p>
-<div class="dz-split"><div class="dz-controls">${card('header')}${headCard}${officeCard}${card('bg')}
+<div class="dz-split"><div class="dz-controls">${card('header')}${headCard}${diorCard}${officeCard}${card('bg')}
 <div class="toolbar"><button class="btn primary" data-act="saveLayout">💾 Αποθήκευση σχεδίασης</button><a class="btn" href="#/templates">Ακύρωση</a></div></div>
 <div class="dz-page"><div class="dz-wrap" id="dzp"></div></div></div>`,
     mount(el) {
@@ -426,6 +448,9 @@ ${k === 'bg' ? '<label>Διαφάνεια<input type="range" min="0.05" max="1" 
         const ho = !!(L.office && (L.office.file || urls.office));
         el.querySelector('[data-has=office]').hidden = !ho; el.querySelector('[data-none=office]').hidden = ho;
         if (ho) for (const i of el.querySelectorAll('[data-o]')) if (document.activeElement !== i) i.value = L.office[i.dataset.o] ?? OFFICE_DEFAULT[i.dataset.o];
+        const dv = diorOf(L);
+        for (const i of el.querySelectorAll('[data-a]')) if (document.activeElement !== i) i.value = dv[i.dataset.a];
+        el.querySelector('#dOrig').style.display = dv.file || urls.dior ? '' : 'none';
         const on = headOn(L.head);
         el.querySelector('#hdOn').checked = on; el.querySelector('#hdBox').hidden = !on;
         if (on) { el.querySelector('#hdEmb').checked = L.head.emblem !== false; if (document.activeElement !== el.querySelector('#hdEmbW')) el.querySelector('#hdEmbW').value = L.head.emblem_w ?? 34; }
@@ -453,6 +478,15 @@ ${k === 'bg' ? '<label>Διαφάνεια<input type="range" min="0.05" max="1" 
         const pr = p.getBoundingClientRect(), ir = i.getBoundingClientRect(), mm = A4.w / pr.width;
         Object.assign(h.style, { left: (ir.left - pr.left) * mm + 'mm', top: (ir.top - pr.top) * mm + 'mm', width: ir.width * mm + 'mm', height: ir.height * mm + 'mm' });
       };
+      // ΔΙΟΡΙΖΟΜΕΝ: ενημέρωση εικόνας και πλαισίου χωρίς νέα απόδοση
+      const placeDior = () => {
+        const p = box.querySelector('.paper'); if (!p) return;
+        const a = p.querySelector('.act-art.diorizomen'), h = p.querySelector('.dz-dior'); if (!a) return;
+        a.style.cssText = diorStyle(diorOf(L));
+        if (!h) return;
+        const pr = p.getBoundingClientRect(), ar = a.getBoundingClientRect(), mm = A4.w / pr.width;
+        Object.assign(h.style, { left: (ar.left - pr.left) * mm + 'mm', top: (ar.top - pr.top) * mm + 'mm', width: ar.width * mm + 'mm', height: ar.height * mm + 'mm' });
+      };
       const render = () => {
         box.innerHTML = decreePaper(sample, { layout: L, urls });
         const p = box.querySelector('.paper');
@@ -463,23 +497,42 @@ ${k === 'bg' ? '<label>Διαφάνεια<input type="range" min="0.05" max="1" 
           h.innerHTML = `<span class="dz-tag">${k === 'bg' ? 'Φόντο' : 'Κεφαλίδα'}</span><span class="dz-h" data-resize="${k}">◢</span>`;
           p.appendChild(h); place(k);
         }
+        if (p.querySelector('.act-art.diorizomen')) {
+          const h = document.createElement('div');
+          h.className = 'dz-box dz-dior'; h.dataset.layer = 'dior'; h.title = 'Σύρετε πάνω-κάτω · γωνία για μέγεθος';
+          h.innerHTML = '<span class="dz-tag">ΔΙΟΡΙΖΟΜΕΝ</span><span class="dz-h" data-resize="dior">◢</span>';
+          p.appendChild(h); placeDior();
+        }
         if (p.querySelector('.dec-office-img')) {
           const h = document.createElement('div');
           h.className = 'dz-box dz-office'; h.dataset.layer = 'office'; h.title = 'Σύρετε για μετακίνηση · γωνία για μέγεθος';
           h.innerHTML = '<span class="dz-tag">Αξίωμα</span><span class="dz-h" data-resize="office">◢</span>';
           p.appendChild(h); placeOffice();
         }
+        // τα πλαίσια ακολουθούν τη διάταξη (γραμματοσειρές, εικόνες που φορτώνουν αργότερα)
+        if (ro) ro.disconnect();
+        ro = new ResizeObserver(() => { placeDior(); placeOffice(); });
+        ro.observe(p.querySelector('.decbody'));
         syncInputs();
       };
+      let ro = null;
       // σύρσιμο / αλλαγή μεγέθους (px → mm με βάση το πλάτος της σελίδας στην οθόνη)
       box.addEventListener('pointerdown', (e) => {
         const b = e.target.closest('.dz-box'); if (!b) return;
         e.preventDefault();
         const k = b.dataset.layer, resize = !!e.target.closest('[data-resize]'), p = box.querySelector('.paper');
+        if (k === 'dior') L.dior = diorOf(L);
         const mm = A4.w / p.getBoundingClientRect().width, start = { ...L[k] }, x0 = e.clientX, y0 = e.clientY;
         b.setPointerCapture(e.pointerId);
         const move = (ev) => {
           const dx = (ev.clientX - x0) * mm, dy = (ev.clientY - y0) * mm;
+          if (k === 'dior') { // πάντα στο κέντρο: μόνο κάθετη μετατόπιση· η γωνία αλλάζει πλάτος (και ύψος)
+            if (resize) {
+              const w = Math.max(5, r1(start.w + 2 * dx)); // κεντραρισμένο: η γωνία απλώνει και προς τις δύο πλευρές
+              L.dior.w = w; L.dior.h = el.querySelector('#dLock').checked ? r1(w * (ratio.dior || DIOR_RATIO)) : Math.max(3, r1(start.h + dy));
+            } else L.dior.dy = r1((+start.dy || 0) + dy);
+            placeDior(); syncInputs(); return;
+          }
           if (k === 'office') { // μέγεθος σε px (1 mm = 96/25.4 px), θέση X και κάθετη μετατόπιση σε mm
             if (resize) L.office.size = Math.max(20, Math.min(300, Math.round((+start.size || OFFICE_DEFAULT.size) + dx * 96 / 25.4)));
             else { L.office.x = r1((+start.x || OFFICE_DEFAULT.x) + dx); L.office.dy = r1((+start.dy || 0) + dy); }
@@ -507,6 +560,13 @@ ${k === 'bg' ? '<label>Διαφάνεια<input type="range" min="0.05" max="1" 
       };
       el.addEventListener('input', (e) => {
         if (headInput(e)) return;
+        if (e.target.dataset.a) {
+          const v = Number(e.target.value); if (!Number.isFinite(v)) return;
+          const f = e.target.dataset.a, lock = el.querySelector('#dLock').checked, rt = ratio.dior || DIOR_RATIO;
+          L.dior = diorOf(L); L.dior[f] = v;
+          if (lock && f === 'w') L.dior.h = r1(v * rt); if (lock && f === 'h') L.dior.w = r1(v / rt);
+          placeDior(); syncInputs(); return;
+        }
         if (e.target.dataset.o && L.office) { const v = Number(e.target.value); if (Number.isFinite(v)) { L.office[e.target.dataset.o] = v; placeOffice(); } return; }
         const i = e.target; if (!i.dataset.k || !L[i.dataset.k]) return;
         const k = i.dataset.k, f = i.dataset.f, v = Number(i.value);
@@ -526,6 +586,7 @@ ${k === 'bg' ? '<label>Διαφάνεια<input type="range" min="0.05" max="1" 
         pending[k] = { bytes, ext: ['png', 'jpg', 'webp'].includes(ext) ? ext : 'png' }; urls[k] = url;
         const old = L[k] || {};
         if (k === 'bg') L.bg = { file: old.file || '', x: 0, y: 0, w: A4.w, h: A4.h, opacity: old.opacity ?? 0.25 };
+        else if (k === 'dior') { const o = diorOf(L); L.dior = { ...o, file: o.file || '', h: r1(o.w * (ratio.dior || DIOR_RATIO)) }; }
         else if (k === 'office') L.office = { file: old.file || '', size: old.size || OFFICE_DEFAULT.size, x: old.x || OFFICE_DEFAULT.x };
         else { const w = 180; L.header = { file: old.file || '', x: 15, y: 8, w, h: r1(ratio.header ? w * ratio.header : 40) }; }
         if (k === 'bg') el.querySelector('[data-lock=bg]').checked = false;
@@ -546,6 +607,13 @@ ${k === 'bg' ? '<label>Διαφάνεια<input type="range" min="0.05" max="1" 
           }
           drawLines(); render(); return;
         }
+        const ap = e.target.closest('[data-apreset]');
+        if (ap) {
+          const o = diorOf(L);
+          if (ap.dataset.apreset === 'orig') { L.dior = { ...o, file: '' }; delete urls.dior; delete pending.dior; ratio.dior = DIOR_RATIO; o.file = ''; }
+          L.dior = { ...diorOf(L), w: DIOR_DEFAULT.w, h: r1(DIOR_DEFAULT.w * (ratio.dior || DIOR_RATIO)), dy: 0 };
+          render(); return;
+        }
         if (e.target.closest('[data-opreset]') && L.office) { Object.assign(L.office, OFFICE_DEFAULT); render(); return; }
         const b = e.target.closest('[data-preset]'); if (!b) return;
         const [k, what] = b.dataset.preset.split(':');
@@ -556,6 +624,7 @@ ${k === 'bg' ? '<label>Διαφάνεια<input type="range" min="0.05" max="1" 
       });
       // λόγος διαστάσεων για ήδη αποθηκευμένες εικόνες
       for (const k of ['header', 'bg']) if (L[k] && L[k].file && L[k].w) ratio[k] = L[k].h / L[k].w;
+      ratio.dior = L.dior && L.dior.w && L.dior.h ? L.dior.h / L.dior.w : DIOR_RATIO;
       drawLines();
       bind(el, {
         async saveLayout() {

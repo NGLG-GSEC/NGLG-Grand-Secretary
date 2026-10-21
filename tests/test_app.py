@@ -894,7 +894,7 @@ def test_decree_live_preview(app):
     app.go('/decrees/new')
     pv = lambda: app.page.locator('#dprev').inner_text()
     app.page.wait_for_function("() => document.querySelector('#dprev .paper')")
-    assert 'ΔΙΑΤΑΓΜΑ' in pv() and '513/' in pv() and 'περί ……' in pv()
+    assert 'ΔΙΑΤΑΓΜΑ' in pv() and '513/' in pv() and 'περί Διορισμού Μεγάλων Αξιωματικών,' in pv()  # ΔΙΟΡΙΖΟΜΕΝ: προεπιλεγμένο «Περί»
     app.page.fill('[name=matter]', 'διορισμού Μεγάλων Αξιωματικών')
     app.page.wait_for_function("() => document.querySelector('#dprev').innerText.includes('περί διορισμού Μεγάλων Αξιωματικών')")
     app.page.select_option('#dOffice', 'Μέγας Γραμματεύς')
@@ -2442,11 +2442,11 @@ def test_decree_design_header_builder_and_office_image(app):
     app.page.locator('.hd-line select[data-f=color]').last.select_option('gold')
     app.page.set_input_files('input[data-up=office]', str(ROOT / 'programme' / 'emblem.jpg'))
     app.page.wait_for_selector('#dzp .dec-office-img')
-    # όνομα του Αδελφού έντονα 20px· το ΗΜΕΙΣ δεν ακουμπά τη γραμμή «υπ’ αριθμ. …, ημερ. …»· νέα εικόνα ΔΙΟΡΙΖΟΜΕΝ
+    # όνομα του Αδελφού έντονα 20px· το ΗΜΕΙΣ δεν ακουμπά τη γραμμή «υπ’ αριθμ. …, ημερ. …»· εικόνα «ΔΙΟΡΙΖΟΜΕΝ & ΕΝΔΥΟΜΕΝ»
     st = app.page.evaluate("""() => { const p = document.querySelector('#dzp .paper').getBoundingClientRect(), mm = p.width / 210, g = (s) => document.querySelector('#dzp ' + s).getBoundingClientRect(),
       n = getComputedStyle(document.querySelector('#dzp .dec-name')); return { name: document.querySelector('#dzp .dec-name').textContent, w: n.fontWeight, fs: n.fontSize,
       gap: (g('.hmeis img').top - g('.dec-no').bottom) / mm, no: document.querySelector('#dzp .dec-no').textContent, dio: g('.diorizomen img').width / g('.diorizomen img').height }; }""")
-    assert st['name'] == 'Ιωάννην Παπαδόπουλον' and st['w'] == '700' and st['fs'] == '20px' and st['gap'] > 1.5 and ', ημερ. ' in st['no'] and st['dio'] > 4, st
+    assert st['name'] == 'Ιωάννην Παπαδόπουλον' and st['w'] == '700' and st['fs'] == '20px' and st['gap'] > 1.5 and ', ημερ. ' in st['no'] and 1.8 < st['dio'] < 2.6, st
     head = app.text('#dzp .head-custom')
     assert 'ΚΕΦΑΛΙΔΑ ΔΟΚΙΜΗΣ' in head and 'Γραμμή χρυσή' in head
     b = app.page.evaluate("""() => { const p = document.querySelector('#dzp .paper').getBoundingClientRect(), mm = p.width / 210,
@@ -2474,3 +2474,42 @@ def test_decree_design_header_builder_and_office_image(app):
     # Word: η κεφαλίδα του builder περνά και στο έγγραφο
     n = app.page.evaluate("async () => { const { letterBlocks } = await import('./core/docx.js'); return letterBlocks({ head: { emblem: true, lines: [{ text: 'Α', size: 22, bold: true, hex: '1F355D' }, { text: 'Β', size: 11 }] }, paragraphs: [] }).filter((b) => b.text === 'Α' || b.text === 'Β').length; }")
     assert n == 2
+
+
+def test_decree_diorizomen_builder_and_appoint_matter(app):
+    # ΔΙΟΡΙΖΟΜΕΝ: πλάτος/ύψος και κάθετη θέση από τη Σχεδίαση σελίδας, πάντα στο κέντρο· «Περί Διορισμού Μεγάλων Αξιωματικών»
+    app.connect_local()
+    tid = app.page.evaluate("async () => (await import('./core/store.js')).db.all('letter_templates').find((t) => t.key === 'decree-appoint').id")
+    app.go(f'/templates/{tid}/design')
+    app.page.wait_for_selector('#dzp .act-art.diorizomen')
+    geo = """() => { const p = document.querySelector('#dzp .paper').getBoundingClientRect(), mm = p.width / 210, a = document.querySelector('#dzp .act-art.diorizomen').getBoundingClientRect();
+      return { cx: ((a.left + a.right) / 2 - p.left) / mm, w: a.width / mm, h: a.height / mm, top: (a.top - p.top) / mm }; }"""
+    g0 = app.page.evaluate(geo)
+    assert abs(g0['w'] - 45) < 0.6 and abs(g0['h'] - 20.7) < 0.6 and abs(g0['cx'] - 105) < 2, g0
+    assert 'περί Διορισμού Μεγάλων Αξιωματικών,' in app.text('#dzp .decbody')
+    app.page.fill('[data-a=w]', '60')
+    g1 = app.page.evaluate(geo)
+    assert abs(g1['w'] - 60) < 0.6 and abs(g1['h'] - 60 * 0.4608) < 0.6 and abs(g1['cx'] - 105) < 2, g1
+    app.page.uncheck('#dLock'); app.page.fill('[data-a=h]', '15')
+    app.page.fill('[data-a=dy]', '-4')
+    g2 = app.page.evaluate(geo)
+    assert abs(g2['h'] - 15) < 0.6 and abs(g2['w'] - 60) < 0.6 and abs(g2['top'] - (g1['top'] - 4)) < 0.8 and abs(g2['cx'] - 105) < 2, (g1, g2)
+    app.click('💾 Αποθήκευση σχεδίασης')
+    app.page.wait_for_timeout(500)
+    L = app.page.evaluate(f"async () => (await import('./core/store.js')).db.get('letter_templates', {tid}).layout")
+    assert L['dior']['w'] == 60 and L['dior']['h'] == 15 and L['dior']['dy'] == -4, L
+    # Νέο Διάταγμα: με ΔΙΟΡΙΖΟΜΕΝ το «Περί» συμπληρώνεται, και η εικόνα μπαίνει στη θέση του ΔΙΟΡΙΖΟΜΕΝ
+    app.go('/decrees/new')
+    app.page.wait_for_selector('#df')
+    assert app.page.input_value('[name=matter]') == 'Διορισμού Μεγάλων Αξιωματικών'
+    app.page.select_option('#dAction', 'award')
+    assert app.page.input_value('[name=matter]') == ''
+    app.page.select_option('#dAction', 'appoint')
+    assert app.page.input_value('[name=matter]') == 'Διορισμού Μεγάλων Αξιωματικών'
+    app.go(f'/templates/{tid}/design')
+    app.page.wait_for_selector('#dzp .act-art.diorizomen')
+    assert not app.page.is_visible('#dOrig')  # χωρίς δική του εικόνα: όχι «Αρχική εικόνα»
+    app.page.set_input_files('input[data-up=dior]', str(ROOT / 'img' / 'diorizomen.png'))
+    app.page.wait_for_selector('#dOrig', state='visible')
+    app.page.click('#dOrig')
+    assert not app.page.is_visible('#dOrig') and app.page.input_value('[data-a=w]') == '45'
