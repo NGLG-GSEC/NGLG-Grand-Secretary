@@ -2353,6 +2353,9 @@ def test_declarations_constitution_helper_and_decree_signature(app):
     w = cp.evaluate("() => [document.documentElement.scrollWidth, document.documentElement.clientWidth]")
     assert w[0] <= w[1] + 1, w  # χωρίς οριζόντια υπερχείλιση
     assert cp.locator('a[href*="#/"]').count() == 0  # χωρίς συνδέσμους προς την εφαρμογή
+    # PDF του Συντάγματος: προβολή και λήψη
+    assert cp.locator('a.pdf-btn[href="constitution.pdf"][target=_blank]').count() == 1 and cp.locator('a.pdf-btn[download]').count() == 1
+    assert (ROOT / 'constitution' / 'constitution.pdf').read_bytes()[:5] == b'%PDF-'
     cp.close()
     # Διατάγματα: η υπογραφή έμεινε ως είχε (δεν είναι χαιρετισμός)
     html = app.page.evaluate("async () => (await import('./core/paper.js')).reportPaper('x', '', '', { signatures: true })")
