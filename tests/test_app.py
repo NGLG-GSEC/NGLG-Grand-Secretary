@@ -2486,7 +2486,7 @@ def test_decree_diorizomen_builder_and_appoint_matter(app):
       return { cx: ((a.left + a.right) / 2 - p.left) / mm, w: a.width / mm, h: a.height / mm, top: (a.top - p.top) / mm }; }"""
     g0 = app.page.evaluate(geo)
     assert abs(g0['w'] - 45) < 0.6 and abs(g0['h'] - 20.7) < 0.6 and abs(g0['cx'] - 105) < 2, g0
-    assert 'περί Διορισμού Μεγάλων Αξιωματικών,' in app.text('#dzp .decbody')
+    assert 'Κανονισμών,\nπερί Διορισμού Μεγάλων Αξιωματικών,' in app.text('#dzp .decbody')  # χωρίς κενή γραμμή ανάμεσα
     app.page.fill('[data-a=w]', '60')
     g1 = app.page.evaluate(geo)
     assert abs(g1['w'] - 60) < 0.6 and abs(g1['h'] - 60 * 0.4608) < 0.6 and abs(g1['cx'] - 105) < 2, g1

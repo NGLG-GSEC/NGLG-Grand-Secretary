@@ -46,7 +46,7 @@ export function decreeBody(matter, apps, iso, action = 'appoint', awardOffice = 
       ...apps.map((a) => '• ' + displayName(a)), '', end].join('\n').trim() };
   }
   const out = ['ΗΜΕΙΣ', 'Ο Μέγας Διδάσκαλος της Εθνικής Μεγάλης Στοάς της Ελλάδος,', 'Σεβασμιώτατος Αδελφός Ιωάννης Μπενετάτος,', 'λαβόντες υπ’ όψιν ' + (rules.length === 1 ? 'τον Κανόνα ' : 'τους Κανόνας ') + rules.join(' και '),
-    'του Βιβλίου των Γενικών Νόμων και Κανονισμών,', '', `περί ${matter},`, ''];
+    'του Βιβλίου των Γενικών Νόμων και Κανονισμών,', `περί ${matter},`, ''];
   if (action === 'award') {
     out.push('ΑΠΟΝΕΜΕΙ', '', 'τον Τίτλον του ' + (AWARD_MAP[awardOffice] || awardOffice), apps.length === 1 ? 'τον κάτωθι Αδελφόν:' : 'τους κάτωθι Αδελφούς:', '', ...apps.map((a) => '• ' + displayName(a)));
   } else {
@@ -70,6 +70,8 @@ const apps = (d) => { try { return typeof d.appointments === 'string' ? JSON.par
 const decreeNo = (d) => `${d.decree_no}/${d.decree_year}`;
 // Ονόματα των Αδελφών στο Διάταγμα (η γραμμή μετά το «… Αδελφόν» και οι γραμμές «• …»): έντονα, 20px
 const NAME_AFTER = /^(τον [^\n]*Αδελφόν\n)([^\n]+)$/gm, NAME_BULLET = /^(• )([^\n]+)$/gm;
+// Χωρίς κενή γραμμή ανάμεσα στο «… Κανονισμών,» και στο «περί …» (και στα ήδη αποθηκευμένα Διατάγματα)
+const tightPeri = (t) => String(t || '').replace(/(Γενικών Νόμων και Κανονισμών,)[ \t]*\n\s*\n(\s*περί )/, '$1\n$2');
 const markNames = (text, wrap) => String(text || '').replace(NAME_AFTER, (_, a, n) => a + wrap(n)).replace(NAME_BULLET, (_, a, n) => a + wrap(n));
 const fileName = (d) => (d.protocol_seq ? docTitle(d.protocol_seq, 'ΔΙΑΤΑΓΜΑ', `${decreeNo(d)} ${d.matter || ''}`) : safeFileName(`ΔΙΑΤΑΓΜΑ ${decreeNo(d)} ${d.matter || ''}`));
 // Εικόνα της Σχεδίασης σελίδας ως PNG (το Word δέχεται με ασφάλεια PNG)
@@ -108,7 +110,7 @@ async function decreeDocxBlob(d) {
   const PT = 72 / 25.4, MARGIN_TOP = 1000 / 1440 * 25.4; // περιθώριο σελίδας (mm)
   const blocks = letterBlocks({ noHead: top != null, topSpace: top != null ? (top - MARGIN_TOP) * PT : 0, org: S('organization_name'), founded: S('founded_year'), gmTitle: S('grand_master_title'), gmName: S('grand_master_name'),
     number: d.protocol_seq ? String(d.protocol_seq) : (d.protocol_no || ''), date: fmtDate(d.decree_date), place: 'Εν Αθήναις', title: `ΔΙΑΤΑΓΜΑ υπ’ αριθμ. ${decreeNo(d)}`,
-    paragraphs: (decreeKey(d) === 'decree-general' ? String(d.body || '') : markNames(d.body, (n) => `[b][size=15]${n}[/size][/b]`)).split(/\n\s*\n/).map((t) => ({ text: t.trim(), align: 'center', bold: /^(ΗΜΕΙΣ|ΔΙΟΡΙΖΟΜΕΝ|ΑΠΟΝΕΜΕΙ|ΕΥΑΡΕΣΤΟΥΜΕΘΑ)/.test(t.trim()) })),
+    paragraphs: (decreeKey(d) === 'decree-general' ? String(d.body || '') : markNames(tightPeri(d.body), (n) => `[b][size=15]${n}[/size][/b]`)).split(/\n\s*\n/).map((t) => ({ text: t.trim(), align: 'center', bold: /^(ΗΜΕΙΣ|ΔΙΟΡΙΖΟΜΕΝ|ΑΠΟΝΕΜΕΙ|ΕΥΑΡΕΣΤΟΥΜΕΘΑ)/.test(t.trim()) })),
     artwork: Object.fromEntries(Object.entries(DECREE_ARTWORK).map(([w, a]) => [w, w === 'ΔΙΟΡΙΖΟΜΕΝ' ? { img: dioImg, width: +(Math.max(5, +dio.w) / 10).toFixed(2) } : { img: a.img, width: a.word }])),
     signature: IMG.signature, signer: 'Δημήτριος Σκιαδόπουλος', signerTitle: 'Ο ΜΕΓΑΣ ΓΡΑΜΜΑΤΕΑΣ',
     head: headOn(L.head) ? { ...L.head, lines: L.head.lines.map((l) => ({ ...l, hex: (HEAD_COLORS[l.color] || HEAD_COLORS.navy).slice(1).toUpperCase() })) } : null });
@@ -122,7 +124,7 @@ export function decreePaper(d, opts = {}) {
   const action = meta(d).action, general = decreeKey(d) === 'decree-general';
   const L = opts.layout || layoutOf(decreeTemplate(decreeKey(d))), urls = opts.urls || {}, layers = pageLayers(L, urls), top = layoutTop(L, urls);
   const bodyHtml = general ? richHtml(d.body, { links: false }).replace(/^([Α-ΩΆ-Ώ][Α-ΩΆ-ΏΪΫ ’'΄-]{3,})$/gm, '<b>$1</b>')
-    : markNames(richHtml(d.body, { links: false }).replace(/^(ΗΜΕΙΣ|ΔΙΟΡΙΖΟΜΕΝ|ΑΠΟΝΕΜΕΙ|ΕΥΑΡΕΣΤΟΥΜΕΘΑ ΝΑ ΑΠΟΝΕΙΜΩΜΕΝ)$/gm, '<b>$1</b>'), (n) => `<span class="dec-name">${n}</span>`);
+    : markNames(richHtml(tightPeri(d.body), { links: false }).replace(/^(ΗΜΕΙΣ|ΔΙΟΡΙΖΟΜΕΝ|ΑΠΟΝΕΜΕΙ|ΕΥΑΡΕΣΤΟΥΜΕΘΑ ΝΑ ΑΠΟΝΕΙΜΩΜΕΝ)$/gm, '<b>$1</b>'), (n) => `<span class="dec-name">${n}</span>`);
   // «ΗΜΕΙΣ» / «ΔΙΟΡΙΖΟΜΕΝ»: καλλιγραφικές εικόνες, μεγάλες και πίσω από το κείμενο (πιάνουν λίγο ύψος — το κεφαλαίο απλώνεται προς τα πάνω)
   // η γραμμή μόνο με τη λέξη (ό,τι μορφοποίηση κι αν έχει: έντονα, μέγεθος, κενά) γίνεται εικόνα
   const hmeisHtml = Object.entries(DECREE_ARTWORK).reduce((h, [w, a]) => h.replace(new RegExp(`^(?:<[^>]+>|[ \\t])*${w}(?:</[^>]+>|[ \\t])*$`, 'm'),
