@@ -2516,3 +2516,35 @@ def test_decree_diorizomen_builder_and_appoint_matter(app):
     app.page.wait_for_selector('#dOrig', state='visible')
     app.page.click('#dOrig')
     assert not app.page.is_visible('#dOrig') and app.page.input_value('[data-a=w]') == '45'
+
+
+def test_declarations_protocol_and_report_need_code(browser, base_url):
+    # «🔒 ΠΡΩΤΟΚΟΛΛΟ ΕΞΕΡΧΟΜΕΝΩΝ» και «🔒 Διαχειριστική Αναφορά»: φαίνονται πάντα, ανοίγουν μόνο με τον κωδικό (έλεγχος στον server)
+    import json
+    page = browser.new_page()
+    page.route('https://accounts.google.com/**', lambda r: r.abort())
+    page.context.route('https://drive.google.com/**', lambda r: r.fulfill(body='drive'))
+    page.route('https://script.google.com/**', lambda r: r.fulfill(json={'ok': json.loads(r.request.post_data or '{}').get('key') == 'test-key', 'data': {}, 'decisions': {}}))
+    page.goto(base_url + 'declarations/#form')
+    assert page.is_visible('.tab-btn[data-view=report]')
+    assert page.locator('a[href*="drive.google.com"]').count() == 0  # ο σύνδεσμος δεν είναι ανοιχτός στη σελίδα
+    page.click('button.header-link')
+    page.fill('#protocol-pass', 'wrong')
+    page.click('#protocol-dlg .btn-submit')
+    page.wait_for_selector('#protocol-msg.error')
+    assert 'Λανθασμένος' in page.inner_text('#protocol-msg')
+    with page.context.expect_page() as popup:
+        page.fill('#protocol-pass', 'test-key')
+        page.click('#protocol-dlg .btn-submit')
+    popup.value.wait_for_url('https://drive.google.com/**')
+    assert not page.is_visible('#protocol-dlg')
+    page.close()
+    page = browser.new_page()
+    page.route('https://accounts.google.com/**', lambda r: r.abort())
+    page.route('https://script.google.com/**', lambda r: r.fulfill(json={'ok': json.loads(r.request.post_data or '{}').get('key') == 'test-key', 'data': {}, 'decisions': {}}))
+    page.goto(base_url + 'declarations/#report')
+    assert page.is_visible('#admin-pass')  # κωδικός πρώτα, χωρίς άνοιγμα πτυσσόμενου
+    page.fill('#admin-pass', 'test-key')
+    page.press('#admin-pass', 'Enter')
+    page.wait_for_selector('#report-content', state='visible')
+    page.close()

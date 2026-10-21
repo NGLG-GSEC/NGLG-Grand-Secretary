@@ -510,6 +510,12 @@
       font-size: 13px; font-weight: 600; letter-spacing: 1px;
     }
     .header-link:hover { background: var(--gold); color: var(--primary); }
+    button.header-link { cursor: pointer; font-family: inherit; }
+    .code-dlg { border: 1px solid var(--gold); border-radius: 12px; padding: 22px; max-width: 360px; width: 90%; }
+    .code-dlg::backdrop { background: rgba(7, 20, 38, .55); }
+    .code-dlg h3 { margin: 0 0 12px; color: var(--primary); }
+    .code-dlg input { width: 100%; margin: 6px 0 4px; }
+    .code-dlg .dlg-actions { display: flex; gap: 8px; margin-top: 12px; }
     /* Μέσα στην Ψηφιακή Μεγάλη Γραμματεία (?embed=1): χωρίς τη μεγάλη κεφαλίδα */
     body.embed header { display: none; }
     body.embed .nav-tabs { display: none; } /* μέσα στην εφαρμογή: μόνο το μενού της εφαρμογής */
@@ -530,7 +536,7 @@
     <h2>Μεγάλη Γραμματεία</h2>
     <div class="header-divider"></div>
     <h3 id="view-title">Πίνακας Δήλωσης Διάθεσης για Εκπροσώπηση Μ.Δ. σε Εγκαταστάσεις Σεβ. Διδ.</h3>
-    <a class="header-link" href="https://drive.google.com/drive/folders/1kKR7v86jjs5QJE9-K5uUebvS6nZd9J03?usp=sharing" target="_blank" rel="noopener">ΠΡΩΤΟΚΟΛΛΟ ΕΞΕΡΧΟΜΕΝΩΝ</a>
+    <button type="button" class="header-link" onclick="openProtocol()">🔒 ΠΡΩΤΟΚΟΛΛΟ ΕΞΕΡΧΟΜΕΝΩΝ</button>
   </header>
 
   <div class="container">
@@ -538,7 +544,7 @@
     <div class="nav-tabs">
       <button class="tab-btn active" data-view="form" onclick="switchView('form')">Δήλωση Ενδιαφέροντος</button>
       <button class="tab-btn" data-view="programme" onclick="switchView('programme')">Πρόγραμμα Επισκέψεων Μ.Δ.</button>
-      <button class="tab-btn" data-view="report" onclick="switchView('report')" hidden>Διαχειριστική Αναφορά & PDF</button>
+      <button class="tab-btn" data-view="report" onclick="switchView('report')">🔒 Διαχειριστική Αναφορά & PDF</button>
     </div>
 
     <!-- VIEW 1: Φόρμα Δήλωσης Ενδιαφέροντος -->
@@ -603,18 +609,19 @@
       <div id="auth-box" class="card" style="max-width: 480px; margin: 40px auto; text-align: center;">
         <h2 class="card-title" style="border: none; padding: 0;">Είσοδος Μεγάλης Γραμματείας</h2>
         <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 20px;">
-          Συνδεθείτε με τον λογαριασμό Google της Μεγάλης Γραμματείας. Μετά την πρώτη φορά, η αναφορά ανοίγει αυτόματα σε αυτόν τον browser.
+          Όλες οι δηλώσεις πρόθεσης επίσκεψης. Γράψτε τον κωδικό πρόσβασης της Μεγάλης Γραμματείας.
         </p>
-        <div id="google-btn"></div>
-        <p id="auth-status" class="auth-status"></p>
-        <details class="auth-alt" id="auth-alt">
+        <details class="auth-alt" id="auth-alt" open>
           <summary>Είσοδος με κωδικό</summary>
           <div class="form-group">
             <label for="admin-pass">Κωδικός Πρόσβασης:</label>
-            <input type="password" id="admin-pass" placeholder="Εισάγετε τον κωδικό">
+            <input type="password" id="admin-pass" placeholder="Εισάγετε τον κωδικό" autocomplete="off" onkeydown="if (event.key === 'Enter') checkAuth()">
           </div>
           <button class="btn-submit" id="auth-btn" onclick="checkAuth()">Εισοδος στην Αναφορα</button>
         </details>
+        <p style="font-size: 12px; color: var(--text-muted); margin: 18px 0 8px;">ή με λογαριασμό Google της Μεγάλης Γραμματείας:</p>
+        <div id="google-btn"></div>
+        <p id="auth-status" class="auth-status"></p>
       </div>
 
       <!-- Actual Report Content (Hidden initially) -->
@@ -661,6 +668,17 @@
       </div>
     </div>
   </div>
+
+  <!-- Κωδικός για το Πρωτόκολλο Εξερχομένων (ο έλεγχος γίνεται στον server: ίδιος κωδικός με την Αναφορά) -->
+  <dialog id="protocol-dlg" class="code-dlg">
+    <form method="dialog" onsubmit="return false">
+      <h3>🔒 Πρωτόκολλο Εξερχομένων</h3>
+      <label for="protocol-pass">Κωδικός Πρόσβασης:</label>
+      <input type="password" id="protocol-pass" autocomplete="off" onkeydown="if (event.key === 'Enter') { event.preventDefault(); submitProtocol(); }">
+      <p id="protocol-msg" class="auth-status"></p>
+      <div class="dlg-actions"><button type="button" class="btn-submit" onclick="submitProtocol()">Άνοιγμα</button><button type="button" class="btn-cancel" onclick="document.getElementById('protocol-dlg').close()">Ακύρωση</button></div>
+    </form>
+  </dialog>
 
   <script src="officers.js"></script>
   <script src="config.js"></script>
@@ -1096,6 +1114,30 @@
       showAdminTab();
       authStatus("Συνδεθήκατε ως " + email + ".");
       if (currentView() === "report") await openReport();
+    }
+
+    // ---- Πρωτόκολλο Εξερχομένων: ανοίγει μόνο με τον κωδικό πρόσβασης (ή μετά την είσοδο στην Αναφορά) ----
+    const PROTOCOL_URL = "https://drive.google.com/drive/folders/1kKR7v86jjs5QJE9-K5uUebvS6nZd9J03";
+    function openProtocol() {
+      if (idToken || adminKey) { window.open(PROTOCOL_URL, "_blank", "noopener"); return; }
+      const d = document.getElementById("protocol-dlg");
+      document.getElementById("protocol-pass").value = "";
+      document.getElementById("protocol-msg").textContent = "";
+      d.showModal();
+      document.getElementById("protocol-pass").focus();
+    }
+    async function submitProtocol() {
+      const key = document.getElementById("protocol-pass").value, msg = document.getElementById("protocol-msg");
+      if (!key) return;
+      const w = window.open("", "_blank"); // ανοίγει αμέσως (μέσα στο πάτημα), ώστε να μην το μπλοκάρει ο browser
+      msg.className = "auth-status"; msg.textContent = "Έλεγχος…";
+      try {
+        const r = await callApi({ action: "report", key: key });
+        if (!r.ok) { if (w) w.close(); msg.className = "auth-status error"; msg.textContent = "Λανθασμένος κωδικός."; return; }
+        adminKey = key;
+        document.getElementById("protocol-dlg").close();
+        if (w) w.location.href = PROTOCOL_URL; else location.href = PROTOCOL_URL;
+      } catch (e) { if (w) w.close(); msg.className = "auth-status error"; msg.textContent = apiErrorText(e); }
     }
 
     async function checkAuth() {
