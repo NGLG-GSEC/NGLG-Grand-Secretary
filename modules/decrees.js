@@ -403,7 +403,7 @@ ${k === 'bg' ? '<label>Διαφάνεια<input type="range" min="0.05" max="1" 
     title: 'Σχεδίαση σελίδας',
     html: `<p><a href="#/templates">← Πρότυπα</a></p><h1>🎨 Σχεδίαση σελίδας — ${esc(t.name)}</h1>
 <p class="muted">Ανεβάστε εικόνα κεφαλίδας και φόντου και τοποθετήστε τες στη σελίδα Α4 (210 × 297 mm): σύρετε την εικόνα για να τη μετακινήσετε και τη γωνία ◢ για να αλλάξετε μέγεθος — ή γράψτε τις τιμές σε mm. Ισχύει για κάθε Διάταγμα αυτού του είδους (οθόνη, εκτύπωση, PDF).</p>
-<div class="dz-split"><div class="dz-controls">${headCard}${card('header')}${officeCard}${card('bg')}
+<div class="dz-split"><div class="dz-controls">${card('header')}${headCard}${officeCard}${card('bg')}
 <div class="toolbar"><button class="btn primary" data-act="saveLayout">💾 Αποθήκευση σχεδίασης</button><a class="btn" href="#/templates">Ακύρωση</a></div></div>
 <div class="dz-page"><div class="dz-wrap" id="dzp"></div></div></div>`,
     mount(el) {
