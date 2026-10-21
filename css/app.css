@@ -412,3 +412,5 @@ input[type=file]{max-width:100%;min-width:0}
 .hd-opts label{display:flex;align-items:center;gap:3px;font-size:.85em}
 .hd-opts input[type=number]{width:62px}
 @media screen and (max-width:600px){.paper{--padl:7vw}}
+.dz-box.dz-office{outline-color:#15803d;background:rgba(21,128,61,.06)}
+.dz-box.dz-office .dz-tag{background:#15803d}.dz-box.dz-office .dz-h{background:#15803d}

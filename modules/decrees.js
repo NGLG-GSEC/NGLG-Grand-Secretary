@@ -122,14 +122,16 @@ export function decreePaper(d, opts = {}) {
 }
 
 // «Εικόνα αξιώματος» της Σχεδίασης σελίδας: δίπλα στη γραμμή του αξιώματος (μετά το «ως» του ΔΙΟΡΙΖΟΜΕΝ ή «τον Τίτλον του …»),
-// κεντραρισμένη κάθετα στη γραμμή, στο κέντρο-δεξιά του Α4 (x = αριστερή άκρη σε mm από την άκρη της σελίδας), ώστε να μην ακουμπά το κείμενο
-export const OFFICE_DEFAULT = { size: 90, x: 150 };
+// κεντραρισμένη κάθετα στη γραμμή, στο κέντρο-δεξιά του Α4 (x = αριστερή άκρη σε mm από την άκρη της σελίδας), ώστε να μην ακουμπά το κείμενο·
+// dy = κάθετη μετατόπιση (mm) από το κέντρο της γραμμής
+export const OFFICE_DEFAULT = { size: 90, x: 150, dy: 0 };
+const officeStyle = (px, x, dy) => `width:${px}px;height:${px}px;left:calc(${x}mm - var(--padl, 16mm));transform:translateY(calc(-50% + .75em + ${dy}mm))`;
 export function officeImage(html, L, urls = {}) {
   const o = L && L.office;
   if (!o || !(o.file || urls.office)) return html;
-  const px = Math.min(300, Math.max(20, +o.size || OFFICE_DEFAULT.size)), x = +o.x || OFFICE_DEFAULT.x;
+  const px = Math.min(300, Math.max(20, +o.size || OFFICE_DEFAULT.size)), x = +o.x || OFFICE_DEFAULT.x, dy = +o.dy || 0;
   const src = urls.office ? ` src="${esc(urls.office)}"` : ` data-dfile="${esc(o.file)}"`;
-  const img = `<img class="dec-office-img" data-layer="office" alt=""${src} style="width:${px}px;height:${px}px;left:calc(${x}mm - var(--padl, 16mm))">`;
+  const img = `<img class="dec-office-img" data-layer="office" alt=""${src} style="${officeStyle(px, x, dy)}">`;
   return html.replace(/^(ως\n)([^\n]+)$/gm, `$1<span class="dec-office">$2</span>${img}`).replace(/^(τον Τίτλον του [^\n]+)$/m, `<span class="dec-office">$1</span>${img}`);
 }
 
@@ -396,7 +398,8 @@ ${k === 'bg' ? '<label>Διαφάνεια<input type="range" min="0.05" max="1" 
 <small class="muted">Ισχύει όταν δεν υπάρχει εικόνα κεφαλίδας. Χωρίς προσαρμογή: η κανονική κεφαλίδα (Ρυθμίσεις).</small></div>`;
   const officeCard = `<div class="card dz-layer" data-layer="office"><h3 style="margin-top:0">Εικόνα αξιώματος (δίπλα στο αξίωμα του διορισμού)</h3>
 <label class="dz-file">🖼 Ανέβασμα εικόνας (JPEG, PNG)<input type="file" accept="image/jpeg,image/png,image/webp" data-up="office"></label>
-<div class="dz-has" data-has="office"><div class="dz-nums"><label>Μέγεθος (px, τετράγωνο)<input type="number" step="1" data-o="size"></label><label>Θέση X (mm από αριστερά)<input type="number" step="0.5" data-o="x"></label></div>
+<div class="dz-has" data-has="office"><div class="dz-nums"><label>Μέγεθος (px, τετράγωνο)<input type="number" step="1" data-o="size"></label><label>Θέση X (mm από αριστερά)<input type="number" step="0.5" data-o="x"></label><label>Κάθετη μετατόπιση (mm, + κάτω)<input type="number" step="0.5" data-o="dy"></label></div>
+<small class="muted">Στην προεπισκόπηση: σύρετε την εικόνα (πλαίσιο «Αξίωμα») για μετακίνηση και τη γωνία ◢ για μέγεθος.</small>
 <div class="toolbar"><button type="button" class="btn small" data-opreset="default">90×90 · κέντρο-δεξιά</button><button type="button" class="btn small danger" data-preset="office:remove">Αφαίρεση εικόνας</button></div></div>
 <small class="muted" data-none="office">Χωρίς εικόνα. Μπαίνει στο ύψος της γραμμής του αξιώματος, στο δεξί μισό της σελίδας, χωρίς να ακουμπά το κείμενο.</small></div>`;
   return {
@@ -438,6 +441,15 @@ ${k === 'bg' ? '<label>Διαφάνεια<input type="range" min="0.05" max="1" 
         for (const n of p.querySelectorAll(`[data-layer=${k}]`)) Object.assign(n.style, { left: L[k].x + 'mm', top: L[k].y + 'mm', width: L[k].w + 'mm', height: L[k].h + 'mm' });
         if (k === 'header') { const top = layoutTop(L, urls); if (top != null) p.style.setProperty('--pt', top + 'mm'); }
       };
+      // εικόνα αξιώματος: ενημέρωση εικόνων και πλαισίου χωρίς νέα απόδοση (το πλαίσιο πάνω στην 1η εικόνα)
+      const placeOffice = () => {
+        const p = box.querySelector('.paper'), o = L.office; if (!p || !o) return;
+        const px = Math.min(300, Math.max(20, +o.size || OFFICE_DEFAULT.size));
+        p.querySelectorAll('.dec-office-img').forEach((i) => { i.style.cssText = officeStyle(px, +o.x || OFFICE_DEFAULT.x, +o.dy || 0); });
+        const i = p.querySelector('.dec-office-img'), h = p.querySelector('.dz-office'); if (!i || !h) return;
+        const pr = p.getBoundingClientRect(), ir = i.getBoundingClientRect(), mm = A4.w / pr.width;
+        Object.assign(h.style, { left: (ir.left - pr.left) * mm + 'mm', top: (ir.top - pr.top) * mm + 'mm', width: ir.width * mm + 'mm', height: ir.height * mm + 'mm' });
+      };
       const render = () => {
         box.innerHTML = decreePaper(sample, { layout: L, urls });
         const p = box.querySelector('.paper');
@@ -447,6 +459,12 @@ ${k === 'bg' ? '<label>Διαφάνεια<input type="range" min="0.05" max="1" 
           h.className = `dz-box dz-${k}`; h.dataset.layer = k; h.title = 'Σύρετε για μετακίνηση · γωνία για μέγεθος';
           h.innerHTML = `<span class="dz-tag">${k === 'bg' ? 'Φόντο' : 'Κεφαλίδα'}</span><span class="dz-h" data-resize="${k}">◢</span>`;
           p.appendChild(h); place(k);
+        }
+        if (p.querySelector('.dec-office-img')) {
+          const h = document.createElement('div');
+          h.className = 'dz-box dz-office'; h.dataset.layer = 'office'; h.title = 'Σύρετε για μετακίνηση · γωνία για μέγεθος';
+          h.innerHTML = '<span class="dz-tag">Αξίωμα</span><span class="dz-h" data-resize="office">◢</span>';
+          p.appendChild(h); placeOffice();
         }
         syncInputs();
       };
@@ -459,6 +477,11 @@ ${k === 'bg' ? '<label>Διαφάνεια<input type="range" min="0.05" max="1" 
         b.setPointerCapture(e.pointerId);
         const move = (ev) => {
           const dx = (ev.clientX - x0) * mm, dy = (ev.clientY - y0) * mm;
+          if (k === 'office') { // μέγεθος σε px (1 mm = 96/25.4 px), θέση X και κάθετη μετατόπιση σε mm
+            if (resize) L.office.size = Math.max(20, Math.min(300, Math.round((+start.size || OFFICE_DEFAULT.size) + dx * 96 / 25.4)));
+            else { L.office.x = r1((+start.x || OFFICE_DEFAULT.x) + dx); L.office.dy = r1((+start.dy || 0) + dy); }
+            placeOffice(); syncInputs(); return;
+          }
           if (resize) {
             const w = Math.max(5, r1(start.w + dx));
             L[k].w = w; L[k].h = el.querySelector(`[data-lock=${k}]`).checked && ratio[k] ? r1(w * ratio[k]) : Math.max(5, r1(start.h + dy));
@@ -481,7 +504,7 @@ ${k === 'bg' ? '<label>Διαφάνεια<input type="range" min="0.05" max="1" 
       };
       el.addEventListener('input', (e) => {
         if (headInput(e)) return;
-        if (e.target.dataset.o && L.office) { const v = Number(e.target.value); if (Number.isFinite(v)) { L.office[e.target.dataset.o] = v; render(); } return; }
+        if (e.target.dataset.o && L.office) { const v = Number(e.target.value); if (Number.isFinite(v)) { L.office[e.target.dataset.o] = v; placeOffice(); } return; }
         const i = e.target; if (!i.dataset.k || !L[i.dataset.k]) return;
         const k = i.dataset.k, f = i.dataset.f, v = Number(i.value);
         if (!Number.isFinite(v)) return;

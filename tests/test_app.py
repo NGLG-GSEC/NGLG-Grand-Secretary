@@ -2446,6 +2446,19 @@ def test_decree_design_header_builder_and_office_image(app):
       return { left: (i.left - p.left) / mm, right: (i.right - p.left) / mm, w: i.width / mm, txtRight: (s.right - p.left) / mm,
         dy: Math.abs((i.top + i.bottom) / 2 - (s.top + s.bottom) / 2) / mm }; }""")
     assert abs(b['left'] - 150) < 1 and b['right'] < 194 and abs(b['w'] - 90 * 25.4 / 96) < 1 and b['txtRight'] < b['left'] and b['dy'] < 1.5, b
+    # σύρσιμο του πλαισίου «Αξίωμα»: 10 mm δεξιά και 5 mm κάτω· η γωνία ◢ μεγαλώνει την εικόνα
+    def drag(sel, dx_mm, dy_mm):
+        pw = app.page.evaluate("document.querySelector('#dzp .paper').getBoundingClientRect().width")
+        r = app.page.locator(sel).bounding_box()
+        x, y = r['x'] + r['width'] / 2, r['y'] + r['height'] / 2
+        app.page.mouse.move(x, y); app.page.mouse.down()
+        app.page.mouse.move(x + dx_mm * pw / 210, y + dy_mm * pw / 210, steps=5); app.page.mouse.up()
+    drag('#dzp .dz-office', 10, 5)
+    assert abs(float(app.page.input_value('[data-o=x]')) - 160) < 0.6 and abs(float(app.page.input_value('[data-o=dy]')) - 5) < 0.6
+    drag('#dzp .dz-office .dz-h', 5, 0)
+    assert int(app.page.input_value('[data-o=size]')) > 100
+    app.page.click('[data-opreset=default]')
+    assert app.page.input_value('[data-o=x]') == '150' and app.page.input_value('[data-o=size]') == '90'
     app.click('💾 Αποθήκευση σχεδίασης')
     app.page.wait_for_timeout(500)
     L = app.page.evaluate(f"async () => (await import('./core/store.js')).db.get('letter_templates', {tid}).layout")
