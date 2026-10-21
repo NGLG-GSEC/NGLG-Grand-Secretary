@@ -30,3 +30,10 @@ module({
     }),
   },
 });
+
+// Σύνταγμα (Βοηθός Συντάγματος): πλακίδιο στην Αρχική που ανοίγει μόνο την αυτόνομη σελίδα constitution/ σε νέα καρτέλα
+module({
+  id: 'constitution-tile',
+  tile: { order: 32, render: () => `<div class="dtile"><h3><a href="constitution/" target="_blank" rel="noopener">📜 Σύνταγμα</a></h3><div class="muted">Βοηθός Συντάγματος — Γενικοί Νόμοι και Κανονισμοί (αυτόνομη σελίδα, για αποστολή)</div>
+<div class="acts"><a class="btn primary" href="constitution/" target="_blank" rel="noopener">Άνοιγμα ↗</a></div></div>` },
+});

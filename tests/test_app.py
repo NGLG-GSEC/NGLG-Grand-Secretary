@@ -2344,6 +2344,9 @@ def test_declarations_constitution_helper_and_decree_signature(app):
     assert 'Συντάγματ' not in app.text() and app.page.locator('#constFrame, .constitution-box, #constLink').count() == 0
     app.go('/portal')
     assert app.page.locator('a[href*="constitution"]').count() == 0
+    app.go('/')  # μόνο πλακίδιο στην Αρχική, που ανοίγει την αυτόνομη σελίδα
+    t = app.page.locator('.dtile', has_text='📜 Σύνταγμα')
+    assert t.count() == 1 and t.locator('a.btn').get_attribute('href') == 'constitution/' and t.locator('a.btn').get_attribute('target') == '_blank'
     cp = app.page.context.new_page()
     cp.goto(app.page.url.split('#')[0] + 'constitution/')
     cp.locator('#emptyState').first.wait_for(state='attached')
