@@ -2439,6 +2439,11 @@ def test_decree_design_header_builder_and_office_image(app):
     app.page.locator('.hd-line select[data-f=color]').last.select_option('gold')
     app.page.set_input_files('input[data-up=office]', str(ROOT / 'programme' / 'emblem.jpg'))
     app.page.wait_for_selector('#dzp .dec-office-img')
+    # όνομα του Αδελφού έντονα 20px· το ΗΜΕΙΣ δεν ακουμπά τη γραμμή «υπ’ αριθμ. …, ημερ. …»· νέα εικόνα ΔΙΟΡΙΖΟΜΕΝ
+    st = app.page.evaluate("""() => { const p = document.querySelector('#dzp .paper').getBoundingClientRect(), mm = p.width / 210, g = (s) => document.querySelector('#dzp ' + s).getBoundingClientRect(),
+      n = getComputedStyle(document.querySelector('#dzp .dec-name')); return { name: document.querySelector('#dzp .dec-name').textContent, w: n.fontWeight, fs: n.fontSize,
+      gap: (g('.hmeis img').top - g('.dec-no').bottom) / mm, no: document.querySelector('#dzp .dec-no').textContent, dio: g('.diorizomen img').width / g('.diorizomen img').height }; }""")
+    assert st['name'] == 'Ιωάννην Παπαδόπουλον' and st['w'] == '700' and st['fs'] == '20px' and st['gap'] > 1.5 and ', ημερ. ' in st['no'] and st['dio'] > 4, st
     head = app.text('#dzp .head-custom')
     assert 'ΚΕΦΑΛΙΔΑ ΔΟΚΙΜΗΣ' in head and 'Γραμμή χρυσή' in head
     b = app.page.evaluate("""() => { const p = document.querySelector('#dzp .paper').getBoundingClientRect(), mm = p.width / 210,

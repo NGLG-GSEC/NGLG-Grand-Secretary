@@ -192,8 +192,8 @@ textarea.short{min-height:90px}
 .tablecard{overflow:auto}
 @media print{body{background:#fff}.top,.noprint,#toasts,.wrap>*:not(.paper):not(.print-area){display:none!important}.print-area>*:not(.paper){display:none!important}.paper{margin:0;padding:13mm 16mm 18mm;box-shadow:none;width:auto;min-height:0}}
 .decree-banner{background:#fff8e9;border:1px solid #d7bc83}
-.dec-title{text-align:center;font:900 21px Georgia,'Times New Roman',serif;letter-spacing:1.6px;margin:9mm 0 1mm}
-.dec-no{text-align:center;font-weight:bold;font-size:13pt;margin-bottom:6mm}
+.dec-title{text-align:center;font:900 21px Georgia,'Times New Roman',serif;letter-spacing:1.6px;margin:calc(9mm - 34px) 0 1mm}
+.dec-no{text-align:center;font-weight:bold;font-size:13pt;margin-bottom:calc(6mm + 18px)}
 .decbody{white-space:pre-wrap;line-height:1.5;color:#111;text-align:center}
 .decsig{display:grid;grid-template-columns:1fr 48mm 1fr;gap:7mm;text-align:center;align-items:start;margin-top:10mm}
 .decsig .t{font-weight:900;margin-bottom:2mm}.decsig .signature-img{height:18mm;width:46mm}.decsig .seal-img{margin:auto;width:40mm;height:40mm}
@@ -393,7 +393,7 @@ input[type=file]{max-width:100%;min-width:0}
 .decbody{position:relative;z-index:0}
 .decbody .hmeis{display:inline-block;position:relative;width:39mm;height:8.25mm;vertical-align:bottom}
 .decbody .hmeis img{position:absolute;left:-11mm;bottom:0;width:39mm;height:auto;z-index:-1;pointer-events:none}
-.decbody .diorizomen{display:inline-block;position:relative;width:28mm;height:6.5mm;vertical-align:bottom}
+.decbody .diorizomen{display:inline-block;position:relative;width:28mm;height:5.8mm;vertical-align:bottom}
 .decbody .diorizomen img{position:absolute;left:0;bottom:0;width:28mm;height:auto;z-index:-1;pointer-events:none}
 /* «ΑΠΟΝΕΜΕΙ»: τα γράμματα στη γραμμή, τα στολίδια πάνω/κάτω πίσω από το κείμενο */
 .decbody .aponemei{display:inline-block;position:relative;width:37mm;height:6mm;vertical-align:bottom}
@@ -414,3 +414,5 @@ input[type=file]{max-width:100%;min-width:0}
 @media screen and (max-width:600px){.paper{--padl:7vw}}
 .dz-box.dz-office{outline-color:#15803d;background:rgba(21,128,61,.06)}
 .dz-box.dz-office .dz-tag{background:#15803d}.dz-box.dz-office .dz-h{background:#15803d}
+/* Όνομα του Αδελφού στο Διάταγμα: έντονα 20px, με αρκετό διάστιχο ώστε να μην ακουμπά τις διπλανές γραμμές */
+.decbody .dec-name{display:inline-block;font-weight:700;font-size:20px;line-height:1.35;margin:1mm 0}
