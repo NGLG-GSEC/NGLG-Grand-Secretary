@@ -5,7 +5,9 @@ import { db } from './store.js';
 import { loadScript } from './pdf.js';
 
 export const DRIVE_FOLDER_DEFAULT = '1kKR7v86jjs5QJE9-K5uUebvS6nZd9J03';
-db.defaultSettings({ drive_folder_id: DRIVE_FOLDER_DEFAULT, google_client_id: '' });
+// Ο λογαριασμός Google που προτείνεται στο παράθυρο σύνδεσης για το Drive (πρέπει να έχει «Επεξεργασία» στον φάκελο)
+export const DRIVE_ACCOUNT_DEFAULT = 'info@nglgreece.gr';
+db.defaultSettings({ drive_folder_id: DRIVE_FOLDER_DEFAULT, google_client_id: '', drive_account: DRIVE_ACCOUNT_DEFAULT });
 const SCOPE = 'https://www.googleapis.com/auth/drive';
 const API = 'https://www.googleapis.com';
 export const folderId = () => { const v = String(db.setting('drive_folder_id') || DRIVE_FOLDER_DEFAULT).trim(); const m = /folders\/([\w-]+)/.exec(v); return m ? m[1] : v; };
@@ -29,7 +31,7 @@ export async function googleToken(scope = SCOPE, hint = '') {
     c.requestAccessToken({ prompt: '' });
   });
 }
-const getToken = () => googleToken(SCOPE);
+const getToken = () => googleToken(SCOPE, String(db.setting('drive_account') || DRIVE_ACCOUNT_DEFAULT).trim());
 
 async function api(path, opts = {}) {
   const t = await getToken();
