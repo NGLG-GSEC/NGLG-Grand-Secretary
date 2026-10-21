@@ -33,6 +33,24 @@ export function letterhead() {
 <div>${s('grand_master_title')}</div><div>${s('grand_master_name')}</div><div class="rule"></div></div>`;
 }
 
+// Κεφαλίδα κειμένων που διαμορφώνεται στη «Σχεδίαση σελίδας» του προτύπου (builder):
+// { on, emblem: true|false, emblem_w: mm, lines: [{ text, size (pt), bold, italic, color: 'navy'|'gold'|'black' }] }
+export const HEAD_COLORS = { navy: '#1f355d', gold: '#b18a43', black: '#111111' };
+export function defaultHead() {
+  const s = (k) => String(db.setting(k) || '');
+  return { on: true, emblem: true, emblem_w: 34, lines: [
+    { text: s('organization_name'), size: 22, bold: true, color: 'navy' },
+    { text: s('founded_year') ? `Έτος Ιδρύσεως ${s('founded_year')}` : '', size: 11, color: 'gold' },
+    { text: s('grand_master_title'), size: 11, color: 'navy' },
+    { text: s('grand_master_name'), size: 11, color: 'navy' },
+  ].filter((l) => l.text) };
+}
+export const headOn = (h) => !!(h && h.on && Array.isArray(h.lines));
+export function customHead(h) {
+  const line = (l) => `<div class="hl" style="font-size:${Math.min(40, Math.max(6, +l.size || 11))}pt;font-weight:${l.bold ? 700 : 400};font-style:${l.italic ? 'italic' : 'normal'};color:${HEAD_COLORS[l.color] || HEAD_COLORS.navy}">${esc(l.text || '')}</div>`;
+  return `<div class="head head-custom">${h.emblem !== false ? `<img src="${IMG.emblem}" alt="" style="width:${Math.min(80, Math.max(8, +h.emblem_w || 34))}mm">` : ''}${(h.lines || []).map(line).join('')}<div class="rule"></div></div>`;
+}
+
 export function signatureBlock(signer, protoImg = '') {
   const p = signerProfile(signer);
   return `<div class="sigrow"><div class="sign"><img class="signature-img" src="${p.img}" alt=""><div class="signature-line"></div>

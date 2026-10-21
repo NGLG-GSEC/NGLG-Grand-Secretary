@@ -400,3 +400,15 @@ input[type=file]{max-width:100%;min-width:0}
 .decbody .aponemei img{position:absolute;left:0;bottom:-1.27mm;width:37mm;height:auto;z-index:-1;pointer-events:none}
 .decltabs{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0 12px}
 
+
+/* Διάταγμα: κεφαλίδα κειμένων (builder) και εικόνα αξιώματος */
+.head-custom .hl{line-height:1.25;margin:0}
+.head-custom img{display:block;margin:0 auto 1mm}
+.paper{--padl:16mm}
+.decbody .dec-office-img{position:absolute;transform:translateY(calc(-50% + .75em));object-fit:contain;pointer-events:none;z-index:1}
+.hd-line{border:1px solid #e3e6ee;border-radius:8px;padding:6px;margin:6px 0;background:#fafbfd}
+.hd-line>input{width:100%}
+.hd-opts{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:4px}
+.hd-opts label{display:flex;align-items:center;gap:3px;font-size:.85em}
+.hd-opts input[type=number]{width:62px}
+@media screen and (max-width:600px){.paper{--padl:7vw}}

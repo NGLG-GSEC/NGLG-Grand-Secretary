@@ -2425,3 +2425,31 @@ def test_gm_decisions_applied_to_visits(app):
     app.go('/visits/decisions')
     app.page.wait_for_selector('#gmdApply')
     assert app.text().count('Ήδη ορισμένος') == 2 and app.page.locator('#gmdApply').is_disabled()
+
+
+def test_decree_design_header_builder_and_office_image(app):
+    # Σχεδίαση σελίδας Διατάγματος: builder κεφαλίδας κειμένων και εικόνα αξιώματος 90×90 στο κέντρο-δεξιά, στο ύψος του αξιώματος
+    app.connect_local()
+    tid = app.page.evaluate("async () => (await import('./core/store.js')).db.all('letter_templates').find((t) => t.key === 'decree-appoint').id")
+    app.go(f'/templates/{tid}/design')
+    app.page.check('#hdOn')
+    app.page.locator('.hd-line input[data-f=text]').first.fill('ΚΕΦΑΛΙΔΑ ΔΟΚΙΜΗΣ')
+    app.page.click('[data-hd=add]')
+    app.page.locator('.hd-line input[data-f=text]').last.fill('Γραμμή χρυσή')
+    app.page.locator('.hd-line select[data-f=color]').last.select_option('gold')
+    app.page.set_input_files('input[data-up=office]', str(ROOT / 'programme' / 'emblem.jpg'))
+    app.page.wait_for_selector('#dzp .dec-office-img')
+    head = app.text('#dzp .head-custom')
+    assert 'ΚΕΦΑΛΙΔΑ ΔΟΚΙΜΗΣ' in head and 'Γραμμή χρυσή' in head
+    b = app.page.evaluate("""() => { const p = document.querySelector('#dzp .paper').getBoundingClientRect(), mm = p.width / 210,
+      i = document.querySelector('#dzp .dec-office-img').getBoundingClientRect(), s = document.querySelector('#dzp .dec-office').getBoundingClientRect();
+      return { left: (i.left - p.left) / mm, right: (i.right - p.left) / mm, w: i.width / mm, txtRight: (s.right - p.left) / mm,
+        dy: Math.abs((i.top + i.bottom) / 2 - (s.top + s.bottom) / 2) / mm }; }""")
+    assert abs(b['left'] - 150) < 1 and b['right'] < 194 and abs(b['w'] - 90 * 25.4 / 96) < 1 and b['txtRight'] < b['left'] and b['dy'] < 1.5, b
+    app.click('💾 Αποθήκευση σχεδίασης')
+    app.page.wait_for_timeout(500)
+    L = app.page.evaluate(f"async () => (await import('./core/store.js')).db.get('letter_templates', {tid}).layout")
+    assert L['head']['on'] and L['head']['lines'][0]['text'] == 'ΚΕΦΑΛΙΔΑ ΔΟΚΙΜΗΣ' and L['office']['file'].endswith('.jpg') and L['office']['size'] == 90
+    # Word: η κεφαλίδα του builder περνά και στο έγγραφο
+    n = app.page.evaluate("async () => { const { letterBlocks } = await import('./core/docx.js'); return letterBlocks({ head: { emblem: true, lines: [{ text: 'Α', size: 22, bold: true, hex: '1F355D' }, { text: 'Β', size: 11 }] }, paragraphs: [] }).filter((b) => b.text === 'Α' || b.text === 'Β').length; }")
+    assert n == 2

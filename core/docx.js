@@ -101,9 +101,13 @@ export async function makeDocx(blocks, { title = '', author = '', anchors = [] }
 
 // Επιστολόχαρτο ΕΜΣτΕ: κεφαλίδα + στοιχεία + κείμενο + κλείσιμο/υπογραφή
 // noHead: χωρίς την κανονική κεφαλίδα (τη θέση της παίρνει εικόνα της Σχεδίασης σελίδας)· topSpace: κενό (pt) πάνω από το κείμενο
-export function letterBlocks({ base = '', org, founded, gmTitle, gmName, number, date, place, title, to, cc, subject, paragraphs = [], closing, signature, signer, signerTitle, noHead = false, topSpace = 0, artwork = {}, protoImg = '' }) {
+export function letterBlocks({ base = '', org, founded, gmTitle, gmName, number, date, place, title, to, cc, subject, paragraphs = [], closing, signature, signer, signerTitle, noHead = false, topSpace = 0, artwork = {}, protoImg = '', head = null }) {
   const B = [];
-  if (!noHead) {
+  if (!noHead && head) { // κεφαλίδα από τον builder της Σχεδίασης σελίδας: { emblem, emblem_w (mm), lines: [{ text, size, bold, italic, hex }] }
+    if (head.emblem !== false) B.push({ img: base + 'img/header_emblem.png', width: Math.max(0.8, (+head.emblem_w || 34) / 10 * 0.94) });
+    for (const l of head.lines || []) if (String(l.text || '').trim()) B.push({ text: l.text, align: 'center', bold: !!l.bold, italic: !!l.italic, size: Math.max(6, Math.round((+l.size || 11) * 0.68 * 2) / 2), color: l.hex || '1D2F5E', after: 0 });
+    B.push({ text: '', rule: true, after: 12 });
+  } else if (!noHead) {
     B.push({ img: base + 'img/header_emblem.png', width: 3.2 }, { text: org, align: 'center', bold: true, size: 15, color: '1D2F5E', after: 0 });
     if (founded) B.push({ text: `Έτος Ιδρύσεως ${founded}`, align: 'center', size: 10, color: 'B18A43', after: 0 });
     if (gmTitle || gmName) B.push({ text: [gmTitle, gmName].filter(Boolean).join('\n'), align: 'center', size: 10, after: 0 });

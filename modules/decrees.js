@@ -6,7 +6,7 @@ import { esc, today, fmtDate, matches, sortBy, safeFileName, parseIso, MONTHS_GE
 import { makeDocx, letterBlocks } from '../core/docx.js';
 import { richHtml } from '../core/rich.js';
 import { docTitle, driveBox, saveDocToDrive } from '../core/drive.js';
-import { letterhead, IMG, printPaper, pageLayers, layoutTop } from '../core/paper.js';
+import { letterhead, IMG, printPaper, pageLayers, layoutTop, customHead, defaultHead, headOn, HEAD_COLORS } from '../core/paper.js';
 import { mailButtons, senderBanner } from '../core/mail.js';
 import { attachPicker, memberItems, contactItems } from '../core/pickers.js';
 import { DECREE_KINDS, DECREE_PLACEHOLDERS, GENERAL_BODY, decreeKey, decreeTemplate, layoutOf } from './decree-templates.js';
@@ -97,7 +97,8 @@ async function decreeDocxBlob(d) {
     number: d.protocol_seq ? String(d.protocol_seq) : (d.protocol_no || ''), date: fmtDate(d.decree_date), place: 'Εν Αθήναις', title: `ΔΙΑΤΑΓΜΑ υπ’ αριθμ. ${decreeNo(d)}`,
     paragraphs: String(d.body || '').split(/\n\s*\n/).map((t) => ({ text: t.trim(), align: 'center', bold: /^(ΗΜΕΙΣ|ΔΙΟΡΙΖΟΜΕΝ|ΑΠΟΝΕΜΕΙ|ΕΥΑΡΕΣΤΟΥΜΕΘΑ)/.test(t.trim()) })),
     artwork: Object.fromEntries(Object.entries(DECREE_ARTWORK).map(([w, a]) => [w, { img: a.img, width: a.word }])),
-    signature: IMG.signature, signer: 'Δημήτριος Σκιαδόπουλος', signerTitle: 'Ο ΜΕΓΑΣ ΓΡΑΜΜΑΤΕΑΣ' });
+    signature: IMG.signature, signer: 'Δημήτριος Σκιαδόπουλος', signerTitle: 'Ο ΜΕΓΑΣ ΓΡΑΜΜΑΤΕΑΣ',
+    head: headOn(L.head) ? { ...L.head, lines: L.head.lines.map((l) => ({ ...l, hex: (HEAD_COLORS[l.color] || HEAD_COLORS.navy).slice(1).toUpperCase() })) } : null });
   return makeDocx(blocks, { title: d.subject, author: 'Μεγάλη Γραμματεία', anchors });
 }
 const nextDecreeNo = (tx) => Math.max(tx.all('decree_documents').reduce((m, d) => Math.max(m, Number(d.decree_no) || 0), 0) + 1, Number(db.setting('decree_first_no')) || 513);
@@ -112,11 +113,24 @@ export function decreePaper(d, opts = {}) {
   // «ΗΜΕΙΣ» / «ΔΙΟΡΙΖΟΜΕΝ»: καλλιγραφικές εικόνες, μεγάλες και πίσω από το κείμενο (πιάνουν λίγο ύψος — το κεφαλαίο απλώνεται προς τα πάνω)
   // η γραμμή μόνο με τη λέξη (ό,τι μορφοποίηση κι αν έχει: έντονα, μέγεθος, κενά) γίνεται εικόνα
   const hmeisHtml = Object.entries(DECREE_ARTWORK).reduce((h, [w, a]) => h.replace(new RegExp(`^(?:<[^>]+>|[ \\t])*${w}(?:</[^>]+>|[ \\t])*$`, 'm'), `<span class="${a.cls}" role="img" aria-label="${w}"><img src="${a.img}" alt=""></span>`), bodyHtml);
-  return `<article class="paper decree${layers ? ' has-layers' : ''}"${top != null ? ` style="--pt:${top}mm"` : ''}>${layers}${top != null ? '' : letterhead()}<div class="dec-title">ΔΙΑΤΑΓΜΑ</div>
+  const withOffice = officeImage(hmeisHtml, L, urls);
+  return `<article class="paper decree${layers ? ' has-layers' : ''}"${top != null ? ` style="--pt:${top}mm"` : ''}>${layers}${top != null ? '' : headOn(L.head) ? customHead(L.head) : letterhead()}<div class="dec-title">ΔΙΑΤΑΓΜΑ</div>
 <div class="dec-no official-number">${action === 'service_award' ? 'υπ’ αριθ. ' : 'υπ’ αριθμ. '}${esc(decreeNo(d))}</div><div class="dec-date official-number">${esc(fmtDate(d.decree_date))}</div>
-<div class="decbody">${hmeisHtml}</div>
+<div class="decbody">${withOffice}</div>
 <div class="decsig"><div><div class="t">ΜΕΓΑΣ ΓΡΑΜΜΑΤΕΑΣ</div><img class="signature-img" src="${IMG.signature}" alt=""><div class="signature-line"></div><b>Δημήτριος Σκιαδόπουλος</b></div>
 <div><img class="seal-img" src="${IMG.seal}" alt=""></div><div><div class="t">Ο ΜΕΓΑΣ ΔΙΔΑΣΚΑΛΟΣ</div><img class="signature-img" src="${IMG.grandMaster}" alt=""><div class="signature-line"></div><b>Ιωάννης Μπενετάτος</b></div></div></article>`;
+}
+
+// «Εικόνα αξιώματος» της Σχεδίασης σελίδας: δίπλα στη γραμμή του αξιώματος (μετά το «ως» του ΔΙΟΡΙΖΟΜΕΝ ή «τον Τίτλον του …»),
+// κεντραρισμένη κάθετα στη γραμμή, στο κέντρο-δεξιά του Α4 (x = αριστερή άκρη σε mm από την άκρη της σελίδας), ώστε να μην ακουμπά το κείμενο
+export const OFFICE_DEFAULT = { size: 90, x: 150 };
+export function officeImage(html, L, urls = {}) {
+  const o = L && L.office;
+  if (!o || !(o.file || urls.office)) return html;
+  const px = Math.min(300, Math.max(20, +o.size || OFFICE_DEFAULT.size)), x = +o.x || OFFICE_DEFAULT.x;
+  const src = urls.office ? ` src="${esc(urls.office)}"` : ` data-dfile="${esc(o.file)}"`;
+  const img = `<img class="dec-office-img" data-layer="office" alt=""${src} style="width:${px}px;height:${px}px;left:calc(${x}mm - var(--padl, 16mm))">`;
+  return html.replace(/^(ως\n)([^\n]+)$/gm, `$1<span class="dec-office">$2</span>${img}`).replace(/^(τον Τίτλον του [^\n]+)$/m, `<span class="dec-office">$1</span>${img}`);
 }
 
 // Επετηρίδα: κάθε Διάταγμα γράφει τα αξιώματα/τίτλους στο member_degrees_offices (δημιουργεί μέλος αν λείπει).
@@ -375,11 +389,21 @@ ${k === 'bg' ? '<label>Διαφάνεια<input type="range" min="0.05" max="1" 
 <div class="toolbar"><button type="button" class="btn small" data-preset="${k}:full">${k === 'bg' ? 'Όλη η σελίδα' : 'Όλο το πλάτος'}</button><button type="button" class="btn small" data-preset="${k}:center">Κέντρο οριζόντια</button>
 <button type="button" class="btn small danger" data-preset="${k}:remove">Αφαίρεση εικόνας</button></div></div>
 <small class="muted" data-none="${k}">${k === 'header' ? 'Χωρίς εικόνα: χρησιμοποιείται η κανονική κεφαλίδα (θυρεός και τίτλοι).' : 'Χωρίς φόντο.'}</small></div>`;
+  const headCard = `<div class="card dz-layer" data-layer="head"><h3 style="margin-top:0">Κεφαλίδα κειμένων (builder)</h3>
+<label class="chk"><input type="checkbox" id="hdOn"> Προσαρμοσμένη κεφαλίδα — έμβλημα και γραμμές κειμένου</label>
+<div id="hdBox"><div class="dz-nums"><label class="chk"><input type="checkbox" id="hdEmb"> Έμβλημα</label><label>Πλάτος εμβλήματος (mm)<input type="number" step="1" id="hdEmbW"></label></div>
+<div id="hdLines"></div><div class="toolbar"><button type="button" class="btn small" data-hd="add">+ Γραμμή</button><button type="button" class="btn small" data-hd="reset">↺ Επαναφορά από τις Ρυθμίσεις</button></div></div>
+<small class="muted">Ισχύει όταν δεν υπάρχει εικόνα κεφαλίδας. Χωρίς προσαρμογή: η κανονική κεφαλίδα (Ρυθμίσεις).</small></div>`;
+  const officeCard = `<div class="card dz-layer" data-layer="office"><h3 style="margin-top:0">Εικόνα αξιώματος (δίπλα στο αξίωμα του διορισμού)</h3>
+<label class="dz-file">🖼 Ανέβασμα εικόνας (JPEG, PNG)<input type="file" accept="image/jpeg,image/png,image/webp" data-up="office"></label>
+<div class="dz-has" data-has="office"><div class="dz-nums"><label>Μέγεθος (px, τετράγωνο)<input type="number" step="1" data-o="size"></label><label>Θέση X (mm από αριστερά)<input type="number" step="0.5" data-o="x"></label></div>
+<div class="toolbar"><button type="button" class="btn small" data-opreset="default">90×90 · κέντρο-δεξιά</button><button type="button" class="btn small danger" data-preset="office:remove">Αφαίρεση εικόνας</button></div></div>
+<small class="muted" data-none="office">Χωρίς εικόνα. Μπαίνει στο ύψος της γραμμής του αξιώματος, στο δεξί μισό της σελίδας, χωρίς να ακουμπά το κείμενο.</small></div>`;
   return {
     title: 'Σχεδίαση σελίδας',
     html: `<p><a href="#/templates">← Πρότυπα</a></p><h1>🎨 Σχεδίαση σελίδας — ${esc(t.name)}</h1>
 <p class="muted">Ανεβάστε εικόνα κεφαλίδας και φόντου και τοποθετήστε τες στη σελίδα Α4 (210 × 297 mm): σύρετε την εικόνα για να τη μετακινήσετε και τη γωνία ◢ για να αλλάξετε μέγεθος — ή γράψτε τις τιμές σε mm. Ισχύει για κάθε Διάταγμα αυτού του είδους (οθόνη, εκτύπωση, PDF).</p>
-<div class="dz-split"><div class="dz-controls">${card('header')}${card('bg')}
+<div class="dz-split"><div class="dz-controls">${headCard}${card('header')}${officeCard}${card('bg')}
 <div class="toolbar"><button class="btn primary" data-act="saveLayout">💾 Αποθήκευση σχεδίασης</button><a class="btn" href="#/templates">Ακύρωση</a></div></div>
 <div class="dz-page"><div class="dz-wrap" id="dzp"></div></div></div>`,
     mount(el) {
@@ -393,6 +417,21 @@ ${k === 'bg' ? '<label>Διαφάνεια<input type="range" min="0.05" max="1" 
           el.querySelector(`[data-has=${k}]`).hidden = !has; el.querySelector(`[data-none=${k}]`).hidden = has;
           if (has) for (const i of el.querySelectorAll(`[data-k=${k}]`)) if (document.activeElement !== i) i.value = L[k][i.dataset.f] ?? (i.dataset.f === 'opacity' ? 1 : 0);
         }
+        const ho = !!(L.office && (L.office.file || urls.office));
+        el.querySelector('[data-has=office]').hidden = !ho; el.querySelector('[data-none=office]').hidden = ho;
+        if (ho) for (const i of el.querySelectorAll('[data-o]')) if (document.activeElement !== i) i.value = L.office[i.dataset.o] ?? OFFICE_DEFAULT[i.dataset.o];
+        const on = headOn(L.head);
+        el.querySelector('#hdOn').checked = on; el.querySelector('#hdBox').hidden = !on;
+        if (on) { el.querySelector('#hdEmb').checked = L.head.emblem !== false; if (document.activeElement !== el.querySelector('#hdEmbW')) el.querySelector('#hdEmbW').value = L.head.emblem_w ?? 34; }
+      };
+      // γραμμές της κεφαλίδας (ξαναχτίζονται μόνο σε προσθήκη/αφαίρεση/μετακίνηση, ώστε να μη χάνεται η εστίαση)
+      const COLORS = { navy: 'Μπλε', gold: 'Χρυσό', black: 'Μαύρο' };
+      const drawLines = () => {
+        const box2 = el.querySelector('#hdLines');
+        box2.innerHTML = headOn(L.head) ? L.head.lines.map((l, i) => `<div class="hd-line" data-i="${i}"><input data-f="text" value="${esc(l.text || '')}" placeholder="Κείμενο γραμμής ${i + 1}">
+<div class="hd-opts"><label>pt<input type="number" step="0.5" data-f="size" value="${esc(l.size ?? 11)}"></label><label class="chk"><input type="checkbox" data-f="bold"${l.bold ? ' checked' : ''}><b>B</b></label>
+<label class="chk"><input type="checkbox" data-f="italic"${l.italic ? ' checked' : ''}><i>I</i></label><select data-f="color">${Object.entries(COLORS).map(([v, n]) => `<option value="${v}"${(l.color || 'navy') === v ? ' selected' : ''}>${n}</option>`).join('')}</select>
+<button type="button" class="btn small" data-hd="up" title="Πάνω">↑</button><button type="button" class="btn small" data-hd="down" title="Κάτω">↓</button><button type="button" class="btn small danger" data-hd="del" title="Αφαίρεση">✕</button></div></div>`).join('') : '';
       };
       const place = (k) => { // ενημέρωση εικόνας + πλαισίου χωρίς νέα απόδοση
         const p = box.querySelector('.paper'); if (!p) return;
@@ -429,7 +468,20 @@ ${k === 'bg' ? '<label>Διαφάνεια<input type="range" min="0.05" max="1" 
         const up = () => { b.removeEventListener('pointermove', move); b.removeEventListener('pointerup', up); render(); };
         b.addEventListener('pointermove', move); b.addEventListener('pointerup', up);
       });
+      const headInput = (e) => {
+        const t = e.target;
+        if (t.id === 'hdOn') { L.head = t.checked ? (L.head && L.head.lines ? { ...L.head, on: true } : defaultHead()) : { ...(L.head || {}), on: false }; drawLines(); render(); return true; }
+        if (!headOn(L.head)) return false;
+        if (t.id === 'hdEmb') { L.head.emblem = t.checked; render(); return true; }
+        if (t.id === 'hdEmbW') { L.head.emblem_w = Number(t.value) || 34; render(); return true; }
+        const row = t.closest('.hd-line'); if (!row || !t.dataset.f) return false;
+        const l = L.head.lines[Number(row.dataset.i)], f = t.dataset.f;
+        l[f] = t.type === 'checkbox' ? t.checked : f === 'size' ? Number(t.value) || 11 : t.value;
+        render(); return true;
+      };
       el.addEventListener('input', (e) => {
+        if (headInput(e)) return;
+        if (e.target.dataset.o && L.office) { const v = Number(e.target.value); if (Number.isFinite(v)) { L.office[e.target.dataset.o] = v; render(); } return; }
         const i = e.target; if (!i.dataset.k || !L[i.dataset.k]) return;
         const k = i.dataset.k, f = i.dataset.f, v = Number(i.value);
         if (!Number.isFinite(v)) return;
@@ -438,6 +490,7 @@ ${k === 'bg' ? '<label>Διαφάνεια<input type="range" min="0.05" max="1" 
         if (f === 'opacity') render(); else { place(k); syncInputs(); }
       });
       el.addEventListener('change', async (e) => {
+        if (e.target.type === 'checkbox' || e.target.tagName === 'SELECT') { if (headInput(e)) return; }
         const k = e.target.dataset.up; if (!k || !e.target.files[0]) return;
         const file = e.target.files[0], ext = (file.name.split('.').pop() || 'png').toLowerCase().replace('jpeg', 'jpg');
         if (file.size > 6 * 1024 * 1024) { e.target.value = ''; toast('Η εικόνα είναι μεγαλύτερη από 6 MB.', 'error'); return; }
@@ -447,11 +500,27 @@ ${k === 'bg' ? '<label>Διαφάνεια<input type="range" min="0.05" max="1" 
         pending[k] = { bytes, ext: ['png', 'jpg', 'webp'].includes(ext) ? ext : 'png' }; urls[k] = url;
         const old = L[k] || {};
         if (k === 'bg') L.bg = { file: old.file || '', x: 0, y: 0, w: A4.w, h: A4.h, opacity: old.opacity ?? 0.25 };
+        else if (k === 'office') L.office = { file: old.file || '', size: old.size || OFFICE_DEFAULT.size, x: old.x || OFFICE_DEFAULT.x };
         else { const w = 180; L.header = { file: old.file || '', x: 15, y: 8, w, h: r1(ratio.header ? w * ratio.header : 40) }; }
         if (k === 'bg') el.querySelector('[data-lock=bg]').checked = false;
+        e.target.value = '';
         render();
       });
       el.addEventListener('click', (e) => {
+        const h = e.target.closest('[data-hd]');
+        if (h) {
+          const act = h.dataset.hd, row = h.closest('.hd-line'), i = row ? Number(row.dataset.i) : -1;
+          if (act === 'reset') L.head = defaultHead();
+          else if (headOn(L.head)) {
+            const xs = L.head.lines;
+            if (act === 'add') xs.push({ text: '', size: 11, color: 'navy' });
+            if (act === 'del') xs.splice(i, 1);
+            if (act === 'up' && i > 0) [xs[i - 1], xs[i]] = [xs[i], xs[i - 1]];
+            if (act === 'down' && i < xs.length - 1) [xs[i + 1], xs[i]] = [xs[i], xs[i + 1]];
+          }
+          drawLines(); render(); return;
+        }
+        if (e.target.closest('[data-opreset]') && L.office) { Object.assign(L.office, OFFICE_DEFAULT); render(); return; }
         const b = e.target.closest('[data-preset]'); if (!b) return;
         const [k, what] = b.dataset.preset.split(':');
         if (what === 'remove') { L[k] = null; delete urls[k]; delete pending[k]; }
@@ -461,6 +530,7 @@ ${k === 'bg' ? '<label>Διαφάνεια<input type="range" min="0.05" max="1" 
       });
       // λόγος διαστάσεων για ήδη αποθηκευμένες εικόνες
       for (const k of ['header', 'bg']) if (L[k] && L[k].file && L[k].w) ratio[k] = L[k].h / L[k].w;
+      drawLines();
       bind(el, {
         async saveLayout() {
           await db.save(`Πρότυπο «${t.name}»: σχεδίαση σελίδας`, (tx) => {
@@ -469,7 +539,7 @@ ${k === 'bg' ? '<label>Διαφάνεια<input type="range" min="0.05" max="1" 
               const path = `templates/${t.key || 'tpl' + t.id}-${k}-${Date.now()}.${f.ext}`;
               tx.putFile(path, f.bytes); out[k].file = path;
             }
-            for (const k of ['header', 'bg']) if (out[k] && !out[k].file) out[k] = null;
+            for (const k of ['header', 'bg', 'office']) if (out[k] && !out[k].file) out[k] = null;
             tx.update('letter_templates', t.id, { layout: out });
           });
           flash('Η σχεδίαση σελίδας αποθηκεύτηκε.'); go(`/templates/${t.id}/design`);
