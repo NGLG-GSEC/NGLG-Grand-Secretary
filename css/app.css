@@ -193,7 +193,7 @@ textarea.short{min-height:90px}
 @media print{body{background:#fff}.top,.noprint,#toasts,.wrap>*:not(.paper):not(.print-area){display:none!important}.print-area>*:not(.paper){display:none!important}.paper{margin:0;padding:13mm 16mm 18mm;box-shadow:none;width:auto;min-height:0}}
 .decree-banner{background:#fff8e9;border:1px solid #d7bc83}
 .dec-title{text-align:center;font:900 21px Georgia,'Times New Roman',serif;letter-spacing:1.6px;margin:9mm 0 1mm}
-.dec-no{text-align:center;font-weight:bold;font-size:13pt;margin-bottom:2mm}.dec-date{text-align:center;font-size:10.5pt;margin-bottom:6mm}
+.dec-no{text-align:center;font-weight:bold;font-size:13pt;margin-bottom:6mm}
 .decbody{white-space:pre-wrap;line-height:1.5;color:#111;text-align:center}
 .decsig{display:grid;grid-template-columns:1fr 48mm 1fr;gap:7mm;text-align:center;align-items:start;margin-top:10mm}
 .decsig .t{font-weight:900;margin-bottom:2mm}.decsig .signature-img{height:18mm;width:46mm}.decsig .seal-img{margin:auto;width:40mm;height:40mm}

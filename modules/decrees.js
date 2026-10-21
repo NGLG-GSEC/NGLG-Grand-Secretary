@@ -115,7 +115,7 @@ export function decreePaper(d, opts = {}) {
   const hmeisHtml = Object.entries(DECREE_ARTWORK).reduce((h, [w, a]) => h.replace(new RegExp(`^(?:<[^>]+>|[ \\t])*${w}(?:</[^>]+>|[ \\t])*$`, 'm'), `<span class="${a.cls}" role="img" aria-label="${w}"><img src="${a.img}" alt=""></span>`), bodyHtml);
   const withOffice = officeImage(hmeisHtml, L, urls);
   return `<article class="paper decree${layers ? ' has-layers' : ''}"${top != null ? ` style="--pt:${top}mm"` : ''}>${layers}${top != null ? '' : headOn(L.head) ? customHead(L.head) : letterhead()}<div class="dec-title">ΔΙΑΤΑΓΜΑ</div>
-<div class="dec-no official-number">${action === 'service_award' ? 'υπ’ αριθ. ' : 'υπ’ αριθμ. '}${esc(decreeNo(d))}</div><div class="dec-date official-number">${esc(fmtDate(d.decree_date))}</div>
+<div class="dec-no official-number">${action === 'service_award' ? 'υπ’ αριθ. ' : 'υπ’ αριθμ. '}${esc(decreeNo(d))}, ημερ. ${esc(fmtDate(d.decree_date))}</div>
 <div class="decbody">${withOffice}</div>
 <div class="decsig"><div><div class="t">ΜΕΓΑΣ ΓΡΑΜΜΑΤΕΑΣ</div><img class="signature-img" src="${IMG.signature}" alt=""><div class="signature-line"></div><b>Δημήτριος Σκιαδόπουλος</b></div>
 <div><img class="seal-img" src="${IMG.seal}" alt=""></div><div><div class="t">Ο ΜΕΓΑΣ ΔΙΔΑΣΚΑΛΟΣ</div><img class="signature-img" src="${IMG.grandMaster}" alt=""><div class="signature-line"></div><b>Ιωάννης Μπενετάτος</b></div></div></article>`;
