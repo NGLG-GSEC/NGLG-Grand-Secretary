@@ -43,7 +43,7 @@ export function decreeBody(matter, apps, iso, action = 'appoint', awardOffice = 
   const end = 'Εγένετο εν τω Τεκτονικώ Μεγάρω της πόλεως των Αθηνών, την ' + gdate(iso) + '.';
   if (action === 'service_award') {
     return { rules, body: ['ΗΜΕΙΣ', 'Ο Μέγας Διδάσκαλος της Εθνικής Μεγάλης Στοάς της Ελλάδος,', 'Σεβασμιώτατος Αδελφός Ιωάννης Μπενετάτος', '', 'λαβόντες υπ’ όψιν τον Κανόνα 19 του Βιβλίου Γενικών Νόμων και', 'Κανονισμών,', '',
-      'ΕΥΑΡΕΣΤΟΥΜΕΘΑ ΝΑ ΑΠΟΝΕΙΜΩΜΕΝ', '', 'την Τάξιν του Μεγάλου Διδασκάλου', '', 'δι’ Υπηρεσίας προς την Τεκτονικήν, ' + (apps.length === 1 ? 'στον κάτωθι Αδελφόν:' : 'στους κάτωθι Αδελφούς:'), '',
+      'ΕΥΑΡΕΣΤΟΥΜΕΘΑ ΝΑ ΑΠΟΝΕΙΜΩΜΕΝ', '', 'την Τάξιν του Μεγάλου Διδασκάλου', '', 'δι’ Υπηρεσίας προς την Τεκτονικήν, ' + (apps.length === 1 ? 'στον Αδελφόν:' : 'στους Αδελφούς:'), '',
       ...apps.map((a) => '• ' + displayName(a)), '', end].join('\n').trim() };
   }
   const out = ['ΗΜΕΙΣ', 'Ο Μέγας Διδάσκαλος της Εθνικής Μεγάλης Στοάς της Ελλάδος,', 'Σεβασμιώτατος Αδελφός Ιωάννης Μπενετάτος,', 'λαβόντες υπ’ όψιν ' + (rules.length === 1 ? 'τον Κανόνα ' : 'τους Κανόνας ') + rules.join(' και '),
@@ -87,7 +87,7 @@ async function layerPng(path) {
 }
 // Word του Διατάγματος (με επιστολόχαρτο ή με τη Σχεδίαση σελίδας του προτύπου), για λήψη και Drive
 // Λέξεις του Διατάγματος που γράφονται ως καλλιγραφική εικόνα (cls: θέση/μέγεθος στο css, word: πλάτος στο Word σε cm)
-const DECREE_ARTWORK = { ΗΜΕΙΣ: { img: IMG.hmeis, cls: 'hmeis', word: 3.3 }, ΔΙΟΡΙΖΟΜΕΝ: { img: IMG.diorizomen, cls: 'diorizomen', word: 2.6 },
+const DECREE_ARTWORK = { 'ΕΥΑΡΕΣΤΟΥΜΕΘΑ ΝΑ ΑΠΟΝΕΙΜΩΜΕΝ': { img: IMG.evarestoumetha, cls: 'evarest', word: 7 }, ΗΜΕΙΣ: { img: IMG.hmeis, cls: 'hmeis', word: 3.3 }, ΔΙΟΡΙΖΟΜΕΝ: { img: IMG.diorizomen, cls: 'diorizomen', word: 2.6 },
   ΑΠΟΝΕΜΕΙ: { img: IMG.aponemei, cls: 'aponemei', word: 3.1 } };
 // «ΔΙΟΡΙΖΟΜΕΝ» (εικόνα της πράξης): πλάτος/ύψος σε mm, πάντα στο κέντρο, κάθετη μετατόπιση dy (mm)·
 // προαιρετικά δική του εικόνα ανά πρότυπο (Σχεδίαση σελίδας → layout.dior.file)
@@ -159,9 +159,14 @@ export function decreePaper(d, opts = {}) {
 // dy = κάθετη μετατόπιση (mm) από το κέντρο της γραμμής
 export const OFFICE_DEFAULT = { size: 90, x: 150, dy: 0 };
 const officeStyle = (px, x, dy) => `width:${px}px;height:${px}px;left:calc(${x}mm - var(--padl, 16mm));transform:translateY(calc(-50% + .75em + ${dy}mm))`;
+// Κοσμήματα αξιωμάτων/τίτλων της εφαρμογής: μπαίνουν αυτόματα δίπλα στη γραμμή τους, όταν το πρότυπο δεν έχει δική του εικόνα αξιώματος
+export const JEWELS = [{ line: /^(την Τάξιν του Μεγάλου Διδασκάλου)$/m, src: 'img/jewels/taxis-md.jpg', label: 'Κόσμημα Τάξεως Μεγάλου Διδασκάλου', size: 180 }];
 export function officeImage(html, L, urls = {}) {
   const o = L && L.office;
-  if (!o || !(o.file || urls.office)) return html;
+  if (!o || !(o.file || urls.office)) {
+    const j = o || {}, st = (k) => officeStyle(Math.min(300, Math.max(20, +j.size || k.size || OFFICE_DEFAULT.size)), +j.x || OFFICE_DEFAULT.x, +j.dy || 0);
+    return JEWELS.reduce((h, k) => h.replace(k.line, `<span class="dec-office">$1</span><img class="dec-office-img dec-jewel" data-layer="office" alt="${esc(k.label)}" src="${k.src}" style="${st(k)}">`), html);
+  }
   const px = Math.min(300, Math.max(20, +o.size || OFFICE_DEFAULT.size)), x = +o.x || OFFICE_DEFAULT.x, dy = +o.dy || 0;
   const src = urls.office ? ` src="${esc(urls.office)}"` : ` data-dfile="${esc(o.file)}"`;
   const img = `<img class="dec-office-img" data-layer="office" alt=""${src} style="${officeStyle(px, x, dy)}">`;
@@ -472,7 +477,7 @@ ${k === 'bg' ? '<label>Διαφάνεια<input type="range" min="0.05" max="1" 
 <div class="dz-has" data-has="office"><div class="dz-nums"><label>Μέγεθος (px, τετράγωνο)<input type="number" step="1" data-o="size"></label><label>Θέση X (mm από αριστερά)<input type="number" step="0.5" data-o="x"></label><label>Κάθετη μετατόπιση (mm, + κάτω)<input type="number" step="0.5" data-o="dy"></label></div>
 <small class="muted">Στην προεπισκόπηση: σύρετε την εικόνα (πλαίσιο «Αξίωμα») για μετακίνηση και τη γωνία ◢ για μέγεθος.</small>
 <div class="toolbar"><button type="button" class="btn small" data-opreset="default">90×90 · κέντρο-δεξιά</button><button type="button" class="btn small danger" data-preset="office:remove">Αφαίρεση εικόνας</button></div></div>
-<small class="muted" data-none="office">Χωρίς εικόνα. Μπαίνει στο ύψος της γραμμής του αξιώματος, στο δεξί μισό της σελίδας, χωρίς να ακουμπά το κείμενο.</small></div>`;
+<small class="muted" data-none="office">Χωρίς εικόνα (στην Τάξη του Μεγάλου Διδασκάλου μπαίνει αυτόματα το κόσμημά της). Μπαίνει στο ύψος της γραμμής του αξιώματος, στο δεξί μισό της σελίδας, χωρίς να ακουμπά το κείμενο.</small></div>`;
   const diorCard = `<div class="card dz-layer" data-layer="dior"><h3 style="margin-top:0">ΔΙΟΡΙΖΟΜΕΝ (εικόνα της πράξης)</h3>
 <label class="dz-file">🖼 Άλλη εικόνα για το ΔΙΟΡΙΖΟΜΕΝ (PNG, JPEG)<input type="file" accept="image/png,image/jpeg,image/webp" data-up="dior"></label>
 <div class="dz-nums"><label>Πλάτος (mm)<input type="number" step="0.5" data-a="w"></label><label>Ύψος (mm)<input type="number" step="0.5" data-a="h"></label>
@@ -575,6 +580,7 @@ ${k === 'bg' ? '<label>Διαφάνεια<input type="range" min="0.05" max="1" 
         e.preventDefault();
         const k = b.dataset.layer, resize = !!e.target.closest('[data-resize]'), p = box.querySelector('.paper');
         if (k === 'dior') L.dior = diorOf(L);
+        if (k === 'office' && !L.office) L.office = { ...OFFICE_DEFAULT, size: (JEWELS.find((j) => p.querySelector(`img[src="${j.src}"]`)) || OFFICE_DEFAULT).size }; // κόσμημα της εφαρμογής: θέση/μέγεθος στο πρότυπο
         const mm = A4.w / p.getBoundingClientRect().width, start = { ...L[k] }, x0 = e.clientX, y0 = e.clientY;
         b.setPointerCapture(e.pointerId);
         const move = (ev) => {

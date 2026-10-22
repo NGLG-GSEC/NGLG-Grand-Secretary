@@ -903,7 +903,7 @@ def test_decree_live_preview(app):
     app.page.wait_for_function("() => document.querySelector('#dprev').innerText.includes('Παπαδόπουλον')")
     assert 'Κανόνα 22' in pv()
     app.page.select_option('#dAction', 'service_award')
-    app.page.wait_for_function("() => document.querySelector('#dprev').innerText.includes('ΕΥΑΡΕΣΤΟΥΜΕΘΑ')")
+    app.page.wait_for_function("() => !!document.querySelector('#dprev .evarest img')")  # καλλιγραφική εικόνα
     assert 'υπ’ αριθ. 513/' in pv()
 
 
@@ -2827,3 +2827,23 @@ def test_decree_template_follows_action_and_office(app):
     # οι σελίδες: ΠΡΩΗΝ από το Γενικό, ΤΑΞΗ ΜΔ αντίγραφο του ΕΝ ΕΝΕΡΓΕΙΑ (ξεχωριστό πρότυπο)
     ks = app.page.evaluate("async () => (await import('./core/store.js')).db.all('letter_templates').filter((t) => t.kind === 'decree').map((t) => t.key)")
     assert sorted(ks) == ['decree-appoint', 'decree-general', 'decree-provincial', 'decree-service'], ks
+
+
+def test_taxis_md_decree_shows_jewel_automatically(app):
+    # Τάξη ΜΔ: το κόσμημα της Τάξεως μπαίνει αυτόματα δίπλα στη γραμμή «την Τάξιν του Μεγάλου Διδασκάλου»
+    app.connect_local()
+    add_member(app)
+    app.go('/decrees/new?kind=decree-service')
+    app.pick('.registry-search', 'Παπαδ')
+    app.page.wait_for_selector('#dprev img.dec-jewel[src="img/jewels/taxis-md.jpg"]')
+    app.click('Έκδοση Διατάγματος')
+    app.page.wait_for_url('**/#/decrees/*')
+    app.page.wait_for_selector('.paper img.dec-jewel')
+    assert app.page.evaluate("() => document.querySelector('.paper img.dec-jewel').naturalWidth > 0")
+    assert app.page.evaluate("() => document.querySelector('.paper img.dec-jewel').style.width") == '180px'  # διπλάσιο
+    assert app.page.evaluate("() => !!document.querySelector('.paper .evarest img[src=\"img/evarestoumetha.png\"]')")
+    t = app.text('.paper')
+    assert 'στον Αδελφόν:' in t and 'κάτωθι' not in t and 'ΕΥΑΡΕΣΤΟΥΜΕΘΑ ΝΑ ΑΠΟΝΕΙΜΩΜΕΝ' not in t, t
+    # όχι σε Διάταγμα ΕΝ ΕΝΕΡΓΕΙΑ
+    app.go('/decrees/new')
+    assert app.page.locator('#dprev img.dec-jewel').count() == 0

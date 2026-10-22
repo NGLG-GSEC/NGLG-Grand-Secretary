@@ -66,3 +66,11 @@ db.migrate('decree-templates-chips-2026-10', (tx) => {
   copy('decree-service', 'decree-appoint');
   for (const [k, v] of Object.entries(DECREE_KINDS)) if (t(k)) tx.update('letter_templates', t(k).id, { name: v.name });
 });
+
+// Τάξις ΜΔ: «στον Αδελφόν» (χωρίς «κάτωθι») και στα ήδη εκδομένα Διατάγματα
+db.migrate('decree-service-katothi-2026-10', (tx) => {
+  for (const d of tx.all('decree_documents')) {
+    const b = String(d.body || ''), nb = b.replace('Τεκτονικήν, στον κάτωθι Αδελφόν:', 'Τεκτονικήν, στον Αδελφόν:').replace('Τεκτονικήν, στους κάτωθι Αδελφούς:', 'Τεκτονικήν, στους Αδελφούς:');
+    if (nb !== b) tx.update('decree_documents', d.id, { body: nb });
+  }
+});
