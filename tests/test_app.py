@@ -419,7 +419,7 @@ def test_portal_and_old_links(browser, base_url):
     ctx.close()
 
 
-@pytest.mark.parametrize('path', ['/', '/letters/new', '/decrees/new', '/members', '/directory', '/visits', '/namedays', '/projects', '/database', '/settings'])
+@pytest.mark.parametrize('path', ['/', '/letters/new', '/decrees/new', '/members', '/directory', '/visits', '/namedays', '/projects', '/database', '/settings', '/members/new', '/members/diplomas', '/visits/decisions', '/declarations', '/epeteirida/pinakas', '/templates'])
 def test_mobile_no_horizontal_scroll(browser, base_url, path):
     ctx = browser.new_context(viewport={'width': 390, 'height': 800})
     page = ctx.new_page()
@@ -1044,11 +1044,11 @@ def test_single_member_pool_identify_merge_and_relink(app):
     st = app.page.evaluate("""async () => { const {db} = await import('./core/store.js'); return { ms: db.all('member_registry').filter((m) => /διπλ/i.test(m.surname.normalize('NFD').replace(/[\\u0300-\\u036f]/g, ''))), ls: db.all('member_lodges'), reps: db.all('reps') }; }""")
     assert len(st['ms']) == 1
     m = st['ms'][0]
-    assert m['registry_no'] == 81 and 'a1@example.com' in m['other_emails'] and 'Αρ. Μητρώου 80' in m['merged_from'] and m['surname_variants'] == ''  # ίδιο όνομα με άλλους τόνους δεν είναι παραλλαγή
+    assert m['registry_no'] == 81 and 'a1@example.com' in m['other_emails'] and 'Αρ. Μητρώου M80' in m['merged_from'] and m['surname_variants'] == ''  # ίδιο όνομα με άλλους τόνους δεν είναι παραλλαγή
     assert sorted(l['lodge_number'] for l in st['ls'] if l['member_id'] == m['id']) == ['3', '70']
     assert [x for x in st['reps'] if x['surname'] in ('Διπλός', 'Διπλος')][0]['member_id'] == m['id']
     app.go(f"/members/{m['id']}")
-    assert 'Εκπρόσωπος ΜΔ: Μέγας Ευχέτης' in app.text() and 'Συγχωνεύθηκαν: Αρ. Μητρώου 80' in app.text()
+    assert 'Εκπρόσωπος ΜΔ: Μέγας Ευχέτης' in app.text() and 'Συγχωνεύθηκαν: Αρ. Μητρώου M80' in app.text()
 
 
 def test_grand_master_official_visit_letter_and_email(app):
@@ -1685,7 +1685,7 @@ def test_epeteirida_table_import_filters_edit_and_member(app):
     app.page.wait_for_selector('text=3 εγγραφές · 2 συνδέθηκαν')
     assert 'Εμφανίζονται 3 από 3 · 2 συνδεδεμένοι' in app.text('#epcount')
     # Αρ. Μητρώου από τον πίνακα μελών (στήλη, αναζήτηση)
-    assert app.page.locator('tr:has-text("Δοκιμαστής") .c-regno').inner_text().strip() == '1777'
+    assert app.page.locator('tr:has-text("Δοκιμαστής") .c-regno').inner_text().strip() == 'M1777'
     app.page.fill('[data-f=q]', '1777')
     assert 'Εμφανίζονται 1 από 3' in app.text('#epcount')
     app.page.click('[data-act=reset]')
@@ -2091,7 +2091,7 @@ def test_small_lodges_report(app):
     app.connect_local()
     add_member(app, surname='ΜΙΚΡΟΣΤΟΪΤΗΣ', first='ΑΝΤΩΝΙΟΣ', email='ms1@example.com', lodges='ΑΚΡΟΠΟΛΙΣ | 2 | 1. ΤΑΚΤΙΚΟ\nΠΑΡΘΕΝΩΝ | 3 | 2. ΣΥΝΔΕΔΕΜΕΝΟ')
     app.go('/members')
-    assert app.page.locator('#mainnav a[href="#/members/small-lodges"]').count() == 1  # και στο μενού «Στοές & Μέλη»
+    assert app.page.locator('#mainnav a[href="#/members/small-lodges"]').count() == 1  # και στο μενού «Μητρώο»
     app.page.click('main a:has-text("Στοές με < 12 κύρια μέλη")')
     app.page.wait_for_selector('#slbody tr')
     nums = app.page.eval_on_selector_all('#slbody .c-number', 'xs => xs.map((x) => x.textContent)')
@@ -2548,3 +2548,52 @@ def test_declarations_protocol_and_report_need_code(browser, base_url):
     page.press('#admin-pass', 'Enter')
     page.wait_for_selector('#report-content', state='visible')
     page.close()
+
+
+def test_master_mason_diplomas_registry_codes_and_import(app, tmp_path):
+    # Δίπλωμα Διδασκάλου Τέκτονος: αρ. μητρώου MM<δίπλωμα>, αλλιώς M<αριθμός>· εισαγωγή από Excel με αντιστοίχιση και συγκρούσεις
+    from openpyxl import Workbook
+    app.connect_local()
+    ids = app.page.evaluate("""async () => { const {db} = await import('./core/store.js'); const {insertMember} = await import('./modules/members.js'); let a, b, c;
+      await db.save('x', (tx) => { a = insertMember(tx, { surname: 'Διπλωματούχος', first_name: 'Πέτρος' }); b = insertMember(tx, { surname: 'Άλλος', first_name: 'Νίκος' });
+        c = insertMember(tx, { surname: 'Κάτοχος', first_name: 'Γιώργος', diploma_no: '777' }); }); return [a, b, c]; }""")
+    reg = app.page.evaluate(f"async () => (await import('./core/store.js')).db.get('member_registry', {ids[0]}).registry_no")
+    wb = Workbook(); ws = wb.active
+    ws.append(['Ονοματεπώνυμο', 'Αρ. Διπλώματος'])
+    ws.append(['Διπλωματούχος Πέτρος', 24680]); ws.append(['Άλλος Νίκος', 777]); ws.append(['Ανύπαρκτος Τάδε', 999])
+    f = tmp_path / 'diplomas.xlsx'; wb.save(f)
+    app.go('/members')
+    app.page.click('a.btn:has-text("🎓 Διπλώματα Διδασκάλου")')
+    app.page.set_input_files('#dpFile', str(f))
+    app.page.wait_for_selector('#dpApply')
+    t = app.text('#dpPlan')
+    assert 'Θα οριστεί' in t and 'Ο αριθμός ανήκει σε άλλο μέλος' in t and 'Δεν βρέθηκε' in t
+    app.page.click('#dpApply')
+    app.page.wait_for_selector('.regno.mm:has-text("MM24680")')
+    st = app.page.evaluate(f"async () => {{ const {{db}} = await import('./core/store.js'); const {{regCode}} = await import('./core/people.js'); return [{ids[0]}, {ids[1]}, {ids[2]}].map((i) => regCode(db.get('member_registry', i))); }}")
+    assert st == ['MM24680', f"M{reg + 1}", 'MM777'], st
+    # αναζήτηση με τον κωδικό (και με ελληνικό «Μ»)
+    for q in ['MM24680', 'ΜΜ24680', '24680']:
+        app.go('/members?q=' + q + '&field=all')
+        assert 'Διπλωματούχος' in app.text('.memtable'), q
+    app.go(f'/members?q=M{reg + 1}&field=all')
+    assert 'Άλλος' in app.text('.memtable') and 'Διπλωματούχος' not in app.text('.memtable')
+    app.go(f'/members/{ids[0]}')
+    assert 'MM24680' in app.text('.regcode') and app.page.input_value('[name=diploma_no]') == '24680'
+
+
+def test_unified_menu_and_visits_flow(app):
+    # Ενιαίο μενού: κάθε ενότητα μία φορά· Επισκέψεις ΜΔ με τα βήματα ①–⑤ και μπάρα ροής σε κάθε βήμα
+    app.connect_local()
+    app.go('/')
+    groups = app.page.eval_on_selector_all('#mainnav details.navdrop > summary', 'els => els.map((e) => e.textContent.replace("▾", "").trim())')
+    assert groups == ['✉ Έγγραφα', '👥 Μητρώο', '📅 Επισκέψεις ΜΔ', '🎉 Εορτολόγιο & Πρότζεκτ', '🌐 Δημόσιες σελίδες', '⚙ Διαχείριση'], groups
+    hrefs = app.page.eval_on_selector_all('#mainnav a', 'els => els.map((e) => e.getAttribute("href"))')
+    inner = [h for h in hrefs if h.startswith('#/')]
+    assert len(inner) == len(set(inner)), inner  # κάθε σελίδα μία φορά στο μενού
+    assert app.page.locator('#mainnav a[href="programme/"][target=_blank]').count() == 1 and app.page.locator('#mainnav a[href="#/members/diplomas"]').count() == 1
+    assert app.page.locator('#mainnav a[href*="constitution"]').count() == 0  # το Σύνταγμα μόνο ως πλακίδιο στην Αρχική
+    for step, path in [(1, '/visits'), (2, '/declarations'), (3, '/visits/decisions'), (4, '/visits/publish'), (5, '/visits/report')]:
+        app.go(path)
+        app.page.wait_for_selector('.vflow')
+        assert app.page.locator('.vflow a.on').inner_text().startswith('①②③④⑤'[step - 1]), path

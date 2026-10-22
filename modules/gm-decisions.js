@@ -6,7 +6,7 @@ import { db } from '../core/store.js';
 import { module, go, flash, toast, table } from '../core/app.js';
 import { esc, fold, dayStr } from '../core/util.js';
 import { lodgeNoKey } from './lodges.js';
-import { repCandidates, candRep, repIdIn, repLabel, isGM, visitsAll } from './visits.js';
+import { repCandidates, candRep, repIdIn, repLabel, isGM, visitsAll, visitsFlow } from './visits.js';
 
 export const GM_SELF = 'Ο Μέγας Διδάσκαλος (αυτοπροσώπως)';
 const CONFIG_URL = 'declarations/config.js';
@@ -103,7 +103,7 @@ export async function applyPlan(rows) {
 function decisionsPage() {
   return {
     title: 'Αποφάσεις Μ.Δ.',
-    html: `<div class="hero"><h1>🗳 Αποφάσεις Μ.Δ. → Επισκέψεις Στοών</h1></div>
+    html: `${visitsFlow(3)}<div class="hero"><h1>🗳 Αποφάσεις Μ.Δ. → Επισκέψεις Στοών</h1></div>
 <p class="muted">Οι αποφάσεις που παίρνει ο Μέγας Διδάσκαλος στη <a href="#/declarations">Διαχειριστική Αναφορά των Δηλώσεων</a> («Απόφαση Μ.Δ. — Εκπρόσωπος»)
 ορίζουν τον εκπρόσωπο στην αντίστοιχη επίσκεψη. Ελέγξτε τον πίνακα και πατήστε «Εφαρμογή».</p>
 <div class="toolbar"><a class="btn" href="#/visits">← Επισκέψεις Στοών</a><button class="btn" id="gmdReload">⟳ Ανανέωση</button></div>

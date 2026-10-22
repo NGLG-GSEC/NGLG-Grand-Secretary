@@ -25,13 +25,29 @@ const nameKeysOf = (m) => {
 const score = (m) => (m.active !== 0 && Number(m.no_contact) !== 1 ? 8 : 0) + (m.email ? 4 : 0) + (m.mobile ? 2 : 0) + (m.registry_no != null ? 1 : 0);
 
 let memo = { head: undefined, idx: null };
+// Αριθμός Μητρώου (κωδικός): με Δίπλωμα Διδασκάλου Τέκτονος (Certificate Master Mason) → «MM» + αριθμός διπλώματος
+// (ο πραγματικός αριθμός μητρώου)· χωρίς δίπλωμα → «M» + ο εσωτερικός αριθμός (από 1200). Π.χ. MM12345, M1200.
+export const regCode = (m) => (!m ? '' : String(m.diploma_no ?? '').trim() ? `MM${String(m.diploma_no).trim()}` : m.registry_no != null && m.registry_no !== '' ? `M${m.registry_no}` : '');
+// Κανονικοποίηση αναζήτησης κωδικού: κεφαλαία, χωρίς κενά/παύλες, ελληνικό «Μ» → λατινικό «M»
+export const codeKey = (q) => String(q ?? '').toUpperCase().replace(/Μ/g, 'M').replace(/[\s.\-_/]/g, '');
+// Ταιριάζει ο όρος με τον αριθμό μητρώου ενός μέλους; (MM12345 / M1200 / σκέτος αριθμός διπλώματος ή εσωτερικός αριθμός)
+export function matchesCode(m, q) {
+  const k = codeKey(q);
+  if (!k || !m) return false;
+  if (/^\d+$/.test(k)) return String(m.diploma_no ?? '').trim() === k || String(m.registry_no ?? '') === k;
+  return codeKey(regCode(m)) === k || (k.startsWith('M') && !k.startsWith('MM') && String(m.registry_no ?? '') === k.slice(1));
+}
+// Ταξινόμηση κατά κωδικό: πρώτα MM (κατά αριθμό διπλώματος), μετά M (κατά εσωτερικό αριθμό)
+export const regSortKey = (code) => { const m = /^(MM|M)(\d+)$/.exec(codeKey(code)); return !m ? 9e9 : m[1] === 'MM' ? Number(m[2]) : 1e8 + Number(m[2]); };
+
 export function peopleIndex(src = db) {
   if (src === db && memo.head === db.head && memo.idx) return memo.idx;
   const ms = src.all('member_registry'), byId = new Map(ms.map((m) => [m.id, m]));
   const add = (map, k, id) => { if (!k) return; (map.get(k) || map.set(k, new Set()).get(k)).add(id); };
   const byReg = new Map(), byEmail = new Map(), byMobile = new Map(), byName = new Map(), groupOf = new Map();
   for (const m of ms) {
-    if (m.registry_no != null) byReg.set(String(m.registry_no), m.id);
+    if (m.registry_no != null) { byReg.set(String(m.registry_no), m.id); byReg.set('M' + m.registry_no, m.id); }
+    if (String(m.diploma_no ?? '').trim()) byReg.set('MM' + String(m.diploma_no).trim(), m.id);
     for (const e of emailsOf(m)) add(byEmail, e, m.id);
     for (const d of mobilesOf(m)) add(byMobile, d, m.id);
     for (const k of nameKeysOf(m)) add(byName, k, m.id);
@@ -58,7 +74,7 @@ const reduce = (ids, idx) => [...new Set([...ids].map((i) => (idx.groupOf.get(i)
 export function identify(p, src = db) {
   const idx = peopleIndex(src);
   if (p.member_id && idx.byId.has(Number(p.member_id))) return canonicalId(p.member_id, src);
-  if (p.registry_no != null && p.registry_no !== '' && idx.byReg.has(String(p.registry_no))) return canonicalId(idx.byReg.get(String(p.registry_no)), src);
+  if (p.registry_no != null && p.registry_no !== '' && idx.byReg.has(codeKey(p.registry_no))) return canonicalId(idx.byReg.get(codeKey(p.registry_no)), src);
   // ονοματεπώνυμο → υποψήφιοι
   const keys = [];
   if (p.surname || p.first_name) keys.push(`${surKey(p.surname)}|${firstKey(p.first_name)}`);

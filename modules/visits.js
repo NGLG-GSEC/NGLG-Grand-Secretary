@@ -19,6 +19,9 @@ import { insertMember } from './members.js';
 import { parseRank, matchName, isCurrentRecord, hasActiveList, importEpeteiridaAny, hasEpeteirida } from './epeteirida-import.js';
 
 const MONTHS = ['Ιανουάριος', 'Φεβρουάριος', 'Μάρτιος', 'Απρίλιος', 'Μάιος', 'Ιούνιος', 'Ιούλιος', 'Αύγουστος', 'Σεπτέμβριος', 'Οκτώβριος', 'Νοέμβριος', 'Δεκέμβριος'];
+// Ροή των Επισκέψεων ΜΔ: ① Πρόγραμμα → ② Δηλώσεις → ③ Αποφάσεις Μ.Δ. → ④ Ενημερώσεις → ⑤ Αναφορά (μπάρα στην κορυφή κάθε βήματος)
+export const VISIT_STEPS = [['#/visits', 'Πρόγραμμα Εγκαταστάσεων'], ['#/declarations', 'Δηλώσεις Διάθεσης'], ['#/visits/decisions', 'Αποφάσεις Μ.Δ.'], ['#/visits/publish', 'Ενημερώσεις'], ['#/visits/report', 'Αναφορά']];
+export const visitsFlow = (n) => `<nav class="vflow noprint" aria-label="Ροή Επισκέψεων ΜΔ">${VISIT_STEPS.map(([h, l], i) => `<a href="${h}" class="${i + 1 === n ? 'on' : ''}"${i + 1 === n ? ' aria-current="step"' : ''}><b>${'①②③④⑤'[i]}</b> ${l}</a>`).join('<span class="sep" aria-hidden="true">›</span>')}</nav>`;
 export const REP_RANKS = ['Σεβάσμιος Αδ.', 'Λίαν Σεβάσμιος Αδ.', 'Πανσεβάσμιος Αδ.', 'Σεβασμιώτατος Αδ.'];
 const REP_DEFAULT_RANKS = { 'Μέγας Διδάσκαλος': 3, 'Αναπληρωτής Μέγας Διδάσκαλος': 2, 'Βοηθός Μέγας Διδάσκαλος': 2, 'Επαρχιακός Μέγας Διδάσκαλος': 2, 'Περιφερειακός Μέγας Διδάσκαλος': 2,
   'Πρώτος Μέγας Επόπτης': 2, 'Δεύτερος Μέγας Επόπτης': 2, 'Μέγας Καγκελάριος': 1, 'Αναπληρωτής Μέγας Καγκελάριος': 1, 'Μέγας Γραμματέας': 1, 'Αναπληρωτής Μέγας Γραμματέας': 1, 'Μέγας Ευχέτης': 1,
@@ -313,7 +316,7 @@ function visitsPage({ query }) {
   const yr = masonicYear(), summary = provinceSummary(yr), sumAll = summary.reduce((a, o) => ({ total: a.total + o.total, declared: a.declared + o.declared }), { total: 0, declared: 0 });
   return {
     title: 'Επισκέψεις Στοών',
-    html: `<div class="hero"><h1>Επισκέψεις Στοών</h1>${outgoingProtocolBtn()}</div>${notice(query.msg)}${hasEpeteirida() ? '' : `<div class="card nocontact noprint"><b>Οι υποψήφιοι εκπρόσωποι προέρχονται από την Επετηρίδα, που δεν έχει περαστεί ακόμη σε αυτή τη βάση.</b>
+    html: `${visitsFlow(1)}<div class="hero"><h1>Επισκέψεις Στοών</h1>${outgoingProtocolBtn()}</div>${notice(query.msg)}${hasEpeteirida() ? '' : `<div class="card nocontact noprint"><b>Οι υποψήφιοι εκπρόσωποι προέρχονται από την Επετηρίδα, που δεν έχει περαστεί ακόμη σε αυτή τη βάση.</b>
 <p style="margin:6px 0">Ανεβάστε το αρχείο Excel της Επετηρίδας (π.χ. «Επετηρίδα 2026») — μετά επικολλήστε και τον κατάλογο εν ενεργεία στην <a href="#/epeteirida?imp=1">Επετηρίδα → Εισαγωγή</a>.</p>
 <label class="btn primary" style="cursor:pointer">⬆ Αρχείο Επετηρίδας (.xlsx)<input type="file" id="epFile" accept=".xlsx,.xls" hidden></label></div>`}<div class="toolbar"><a class="btn primary" href="#/visits/new">+ Νέα επίσκεψη</a><a class="btn" href="#/visits/import">Επικόλληση λίστας</a>
 <a class="btn" href="#/visits/publish${query.prov ? '?prov=' + encodeURIComponent(query.prov) : ''}">Ενημέρωση Επαρχίας</a><a class="btn" href="#/visits/report">Αναφορά</a><a class="btn" href="#/reps">Εκπρόσωποι</a><a class="btn" href="#/declarations">🗳 Δηλώσεις διάθεσης</a><a class="btn" href="#/visits/decisions">🗳 Αποφάσεις Μ.Δ.</a><a class="btn${sumAll.total - sumAll.declared ? ' warnbtn' : ''}" href="#/visits/missing${query.prov ? '?prov=' + encodeURIComponent(query.prov) : ''}">⚠ Στοές χωρίς ημερομηνία (${sumAll.total - sumAll.declared})</a></div>
@@ -650,7 +653,7 @@ function publishPage({ query }) {
   const qs = new URLSearchParams({ prov, frm, to, missing: query.missing || '' }).toString();
   return {
     title: 'Ενημέρωση Επαρχίας',
-    html: `<h1>Ενημέρωση Επαρχίας</h1>${notice(query.msg)}<form class="card filters vfilters f4" id="flt"><select name="prov">${provs.map((x) => `<option${x === prov ? ' selected' : ''}>${esc(x)}</option>`).join('')}</select>
+    html: `${visitsFlow(4)}<h1>Ενημέρωση Επαρχίας</h1>${notice(query.msg)}<form class="card filters vfilters f4" id="flt"><select name="prov">${provs.map((x) => `<option${x === prov ? ' selected' : ''}>${esc(x)}</option>`).join('')}</select>
 <input type="date" name="frm" value="${esc(frm)}"><input type="date" name="to" value="${esc(to)}"><label><input type="checkbox" name="missing"${query.missing ? ' checked' : ''}> Και Στοές χωρίς ημερομηνία</label><button>Προβολή</button></form>
 <div class="card"><p style="margin-top:0">${p && p.email ? `Προς: ${esc(provTitle(p) || 'Γραμματεία')} — <b>${esc(p.email)}</b>` : 'Η Επαρχία δεν έχει email Γραμματείας (Μητρώα → Επαρχιακές Μεγάλες Στοές).'}</p>
 <p>${rows.length} ${rows.length === 1 ? 'Εγκατάσταση' : 'Εγκαταστάσεις'} · ${miss.length} Στοές χωρίς ημερομηνία</p>
@@ -683,7 +686,7 @@ function reportPage({ query }) {
   const rng = (frm ? 'Από ' + fmtDate(frm) : 'Όλες οι ημερομηνίες') + (to ? ' έως ' + fmtDate(to) : '') + ' · ' + (prov || 'Όλες οι Επαρχίες') + ` · ${rows.length} επισκέψεις`;
   return {
     title: 'Αναφορά επισκέψεων',
-    html: `<div class="noprint"><h1>Αναφορά επισκέψεων</h1><form class="card filters vfilters f3" id="flt"><input type="date" name="frm" value="${esc(frm)}"><input type="date" name="to" value="${esc(to)}">
+    html: `${visitsFlow(5)}<div class="noprint"><h1>Αναφορά επισκέψεων</h1><form class="card filters vfilters f3" id="flt"><input type="date" name="frm" value="${esc(frm)}"><input type="date" name="to" value="${esc(to)}">
 <select name="prov"><option value="">Όλες οι Επαρχίες</option>${provincialChoices().map((p) => `<option${p === prov ? ' selected' : ''}>${esc(p)}</option>`).join('')}</select><button>Προβολή</button></form>
 <div class="toolbar"><button class="btn primary" data-act="print">⬇ PDF / Εκτύπωση (A4)</button><a class="btn" href="#/visits">Επισκέψεις</a></div></div>
 <div class="print-area">${reportPaper('Πρόγραμμα Επισκέψεων στις Στοές', rng, tbl)}</div>`,

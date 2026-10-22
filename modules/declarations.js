@@ -5,6 +5,7 @@
 // της σελίδας (ADMIN_KEY του Apps Script), ώστε ο κωδικός να μη γράφεται πουθενά στον δημόσιο κώδικα.
 import { module } from '../core/app.js';
 import { db } from '../core/store.js';
+import { visitsFlow } from './visits.js';
 
 export const DECLARATIONS_URL = 'declarations/';
 
@@ -18,7 +19,7 @@ const frameHtml = (id, title, src) => `<iframe id="${id}" class="embed-frame" ti
 function declarationsPage({ query }) {
   return {
     title: 'Δηλώσεις Διάθεσης Μ. Αξιωματικών',
-    html: `<h1>Δηλώσεις Διάθεσης Μεγάλων Αξιωματικών</h1>
+    html: `${visitsFlow(2)}<h1>Δηλώσεις Διάθεσης Μεγάλων Αξιωματικών</h1>
 <p class="muted">Εκπροσώπηση του Μεγάλου Διδασκάλου σε Εγκαταστάσεις Σεβ. Διδασκάλων: οι αξιωματικοί δηλώνουν και η Γραμματεία ορίζει εκπροσώπους στις <a href="#/visits">Επισκέψεις Στοών</a>.
 Η Διαχειριστική Αναφορά ανοίγει με τον κωδικό πρόσβασης. <a href="${DECLARATIONS_URL}" target="_blank" rel="noopener">Δημόσια σελίδα ↗</a></p>
 <nav class="decltabs">${VIEWS.map(([v, l]) => `<button type="button" class="btn${v === 'form' ? ' primary' : ''}" data-view="${v}">${l}</button>`).join('')}</nav>

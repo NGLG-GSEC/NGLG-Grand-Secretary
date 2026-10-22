@@ -5,7 +5,7 @@ import { db } from '../core/store.js';
 import { module, bind, flash, go, confirmDo, toast } from '../core/app.js';
 import { esc, fold, sortBy, parsePasted, exportXlsx, today, fmtDate } from '../core/util.js';
 import { attachPicker, memberItems } from '../core/pickers.js';
-import { identify, canonicalId, person } from '../core/people.js';
+import { identify, canonicalId, person, regCode, regSortKey } from '../core/people.js';
 import { reportPaper, printPaper } from '../core/paper.js';
 
 db.seed('epeteirida', () => []);
@@ -69,7 +69,7 @@ export function highestOfficeText(memberId) {
 export function epRegistryNo(r) {
   const id = r.member_id || (r.member_id == null && r.full_name ? matchName(r.full_name) : null), p = id ? person(id) : null;
   if (!p) return { no: null, linked: false };
-  return { no: p.member.registry_no ?? p.registry_nos[0] ?? null, linked: !!r.member_id };
+  return { no: regCode(p.member) || (p.registry_nos[0] != null ? `M${p.registry_nos[0]}` : null), linked: !!r.member_id };
 }
 // Μόνιμη σύνδεση: γραμμές χωρίς σύνδεση που το ονοματεπώνυμό τους δείχνει με βεβαιότητα ένα μέλος → [id γραμμής, member_id]
 // (όσες αποσυνδέθηκαν ρητά από τον χρήστη έχουν member_id 0 και δεν ξαναδένονται αυτόματα)
@@ -182,7 +182,7 @@ ${FILTERS.map(([k, l]) => `<label>${esc(l)}<select data-s="${k}">${opts(k)}</sel
       const renderTable = () => {
         const xs = live().filter((r) => pass(r));
         const k = sort.k, t = (COL[k] || [])[2];
-        const key = (r) => (k === 'regno' ? (Number(epRegistryNo(r).no) || 1e9) : k === 'member' ? (r.member_id ? 0 : 1) : t === 'num' || t === 'yn' ? (Number(r[k]) || (r[k] === '' || r[k] == null ? 1e9 : 0)) : fold(r[k]));
+        const key = (r) => (k === 'regno' ? regSortKey(epRegistryNo(r).no) : k === 'member' ? (r.member_id ? 0 : 1) : t === 'num' || t === 'yn' ? (Number(r[k]) || (r[k] === '' || r[k] == null ? 1e9 : 0)) : fold(r[k]));
         const sorted = sortBy(xs, key, 'aa');
         if (sort.dir < 0) sorted.reverse();
         el.querySelector('#epg').innerHTML = `<thead><tr>${[['aa', COL.aa[1]], ['regno', 'Αρ. Μητρώου'], ...EP_COLS.slice(1)].map(([c, l]) => `<th data-sort="${c}" class="c-${c}">${esc(l)}${sort.k === c ? (sort.dir > 0 ? ' ▲' : ' ▼') : ''}</th>`).join('')}<th data-sort="member">Μητρώο</th><th></th></tr></thead>

@@ -9,6 +9,7 @@ import { reportPaper, printPaper } from '../core/paper.js';
 import { loadScript } from '../core/pdf.js';
 import { lodgesAll, lodgeNoKey } from './lodges.js';
 import { capacityOf, feeRankLabel, MEMBER_CAPACITIES } from './members.js';
+import { regCode } from '../core/people.js';
 
 const LIMIT = 12;
 const gone = (st) => /ΔΙΑΓΡΑΦ|ΜΕΤΕΣΘ/.test(st);
@@ -117,7 +118,7 @@ export function smallLodgesPage() {
           const m = ms.get(l.member_id);
           if (!m || lodgeNoKey(l.lodge_number) !== lodgeNoKey(sel) || seen.has(m.id)) continue;
           seen.add(m.id);
-          out.push({ id: m.id, regno: m.registry_no ?? '', name: `${m.surname || ''} ${m.first_name || ''}`.trim(), degree: m.degree || '', capacity: capacityOf(l) || '-', fee: feeRankLabel(l.fee_rank) || '-',
+          out.push({ id: m.id, regno: regCode(m), name: `${m.surname || ''} ${m.first_name || ''}`.trim(), degree: m.degree || '', capacity: capacityOf(l) || '-', fee: feeRankLabel(l.fee_rank) || '-',
             status: String(l.member_status || '').trim() || '-', primary: isPrimaryRow(l, st, active) ? 'ΝΑΙ' : 'ΟΧΙ' });
         }
         return sortBy(out, (r) => (r.primary === 'ΝΑΙ' ? 0 : 1), (r) => fold(r.name));

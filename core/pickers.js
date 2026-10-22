@@ -11,7 +11,7 @@ export function searchMembers(q, limit = 12, withBlocked = false) {
   if (!q || q.trim().length < 2) return [];
   const byM = {};
   for (const l of db.all('member_lodges')) (byM[l.member_id] ||= []).push(`${l.lodge_name} ${l.lodge_number}`);
-  return sortBy(db.all('member_registry').filter((m) => (withBlocked || !noContact(m)) && matches(q, m.surname, m.first_name, m.surname_variants, m.first_name_variants, m.email, m.other_emails, m.mobile, m.other_mobiles, m.registry_no, (byM[m.id] || []).join(' '))), 'surname', 'first_name').slice(0, limit);
+  return sortBy(db.all('member_registry').filter((m) => (withBlocked || !noContact(m)) && matches(q, m.surname, m.first_name, m.surname_variants, m.first_name_variants, m.email, m.other_emails, m.mobile, m.other_mobiles, m.registry_no, m.diploma_no ? 'MM' + m.diploma_no : '', m.registry_no != null ? 'M' + m.registry_no : '', (byM[m.id] || []).join(' '))), 'surname', 'first_name').slice(0, limit);
 }
 
 // Πεδίο αναζήτησης· onPick(item) όταν επιλεγεί. items(q) → [{label, sub, value}]
@@ -33,7 +33,7 @@ export function attachPicker(input, items, onPick) {
   document.addEventListener('pointerdown', (e) => { if (!box.contains(e.target) && e.target !== input) box.hidden = true; });
 }
 
-export const memberItems = (q) => searchMembers(q).map((m) => ({ label: memberName(m), sub: [m.degree, m.email, m.mobile, memberLodges(m.id).map((l) => `${l.lodge_name} ${l.lodge_number}`).join(', ')].filter(Boolean).join(' · '), value: m }));
+export const memberItems = (q) => searchMembers(q).map((m) => ({ label: memberName(m), sub: [String(m.diploma_no ?? '').trim() ? 'MM' + String(m.diploma_no).trim() : m.registry_no != null ? 'M' + m.registry_no : '', m.degree, m.email, m.mobile, memberLodges(m.id).map((l) => `${l.lodge_name} ${l.lodge_number}`).join(', ')].filter(Boolean).join(' · '), value: m }));
 
 // Τίτλος μέλους (π.χ. «Πσεβ. Αδ.») — ορίζεται από τις Ευχές/Εορτολόγιο, που γνωρίζουν αξιώματα και Επετηρίδα
 let titleFn = () => '';
