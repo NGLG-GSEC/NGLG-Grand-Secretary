@@ -1,13 +1,13 @@
 // 🎓 Διπλώματα Διδασκάλου Τέκτονος (Certificate Master Mason) — μία σελίδα, πάνω στο Μητρώο Μελών (καμία ξεχωριστή λίστα):
-//   Μέλη με Δίπλωμα (αναζήτηση ανά Αδελφό) · Ανά Στοά (πόσοι έχουν / δεν έχουν) · Εισαγωγή Excel · Πρότυπο Excel · Εκτύπωση Διπλώματος.
+//   Μέλη με Δίπλωμα (αναζήτηση ανά Αδελφό) · Ανά Στοά (πόσοι έχουν / δεν έχουν) · Εισαγωγή Excel · Πρότυπο Excel · Κάρτα Μέλους.
+// (Το επίσημο Δίπλωμα Διδασκάλου Τέκτονος θα προστεθεί από το πρότυπο της Γραμματείας.)
 // Ο αριθμός Διπλώματος είναι ο πραγματικός αριθμός μητρώου (MM…). Η εισαγωγή συμπληρώνει στην καρτέλα του μέλους:
 // Δίπλωμα, Ημ. Εισδοχής (Μαθητής), Ημ. Διελεύσεως (Εταίρος), Ημ. Εγέρσεως (Διδάσκαλος), Στοά Εγέρσεως και αριθμό της.
 import { db } from '../core/store.js';
 import { go, flash, toast, table, bind } from '../core/app.js';
-import { esc, fold, sortBy, readXlsx, parsePasted, exportXlsx, fmtDate, today } from '../core/util.js';
+import { esc, fold, sortBy, readXlsx, parsePasted, exportXlsx, fmtDate } from '../core/util.js';
 import { identify, regCode, matchesCode } from '../core/people.js';
 import { attachPicker, memberItems, noContact } from '../core/pickers.js';
-import { IMG, printPaper } from '../core/paper.js';
 import { regBadge, isAdmin, isoOf, lodgesByMember } from './members.js';
 import { lodgeNoKey, lodgesAll } from './lodges.js';
 
@@ -131,16 +131,16 @@ export function diplomasPage({ query = {} } = {}) {
     if (q) xs = xs.filter((m) => matchesCode(m, q) || fold(`${m.surname} ${m.first_name} ${m.first_name} ${m.surname} ${lodgeLine(m)}`).includes(fold(q)));
     xs = sortBy(xs, (m) => (hasDip(m) ? Number(m.diploma_no) || 0 : 1e9), 'surname', 'first_name');
     const years = [...new Set(withD.map((m) => String(isoOf(m.date_mm)).slice(0, 4)).filter((y) => /^\d{4}$/.test(y)))].sort().reverse();
-    const printIds = xs.filter(hasDip).slice(0, 200).map((m) => m.id).join(',');
+    const printIds = xs.slice(0, 200).map((m) => m.id).join(',');
     body = `<form class="card filters vfilters" id="dpf"><input name="q" value="${esc(q)}" placeholder="🔎 Αδελφός, MM/M αριθμός, Στοά…">
 <select name="mode"><option value="with"${mode === 'with' ? ' selected' : ''}>Με Δίπλωμα (${withD.length})</option><option value="without"${mode === 'without' ? ' selected' : ''}>Ενεργοί χωρίς Δίπλωμα</option><option value="all"${mode === 'all' ? ' selected' : ''}>Όλα τα μέλη</option></select>
 <select name="lodge"><option value="">Όλες οι Στοές</option>${lodgesAll().map((l) => `<option value="${esc(l.number)}"${lno && lodgeNoKey(l.number) === lodgeNoKey(lno) ? ' selected' : ''}>${esc(l.number)} · ${esc(l.name)}</option>`).join('')}</select>
 <select name="year"><option value="">Κάθε έτος Εγέρσεως</option>${years.map((y) => `<option${y === yr ? ' selected' : ''}>${y}</option>`).join('')}</select><button>Αναζήτηση</button></form>
-<div class="toolbar"><span class="muted">${xs.length} μέλη</span><button type="button" class="btn small" data-act="exportList">⬇ Excel Διπλωμάτων</button>${printIds ? `<a class="btn small" href="#/members/diplomas/print?ids=${printIds}">🖨 Εκτύπωση Διπλωμάτων λίστας</a>` : ''}</div>
+<div class="toolbar"><span class="muted">${xs.length} μέλη</span><button type="button" class="btn small" data-act="exportList">⬇ Excel Διπλωμάτων</button>${printIds ? `<a class="btn small" href="#/members/card?ids=${printIds}">🖨 Κάρτες Μέλους της λίστας</a>` : ''}</div>
 <div class="memtable">${table(['Αρ. Μητρώου', 'Ονοματεπώνυμο', 'Μαθητής', 'Εταίρος', 'Διδάσκαλος', 'Στοά Εγέρσεως', 'Στοές μέλους', ''], xs.slice(0, 500).map((m) => [regBadge(m),
   `<a href="#/members/${m.id}">${esc(m.surname)} ${esc(m.first_name)}</a>`, esc(fmtDate(isoOf(m.date_ea))), esc(fmtDate(isoOf(m.date_fc))), esc(fmtDate(isoOf(m.date_mm))), esc(lodgeLine(m)),
   `<small>${esc((byM[m.id] || []).map((l) => `${l.lodge_name} ${l.lodge_number}`.trim()).join(', '))}</small>`,
-  hasDip(m) ? `<a class="btn small" href="#/members/diplomas/print?ids=${m.id}">🖨 Δίπλωμα</a>` : '']), 'Δεν βρέθηκαν μέλη.')}</div>`;
+  `<a class="btn small" href="#/members/card?ids=${m.id}">🖨 Κάρτα Μέλους</a>`]), 'Δεν βρέθηκαν μέλη.')}</div>`;
   } else if (tab === 'lodges') {
     const st = lodgeDiplomaStats(), T = st.reduce((a, x) => ({ total: a.total + x.total, with: a.with + x.with }), { total: 0, with: 0 });
     body = `<div class="vstats"><span><b>${T.total}</b> ενεργές συμμετοχές μελών</span><span><b>${T.with}</b> με Δίπλωμα</span><span class="${T.total - T.with ? 'warn' : ''}"><b>${T.total - T.with}</b> χωρίς Δίπλωμα</span></div>
@@ -203,35 +203,5 @@ ${table(['Από το αρχείο', 'Μέλος στο Μητρώο', 'Αλλα
       });
       el.querySelector('#dpRead').addEventListener('click', () => load(parsePasted(el.querySelector('#dpPaste').value)));
     },
-  };
-}
-
-// ---- Εκτύπωση Διπλώματος (Α4). Προσωρινό έντυπο μέχρι να δοθεί το επίσημο πρότυπο. ----
-const gdate = (iso) => (iso ? fmtDate(iso) : '……………');
-export function diplomaPaper(m) {
-  const lodge = m.mm_lodge_name ? `εν τη Σεβ. Στοά «${esc(m.mm_lodge_name)}»${m.mm_lodge_number ? ` υπ’ αριθμ. ${esc(m.mm_lodge_number)}` : ''}` : 'εν τη Σεβ. Στοά «……………»';
-  return `<article class="paper diploma"><div class="dip-frame">
-<img class="dip-emblem" src="${IMG.emblem}" alt="">
-<div class="dip-org">ΕΘΝΙΚΗ ΜΕΓΑΛΗ ΣΤΟΑ ΤΗΣ ΕΛΛΑΔΟΣ</div>
-<div class="dip-title">ΔΙΠΛΩΜΑ ΔΙΔΑΣΚΑΛΟΥ ΤΕΚΤΟΝΟΣ</div><div class="dip-sub">MASTER MASON CERTIFICATE</div>
-<div class="dip-no">Αρ. Μητρώου <b>${esc(regCode(m))}</b></div>
-<p class="dip-text">Η Εθνική Μεγάλη Στοά της Ελλάδος πιστοποιεί ότι ο Αδελφός</p>
-<div class="dip-name">${esc(m.first_name || '')} ${esc(m.surname || '')}</div>
-<p class="dip-text">εισήχθη εις τον βαθμόν του Μαθητού την <b>${gdate(isoOf(m.date_ea))}</b>,<br>διήλθε εις τον βαθμόν του Εταίρου την <b>${gdate(isoOf(m.date_fc))}</b><br>
-και ηγέρθη εις τον βαθμόν του <b>Διδασκάλου Τέκτονος</b> την <b>${gdate(isoOf(m.date_mm))}</b><br>${lodge}.</p>
-<div class="dip-place">Εν Αθήναις, ${esc(fmtDate(today()))}</div>
-<div class="decsig"><div><div class="t">Ο ΜΕΓΑΣ ΓΡΑΜΜΑΤΕΥΣ</div><img class="signature-img" src="${IMG.signature}" alt=""><div class="signature-line"></div><b>Δημήτριος Σκιαδόπουλος</b></div>
-<div><img class="seal-img" src="${IMG.seal}" alt=""></div><div><div class="t">Ο ΜΕΓΑΣ ΔΙΔΑΣΚΑΛΟΣ</div><img class="signature-img" src="${IMG.grandMaster}" alt=""><div class="signature-line"></div><b>Ιωάννης Μπενετάτος</b></div></div>
-</div></article>`;
-}
-export function diplomaPrintPage({ query = {} } = {}) {
-  const ms = String(query.ids || '').split(',').map(Number).filter(Boolean).map((id) => db.get('member_registry', id)).filter((m) => m && hasDip(m));
-  return {
-    title: 'Εκτύπωση Διπλώματος',
-    html: `<div class="noprint"><p><a href="#/members/diplomas">← Διπλώματα Διδασκάλου</a></p><h1>🖨 Δίπλωμα Διδασκάλου Τέκτονος ${ms.length > 1 ? `<small class="muted">${ms.length} Διπλώματα</small>` : ''}</h1>
-<div class="card notice">Προσωρινό έντυπο — θα αντικατασταθεί από το επίσημο πρότυπο Διπλώματος μόλις δοθεί. Τα στοιχεία έρχονται από την καρτέλα του μέλους.</div>
-<div class="toolbar"><button type="button" class="btn primary" data-act="print">🖨 Εκτύπωση / PDF</button></div></div>
-<div class="print-area">${ms.length ? ms.map(diplomaPaper).join('') : '<div class="card">Δεν βρέθηκαν μέλη με Δίπλωμα.</div>'}</div>`,
-    mount(el) { bind(el, { print: () => printPaper(ms.length === 1 ? `Δίπλωμα ${regCode(ms[0])} ${ms[0].surname} ${ms[0].first_name}` : 'Διπλώματα Διδασκάλου') }); },
   };
 }

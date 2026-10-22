@@ -10,7 +10,8 @@ import { epeteiridaOf, highestOfficeText } from './epeteirida-table.js';
 import { identify, canonicalId, person, digits10, sameNameGroups, regCode, matchesCode, codeKey } from '../core/people.js';
 import { isSealed } from '../core/connect.js';
 import { smallLodgesPage } from './small-lodges.js';
-import { diplomasPage, diplomaPrintPage } from './diplomas.js';
+import { diplomasPage } from './diplomas.js';
+import { memberCardPage } from './member-card.js';
 
 // Αρ. Μητρώου: μοναδικός και μόνιμος αριθμός κάθε προσώπου που είναι ή υπήρξε μέλος της ΕΜΣτΕ (και διαγραμμένου).
 // Ξεκινά από το 1200, δίνεται αυτόματα στο νέο μέλος (επόμενος ελεύθερος) και δεν αλλάζει ποτέ· μόνο ο διαχειριστής
@@ -318,7 +319,7 @@ ${f('mm_lodge_name', 'Στοά Εγέρσεως (όπου έγινε Διδάσ�
 <div class="full"><label>Σημείωση Διαγραφής</label><input name="deregistered_note" value="${esc(x.deregistered_note || '')}"></div>
 <div class="full"><label>Πρόσθετες Στοές / παλαιά πληροφορία</label><textarea name="additional_lodges" class="short">${esc(x.additional_lodges || '')}</textarea></div>
 <div class="full"><label>Στοές του μέλους</label>${lodgesEditor(ls)}</div></div>
-<div class="toolbar"><button class="btn primary">💾 Αποθήκευση</button><a class="btn" href="#/members">Ακύρωση</a>${m && String(m.diploma_no ?? '').trim() ? `<a class="btn" href="#/members/diplomas/print?ids=${m.id}">🖨 Δίπλωμα Διδασκάλου</a>` : ''}${m && !noContact(m) ? `<a class="btn" href="#/letters/new?to_name=${encodeURIComponent(`${m.first_name} ${m.surname}`)}&to_email=${encodeURIComponent(m.email || '')}">✉ Επιστολή</a>` : ''}${m ? '<button type="button" class="btn danger" data-act="del">Διαγραφή</button>' : ''}</div></form>
+<div class="toolbar"><button class="btn primary">💾 Αποθήκευση</button><a class="btn" href="#/members">Ακύρωση</a>${m ? `<a class="btn" href="#/members/card?ids=${m.id}">🖨 Κάρτα Μέλους</a>` : ''}${m && !noContact(m) ? `<a class="btn" href="#/letters/new?to_name=${encodeURIComponent(`${m.first_name} ${m.surname}`)}&to_email=${encodeURIComponent(m.email || '')}">✉ Επιστολή</a>` : ''}${m ? '<button type="button" class="btn danger" data-act="del">Διαγραφή</button>' : ''}</div></form>
 ${m ? epCard(m) : ''}${offices.length ? `<h2>Ιστορικό αξιωμάτων (Διατάγματα)</h2>${table(['Έτος', 'Αξίωμα / Τίτλος', 'Διάταγμα'], offices.map((o) => [esc(o.decree_year), esc(o.office), o.decree_id ? `<a href="#/decrees/${o.decree_id}">${esc(o.decree_no)}/${esc(o.decree_year)}</a>` : esc(o.decree_no ? `${o.decree_no}/${o.decree_year}` : '')]))}` : ''}`,
     mount(el) {
       onSubmit(el.querySelector('#mf'), async (d) => {
@@ -600,7 +601,8 @@ module({
     '/members/duplicates': duplicatesPage,
     '/members/small-lodges': smallLodgesPage,
     '/members/diplomas': diplomasPage,
-    '/members/diplomas/print': diplomaPrintPage,
+    '/members/card': memberCardPage,
+    '/members/diplomas/print': memberCardPage, // παλιός σύνδεσμος
     '/members/:id': ({ params }) => { const m = db.get('member_registry', params.id); return m ? formPage(m) : '<h1>Δεν βρέθηκε το μέλος</h1>'; },
   },
   tile: { order: 60, render: () => `<div class="dtile"><h3><a href="#/members">Μητρώο Μελών</a></h3><div class="big">${membersAll().filter((m) => m.active !== 0).length} ενεργά μέλη</div><small class="muted">${membersAll().filter(noContact).length} διαγραμμένα (⛔ χωρίς επικοινωνία)</small>

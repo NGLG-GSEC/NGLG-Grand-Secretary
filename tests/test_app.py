@@ -2593,14 +2593,20 @@ def test_master_mason_diplomas_registry_codes_and_import(app, tmp_path):
     assert row[2].strip() == '2' and row[3].strip() == '1' and row[4].strip() == '1', row
     app.go('/members/diplomas?tab=list&mode=without&lodge=1')
     assert 'Άλλος' in app.text('.memtable') and 'Διπλωματούχος' not in app.text('.memtable')
-    # καρτέλα μέλους και εκτύπωση Διπλώματος
+    # καρτέλα μέλους και Κάρτα Μέλους (όλα τα στοιχεία: Στοές με ιδιότητα και αξιώματα, Επετηρίδα, Διατάγματα)
+    app.page.evaluate(f"""async () => {{ const {{db}} = await import('./core/store.js'); const {{updateMember}} = await import('./modules/members.js');
+      await db.save('x', (tx) => {{ updateMember(tx, {ids[0]}, {{ lodges: [{{ name: 'ΑΘΗΝΑ', number: '1', status: 'ΕΝΕΡΓΟ', capacity: 'Τακτικό', fee_rank: 1, jw_date: '2014-05-01', sw_date: '2015-05-01', wm_date: '2016-05-01' }}] }});
+        tx.insert('member_degrees_offices', {{ member_id: {ids[0]}, record_type: 'appoint', degree: '', office: 'Μέγας Ξιφοφόρος', decree_id: null, decree_no: 600, decree_year: 2026, valid_from: '', valid_to: '', is_current: 1, notes: '' }});
+        tx.insert('epeteirida', {{ aa: 1, active: 1, title: 'Μέγας Ξιφοφόρος', honorific: 'Λσεβ. Αδ.', full_name: 'Διπλωματούχος Πέτρος', rank: 'Μέγας Ξιφοφόρος', province: '', decree_no: 600, decree_year: 2026, tmd: 0, tmd_decree: '', current: '', member_id: {ids[0]} }}); }}); }}""")
     app.go(f'/members/{ids[0]}')
     assert 'MM24680' in app.text('.regcode') and app.page.input_value('[name=diploma_no]') == '24680' and app.page.input_value('[name=mm_lodge_name]') == 'ΑΘΗΝΑ'
-    app.page.click('a.btn:has-text("🖨 Δίπλωμα Διδασκάλου")')
-    app.page.wait_for_selector('.paper.diploma')
-    d = app.text('.paper.diploma')
-    for s_ in ['ΔΙΠΛΩΜΑ ΔΙΔΑΣΚΑΛΟΥ ΤΕΚΤΟΝΟΣ', 'MM24680', 'Πέτρος Διπλωματούχος', '15/03/2010', '20/11/2010', '10/06/2011', '«ΑΘΗΝΑ» υπ’ αριθμ. 1']:
-        assert s_ in d, s_
+    app.page.click('a.btn:has-text("🖨 Κάρτα Μέλους")')
+    app.page.wait_for_selector('.paper.member-card')
+    c = app.text('.paper.member-card')
+    for s_ in ['ΚΑΡΤΑ ΜΕΛΟΥΣ', 'MM24680', 'Διπλωματούχος Πέτρος', '15/03/2010', '20/11/2010', '10/06/2011', 'ΑΘΗΝΑ 1', 'Τακτικό', 'Στοά πλήρους συνδρομής',
+               'Σεβάσμιος ΑΘΗΝΑ 1 (01/05/2016)', 'Α΄ Επόπτης ΑΘΗΝΑ 1 (01/05/2015)', 'Β΄ Επόπτης ΑΘΗΝΑ 1 (01/05/2014)', 'Λσεβ. Αδ.', '600/2026', 'Μέγας Ξιφοφόρος']:
+        assert s_ in c, s_
+    assert 'ΔΙΠΛΩΜΑ ΔΙΔΑΣΚΑΛΟΥ ΤΕΚΤΟΝΟΣ' not in c and 'MASTER MASON' not in c  # το επίσημο Δίπλωμα είναι ξεχωριστό έντυπο
 
 
 def test_unified_menu_and_visits_flow(app):

@@ -435,16 +435,25 @@ input[type=file]{max-width:100%;min-width:0}
 /* Κινητό: τα στοιχεία των φορμών δεν «σπρώχνουν» τη σελίδα (ο πίνακας Στοών του μέλους κυλά μέσα στο πλαίσιό του) */
 .grid>*{min-width:0}
 .ml-wrap{overflow-x:auto;max-width:100%}
-/* Δίπλωμα Διδασκάλου Τέκτονος (προσωρινό έντυπο Α4) */
-.paper.diploma{padding:12mm}
-.dip-frame{border:3px double #b18a43;outline:1px solid #b18a43;outline-offset:3mm;min-height:265mm;padding:12mm 14mm;text-align:center;display:flex;flex-direction:column;align-items:center;color:#1d2f5e}
-.dip-emblem{width:36mm;margin-bottom:4mm}
-.dip-org{font:700 15pt/1.3 'Noto Serif',Georgia,serif;letter-spacing:.08em}
-.dip-title{font:900 22pt/1.2 Georgia,'Noto Serif',serif;letter-spacing:.06em;margin-top:8mm;color:#8a6d1d}
-.dip-sub{font:600 10pt/1.2 'Noto Serif',serif;letter-spacing:.3em;color:#8a6d1d;margin-top:2mm}
-.dip-no{margin:6mm 0 8mm;font-size:11pt}.dip-no b{font-family:ui-monospace,Menlo,monospace;font-size:13pt}
-.dip-text{font-size:12.5pt;line-height:1.7;margin:0 0 3mm;color:#111}
-.dip-name{font:700 22pt/1.3 'Noto Serif',Georgia,serif;margin:2mm 0 6mm;color:#1d2f5e}
-.dip-place{margin:8mm 0 4mm;font-size:11pt;color:#111}
-.dip-frame .decsig{width:100%;margin-top:auto}
-@media print{.paper.diploma{break-after:page}}
+/* Κάρτα Μέλους (Α4): όλα τα στοιχεία ενός μέλους */
+.paper.member-card{padding:12mm 13mm;font-size:9.5pt;color:#111}
+.mc-head{display:flex;align-items:center;gap:5mm;border-bottom:2px solid #b18a43;padding-bottom:3mm}
+.mc-head img{width:18mm}
+.mc-head>div:nth-child(2){flex:1}
+.mc-org{font:600 8.5pt/1.3 'Noto Serif',serif;letter-spacing:.06em;color:#1d2f5e}
+.mc-title{font:900 18pt/1.2 Georgia,'Noto Serif',serif;letter-spacing:.08em;color:#8a6d1d}
+.mc-reg{text-align:right;border:1px solid #d7bc83;background:#fff8e9;border-radius:6px;padding:2mm 3mm}
+.mc-reg small{display:block;font-size:7.5pt;color:#7a5a10}.mc-reg b{font:700 14pt ui-monospace,Menlo,monospace;color:#1d2f5e}
+.mc-name{font:700 17pt/1.3 'Noto Serif',Georgia,serif;color:#1d2f5e;margin:4mm 0 2mm}
+.mc-name small{font-size:11pt;font-weight:400;color:#555}
+.member-card section{margin-top:4mm;break-inside:avoid}
+.member-card h3{font:700 10.5pt/1.2 'Noto Serif',serif;color:#1d2f5e;margin:0 0 1.5mm;padding-bottom:1mm;border-bottom:1px solid #e3e6ee}
+.mc-kv{display:grid;grid-template-columns:repeat(3,1fr);gap:1.5mm 5mm;margin:0}
+.mc-kv div{min-width:0}.mc-kv dt{font-size:7.5pt;color:#667;text-transform:uppercase;letter-spacing:.04em}.mc-kv dd{margin:0;font-weight:600;overflow-wrap:anywhere}
+.mc-table{width:100%;border-collapse:collapse;font-size:8.5pt}
+.mc-table th{background:#eef1f7;color:#1d2f5e;text-align:left;font-weight:700;padding:1.2mm 1.5mm;border:1px solid #d9dfeb}
+.mc-table td{padding:1.2mm 1.5mm;border:1px solid #e3e6ee;vertical-align:top}
+.mc-empty{color:#999}.mc-sub{font-size:8.5pt;margin:1.5mm 0 0}
+.mc-foot{margin-top:6mm;padding-top:2mm;border-top:1px solid #e3e6ee;font-size:7.5pt;color:#888;text-align:center}
+@media print{.paper.member-card{break-after:page}}
+@media screen and (max-width:600px){.mc-kv{grid-template-columns:1fr 1fr}.paper.member-card .mc-table{display:block;overflow-x:auto}}
