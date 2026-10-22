@@ -2690,8 +2690,12 @@ def test_decree_number_editable_and_protocol_button(app):
     app.go('/decrees/2/edit')
     assert app.page.locator('a.btn.protogreen').count() == 1 and app.page.input_value('[name=decree_no]') == '600'
     app.page.fill('[name=decree_no]', '610')
+    app.page.fill('[name=decree_date]', '2026-10-21')  # επεξεργάσιμη ημερομηνία
+    app.page.wait_for_function("() => document.querySelector('#dprev').innerText.includes('21ην Οκτωβρίου 2026')")
     app.page.click('button:has-text("Αποθήκευση Διατάγματος")')
     app.page.wait_for_url('**/#/decrees/2')
-    assert app.page.evaluate("async () => (await import('./core/store.js')).db.get('decree_documents', 2).decree_no") == 610
+    st = app.page.evaluate("async () => { const d = (await import('./core/store.js')).db.get('decree_documents', 2); return [d.decree_no, d.decree_date, d.body]; }")
+    assert st[0] == 610 and st[1] == '2026-10-21' and '21ην Οκτωβρίου 2026' in st[2], st
+    assert '610/2026, ημερ. 21/10/2026' in app.text('.paper')
     app.go('/decrees/new')
     assert app.page.input_value('[name=decree_no]') == '611'  # το επόμενο έπεται του μεγαλύτερου

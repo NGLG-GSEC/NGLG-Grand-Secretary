@@ -118,6 +118,13 @@ async function decreeDocxBlob(d) {
 }
 // Προτεινόμενος αριθμός: ο επόμενος του μεγαλύτερου (ή ο αρχικός των Ρυθμίσεων)· ο αριθμός αλλάζει ελεύθερα στη φόρμα και το επόμενο Διάταγμα έπεται του μεγαλύτερου
 export const suggestDecreeNo = (src = db) => Math.max(src.all('decree_documents').reduce((m, d) => Math.max(m, Number(d.decree_no) || 0), 0) + 1, Number(db.setting('decree_first_no')) || 513);
+// Ημερομηνία Διατάγματος από τη φόρμα (π.χ. 2026-10-21 → «21ην Οκτωβρίου 2026» στο κείμενο)
+function formDecreeDate(data, d) {
+  const v = String(data.decree_date || '').trim();
+  if (!v) return d ? d.decree_date : today();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) throw new Error('Μη έγκυρη ημερομηνία Διατάγματος.');
+  return v;
+}
 // Αριθμός/έτος από τη φόρμα· έλεγχος ότι δεν υπάρχει άλλο Διάταγμα με τον ίδιο αριθμό στο ίδιο έτος
 function formDecreeNo(tx, data, d) {
   const no = Number(String(data.decree_no ?? '').trim()), year = Number(String(data.decree_year ?? '').trim()) || (d ? d.decree_year : new Date().getFullYear());
@@ -216,6 +223,7 @@ function decreeForm(d, query = {}) {
 <small class="muted">${d && d.id ? 'Το είδος δεν αλλάζει σε εκδομένο Διάταγμα. ' : ''}Σελίδα (φόντο, κεφαλίδα): <a href="#/templates">Πρότυπα</a> → «🎨 Σχεδίαση σελίδας».</small>
 <div class="dec-noedit"><label>Αρ. Διατάγματος</label><div class="dec-norow"><input name="decree_no" type="number" min="1" step="1" inputmode="numeric" value="${esc(d && d.id ? d.decree_no : suggestDecreeNo())}" required>
 <span>/</span><input name="decree_year" type="number" min="1900" max="2999" inputmode="numeric" value="${esc(d && d.id ? d.decree_year : new Date().getFullYear())}" required></div>
+<label style="margin-top:10px">Ημερομηνία Διατάγματος</label><input name="decree_date" type="date" class="dec-date-in" value="${esc(d && d.id ? d.decree_date || today() : today())}" required>
 <small class="muted">${d && d.id ? 'Μπορείτε να διορθώσετε τον αριθμό.' : 'Προτείνεται ο επόμενος· μπορείτε να τον αλλάξετε.'} Το επόμενο Διάταγμα θα προταθεί αμέσως μετά τον μεγαλύτερο αριθμό.</small></div>${d && d.id ? `<input type="hidden" name="template_key" value="${key}">` : ''}</div>
 <fieldset class="plainfs" id="generalPart"${gen ? '' : ' disabled hidden'}><div class="card"><div class="grid">
 <div class="full"><label>Περί</label><input name="g_matter" value="${esc(d && gen ? d.matter : '')}" placeholder="π.χ. ιδρύσεως της Στοάς «……»"></div>
@@ -286,7 +294,7 @@ function mountDecreeForm(el, d, m0) {
   const draft = () => {
     const data = Object.fromEntries(new FormData(f)), action = data.action, service = action === 'service_award';
     if (isGen()) {
-      const date = d ? d.decree_date : today(), year = Number(data.decree_year) || (d ? d.decree_year : new Date().getFullYear());
+      const date = data.decree_date || (d ? d.decree_date : today()), year = Number(data.decree_year) || (d ? d.decree_year : new Date().getFullYear());
       const no = Number(data.decree_no) || (d ? d.decree_no : suggestDecreeNo());
       return { template_key: 'decree-general', decree_no: no, decree_year: year, decree_date: date, body: fillGeneral(data.g_body, { matter: String(data.g_matter || '').trim(), date, no: `${no}/${year}` }), rules: JSON.stringify({ action: 'general' }) };
     }
@@ -297,11 +305,14 @@ function mountDecreeForm(el, d, m0) {
       return { first_name: proper(q('.fn')) || DOTS, last_name: proper(q('.ln')) || DOTS, decree_first_name: proper(q('.dfn')), decree_last_name: proper(q('.dln')),
         honorific: q('.hon'), office: action === 'appoint' ? office || DOTS : '', rule: action === 'appoint' ? (DEC_MAP[office] || {}).rule || '' : '19' };
     });
-    const date = d ? d.decree_date : today(), year = Number(data.decree_year) || (d ? d.decree_year : new Date().getFullYear());
+    const date = data.decree_date || (d ? d.decree_date : today()), year = Number(data.decree_year) || (d ? d.decree_year : new Date().getFullYear());
     const no = Number(data.decree_no) || (d ? d.decree_no : suggestDecreeNo());
     const { body } = decreeBody(matter, people.length ? people : [{ first_name: DOTS, last_name: DOTS }], date, action, action === 'award' ? office || DOTS : '', period);
     return { template_key: 'decree-appoint', decree_no: no, decree_year: year, decree_date: date, body, rules: JSON.stringify({ action }) };
   };
+  // αλλαγή ημερομηνίας → το έτος του αριθμού ακολουθεί (αλλάζει και χωριστά)
+  const dIn = f.querySelector('[name=decree_date]'), yIn = f.querySelector('[name=decree_year]');
+  if (dIn && yIn) dIn.addEventListener('change', () => { const y = String(dIn.value).slice(0, 4); if (/^\d{4}$/.test(y)) yIn.value = y; });
   const pv = el.querySelector('#dprev');
   let tmr;
   const preview = () => { clearTimeout(tmr); tmr = setTimeout(() => { try { pv.innerHTML = decreePaper(draft()); } catch (e) { console.warn(e); } }, 120); };
@@ -315,7 +326,7 @@ function mountDecreeForm(el, d, m0) {
       if (!src) throw new Error('Συμπληρώστε το κείμενο του Διατάγματος.');
       if (bad.length) throw new Error('Μη έγκυρο email: ' + bad.join(', '));
       const id = await db.save(d ? `Διάταγμα ${decreeNo(d)}: ενημέρωση` : `Νέο Γενικό Διάταγμα: ${matter}`, (tx) => {
-        const date = d ? d.decree_date : today(), { no, year } = formDecreeNo(tx, data, d);
+        const date = formDecreeDate(data, d), { no, year } = formDecreeNo(tx, data, d);
         const row = { template_key: 'decree-general', decree_no: no, decree_year: year, decree_date: date, subject: `ΔΙΑΤΑΓΜΑ υπ’ αριθμ. ${no}/${year} – ${matter}`, matter,
           body: fillGeneral(src, { matter, date, no: `${no}/${year}` }), body_src: src, rules: JSON.stringify({ action: 'general' }), appointments: '[]',
           recipient_name: String(data.g_to_name || '').trim(), recipient_email: emails.join(', ') };
@@ -344,7 +355,7 @@ function mountDecreeForm(el, d, m0) {
     });
     if (!people.length) throw new Error('Συμπληρώστε τουλάχιστον έναν Αδελφό.');
     const id = await db.save(d ? `Διάταγμα ${decreeNo(d)}: ενημέρωση` : `Νέο Διάταγμα: ${matter}`, (tx) => {
-      const date = d ? d.decree_date : today(), { no, year } = formDecreeNo(tx, data, d);
+      const date = formDecreeDate(data, d), { no, year } = formDecreeNo(tx, data, d);
       const { body, rules } = decreeBody(matter, people, date, action, action === 'award' ? office : '', period);
       const row = { template_key: 'decree-appoint', decree_no: no, decree_year: year, decree_date: date, subject: `ΔΙΑΤΑΓΜΑ υπ’ αριθμ. ${no}/${year} – ${matter}`, body, matter,
         rules: JSON.stringify({ rules, action, award_office: action === 'award' ? office : '', decree_office: action === 'appoint' ? office : '', period: action === 'appoint' ? period : '' }),
