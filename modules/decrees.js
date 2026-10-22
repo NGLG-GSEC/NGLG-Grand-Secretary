@@ -214,14 +214,15 @@ ${table(['Προβάδισμα', 'Αξίωμα / Διορισμός', 'Κανό�
 }
 
 function decreeForm(d, query = {}) {
-  const m = d ? meta(d) : { action: ['appoint', 'award', 'service_award'].includes(query.action) ? query.action : 'appoint', award_office: '', decree_office: '', period: `${new Date().getFullYear()} - ${new Date().getFullYear() + 1}` };
+  const m = d ? meta(d) : { action: ['appoint', 'award', 'service_award'].includes(query.action) ? query.action : { 'decree-provincial': 'award', 'decree-service': 'service_award' }[query.kind] || 'appoint', award_office: '', decree_office: '', period: `${new Date().getFullYear()} - ${new Date().getFullYear() + 1}` };
   const list = d ? apps(d) : [];
   if (m.action === 'appoint' && !m.decree_office && list.length) m.decree_office = list[0].office || '';
   const key = d ? decreeKey(d) : DECREE_KINDS[query.kind] ? query.kind : keyFor(m.action), gen = key === 'decree-general';
   const gBody = d && gen ? d.body_src || d.body : decreeTemplate('decree-general').body || GENERAL_BODY;
   m.key = key;
   return { m, html: `<div class="dec-split"><div class="dec-formcol"><form id="df">
-<div class="card dec-kind"><label>Είδος Διατάγματος (Πρότυπο)</label><div class="dec-kinds">${Object.entries(DECREE_KINDS).map(([k, v]) => `<label class="chip"><input type="radio" name="template_key" value="${k}"${k === key ? ' checked' : ''}${d && d.id ? ' disabled' : ''}><span><b>${esc(v.name)}</b><small>${esc(v.short)}</small></span></label>`).join('')}</div>
+<div class="card dec-kind"><label>Είδος Διατάγματος (Πρότυπο)</label>${(() => { const chip = ([k, v]) => `<label class="chip${k === 'decree-general' ? ' dec-kind-gen' : ''}"><input type="radio" name="template_key" value="${k}"${k === key ? ' checked' : ''}${d && d.id ? ' disabled' : ''}><span><b>${esc(v.chip)}</b><small>${esc(v.short)}</small></span></label>`;
+  const ks = Object.entries(DECREE_KINDS); return `<div class="dec-kinds">${ks.filter(([k]) => k !== 'decree-general').map(chip).join('')}</div><div class="dec-kinds-gen">${ks.filter(([k]) => k === 'decree-general').map(chip).join('')}</div>`; })()}
 <small class="muted">${d && d.id ? 'Το είδος δεν αλλάζει σε εκδομένο Διάταγμα. ' : ''}Σελίδα (φόντο, κεφαλίδα): <a href="#/templates">Πρότυπα</a> → «🎨 Σχεδίαση σελίδας».</small>
 <div class="dec-noedit"><label>Αρ. Διατάγματος</label><div class="dec-norow"><input name="decree_no" type="number" min="1" step="1" inputmode="numeric" value="${esc(d && d.id ? d.decree_no : suggestDecreeNo())}" required>
 <span>/</span><input name="decree_year" type="number" min="1900" max="2999" inputmode="numeric" value="${esc(d && d.id ? d.decree_year : new Date().getFullYear())}" required></div>

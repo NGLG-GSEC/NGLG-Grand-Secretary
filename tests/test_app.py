@@ -1742,7 +1742,7 @@ def test_decree_templates_general_decree_and_page_design(app):
     # τα δύο πρότυπα Διατάγματος στα Πρότυπα, όχι στη Νέα Επιστολή
     app.go('/templates')
     t = app.text()
-    assert all(n in t for n in ['ΓΕΝΙΚΟ ΔΙΑΤΑΓΜΑ', 'ΔΙΑΤΑΓΜΑ ΔΙΟΡΙΣΜΟΥ ΜΕΓΑΛΩΝ ΑΞΙΩΜΑΤΙΚΩΝ', 'ΔΙΑΤΑΓΜΑ ΕΠΑΡΧΙΑΚΟΥ / ΠΕΡΙΦΕΡΕΙΑΚΟΥ Μ.Δ. ΚΑΙ ΠΡΩΗΝ', 'ΔΙΑΤΑΓΜΑ ΤΑΞΕΩΣ ΜΕΓΑΛΟΥ ΔΙΔΑΣΚΑΛΟΥ', '🎨 Σχεδίαση σελίδας']), t
+    assert all(n in t for n in ['ΓΕΝΙΚΟ ΔΙΑΤΑΓΜΑ', 'ΔΙΑΤΑΓΜΑ ΕΝ ΕΝΕΡΓΕΙΑ — ΔΙΟΡΙΣΜΟΣ ΜΕΓΑΛΩΝ ΑΞΙΩΜΑΤΙΚΩΝ', 'ΔΙΑΤΑΓΜΑ ΠΡΩΗΝ — ΚΑΙ ΕΠΑΡΧΙΑΚΟΙ / ΠΕΡΙΦΕΡΕΙΑΚΟΙ Μ.Δ.', 'ΔΙΑΤΑΓΜΑ ΤΑΞΗΣ ΜΕΓΑΛΟΥ ΔΙΔΑΣΚΑΛΟΥ', '🎨 Σχεδίαση σελίδας']), t
     app.go('/letters/new')
     assert 'ΓΕΝΙΚΟ ΔΙΑΤΑΓΜΑ' not in app.page.inner_text('#tplSel')
     # Γενικό Διάταγμα
@@ -2817,4 +2817,13 @@ def test_decree_template_follows_action_and_office(app):
     app.page.wait_for_url('**/#/decrees/1')
     d = app.page.evaluate("async () => (await import('./core/store.js')).db.get('decree_documents', 1)")
     assert d['template_key'] == 'decree-provincial' and 'ΠΕΡΙΦΕΡΕΙΑΚΟΝ ΜΕΓΑΝ ΔΙΔΑΣΚΑΛΟΝ' in d['body'], d
-    assert 'ΔΙΑΤΑΓΜΑ ΕΠΑΡΧΙΑΚΟΥ / ΠΕΡΙΦΕΡΕΙΑΚΟΥ' in app.text('main')
+    assert 'ΔΙΑΤΑΓΜΑ ΠΡΩΗΝ' in app.text('main')
+    # κουμπιά: ΕΝ ΕΝΕΡΓΕΙΑ · ΠΡΩΗΝ · ΤΑΞΗ ΜΔ (και Γενικό Διάταγμα χωριστά)· ΠΡΩΗΝ ανοίγει με ΑΠΟΝΕΜΕΙ
+    app.go('/decrees/new')
+    assert app.page.eval_on_selector_all('.dec-kinds .chip b', 'bs => bs.map((b) => b.textContent)') == ['ΕΝ ΕΝΕΡΓΕΙΑ', 'ΠΡΩΗΝ', 'ΤΑΞΗ ΜΔ']
+    assert app.page.locator('.dec-kinds-gen .chip', has_text='Γενικό Διάταγμα').count() == 1
+    app.go('/decrees/new?kind=decree-provincial')
+    assert app.page.input_value('#dAction') == 'award' and app.page.is_checked('[name=template_key][value=decree-provincial]')
+    # οι σελίδες: ΠΡΩΗΝ από το Γενικό, ΤΑΞΗ ΜΔ αντίγραφο του ΕΝ ΕΝΕΡΓΕΙΑ (ξεχωριστό πρότυπο)
+    ks = app.page.evaluate("async () => (await import('./core/store.js')).db.all('letter_templates').filter((t) => t.kind === 'decree').map((t) => t.key)")
+    assert sorted(ks) == ['decree-appoint', 'decree-general', 'decree-provincial', 'decree-service'], ks

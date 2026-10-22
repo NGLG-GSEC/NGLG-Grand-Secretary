@@ -11,10 +11,10 @@ export const GENERAL_BODY = 'ΗΜΕΙΣ\nΟ Μέγας Διδάσκαλος τη
   + 'λαβόντες υπ’ όψιν τον Κανόνα …… του Βιβλίου των Γενικών Νόμων και Κανονισμών,\n\nπερί {Περί},\n\nΑΠΟΦΑΣΙΖΟΜΕΝ\n\n……\n\n'
   + 'Εγένετο εν τω Τεκτονικώ Μεγάρω της πόλεως των Αθηνών, την {ημερομηνία}.';
 export const DECREE_KINDS = {
-  'decree-appoint': { name: 'ΔΙΑΤΑΓΜΑ ΔΙΟΡΙΣΜΟΥ ΜΕΓΑΛΩΝ ΑΞΙΩΜΑΤΙΚΩΝ', short: 'Διορισμός Μεγάλων Αξιωματικών', help: 'ΔΙΟΡΙΖΟΜΕΝ — όλα τα αξιώματα εκτός Επαρχιακού/Περιφερειακού Μ.Δ.', actions: ['appoint'], body: '' },
-  'decree-provincial': { name: 'ΔΙΑΤΑΓΜΑ ΕΠΑΡΧΙΑΚΟΥ / ΠΕΡΙΦΕΡΕΙΑΚΟΥ Μ.Δ. ΚΑΙ ΠΡΩΗΝ', short: 'Επαρχιακός/Περιφερειακός Μ.Δ. · Απονομή «Πρώην»', help: 'ΔΙΟΡΙΖΟΜΕΝ Επαρχιακό ή Περιφερειακό Μέγα Διδάσκαλο · ΑΠΟΝΕΜΕΙ τίτλο Πρώην Μεγάλου Αξιωματικού.', actions: ['appoint', 'award'], body: '' },
-  'decree-service': { name: 'ΔΙΑΤΑΓΜΑ ΤΑΞΕΩΣ ΜΕΓΑΛΟΥ ΔΙΔΑΣΚΑΛΟΥ', short: 'Τάξις του Μεγάλου Διδασκάλου', help: 'ΕΥΑΡΕΣΤΟΥΜΕΘΑ ΝΑ ΑΠΟΝΕΙΜΩΜΕΝ την Τάξιν του Μεγάλου Διδασκάλου δι’ Υπηρεσίας.', actions: ['service_award'], body: '' },
-  'decree-general': { name: 'ΓΕΝΙΚΟ ΔΙΑΤΑΓΜΑ', short: 'Γενικό — θέματα, Στοές, Επαρχίες', help: 'Ελεύθερο κείμενο από το πρότυπο, για κάθε θέμα, Στοά ή Επαρχία.', actions: ['general'], body: GENERAL_BODY },
+  'decree-appoint': { chip: 'ΕΝ ΕΝΕΡΓΕΙΑ', name: 'ΔΙΑΤΑΓΜΑ ΕΝ ΕΝΕΡΓΕΙΑ — ΔΙΟΡΙΣΜΟΣ ΜΕΓΑΛΩΝ ΑΞΙΩΜΑΤΙΚΩΝ', short: 'Διορισμός Μεγάλων Αξιωματικών', help: 'ΔΙΟΡΙΖΟΜΕΝ — όλα τα αξιώματα εκτός Επαρχιακού/Περιφερειακού Μ.Δ.', actions: ['appoint'], body: '' },
+  'decree-provincial': { chip: 'ΠΡΩΗΝ', name: 'ΔΙΑΤΑΓΜΑ ΠΡΩΗΝ — ΚΑΙ ΕΠΑΡΧΙΑΚΟΙ / ΠΕΡΙΦΕΡΕΙΑΚΟΙ Μ.Δ.', short: 'Απονομή «Πρώην» · Επαρχιακός/Περιφερειακός Μ.Δ.', help: 'ΔΙΟΡΙΖΟΜΕΝ Επαρχιακό ή Περιφερειακό Μέγα Διδάσκαλο · ΑΠΟΝΕΜΕΙ τίτλο Πρώην Μεγάλου Αξιωματικού.', actions: ['appoint', 'award'], body: '' },
+  'decree-service': { chip: 'ΤΑΞΗ ΜΔ', name: 'ΔΙΑΤΑΓΜΑ ΤΑΞΗΣ ΜΕΓΑΛΟΥ ΔΙΔΑΣΚΑΛΟΥ', short: 'Τάξις του Μεγάλου Διδασκάλου δι’ Υπηρεσίας', help: 'ΕΥΑΡΕΣΤΟΥΜΕΘΑ ΝΑ ΑΠΟΝΕΙΜΩΜΕΝ την Τάξιν του Μεγάλου Διδασκάλου δι’ Υπηρεσίας.', actions: ['service_award'], body: '' },
+  'decree-general': { chip: 'Γενικό Διάταγμα', name: 'ΓΕΝΙΚΟ ΔΙΑΤΑΓΜΑ', short: 'Γενικό — θέματα, Στοές, Επαρχίες', help: 'Ελεύθερο κείμενο από το πρότυπο, για κάθε θέμα, Στοά ή Επαρχία.', actions: ['general'], body: GENERAL_BODY },
 };
 // Αξιώματα που διορίζονται με το πρότυπο «Επαρχιακού / Περιφερειακού Μ.Δ.»
 export const PROVINCIAL_OFFICES = ['Επαρχιακός Μέγας Διδάσκαλος', 'Περιφερειακός Μέγας Διδάσκαλος'];
@@ -55,4 +55,14 @@ db.migrate('decree-templates-split-2026-10', (tx) => {
     tx.insert('letter_templates', { key, kind: 'decree', name: DECREE_KINDS[key].name, body: '', active: 1, layout: from ? from.layout || {} : {} });
   }
   for (const { d, key } of docs) if ((d.template_key || 'decree-appoint') === 'decree-appoint' && key !== 'decree-appoint') tx.update('decree_documents', d.id, { template_key: key });
+});
+
+// Κουμπιά ΕΝ ΕΝΕΡΓΕΙΑ / ΠΡΩΗΝ / ΤΑΞΗ ΜΔ: η σελίδα του ΠΡΩΗΝ ξεκινά από τη σελίδα του (πρώην κουμπιού) Γενικού Διατάγματος,
+// της ΤΑΞΗΣ ΜΔ από τη σελίδα του ΕΝ ΕΝΕΡΓΕΙΑ (ξεχωριστό αντίγραφο, για αλλαγές)· νέα ονόματα στα Πρότυπα.
+db.migrate('decree-templates-chips-2026-10', (tx) => {
+  const t = (k) => tx.all('letter_templates').find((x) => x.key === k);
+  const copy = (to, from) => { if (t(to) && t(from)) tx.update('letter_templates', t(to).id, { layout: JSON.parse(JSON.stringify(t(from).layout || {})) }); };
+  copy('decree-provincial', 'decree-general');
+  copy('decree-service', 'decree-appoint');
+  for (const [k, v] of Object.entries(DECREE_KINDS)) if (t(k)) tx.update('letter_templates', t(k).id, { name: v.name });
 });
