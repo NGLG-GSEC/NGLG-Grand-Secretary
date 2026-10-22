@@ -2661,7 +2661,7 @@ def test_decree_delete_from_archive_with_confirmation(app):
     app.go('/decrees')
     app.page.locator('tr', has_text='901/2026').locator('button:has-text("🗑 Διαγραφή")').click()
     app.page.wait_for_function("() => !document.querySelector('main').innerText.includes('901/2026')")
-    assert msgs and 'Οριστική διαγραφή του Διατάγματος 901/2026 «δοκιμής διαγραφής»' in msgs[0] and '1 εγγραφές αξιωμάτων' in msgs[0], msgs
+    assert msgs and 'Οριστική διαγραφή του Διατάγματος 901/2026 «δοκιμής διαγραφής»' in msgs[0] and '1 εγγραφές αξιωμάτων' in msgs[1], msgs
     st = app.page.evaluate("async () => { const {db} = await import('./core/store.js'); return [db.all('decree_documents').map((d) => d.decree_no), db.all('member_degrees_offices').filter((o) => o.decree_no === 901).length]; }")
     assert 902 in st[0] and 901 not in st[0] and st[1] == 0, st
     assert app.page.locator('tr', has_text='902/2026').locator('button:has-text("🗑 Διαγραφή")').count() == 1
@@ -2729,7 +2729,7 @@ def test_decree_updates_epeteirida_and_registry_title_with_confirmation(app):
     # διαγραφή: αναίρεση των αλλαγών στην Επετηρίδα
     app.page.locator('tr', has_text='513/').locator('button:has-text("🗑 Διαγραφή")').click()
     app.page.wait_for_function("() => !document.querySelector('main').innerText.includes('513/')")
-    assert any('Θα αναιρεθούν και οι αλλαγές που έκανε στην Επετηρίδα' in m for m in msgs)
+    assert any('Να αλλάξουν και η ΕΠΕΤΗΡΙΔΑ και το ΜΗΤΡΩΟ ΜΕΛΟΥΣ' in m and 'Ανώτατο αξίωμα: Μέγας Γραμματεύς → Πρώην Μέγας Ξιφοφόρος' in m for m in msgs), msgs
     ep = app.page.evaluate("async () => (await import('./core/store.js')).db.all('epeteirida').find((r) => r.aa === 50)")
     assert ep['rank'] == 'Πρώην Μέγας Ξιφοφόρος' and str(ep['decree_no']) == '400' and not ep['current'], ep
     # Τάξις ΜΔ: νέα γραμμή στην Επετηρίδα με ΤΜΔ, για μέλος χωρίς γραμμή
@@ -2740,3 +2740,25 @@ def test_decree_updates_epeteirida_and_registry_title_with_confirmation(app):
     app.page.wait_for_url('**/#/decrees/*')
     ep = app.page.evaluate("async () => (await import('./core/store.js')).db.all('epeteirida').find((r) => r.full_name === 'Τάξεως Νικόλαος')")
     assert ep and ep['tmd'] == 1 and ep['tmd_decree'].split('/')[0] in ('513', '514') and ep['member_id'], ep
+
+
+def test_decree_delete_asks_whether_to_change_epeteirida_and_registry(app):
+    # Διαγραφή εκδοθέντος Διατάγματος: χωριστή ερώτηση· «Άκυρο» κρατά Επετηρίδα και Μητρώο ως έχουν
+    app.connect_local()
+    add_member(app)
+    app.go('/decrees/new')
+    app.page.select_option('#dOffice', 'Μέγας Γραμματεύς')
+    app.pick('.registry-search', 'Παπαδ')
+    app.click('Έκδοση Διατάγματος')
+    app.page.wait_for_url('**/#/decrees/1')
+    ep = app.page.evaluate("async () => (await import('./core/store.js')).db.all('epeteirida').find((r) => r.full_name === 'Παπαδόπουλος Γεώργιος')")
+    assert ep and ep['rank'] == 'Μέγας Γραμματεύς', ep
+    app.page.evaluate("() => { window._asked = []; window.confirm = (m) => { window._asked.push(m); return !m.includes('ΜΗΤΡΩΟ ΜΕΛΟΥΣ'); }; }")
+    app.go('/decrees')
+    app.page.locator('tr', has_text='513/').locator('button:has-text("🗑 Διαγραφή")').click()
+    app.page.wait_for_function("() => !document.querySelector('main').innerText.includes('513/')")
+    asked = app.page.evaluate('window._asked')
+    assert len(asked) == 2 and 'ΕΠΕΤΗΡΙΔΑ' in asked[1] and 'Άκυρο = Επετηρίδα και Μητρώο μένουν ως έχουν' in asked[1], asked
+    ep = app.page.evaluate("async () => (await import('./core/store.js')).db.all('epeteirida').find((r) => r.full_name === 'Παπαδόπουλος Γεώργιος')")
+    assert ep and ep['rank'] == 'Μέγας Γραμματεύς', ep
+    app.page.wait_for_function("() => document.body.innerText.includes('ΔΕΝ άλλαξαν')", timeout=5000)

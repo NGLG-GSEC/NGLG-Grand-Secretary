@@ -10,7 +10,7 @@ import { letterhead, IMG, printPaper, pageLayers, layoutTop, customHead, default
 import { mailButtons, senderBanner } from '../core/mail.js';
 import { attachPicker, memberItems, contactItems } from '../core/pickers.js';
 import { DECREE_KINDS, DECREE_PLACEHOLDERS, GENERAL_BODY, decreeKey, decreeTemplate, layoutOf } from './decree-templates.js';
-import { planDecreeSync, planChanges, planText, applyDecreeSync, revertDecreeSync, syncInfo } from './decree-sync.js';
+import { planDecreeSync, planChanges, planText, applyDecreeSync, revertDecreeSync, syncInfo, EP_LABEL } from './decree-sync.js';
 import { gmName } from './letter-fill.js';
 import { nextProtocol, askProtocol, claimProtocol } from './protocol.js';
 import { findMember, insertMember } from './members.js';
@@ -704,13 +704,32 @@ export const pendingDecreeSync = (year = new Date().getFullYear()) => db.all('de
   .filter((d) => decreeKey(d) !== 'decree-general' && !syncInfo(d) && Number(d.decree_year) >= year - 1 && planChanges(planDecreeSync(d, apps(d), db, d.id)).length);
 
 // Οριστική διαγραφή Διατάγματος, μετά από επαλήθευση· σβήνονται και οι εγγραφές του στην Επετηρίδα των Διαταγμάτων (αξιώματα μελών)
+// Διαγραφή Διατάγματος: 1) επιβεβαίωση διαγραφής· 2) χωριστή ερώτηση αν θα αναιρεθούν οι αλλαγές του στην Επετηρίδα / Μητρώο
+// (ένα Διάταγμα που εκδόθηκε και στάλθηκε μπορεί να διαγράφεται μόνο ως εγγραφή, ενώ τα αξιώματα που απένειμε ισχύουν)
 export async function deleteDecree(d) {
-  const offices = db.all('member_degrees_offices').filter((o) => o.decree_id === d.id).length;
+  const offices = db.all('member_degrees_offices').filter((o) => o.decree_id === d.id).length, sync = syncInfo(d);
+  const sent = d.status === 'ready' || d.protocol_seq;
   const msg = [`Οριστική διαγραφή του Διατάγματος ${decreeNo(d)}${d.matter ? ` «${d.matter}»` : ''};`, d.recipient_name ? `Αδελφοί: ${d.recipient_name}` : '',
-    d.protocol_seq ? `Αρ. Πρωτ.: ${d.protocol_seq} (μένει στο Βιβλίο Πρωτοκόλλου)` : '', offices ? `Θα αφαιρεθούν και ${offices} εγγραφές αξιωμάτων που έγραψε στα μέλη.` : '', syncInfo(d) ? 'Θα αναιρεθούν και οι αλλαγές που έκανε στην Επετηρίδα (τίτλοι στο Μητρώο).' : '', '', 'Η διαγραφή δεν αναιρείται.'].filter((x, i, a) => x || i === a.length - 2).join('\n');
+    sent ? '⚠ Το Διάταγμα έχει εκδοθεί (Έτοιμο / πρωτοκολλημένο) και πιθανόν έχει σταλεί με email.' : '',
+    d.protocol_seq ? `Αρ. Πρωτ.: ${d.protocol_seq} (μένει στο Βιβλίο Πρωτοκόλλου)` : '', '', 'Η διαγραφή δεν αναιρείται.'].filter((x, i, a) => x || i === a.length - 2).join('\n');
   if (!confirmDo(msg)) return false;
-  await db.save(`Διαγραφή Διατάγματος ${decreeNo(d)}`, (tx) => { revertDecreeSync(tx, d); tx.remove('member_degrees_offices', (o) => o.decree_id === d.id); tx.remove('decree_documents', d.id); });
-  flash(`Το Διάταγμα ${decreeNo(d)} διαγράφηκε.`);
+  let undo = false;
+  if (sync || offices) {
+    const ch = (sync && sync.changes) || [];
+    const lines = ch.map((c) => `• ${c.name}: ${c.created ? 'αφαίρεση της γραμμής που δημιούργησε' : Object.keys(c.after).filter((k) => k !== 'member_id').map((k) => `${EP_LABEL[k] || k}: ${c.after[k] === '' || c.after[k] == null ? '—' : c.after[k]} → ${c.before[k] === '' || c.before[k] == null ? '—' : c.before[k]}`).join(' · ')}`);
+    undo = confirmDo(['Να αλλάξουν και η ΕΠΕΤΗΡΙΔΑ και το ΜΗΤΡΩΟ ΜΕΛΟΥΣ;', '',
+      ...(lines.length ? ['Αλλαγές που είχε κάνει το Διάταγμα και θα αναιρεθούν (ο Τίτλος στο Μητρώο ακολουθεί):', ...lines] : []),
+      ...(offices ? [`Θα αφαιρεθούν ${offices} εγγραφές αξιωμάτων του Διατάγματος από τα μέλη.`] : []), '',
+      'ΟΚ = αναίρεση (το Διάταγμα ακυρώνεται και ως πράξη).',
+      'Άκυρο = Επετηρίδα και Μητρώο μένουν ως έχουν (διαγράφεται μόνο η εγγραφή του Διατάγματος).'].join('\n'));
+  }
+  let n = 0;
+  await db.save(`Διαγραφή Διατάγματος ${decreeNo(d)}${undo ? ' (με αναίρεση στην Επετηρίδα / Μητρώο)' : ''}`, (tx) => {
+    if (undo) { n = revertDecreeSync(tx, d); tx.remove('member_degrees_offices', (o) => o.decree_id === d.id); }
+    else for (const o of tx.all('member_degrees_offices').filter((x) => x.decree_id === d.id)) tx.update('member_degrees_offices', o.id, { decree_id: null });
+    tx.remove('decree_documents', d.id);
+  });
+  flash(`Το Διάταγμα ${decreeNo(d)} διαγράφηκε.${sync || offices ? (undo ? ` Αναιρέθηκαν οι αλλαγές του στην Επετηρίδα (${n}) και στο Μητρώο.` : ' Η Επετηρίδα και το Μητρώο ΔΕΝ άλλαξαν — ελέγξτε τα αν χρειάζεται.') : ''}`);
   return true;
 }
 
