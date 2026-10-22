@@ -2576,11 +2576,13 @@ def test_master_mason_diplomas_registry_codes_and_import(app, tmp_path):
     app.page.wait_for_selector('#dpApply')
     t = app.text('#dpPlan')
     assert 'Θα συμπληρωθεί' in t and 'Δεν βρέθηκε' in t and 'Ο αριθμός υπάρχει δύο φορές στο αρχείο' in t and 'Διδάσκαλος: 10/06/2011' in t and 'Στοά Εγέρσεως: ΑΘΗΝΑ' in t, t
+    app.pick('.dpPick', 'Κάτοχ')  # χειροκίνητη επιλογή για το «Ανύπαρκτος Τάδε» (999)
+    app.page.wait_for_function("() => !document.querySelector('.dpPick') && document.querySelector('#dpPlan').innerText.includes('(επιλογή)')")
     app.page.click('#dpApply')
     app.page.wait_for_selector('.memtable .regno.mm:has-text("MM24680")')
     m = app.page.evaluate(f"async () => {{ const {{db}} = await import('./core/store.js'); const {{regCode}} = await import('./core/people.js'); return [{ids[0]}, {ids[1]}, {ids[2]}].map((i) => {{ const m = db.get('member_registry', i); return [regCode(m), m.date_ea, m.date_fc, m.date_mm, m.mm_lodge_name, m.mm_lodge_number, m.degree]; }}); }}")
     assert m[0] == ['MM24680', '2010-03-15', '2010-11-20', '2011-06-10', 'ΑΘΗΝΑ', '1', 'Διδάσκαλος'], m
-    assert m[1][0] == f"M{reg + 1}" and m[2][0] == 'MM777' and m[2][1] == '2001-01-01', m  # διπλός αριθμός στο αρχείο: καμία αλλαγή
+    assert m[1][0] == f"M{reg + 1}" and m[2][0] == 'MM777', m  # ο 777 είναι δύο φορές στο αρχείο: δεν καταχωρίζεται
     # αναζήτηση με τον κωδικό (και με ελληνικό «Μ»)
     for q in ['MM24680', 'ΜΜ24680', '24680']:
         app.go('/members?q=' + q + '&field=all')
@@ -2600,7 +2602,7 @@ def test_master_mason_diplomas_registry_codes_and_import(app, tmp_path):
         tx.insert('epeteirida', {{ aa: 1, active: 1, title: 'Μέγας Ξιφοφόρος', honorific: 'Λσεβ. Αδ.', full_name: 'Διπλωματούχος Πέτρος', rank: 'Μέγας Ξιφοφόρος', province: '', decree_no: 600, decree_year: 2026, tmd: 0, tmd_decree: '', current: '', member_id: {ids[0]} }}); }}); }}""")
     app.go(f'/members/{ids[0]}')
     assert 'MM24680' in app.text('.regcode') and app.page.input_value('[name=diploma_no]') == '24680' and app.page.input_value('[name=mm_lodge_name]') == 'ΑΘΗΝΑ'
-    app.page.click('a.btn:has-text("🖨 Κάρτα Μέλους")')
+    app.page.click('a.btn.primary:has-text("🪪 Κάρτα Μέλους")')
     app.page.wait_for_selector('.paper.member-card')
     c = app.text('.paper.member-card')
     for s_ in ['ΚΑΡΤΑ ΜΕΛΟΥΣ', 'MM24680', 'Διπλωματούχος Πέτρος', '15/03/2010', '20/11/2010', '10/06/2011', 'ΑΘΗΝΑ 1', 'Τακτικό', 'Στοά πλήρους συνδρομής',
@@ -2624,3 +2626,18 @@ def test_unified_menu_and_visits_flow(app):
         app.go(path)
         app.page.wait_for_selector('.vflow')
         assert app.page.locator('.vflow a.on').inner_text().startswith('①②③④⑤'[step - 1]), path
+
+
+def test_member_card_in_registry(app):
+    # Κάρτα Μέλους μέσα στο Μητρώο: στη λίστα, στην κορυφή της καρτέλας και στο μενού (με αναζήτηση μέλους)
+    app.connect_local()
+    add_member(app)
+    app.go('/members?q=Παπαδ&field=all')
+    app.page.click('.memtable a.btn:has-text("🪪 Κάρτα Μέλους")')
+    app.page.wait_for_selector('.paper.member-card')
+    assert 'ΚΑΡΤΑ ΜΕΛΟΥΣ' in app.text('.paper.member-card')
+    assert app.page.locator('#mainnav a[href="#/members/card"]').count() == 1
+    app.go('/members/card')
+    app.pick('#mcFind', 'Παπαδ')
+    app.page.wait_for_selector('.paper.member-card')
+    assert 'Παπαδόπουλος' in app.text('.paper.member-card')

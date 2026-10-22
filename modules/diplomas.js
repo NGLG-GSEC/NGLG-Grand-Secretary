@@ -136,11 +136,11 @@ export function diplomasPage({ query = {} } = {}) {
 <select name="mode"><option value="with"${mode === 'with' ? ' selected' : ''}>Με Δίπλωμα (${withD.length})</option><option value="without"${mode === 'without' ? ' selected' : ''}>Ενεργοί χωρίς Δίπλωμα</option><option value="all"${mode === 'all' ? ' selected' : ''}>Όλα τα μέλη</option></select>
 <select name="lodge"><option value="">Όλες οι Στοές</option>${lodgesAll().map((l) => `<option value="${esc(l.number)}"${lno && lodgeNoKey(l.number) === lodgeNoKey(lno) ? ' selected' : ''}>${esc(l.number)} · ${esc(l.name)}</option>`).join('')}</select>
 <select name="year"><option value="">Κάθε έτος Εγέρσεως</option>${years.map((y) => `<option${y === yr ? ' selected' : ''}>${y}</option>`).join('')}</select><button>Αναζήτηση</button></form>
-<div class="toolbar"><span class="muted">${xs.length} μέλη</span><button type="button" class="btn small" data-act="exportList">⬇ Excel Διπλωμάτων</button>${printIds ? `<a class="btn small" href="#/members/card?ids=${printIds}">🖨 Κάρτες Μέλους της λίστας</a>` : ''}</div>
+<div class="toolbar"><span class="muted">${xs.length} μέλη</span><button type="button" class="btn small" data-act="exportList">⬇ Excel Διπλωμάτων</button>${printIds ? `<a class="btn small" href="#/members/card?ids=${printIds}">🪪 Κάρτες Μέλους της λίστας</a>` : ''}</div>
 <div class="memtable">${table(['Αρ. Μητρώου', 'Ονοματεπώνυμο', 'Μαθητής', 'Εταίρος', 'Διδάσκαλος', 'Στοά Εγέρσεως', 'Στοές μέλους', ''], xs.slice(0, 500).map((m) => [regBadge(m),
   `<a href="#/members/${m.id}">${esc(m.surname)} ${esc(m.first_name)}</a>`, esc(fmtDate(isoOf(m.date_ea))), esc(fmtDate(isoOf(m.date_fc))), esc(fmtDate(isoOf(m.date_mm))), esc(lodgeLine(m)),
   `<small>${esc((byM[m.id] || []).map((l) => `${l.lodge_name} ${l.lodge_number}`.trim()).join(', '))}</small>`,
-  `<a class="btn small" href="#/members/card?ids=${m.id}">🖨 Κάρτα Μέλους</a>`]), 'Δεν βρέθηκαν μέλη.')}</div>`;
+  `<a class="btn small" href="#/members/card?ids=${m.id}">🪪 Κάρτα Μέλους</a>`]), 'Δεν βρέθηκαν μέλη.')}</div>`;
   } else if (tab === 'lodges') {
     const st = lodgeDiplomaStats(), T = st.reduce((a, x) => ({ total: a.total + x.total, with: a.with + x.with }), { total: 0, with: 0 });
     body = `<div class="vstats"><span><b>${T.total}</b> ενεργές συμμετοχές μελών</span><span><b>${T.with}</b> με Δίπλωμα</span><span class="${T.total - T.with ? 'warn' : ''}"><b>${T.total - T.with}</b> χωρίς Δίπλωμα</span></div>
@@ -187,7 +187,7 @@ ${table(['Από το αρχείο', 'Μέλος στο Μητρώο', 'Αλλα
   r.changes.length ? `<small>${r.changes.map((c) => `${esc(FIELD_LABEL[c.k])}: ${c.from ? `<s>${esc(showVal(c.k, c.from))}</s> → ` : ''}<b>${esc(showVal(c.k, c.to))}</b>`).join('<br>')}</small>` : '—',
   `<span class="pill ${STATUS[r.status][0]}">${STATUS[r.status][1]}</span>`]))}
 <p><button type="button" class="btn primary" id="dpApply"${n ? '' : ' disabled'}>✔ Καταχώριση σε ${n} μέλη</button></p>`;
-        box.querySelectorAll('.dpPick').forEach((inp) => attachPicker(inp, memberItems, (it) => { picks[inp.dataset.i] = it.value.id; draw(); }));
+        box.querySelectorAll('.dpPick').forEach((inp) => attachPicker(inp, memberItems, (mm) => { picks[inp.dataset.i] = mm.id; draw(); }));
         const b = box.querySelector('#dpApply');
         if (b) b.addEventListener('click', async () => {
           b.disabled = true;

@@ -2,10 +2,10 @@
 // (Εισδοχή, Διέλευση, Έγερση, Στοά Εγέρσεως), Στοές με ιδιότητα, συνδρομή και ημερομηνίες Β΄/Α΄ Επόπτη και Σεβασμίου,
 // Επετηρίδα και Διατάγματα που τον αφορούν. (Το επίσημο Δίπλωμα Διδασκάλου Τέκτονος είναι ξεχωριστό έντυπο.)
 import { db } from '../core/store.js';
-import { bind } from '../core/app.js';
+import { bind, go } from '../core/app.js';
 import { esc, sortBy, fmtDate, today } from '../core/util.js';
 import { regCode, canonicalId } from '../core/people.js';
-import { noContact } from '../core/pickers.js';
+import { noContact, attachPicker, memberItems } from '../core/pickers.js';
 import { IMG, printPaper } from '../core/paper.js';
 import { isoOf, lodgesByMember, capacityOf, feeRankLabel } from './members.js';
 import { epeteiridaOf } from './epeteirida-table.js';
@@ -55,9 +55,13 @@ export function memberCardPage({ query = {} } = {}) {
   const back = ms.length === 1 ? `#/members/${ms[0].id}` : '#/members/diplomas';
   return {
     title: 'Κάρτα Μέλους',
-    html: `<div class="noprint"><p><a href="${back}">← Πίσω</a></p><h1>🖨 Κάρτα Μέλους ${ms.length > 1 ? `<small class="muted">${ms.length} κάρτες</small>` : ''}</h1>
-<div class="toolbar"><button type="button" class="btn primary" data-act="print">🖨 Εκτύπωση / PDF</button></div></div>
-<div class="print-area">${ms.length ? ms.map(memberCardPaper).join('') : '<div class="card">Δεν βρέθηκαν μέλη.</div>'}</div>`,
-    mount(el) { bind(el, { print: () => printPaper(ms.length === 1 ? `Κάρτα Μέλους ${regCode(ms[0])} ${ms[0].surname} ${ms[0].first_name}` : 'Κάρτες Μελών') }); },
+    html: `<div class="noprint"><p><a href="${back}">← Πίσω</a></p><h1>🪪 Κάρτα Μέλους ${ms.length > 1 ? `<small class="muted">${ms.length} κάρτες</small>` : ''}</h1>
+<div class="card mc-find"><label>🔎 Μέλος του Μητρώου</label><input id="mcFind" placeholder="Επώνυμο, όνομα, MM/M αριθμός, email ή κινητό" autocomplete="off"></div>
+${ms.length ? '<div class="toolbar"><button type="button" class="btn primary" data-act="print">🖨 Εκτύπωση / PDF</button></div>' : ''}</div>
+<div class="print-area">${ms.length ? ms.map(memberCardPaper).join('') : '<p class="muted noprint">Αναζητήστε ένα μέλος για να δείτε την Κάρτα Μέλους του.</p>'}</div>`,
+    mount(el) {
+      attachPicker(el.querySelector('#mcFind'), (q) => memberItems(q), (mm) => go('/members/card', { ids: mm.id }));
+      bind(el, { print: () => printPaper(ms.length === 1 ? `Κάρτα Μέλους ${regCode(ms[0])} ${ms[0].surname} ${ms[0].first_name}` : 'Κάρτες Μελών') });
+    },
   };
 }

@@ -192,7 +192,7 @@ function listPage({ query }) {
     const lod = ls.slice(0, 3).map((l) => hl(`${l.lodge_name} ${l.lodge_number}`.trim(), lq, field === 'lodge' || field === 'all') + ((c, f) => (c || f ? ` <small class="muted">${esc([c, f].filter(Boolean).join(' · '))}</small>` : ''))(capacityOf(l), Number(l.fee_rank) === 1 ? 'πλήρης συνδρ.' : feeRankLabel(l.fee_rank))).join('<br>') + (ls.length > 3 ? `<br><small>+${ls.length - 3} ακόμη</small>` : '');
     return [`<b>${x.id}</b>`, regBadge(x), (x.title && x.title !== 'Αδ.' ? `<small class="mtitle">${esc(x.title)}</small><br>` : '') + H(x.surname, 'surname') + extra(x, 'surname_variants', 'surname'), H(x.first_name, 'first_name') + extra(x, 'first_name_variants', 'first_name'),
       noContact(x) ? '<span class="muted">⛔</span>' : H(x.email, 'email') + extra(x, 'other_emails', 'email'), noContact(x) ? '<span class="muted">⛔</span>' : H(x.mobile, 'mobile') + extra(x, 'other_mobiles', 'mobile'),
-      esc(x.degree) + [['date_ea', 'Μαθ.'], ['date_fc', 'Εταίρ.'], ['date_mm', 'Διδ.']].filter(([k]) => x[k]).map(([k, a]) => `<br><small class="muted">${a} ${esc(fmtDate(x[k]))}</small>`).join(''), `<small>${esc(highestOfficeText(x.id))}</small>`, lod, noContact(x) ? `<span class="pill bad" title="${NO_CONTACT}">⛔ Διαγραμμένος</span>` : x.active ? 'ΝΑΙ' : 'ΟΧΙ', `<a class="btn small" href="#/members/${x.id}">Επεξεργασία</a>`];
+      esc(x.degree) + [['date_ea', 'Μαθ.'], ['date_fc', 'Εταίρ.'], ['date_mm', 'Διδ.']].filter(([k]) => x[k]).map(([k, a]) => `<br><small class="muted">${a} ${esc(fmtDate(x[k]))}</small>`).join(''), `<small>${esc(highestOfficeText(x.id))}</small>`, lod, noContact(x) ? `<span class="pill bad" title="${NO_CONTACT}">⛔ Διαγραμμένος</span>` : x.active ? 'ΝΑΙ' : 'ΟΧΙ', `<a class="btn small" href="#/members/${x.id}">Επεξεργασία</a> <a class="btn small" href="#/members/card?ids=${x.id}">🪪 Κάρτα Μέλους</a>`];
   });
   const [qlabel, ph, itype] = HINTS[field];
   const flabel = Object.fromEntries(MEMBER_FIELDS)[field];
@@ -303,7 +303,7 @@ function formPage(m) {
   const offices = m ? sortBy(db.all('member_degrees_offices').filter((o) => o.member_id === m.id), (o) => -(o.decree_year || 0)) : [];
   return {
     title: m ? `Μέλος #${m.id}` : 'Νέο Μέλος',
-    html: `<p><a href="#/members">← Μητρώο Μελών</a></p><h1>${m ? `${esc(m.surname)} ${esc(m.first_name)} <small class="muted">#${m.id}</small>` : 'Νέο Μέλος'}</h1>${noContact(m) ? `<div class="card nocontact">${NO_CONTACT}</div>` : ''}${m ? usesOf(m) : ''}
+    html: `<p><a href="#/members">← Μητρώο Μελών</a></p><h1>${m ? `${esc(m.surname)} ${esc(m.first_name)} <small class="muted">#${m.id}</small>` : 'Νέο Μέλος'}</h1>${m ? `<div class="toolbar"><a class="btn primary" href="#/members/card?ids=${m.id}">🪪 Κάρτα Μέλους</a></div>` : ''}${noContact(m) ? `<div class="card nocontact">${NO_CONTACT}</div>` : ''}${m ? usesOf(m) : ''}
 <form id="mf"><div class="grid card"><div class="full regcode-row"><label>Αρ. Μητρώου</label><div class="regcode">${m ? regBadge(m) : '<span class="muted">αυτόματα (M + επόμενος ελεύθερος· MM + αριθμός Διπλώματος, αν υπάρχει)</span>'}</div></div>
 ${isAdmin() ? f('diploma_no', 'Δίπλωμα Διδασκάλου Τέκτονος <small class="muted">(Certificate Master Mason) — ο πραγματικός αριθμός μητρώου</small>', 'inputmode="numeric" placeholder="αριθμός διπλώματος"')
   : `<div><label>Δίπλωμα Διδασκάλου Τέκτονος</label><input value="${esc(x.diploma_no || '—')}" disabled></div>`}
@@ -319,7 +319,7 @@ ${f('mm_lodge_name', 'Στοά Εγέρσεως (όπου έγινε Διδάσ�
 <div class="full"><label>Σημείωση Διαγραφής</label><input name="deregistered_note" value="${esc(x.deregistered_note || '')}"></div>
 <div class="full"><label>Πρόσθετες Στοές / παλαιά πληροφορία</label><textarea name="additional_lodges" class="short">${esc(x.additional_lodges || '')}</textarea></div>
 <div class="full"><label>Στοές του μέλους</label>${lodgesEditor(ls)}</div></div>
-<div class="toolbar"><button class="btn primary">💾 Αποθήκευση</button><a class="btn" href="#/members">Ακύρωση</a>${m ? `<a class="btn" href="#/members/card?ids=${m.id}">🖨 Κάρτα Μέλους</a>` : ''}${m && !noContact(m) ? `<a class="btn" href="#/letters/new?to_name=${encodeURIComponent(`${m.first_name} ${m.surname}`)}&to_email=${encodeURIComponent(m.email || '')}">✉ Επιστολή</a>` : ''}${m ? '<button type="button" class="btn danger" data-act="del">Διαγραφή</button>' : ''}</div></form>
+<div class="toolbar"><button class="btn primary">💾 Αποθήκευση</button><a class="btn" href="#/members">Ακύρωση</a>${m ? `<a class="btn" href="#/members/card?ids=${m.id}">🪪 Κάρτα Μέλους</a>` : ''}${m && !noContact(m) ? `<a class="btn" href="#/letters/new?to_name=${encodeURIComponent(`${m.first_name} ${m.surname}`)}&to_email=${encodeURIComponent(m.email || '')}">✉ Επιστολή</a>` : ''}${m ? '<button type="button" class="btn danger" data-act="del">Διαγραφή</button>' : ''}</div></form>
 ${m ? epCard(m) : ''}${offices.length ? `<h2>Ιστορικό αξιωμάτων (Διατάγματα)</h2>${table(['Έτος', 'Αξίωμα / Τίτλος', 'Διάταγμα'], offices.map((o) => [esc(o.decree_year), esc(o.office), o.decree_id ? `<a href="#/decrees/${o.decree_id}">${esc(o.decree_no)}/${esc(o.decree_year)}</a>` : esc(o.decree_no ? `${o.decree_no}/${o.decree_year}` : '')]))}` : ''}`,
     mount(el) {
       onSubmit(el.querySelector('#mf'), async (d) => {
