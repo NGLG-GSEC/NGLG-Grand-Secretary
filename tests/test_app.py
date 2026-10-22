@@ -2762,3 +2762,34 @@ def test_decree_delete_asks_whether_to_change_epeteirida_and_registry(app):
     ep = app.page.evaluate("async () => (await import('./core/store.js')).db.all('epeteirida').find((r) => r.full_name === 'Παπαδόπουλος Γεώργιος')")
     assert ep and ep['rank'] == 'Μέγας Γραμματεύς', ep
     app.page.wait_for_function("() => document.body.innerText.includes('ΔΕΝ άλλαξαν')", timeout=5000)
+
+
+def test_master_mason_diploma_template_issue_and_design(app):
+    # Δίπλωμα Διδασκάλου Τέκτονος (A3): πρότυπο στα «Πρότυπα», έκδοση από το Μητρώο με τα στοιχεία του μέλους, σχεδίαση θέσεων
+    app.connect_local()
+    add_member(app)
+    mid = app.page.evaluate("""async () => { const {db} = await import('./core/store.js'); const m = db.all('member_registry').find((x) => x.surname === 'Παπαδόπουλος');
+      await db.save('x', (tx) => tx.update('member_registry', m.id, { diploma_no: 24680, date_ea: '2021-03-15', date_mm: '2022-06-20', mm_lodge_name: 'Αρμονία', mm_lodge_number: '12' })); return m.id; }""")
+    app.go('/templates')
+    assert 'ΔΙΠΛΩΜΑ ΔΙΔΑΣΚΑΛΟΥ ΤΕΚΤΟΝΟΣ' in app.text('main') and app.page.locator('a:has-text("🎨 Σχεδίαση Διπλώματος")').count() == 1
+    app.go(f'/members/{mid}')
+    app.page.click('a:has-text("🎓 Δίπλωμα Διδασκάλου")')
+    app.page.wait_for_selector('.dip-sheet')
+    t = app.text('.dip-sheet')
+    for s in ['Γεώργιος Παπαδόπουλος', 'GEORGIOS PAPADOPOULOS', 'τήν 15ην ἡμέραν τοῦ μηνός Μαρτίου 2021 Ε.Κ. 6021 Ε.Φ.', 'Στοάν Αρμονία ὑπ’ ἀριθ. 12',
+              'on the 15th of March 2021 AD 6021 AL in ARMONIA Lodge No. 12', '24680', '20/6/2022', 'Ο Μέγας Διδάσκαλος']:
+        assert s in t, s
+    app.page.fill('[name=name]', 'Γιώργος Παπαδόπουλος')
+    assert 'GIORGOS PAPADOPOULOS' in app.text('.dip-sheet') and app.page.input_value('[name=name_en]') == 'GIORGOS PAPADOPOULOS'
+    app.page.screenshot(path='/tmp/claude-0/dip/issue.png', full_page=True)
+    # σχεδίαση: μετακίνηση του αριθμού Διπλώματος και αποθήκευση στο πρότυπο
+    tid = app.page.evaluate("async () => (await import('./core/store.js')).db.all('letter_templates').find((t) => t.kind === 'diploma').id")
+    app.go(f'/templates/{tid}/diploma')
+    app.page.select_option('#dipSel', 'dno')
+    app.page.fill('[data-f=x]', '90')
+    app.page.click('button:has-text("Αποθήκευση σχεδίασης")')
+    app.page.wait_for_url('**/#/templates')
+    lay = app.page.evaluate(f"async () => {{ const L = (await import('./core/store.js')).db.get('letter_templates', {tid}).layout; return typeof L === 'string' ? JSON.parse(L) : L; }}")
+    assert lay['boxes'] == {'dno': {'x': 90}}, lay
+    app.go(f'/members/diploma?id={mid}')
+    assert 'left:90mm' in app.page.get_attribute('[data-box=dno]', 'style')

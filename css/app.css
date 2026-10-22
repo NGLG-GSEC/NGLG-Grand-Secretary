@@ -478,3 +478,27 @@ input[type=file]{max-width:100%;min-width:0}
 .sync-card.warn{border-left-color:#b45309;background:#fff8ec}
 .sync-card h3{margin:0 0 6px}
 .sync-list{white-space:pre-wrap;font:inherit;font-size:.92em;background:#fff;border:1px solid #e3e6ee;border-radius:8px;padding:8px 10px;margin:6px 0}
+/* 🎓 Δίπλωμα Διδασκάλου Τέκτονος (A3) */
+.dip-view{overflow:hidden;background:#e9edf3;border-radius:8px;padding:0}
+.dip-sheet{position:relative;width:297mm;height:420mm;background:#fff;overflow:hidden;color:#000;box-shadow:0 4px 18px #0003;font-synthesis:none}
+.dip-box{position:absolute;box-sizing:border-box;transform-origin:center}
+.dip-box img{width:100%;height:100%;display:block}
+.dip-txt{line-height:1.2;font-style:normal;overflow-wrap:break-word}
+.dip-txt .dip-big{font-size:1.18em;font-weight:700}
+.dip-fit{overflow:hidden}
+.dip-margin{border:1px solid #000;background:#fff radial-gradient(#9dc3e6 .5px,transparent .6px) 0 0/1.2mm 1.2mm}
+.dip-seal{border:.3mm dotted #c9c5c5;border-radius:50%}
+.dip-stamp .dip-txt{color:#e2efda;-webkit-text-stroke:.25mm #2e75b6;text-shadow:.4mm .4mm .6mm #0006;white-space:nowrap}
+.dip-edit .dip-box{outline:1px dashed #5b8bd5;cursor:move}
+.dip-edit .dip-box.dip-on{outline:2px solid #e2711d;z-index:5}
+.dip-edit .dip-hidden{opacity:.25}
+.dip-edit .dip-shrunk{outline-color:#b42318}
+.dip-tag{position:absolute;left:0;top:-4.5mm;font:9pt system-ui,sans-serif;background:#e2711d;color:#fff;padding:0 4px;border-radius:3px;white-space:nowrap;display:none}
+.dip-on .dip-tag{display:block}
+.dip-rs{position:absolute;right:-1mm;bottom:-1mm;font-size:14pt;line-height:1;color:#e2711d;cursor:nwse-resize;display:none}
+.dip-on .dip-rs{display:block}
+.dip-fields{grid-template-columns:repeat(auto-fit,minmax(210px,1fr))}
+@media print{.print-area>div.dip-sheet,.print-area.dip-view{display:block!important;background:none;padding:0;border-radius:0}
+.dip-sheet{zoom:1!important;box-shadow:none}.dip-edit .dip-box{outline:0}.dip-tag,.dip-rs{display:none!important}}
+@media print{.dz-split:has(.dip-view){display:block!important}}
+.dip-box[data-box^=date] .dip-txt{white-space:nowrap}

@@ -12,6 +12,7 @@ import { isSealed } from '../core/connect.js';
 import { smallLodgesPage } from './small-lodges.js';
 import { diplomasPage } from './diplomas.js';
 import { memberCardPage } from './member-card.js';
+import { diplomaIssuePage } from './diploma.js';
 
 // Αρ. Μητρώου: μοναδικός και μόνιμος αριθμός κάθε προσώπου που είναι ή υπήρξε μέλος της ΕΜΣτΕ (και διαγραμμένου).
 // Ξεκινά από το 1200, δίνεται αυτόματα στο νέο μέλος (επόμενος ελεύθερος) και δεν αλλάζει ποτέ· μόνο ο διαχειριστής
@@ -304,7 +305,7 @@ function formPage(m) {
   const offices = m ? sortBy(db.all('member_degrees_offices').filter((o) => o.member_id === m.id), (o) => -(o.decree_year || 0)) : [];
   return {
     title: m ? `Μέλος #${m.id}` : 'Νέο Μέλος',
-    html: `<p><a href="#/members">← Μητρώο Μελών</a></p><h1>${m ? `${esc(m.surname)} ${esc(m.first_name)} <small class="muted">#${m.id}</small>` : 'Νέο Μέλος'}</h1>${m ? `<div class="toolbar"><a class="btn primary" href="#/members/card?ids=${m.id}">🪪 Κάρτα Μέλους</a></div>` : ''}${noContact(m) ? `<div class="card nocontact">${NO_CONTACT}</div>` : ''}${m ? usesOf(m) : ''}
+    html: `<p><a href="#/members">← Μητρώο Μελών</a></p><h1>${m ? `${esc(m.surname)} ${esc(m.first_name)} <small class="muted">#${m.id}</small>` : 'Νέο Μέλος'}</h1>${m ? `<div class="toolbar"><a class="btn primary" href="#/members/card?ids=${m.id}">🪪 Κάρτα Μέλους</a><a class="btn" href="#/members/diploma?id=${m.id}">🎓 Δίπλωμα Διδασκάλου</a></div>` : ''}${noContact(m) ? `<div class="card nocontact">${NO_CONTACT}</div>` : ''}${m ? usesOf(m) : ''}
 <form id="mf"><div class="grid card"><div class="full regcode-row"><label>Αρ. Μητρώου</label><div class="regcode">${m ? regBadge(m) : '<span class="muted">αυτόματα (M + επόμενος ελεύθερος· MM + αριθμός Διπλώματος, αν υπάρχει)</span>'}</div></div>
 ${isAdmin() ? f('diploma_no', 'Δίπλωμα Διδασκάλου Τέκτονος <small class="muted">(Certificate Master Mason) — ο πραγματικός αριθμός μητρώου</small>', 'inputmode="numeric" placeholder="αριθμός διπλώματος"')
   : `<div><label>Δίπλωμα Διδασκάλου Τέκτονος</label><input value="${esc(x.diploma_no || '—')}" disabled></div>`}
@@ -603,6 +604,7 @@ module({
     '/members/small-lodges': smallLodgesPage,
     '/members/diplomas': diplomasPage,
     '/members/card': memberCardPage,
+    '/members/diploma': diplomaIssuePage,
     '/members/diplomas/print': memberCardPage, // παλιός σύνδεσμος
     '/members/:id': ({ params }) => { const m = db.get('member_registry', params.id); return m ? formPage(m) : '<h1>Δεν βρέθηκε το μέλος</h1>'; },
   },

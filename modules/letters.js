@@ -22,7 +22,7 @@ const TEMPLATE_SEED = [['Ελεύθερη επιστολή', ''], ['Επίσκε
 db.seed('letter_templates', () => TEMPLATE_SEED.map(([name, body], i) => ({ id: i + 1, name, body, active: 1 })));
 
 const PH_HELP = 'Πεδία που συμπληρώνονται από τη βάση: ' + PLACEHOLDERS.map(([k, d]) => `{${k}} = ${d}`).join(' · ') + ' · Πεδία της επιστολής: ' + LETTER_FIELDS.map(([k, d]) => `{${k}} = ${d}`).join(' · ');
-const templates = () => sortBy(db.all('letter_templates').filter((t) => t.active && t.name !== 'ΔΙΑΤΑΓΜΑΤΑ' && t.kind !== 'decree'), 'id');
+const templates = () => sortBy(db.all('letter_templates').filter((t) => t.active && t.name !== 'ΔΙΑΤΑΓΜΑΤΑ' && t.kind !== 'decree' && t.kind !== 'diploma'), 'id');
 export const lettersAll = () => { const dec = legacyDecreeLetterIds(); return db.all('letters').filter((l) => !dec.has(l.id)); };
 const STATUS = { draft: 'Πρόχειρη', ready: 'Έτοιμη' };
 const statusPill = (s) => `<span class="pill ${s === 'ready' ? 'ok' : 'warn'}">${STATUS[s] || esc(s)}</span>`;
@@ -432,7 +432,7 @@ module({
       defaults: { active: 1 },
       sort: (xs) => sortBy(xs.filter((t) => t.name !== 'ΔΙΑΤΑΓΜΑΤΑ'), 'id'),
       validate: (d) => ({ ...d, active: Number(d.active) ? 1 : 0 }),
-      columns: [{ label: 'Αρ.', v: (t) => `<b>${t.id}</b>` }, { label: 'Όνομα', v: (t) => `<b>${esc(t.name)}</b>${t.kind === 'decree' ? ' <span class="pill">📜 Διάταγμα</span><br><a class="btn small" href="#/templates/' + t.id + '/design">🎨 Σχεδίαση σελίδας</a>' : ''}${hasPlaceholders([t.body, t.subject].join(' ')) ? ' <span class="pill ok">⚙ από τη βάση</span>' : ''}` }, { label: 'Κορμός', v: (t) => `<small class="muted">${esc(String(t.body || '').slice(0, 120))}</small>` }, { label: 'Ενεργό', v: (t) => (t.active ? '✓' : '—') }],
+      columns: [{ label: 'Αρ.', v: (t) => `<b>${t.id}</b>` }, { label: 'Όνομα', v: (t) => `<b>${esc(t.name)}</b>${t.kind === 'decree' ? ' <span class="pill">📜 Διάταγμα</span><br><a class="btn small" href="#/templates/' + t.id + '/design">🎨 Σχεδίαση σελίδας</a>' : t.kind === 'diploma' ? ` <span class="pill">🎓 Δίπλωμα A3</span><br><a class="btn small" href="#/templates/${t.id}/diploma">🎨 Σχεδίαση Διπλώματος</a> <a class="btn small" href="#/members/diploma">🖨 Έκδοση</a>` : ''}${hasPlaceholders([t.body, t.subject].join(' ')) ? ' <span class="pill ok">⚙ από τη βάση</span>' : ''}` }, { label: 'Κορμός', v: (t) => `<small class="muted">${esc(String(t.body || '').slice(0, 120))}</small>` }, { label: 'Ενεργό', v: (t) => (t.active ? '✓' : '—') }],
     }),
   },
   tile: { order: 10, render: () => {
