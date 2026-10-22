@@ -2632,10 +2632,16 @@ def test_member_card_in_registry(app):
     # Κάρτα Μέλους μέσα στο Μητρώο: στη λίστα, στην κορυφή της καρτέλας και στο μενού (με αναζήτηση μέλους)
     app.connect_local()
     add_member(app)
+    app.go('/members')
+    assert app.page.locator('.mc-cta a.mc-cta-btn[href="#/members/card"] b').inner_text() == 'ΚΑΡΤΑ ΜΕΛΟΥΣ'  # κάτω από τα κουμπιά του Μητρώου
     app.go('/members?q=Παπαδ&field=all')
     app.page.click('.memtable a.btn:has-text("🪪 Κάρτα Μέλους")')
     app.page.wait_for_selector('.paper.member-card')
     assert 'ΚΑΡΤΑ ΜΕΛΟΥΣ' in app.text('.paper.member-card')
+    # email από info@ με θέμα «Κάρτα Μέλους για …» και την κάρτα σε PDF
+    app.page.wait_for_selector('.mailsheet .ms-head')
+    ms = app.text('.mailsheet')
+    assert 'Κάρτα Μέλους για ' in ms and 'Παπαδόπουλος' in ms and 'info@nglgreece.gr' in ms and '.pdf' in ms, ms
     assert app.page.locator('#mainnav a[href="#/members/card"]').count() == 1
     app.go('/members/card')
     app.pick('#mcFind', 'Παπαδ')

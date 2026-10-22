@@ -457,3 +457,10 @@ input[type=file]{max-width:100%;min-width:0}
 .mc-foot{margin-top:6mm;padding-top:2mm;border-top:1px solid #e3e6ee;font-size:7.5pt;color:#888;text-align:center}
 @media print{.paper.member-card{break-after:page}}
 @media screen and (max-width:600px){.mc-kv{grid-template-columns:1fr 1fr}.paper.member-card .mc-table{display:block;overflow-x:auto}}
+/* Μητρώο: κουμπί «ΚΑΡΤΑ ΜΕΛΟΥΣ» κάτω από τα κουμπιά */
+.mc-cta{margin:4px 0 14px}
+.mc-cta-btn{display:inline-flex;flex-direction:column;align-items:flex-start;gap:2px;padding:12px 20px;background:#fff8e9;border:2px solid #b18a43;color:#1d2f5e;border-radius:12px;font-size:1.05em}
+.mc-cta-btn b{font-weight:900;letter-spacing:.06em;font-size:1.15em}
+.mc-cta-btn small{font-weight:400;color:#7a5a10;font-size:.8em}
+.mc-cta-btn:hover{background:#f6ebcf}
+#mcMail{margin-top:18px}

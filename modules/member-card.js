@@ -6,7 +6,8 @@ import { bind, go } from '../core/app.js';
 import { esc, sortBy, fmtDate, today } from '../core/util.js';
 import { regCode, canonicalId } from '../core/people.js';
 import { noContact, attachPicker, memberItems } from '../core/pickers.js';
-import { IMG, printPaper } from '../core/paper.js';
+import { IMG, printPaper, gsSignatureText } from '../core/paper.js';
+import { senderBanner } from '../core/mail.js';
 import { isoOf, lodgesByMember, capacityOf, feeRankLabel } from './members.js';
 import { epeteiridaOf } from './epeteirida-table.js';
 
@@ -50,18 +51,38 @@ ${m.deregistered_note || m.additional_lodges ? `<section><h3>Σημειώσει�
 <footer class="mc-foot">Εκτύπωση ${esc(fmtDate(today()))} · Μεγάλη Γραμματεία ΕΜΣτΕ · Ενιαίο Μητρώο Μελών</footer></article>`;
 }
 
+// Email της Κάρτας Μέλους: από info@ (γενικά εξερχόμενα), θέμα «Κάρτα Μέλους για …», PDF συνημμένο
+export const cardName = (m) => `${m.first_name || ''} ${m.surname || ''}`.trim();
+export const cardSubject = (m) => `Κάρτα Μέλους για ${cardName(m)}${regCode(m) ? ` — Αρ. Μητρώου ${regCode(m)}` : ''}`;
+export function cardMailBody(m) {
+  const ls = (lodgesByMember()[m.id] || []).map((l) => `${l.lodge_name} ${l.lodge_number}`.trim()).filter(Boolean);
+  return [`Αγαπητέ Αδελφέ ${cardName(m)},`, '',
+    'Σας αποστέλλουμε συνημμένη την Κάρτα Μέλους σας, με τα στοιχεία που τηρούνται στο Μητρώο της Μεγάλης Στοάς.',
+    'Παρακαλούμε να τα ελέγξετε και να μας ενημερώσετε για οποιαδήποτε διόρθωση ή συμπλήρωση.', '',
+    `Αρ. Μητρώου: ${regCode(m) || '—'}`, ...(String(m.diploma_no ?? '').trim() ? [`Δίπλωμα Διδασκάλου Τέκτονος: MM${m.diploma_no}`] : []),
+    ...(ls.length ? [`Στοές: ${ls.join(', ')}`] : []), '', gsSignatureText()].join('\n');
+}
+
 export function memberCardPage({ query = {} } = {}) {
   const ms = String(query.ids || '').split(',').map(Number).filter(Boolean).map((id) => db.get('member_registry', id)).filter(Boolean);
-  const back = ms.length === 1 ? `#/members/${ms[0].id}` : '#/members/diplomas';
+  const back = ms.length === 1 ? `#/members/${ms[0].id}` : '#/members';
+  const one = ms.length === 1 ? ms[0] : null;
   return {
     title: 'Κάρτα Μέλους',
     html: `<div class="noprint"><p><a href="${back}">← Πίσω</a></p><h1>🪪 Κάρτα Μέλους ${ms.length > 1 ? `<small class="muted">${ms.length} κάρτες</small>` : ''}</h1>
 <div class="card mc-find"><label>🔎 Μέλος του Μητρώου</label><input id="mcFind" placeholder="Επώνυμο, όνομα, MM/M αριθμός, email ή κινητό" autocomplete="off"></div>
-${ms.length ? '<div class="toolbar"><button type="button" class="btn primary" data-act="print">🖨 Εκτύπωση / PDF</button></div>' : ''}</div>
-<div class="print-area">${ms.length ? ms.map(memberCardPaper).join('') : '<p class="muted noprint">Αναζητήστε ένα μέλος για να δείτε την Κάρτα Μέλους του.</p>'}</div>`,
-    mount(el) {
+${ms.length ? `<div class="toolbar"><button type="button" class="btn primary" data-act="print">🖨 Εκτύπωση / PDF</button>${one ? '<a class="btn" href="#mcMail">✉ Αποστολή με email</a>' : ''}</div>` : ''}</div>
+<div class="print-area">${ms.length ? ms.map(memberCardPaper).join('') : '<p class="muted noprint">Αναζητήστε ένα μέλος για να δείτε την Κάρτα Μέλους του.</p>'}</div>
+${one ? `<section class="noprint" id="mcMail"><h2>✉ Αποστολή της Κάρτας Μέλους με email</h2>${noContact(one) ? '<div class="card nocontact">⛔ Το μέλος είναι διαγραμμένο — απαγορεύεται η επικοινωνία.</div>' : senderBanner('general')}<div class="mailsheet"></div></section>` : ''}`,
+    async mount(el) {
       attachPicker(el.querySelector('#mcFind'), (q) => memberItems(q), (mm) => go('/members/card', { ids: mm.id }));
       bind(el, { print: () => printPaper(ms.length === 1 ? `Κάρτα Μέλους ${regCode(ms[0])} ${ms[0].surname} ${ms[0].first_name}` : 'Κάρτες Μελών') });
+      if (!one || noContact(one)) return;
+      const title = `Κάρτα Μέλους ${regCode(one)} ${one.surname} ${one.first_name}`.replace(/\s+/g, ' ').trim();
+      const { mailSheet } = await import('../core/gmail.js');
+      mailSheet(el, { kind: 'general', pdfName: title,
+        getMsg: () => ({ to: one.email || '', cc: '', bcc: '', subject: cardSubject(one), body: cardMailBody(one) }),
+        getPdf: async () => ({ blob: await (await import('../core/pdf.js')).paperPdf(el.querySelector('.print-area .paper'), { title }), name: title + '.pdf' }) });
     },
   };
 }
