@@ -2551,35 +2551,56 @@ def test_declarations_protocol_and_report_need_code(browser, base_url):
 
 
 def test_master_mason_diplomas_registry_codes_and_import(app, tmp_path):
-    # Δίπλωμα Διδασκάλου Τέκτονος: αρ. μητρώου MM<δίπλωμα>, αλλιώς M<αριθμός>· εισαγωγή από Excel με αντιστοίχιση και συγκρούσεις
+    # Δίπλωμα Διδασκάλου Τέκτονος: αρ. μητρώου MM<δίπλωμα>, αλλιώς M<αριθμός>· εισαγωγή Excel με ημερομηνίες και Στοά Εγέρσεως,
+    # αντιστοίχιση και συγκρούσεις· ανά Στοά, αναζήτηση, πρότυπο Excel και εκτύπωση Διπλώματος
     from openpyxl import Workbook
     app.connect_local()
     ids = app.page.evaluate("""async () => { const {db} = await import('./core/store.js'); const {insertMember} = await import('./modules/members.js'); let a, b, c;
-      await db.save('x', (tx) => { a = insertMember(tx, { surname: 'Διπλωματούχος', first_name: 'Πέτρος' }); b = insertMember(tx, { surname: 'Άλλος', first_name: 'Νίκος' });
-        c = insertMember(tx, { surname: 'Κάτοχος', first_name: 'Γιώργος', diploma_no: '777' }); }); return [a, b, c]; }""")
+      await db.save('x', (tx) => { a = insertMember(tx, { surname: 'Διπλωματούχος', first_name: 'Πέτρος', lodges: [{ name: 'ΑΘΗΝΑ', number: '1', status: 'ΕΝΕΡΓΟ' }] });
+        b = insertMember(tx, { surname: 'Άλλος', first_name: 'Νίκος', lodges: [{ name: 'ΑΘΗΝΑ', number: '1', status: 'ΕΝΕΡΓΟ' }] });
+        c = insertMember(tx, { surname: 'Κάτοχος', first_name: 'Γιώργος', diploma_no: '777', date_ea: '2001-01-01' }); }); return [a, b, c]; }""")
     reg = app.page.evaluate(f"async () => (await import('./core/store.js')).db.get('member_registry', {ids[0]}).registry_no")
     wb = Workbook(); ws = wb.active
-    ws.append(['Ονοματεπώνυμο', 'Αρ. Διπλώματος'])
-    ws.append(['Διπλωματούχος Πέτρος', 24680]); ws.append(['Άλλος Νίκος', 777]); ws.append(['Ανύπαρκτος Τάδε', 999])
+    ws.append(['Ονοματεπώνυμο', 'Αρ. Διπλώματος', 'Ημ. Εισδοχής (Μαθητής)', 'Ημ. Διελεύσεως (Εταίρος)', 'Ημ. Εγέρσεως (Διδάσκαλος)', 'Στοά Εγέρσεως', 'Αρ. Στοάς Εγέρσεως'])
+    ws.append(['Διπλωματούχος Πέτρος', 24680, '15/03/2010', '20/11/2010', '10/06/2011', 'Σεβ. Στοά «ΑΘΗΝΑ»', 1])
+    ws.append(['Άλλος Νίκος', 777, '', '', '', '', '']); ws.append(['Ανύπαρκτος Τάδε', 999, '', '', '', '', ''])
+    ws.append(['Κάτοχος Γιώργος', 777, '2002-02-02', '', '', '', ''])
     f = tmp_path / 'diplomas.xlsx'; wb.save(f)
     app.go('/members')
     app.page.click('a.btn:has-text("🎓 Διπλώματα Διδασκάλου")')
+    app.page.click('a.btn:has-text("⬆ Εισαγωγή Excel")')
+    with app.page.expect_download() as dl:
+        app.page.click('[data-act=template]')
+    assert dl.value.suggested_filename == 'Πρότυπο Διπλωμάτων Διδασκάλου.xlsx'
     app.page.set_input_files('#dpFile', str(f))
     app.page.wait_for_selector('#dpApply')
     t = app.text('#dpPlan')
-    assert 'Θα οριστεί' in t and 'Ο αριθμός ανήκει σε άλλο μέλος' in t and 'Δεν βρέθηκε' in t
+    assert 'Θα συμπληρωθεί' in t and 'Δεν βρέθηκε' in t and 'Ο αριθμός υπάρχει δύο φορές στο αρχείο' in t and 'Διδάσκαλος: 10/06/2011' in t and 'Στοά Εγέρσεως: ΑΘΗΝΑ' in t, t
     app.page.click('#dpApply')
-    app.page.wait_for_selector('.regno.mm:has-text("MM24680")')
-    st = app.page.evaluate(f"async () => {{ const {{db}} = await import('./core/store.js'); const {{regCode}} = await import('./core/people.js'); return [{ids[0]}, {ids[1]}, {ids[2]}].map((i) => regCode(db.get('member_registry', i))); }}")
-    assert st == ['MM24680', f"M{reg + 1}", 'MM777'], st
+    app.page.wait_for_selector('.memtable .regno.mm:has-text("MM24680")')
+    m = app.page.evaluate(f"async () => {{ const {{db}} = await import('./core/store.js'); const {{regCode}} = await import('./core/people.js'); return [{ids[0]}, {ids[1]}, {ids[2]}].map((i) => {{ const m = db.get('member_registry', i); return [regCode(m), m.date_ea, m.date_fc, m.date_mm, m.mm_lodge_name, m.mm_lodge_number, m.degree]; }}); }}")
+    assert m[0] == ['MM24680', '2010-03-15', '2010-11-20', '2011-06-10', 'ΑΘΗΝΑ', '1', 'Διδάσκαλος'], m
+    assert m[1][0] == f"M{reg + 1}" and m[2][0] == 'MM777' and m[2][1] == '2001-01-01', m  # διπλός αριθμός στο αρχείο: καμία αλλαγή
     # αναζήτηση με τον κωδικό (και με ελληνικό «Μ»)
     for q in ['MM24680', 'ΜΜ24680', '24680']:
         app.go('/members?q=' + q + '&field=all')
         assert 'Διπλωματούχος' in app.text('.memtable'), q
     app.go(f'/members?q=M{reg + 1}&field=all')
     assert 'Άλλος' in app.text('.memtable') and 'Διπλωματούχος' not in app.text('.memtable')
+    # ανά Στοά: η ΑΘΗΝΑ 1 έχει 2 ενεργά μέλη, 1 με Δίπλωμα
+    app.go('/members/diplomas?tab=lodges')
+    row = app.page.locator('tr', has_text='ΠΑΛΑΙΩΝ ΠΑΤΡΩΝ ΓΕΡΜΑΝΟΣ').first.inner_text().split('\t')  # το όνομα της Στοάς 1 από τον κατάλογο Στοών
+    assert row[2].strip() == '2' and row[3].strip() == '1' and row[4].strip() == '1', row
+    app.go('/members/diplomas?tab=list&mode=without&lodge=1')
+    assert 'Άλλος' in app.text('.memtable') and 'Διπλωματούχος' not in app.text('.memtable')
+    # καρτέλα μέλους και εκτύπωση Διπλώματος
     app.go(f'/members/{ids[0]}')
-    assert 'MM24680' in app.text('.regcode') and app.page.input_value('[name=diploma_no]') == '24680'
+    assert 'MM24680' in app.text('.regcode') and app.page.input_value('[name=diploma_no]') == '24680' and app.page.input_value('[name=mm_lodge_name]') == 'ΑΘΗΝΑ'
+    app.page.click('a.btn:has-text("🖨 Δίπλωμα Διδασκάλου")')
+    app.page.wait_for_selector('.paper.diploma')
+    d = app.text('.paper.diploma')
+    for s_ in ['ΔΙΠΛΩΜΑ ΔΙΔΑΣΚΑΛΟΥ ΤΕΚΤΟΝΟΣ', 'MM24680', 'Πέτρος Διπλωματούχος', '15/03/2010', '20/11/2010', '10/06/2011', '«ΑΘΗΝΑ» υπ’ αριθμ. 1']:
+        assert s_ in d, s_
 
 
 def test_unified_menu_and_visits_flow(app):

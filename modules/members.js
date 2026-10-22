@@ -10,7 +10,7 @@ import { epeteiridaOf, highestOfficeText } from './epeteirida-table.js';
 import { identify, canonicalId, person, digits10, sameNameGroups, regCode, matchesCode, codeKey } from '../core/people.js';
 import { isSealed } from '../core/connect.js';
 import { smallLodgesPage } from './small-lodges.js';
-import { diplomasPage } from './diplomas.js';
+import { diplomasPage, diplomaPrintPage } from './diplomas.js';
 
 // Αρ. Μητρώου: μοναδικός και μόνιμος αριθμός κάθε προσώπου που είναι ή υπήρξε μέλος της ΕΜΣτΕ (και διαγραμμένου).
 // Ξεκινά από το 1200, δίνεται αυτόματα στο νέο μέλος (επόμενος ελεύθερος) και δεν αλλάζει ποτέ· μόνο ο διαχειριστής
@@ -132,7 +132,7 @@ export function findMember(tx, m, freeOnly = false) {
   if (!r && sn && fn) r = all.find((x) => ok(x) && String(x.surname || '').toLowerCase() === sn && String(x.first_name || '').toLowerCase() === fn);
   return r ? r.id : null;
 }
-const MEMBER_COLS = ['registry_no', 'diploma_no', 'source_member_id', 'surname', 'first_name', 'email', 'other_emails', 'mobile', 'other_mobiles', 'degree', 'declared_lodge_count', 'deregistered_note', 'additional_lodges', 'active', 'surname_variants', 'first_name_variants', 'source_row', 'no_contact', ...MEMBER_DATES.map(([k]) => k)];
+const MEMBER_COLS = ['registry_no', 'diploma_no', 'mm_lodge_name', 'mm_lodge_number', 'source_member_id', 'surname', 'first_name', 'email', 'other_emails', 'mobile', 'other_mobiles', 'degree', 'declared_lodge_count', 'deregistered_note', 'additional_lodges', 'active', 'surname_variants', 'first_name_variants', 'source_row', 'no_contact', ...MEMBER_DATES.map(([k]) => k)];
 export function insertMember(tx, m, id) {
   const row = Object.fromEntries(MEMBER_COLS.map((k) => [k, m[k] ?? (k === 'active' ? 1 : k === 'registry_no' || k === 'source_row' || k === 'source_member_id' ? null : '')]));
   if (row.registry_no == null) row.registry_no = nextRegistryNo(tx); // κάθε νέο μέλος παίρνει αμέσως Αρ. Μητρώου
@@ -313,11 +313,12 @@ ${f('email', 'Κύριο Email', 'inputmode="email"')}${f('other_emails', 'Άλ�
 <div><label>Ενεργός</label><select name="active"><option value="1"${x.active ? ' selected' : ''}>ΝΑΙ</option><option value="0"${x.active ? '' : ' selected'}>ΟΧΙ</option></select></div>
 <div><label>Επικοινωνία</label><select name="no_contact"><option value="0">Επιτρέπεται</option><option value="1"${noContact(x) ? ' selected' : ''}>⛔ Απαγορεύεται (διαγραμμένος)</option></select></div>
 ${MEMBER_DATES.slice(0, 3).map(([k, lab]) => `<div><label>${esc(lab)}</label><input type="date" name="${k}" value="${esc(isoOf(x[k]))}"></div>`).join('')}
+${f('mm_lodge_name', 'Στοά Εγέρσεως (όπου έγινε Διδάσκαλος)')}${f('mm_lodge_number', 'Αρ. Στοάς Εγέρσεως', 'inputmode="numeric"')}
 <div><label>${esc(MEMBER_DATES[3][1])}</label><input type="date" name="dereg_date" value="${esc(isoOf(x.dereg_date))}"></div>
 <div class="full"><label>Σημείωση Διαγραφής</label><input name="deregistered_note" value="${esc(x.deregistered_note || '')}"></div>
 <div class="full"><label>Πρόσθετες Στοές / παλαιά πληροφορία</label><textarea name="additional_lodges" class="short">${esc(x.additional_lodges || '')}</textarea></div>
 <div class="full"><label>Στοές του μέλους</label>${lodgesEditor(ls)}</div></div>
-<div class="toolbar"><button class="btn primary">💾 Αποθήκευση</button><a class="btn" href="#/members">Ακύρωση</a>${m && !noContact(m) ? `<a class="btn" href="#/letters/new?to_name=${encodeURIComponent(`${m.first_name} ${m.surname}`)}&to_email=${encodeURIComponent(m.email || '')}">✉ Επιστολή</a>` : ''}${m ? '<button type="button" class="btn danger" data-act="del">Διαγραφή</button>' : ''}</div></form>
+<div class="toolbar"><button class="btn primary">💾 Αποθήκευση</button><a class="btn" href="#/members">Ακύρωση</a>${m && String(m.diploma_no ?? '').trim() ? `<a class="btn" href="#/members/diplomas/print?ids=${m.id}">🖨 Δίπλωμα Διδασκάλου</a>` : ''}${m && !noContact(m) ? `<a class="btn" href="#/letters/new?to_name=${encodeURIComponent(`${m.first_name} ${m.surname}`)}&to_email=${encodeURIComponent(m.email || '')}">✉ Επιστολή</a>` : ''}${m ? '<button type="button" class="btn danger" data-act="del">Διαγραφή</button>' : ''}</div></form>
 ${m ? epCard(m) : ''}${offices.length ? `<h2>Ιστορικό αξιωμάτων (Διατάγματα)</h2>${table(['Έτος', 'Αξίωμα / Τίτλος', 'Διάταγμα'], offices.map((o) => [esc(o.decree_year), esc(o.office), o.decree_id ? `<a href="#/decrees/${o.decree_id}">${esc(o.decree_no)}/${esc(o.decree_year)}</a>` : esc(o.decree_no ? `${o.decree_no}/${o.decree_year}` : '')]))}` : ''}`,
     mount(el) {
       onSubmit(el.querySelector('#mf'), async (d) => {
@@ -328,7 +329,7 @@ ${m ? epCard(m) : ''}${offices.length ? `<h2>Ιστορικό αξιωμάτων
         if (dn && !/^\d+$/.test(dn)) throw new Error('Ο αριθμός Διπλώματος πρέπει να είναι αριθμός.');
         if (m && isAdmin() && dn !== String(m.diploma_no ?? '') && m.diploma_no && !confirmDo(`Αλλαγή του αριθμού Διπλώματος από ${m.diploma_no} σε ${dn || '—'};`)) return;
         const lodges = readLodgesEditor(el);
-        const row = { ...Object.fromEntries(['surname', 'first_name', 'email', 'other_emails', 'mobile', 'other_mobiles', 'degree', 'deregistered_note', 'additional_lodges', 'surname_variants', 'first_name_variants', ...MEMBER_DATES.map(([k]) => k)].map((k) => [k, String(d[k] || '').trim()])),
+        const row = { ...Object.fromEntries(['surname', 'first_name', 'email', 'other_emails', 'mobile', 'other_mobiles', 'degree', 'deregistered_note', 'additional_lodges', 'surname_variants', 'first_name_variants', 'mm_lodge_name', 'mm_lodge_number', ...MEMBER_DATES.map(([k]) => k)].map((k) => [k, String(d[k] || '').trim()])),
           active: d.active === '1' ? 1 : 0, no_contact: d.no_contact === '1' || isDereg('', lodges[0]?.status) ? 1 : 0, registry_no: rn ? Number(rn) : null, diploma_no: dn, declared_lodge_count: String(lodges.length), lodges };
         const id = await db.save(m ? `Μέλος #${m.id}: ενημέρωση` : 'Νέο μέλος', (tx) => {
           if (rn && tx.find('member_registry', (x) => x.registry_no === Number(rn) && (!m || x.id !== m.id))) throw new Error(`Ο αριθμός μητρώου ${rn} υπάρχει ήδη.`);
@@ -599,6 +600,7 @@ module({
     '/members/duplicates': duplicatesPage,
     '/members/small-lodges': smallLodgesPage,
     '/members/diplomas': diplomasPage,
+    '/members/diplomas/print': diplomaPrintPage,
     '/members/:id': ({ params }) => { const m = db.get('member_registry', params.id); return m ? formPage(m) : '<h1>Δεν βρέθηκε το μέλος</h1>'; },
   },
   tile: { order: 60, render: () => `<div class="dtile"><h3><a href="#/members">Μητρώο Μελών</a></h3><div class="big">${membersAll().filter((m) => m.active !== 0).length} ενεργά μέλη</div><small class="muted">${membersAll().filter(noContact).length} διαγραμμένα (⛔ χωρίς επικοινωνία)</small>
