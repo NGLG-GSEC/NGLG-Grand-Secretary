@@ -2,7 +2,7 @@
 // πρωτοκόλλου), επίσημο έντυπο, PDF/εκτύπωση, αποστολή, αρχείο. Κάθε Διάταγμα ενημερώνει αυτόματα την Επετηρίδα.
 import { db } from '../core/store.js';
 import { module, onSubmit, go, flash, bind, confirmDo, table, notice, toast } from '../core/app.js';
-import { esc, today, fmtDate, matches, sortBy, safeFileName, parseIso, MONTHS_GEN, download, splitEmails, EMAIL_RE } from '../core/util.js';
+import { esc, today, fmtDate, matches, sortBy, safeFileName, parseIso, MONTHS_GEN, download, splitEmails, EMAIL_RE, protocolGreenBtn } from '../core/util.js';
 import { makeDocx, letterBlocks } from '../core/docx.js';
 import { richHtml } from '../core/rich.js';
 import { docTitle, driveBox, saveDocToDrive } from '../core/drive.js';
@@ -116,7 +116,16 @@ async function decreeDocxBlob(d) {
     head: headOn(L.head) ? { ...L.head, lines: L.head.lines.map((l) => ({ ...l, hex: (HEAD_COLORS[l.color] || HEAD_COLORS.navy).slice(1).toUpperCase() })) } : null });
   return makeDocx(blocks, { title: d.subject, author: 'Μεγάλη Γραμματεία', anchors });
 }
-const nextDecreeNo = (tx) => Math.max(tx.all('decree_documents').reduce((m, d) => Math.max(m, Number(d.decree_no) || 0), 0) + 1, Number(db.setting('decree_first_no')) || 513);
+// Προτεινόμενος αριθμός: ο επόμενος του μεγαλύτερου (ή ο αρχικός των Ρυθμίσεων)· ο αριθμός αλλάζει ελεύθερα στη φόρμα και το επόμενο Διάταγμα έπεται του μεγαλύτερου
+export const suggestDecreeNo = (src = db) => Math.max(src.all('decree_documents').reduce((m, d) => Math.max(m, Number(d.decree_no) || 0), 0) + 1, Number(db.setting('decree_first_no')) || 513);
+// Αριθμός/έτος από τη φόρμα· έλεγχος ότι δεν υπάρχει άλλο Διάταγμα με τον ίδιο αριθμό στο ίδιο έτος
+function formDecreeNo(tx, data, d) {
+  const no = Number(String(data.decree_no ?? '').trim()), year = Number(String(data.decree_year ?? '').trim()) || (d ? d.decree_year : new Date().getFullYear());
+  if (!Number.isInteger(no) || no < 1) throw new Error('Ο αριθμός Διατάγματος πρέπει να είναι θετικός ακέραιος.');
+  const other = tx.find('decree_documents', (x) => Number(x.decree_no) === no && Number(x.decree_year) === year && (!d || x.id !== d.id));
+  if (other) throw new Error(`Υπάρχει ήδη Διάταγμα ${no}/${year}${other.matter ? ` (περί ${other.matter})` : ''}.`);
+  return { no, year };
+}
 
 // Έντυπο Διατάγματος· η σελίδα (φόντο/κεφαλίδα) από τη «Σχεδίαση σελίδας» του προτύπου του
 // opts: { layout, urls } για ζωντανή προβολή στη σχεδίαση πριν την αποθήκευση
@@ -204,7 +213,10 @@ function decreeForm(d, query = {}) {
   m.key = key;
   return { m, html: `<div class="dec-split"><div class="dec-formcol"><form id="df">
 <div class="card dec-kind"><label>Είδος Διατάγματος (Πρότυπο)</label><div class="dec-kinds">${Object.entries(DECREE_KINDS).map(([k, v]) => `<label class="chip"><input type="radio" name="template_key" value="${k}"${k === key ? ' checked' : ''}${d && d.id ? ' disabled' : ''}><span><b>${esc(v.name)}</b><small>${esc(v.short)}</small></span></label>`).join('')}</div>
-<small class="muted">${d && d.id ? 'Το είδος δεν αλλάζει σε εκδομένο Διάταγμα. ' : ''}Σελίδα (φόντο, κεφαλίδα): <a href="#/templates">Πρότυπα</a> → «🎨 Σχεδίαση σελίδας».</small>${d && d.id ? `<input type="hidden" name="template_key" value="${key}">` : ''}</div>
+<small class="muted">${d && d.id ? 'Το είδος δεν αλλάζει σε εκδομένο Διάταγμα. ' : ''}Σελίδα (φόντο, κεφαλίδα): <a href="#/templates">Πρότυπα</a> → «🎨 Σχεδίαση σελίδας».</small>
+<div class="dec-noedit"><label>Αρ. Διατάγματος</label><div class="dec-norow"><input name="decree_no" type="number" min="1" step="1" inputmode="numeric" value="${esc(d && d.id ? d.decree_no : suggestDecreeNo())}" required>
+<span>/</span><input name="decree_year" type="number" min="1900" max="2999" inputmode="numeric" value="${esc(d && d.id ? d.decree_year : new Date().getFullYear())}" required></div>
+<small class="muted">${d && d.id ? 'Μπορείτε να διορθώσετε τον αριθμό.' : 'Προτείνεται ο επόμενος· μπορείτε να τον αλλάξετε.'} Το επόμενο Διάταγμα θα προταθεί αμέσως μετά τον μεγαλύτερο αριθμό.</small></div>${d && d.id ? `<input type="hidden" name="template_key" value="${key}">` : ''}</div>
 <fieldset class="plainfs" id="generalPart"${gen ? '' : ' disabled hidden'}><div class="card"><div class="grid">
 <div class="full"><label>Περί</label><input name="g_matter" value="${esc(d && gen ? d.matter : '')}" placeholder="π.χ. ιδρύσεως της Στοάς «……»"></div>
 <div class="full"><label>Κείμενο Διατάγματος</label><textarea name="g_body" style="min-height:320px">${esc(gBody)}</textarea><small class="muted">Από το πρότυπο «ΓΕΝΙΚΟ ΔΙΑΤΑΓΜΑ». Πεδία: ${DECREE_PLACEHOLDERS.map(([k, h]) => `{${esc(k)}} = ${esc(h)}`).join(' · ')}. Γραμμές με ΚΕΦΑΛΑΙΑ τυπώνονται έντονα.</small></div>
@@ -274,8 +286,8 @@ function mountDecreeForm(el, d, m0) {
   const draft = () => {
     const data = Object.fromEntries(new FormData(f)), action = data.action, service = action === 'service_award';
     if (isGen()) {
-      const date = d ? d.decree_date : today(), year = d ? d.decree_year : new Date().getFullYear();
-      const no = d ? d.decree_no : Math.max(db.all('decree_documents').reduce((x, y) => Math.max(x, Number(y.decree_no) || 0), 0) + 1, Number(db.setting('decree_first_no')) || 513);
+      const date = d ? d.decree_date : today(), year = Number(data.decree_year) || (d ? d.decree_year : new Date().getFullYear());
+      const no = Number(data.decree_no) || (d ? d.decree_no : suggestDecreeNo());
       return { template_key: 'decree-general', decree_no: no, decree_year: year, decree_date: date, body: fillGeneral(data.g_body, { matter: String(data.g_matter || '').trim(), date, no: `${no}/${year}` }), rules: JSON.stringify({ action: 'general' }) };
     }
     const office = service ? '' : data.office || '', period = String(data.period || '').trim() || DOTS;
@@ -285,8 +297,8 @@ function mountDecreeForm(el, d, m0) {
       return { first_name: proper(q('.fn')) || DOTS, last_name: proper(q('.ln')) || DOTS, decree_first_name: proper(q('.dfn')), decree_last_name: proper(q('.dln')),
         honorific: q('.hon'), office: action === 'appoint' ? office || DOTS : '', rule: action === 'appoint' ? (DEC_MAP[office] || {}).rule || '' : '19' };
     });
-    const date = d ? d.decree_date : today(), year = d ? d.decree_year : new Date().getFullYear();
-    const no = d ? d.decree_no : Math.max(db.all('decree_documents').reduce((x, y) => Math.max(x, Number(y.decree_no) || 0), 0) + 1, Number(db.setting('decree_first_no')) || 513);
+    const date = d ? d.decree_date : today(), year = Number(data.decree_year) || (d ? d.decree_year : new Date().getFullYear());
+    const no = Number(data.decree_no) || (d ? d.decree_no : suggestDecreeNo());
     const { body } = decreeBody(matter, people.length ? people : [{ first_name: DOTS, last_name: DOTS }], date, action, action === 'award' ? office || DOTS : '', period);
     return { template_key: 'decree-appoint', decree_no: no, decree_year: year, decree_date: date, body, rules: JSON.stringify({ action }) };
   };
@@ -303,7 +315,7 @@ function mountDecreeForm(el, d, m0) {
       if (!src) throw new Error('Συμπληρώστε το κείμενο του Διατάγματος.');
       if (bad.length) throw new Error('Μη έγκυρο email: ' + bad.join(', '));
       const id = await db.save(d ? `Διάταγμα ${decreeNo(d)}: ενημέρωση` : `Νέο Γενικό Διάταγμα: ${matter}`, (tx) => {
-        const date = d ? d.decree_date : today(), no = d ? d.decree_no : nextDecreeNo(tx), year = d ? d.decree_year : new Date().getFullYear();
+        const date = d ? d.decree_date : today(), { no, year } = formDecreeNo(tx, data, d);
         const row = { template_key: 'decree-general', decree_no: no, decree_year: year, decree_date: date, subject: `ΔΙΑΤΑΓΜΑ υπ’ αριθμ. ${no}/${year} – ${matter}`, matter,
           body: fillGeneral(src, { matter, date, no: `${no}/${year}` }), body_src: src, rules: JSON.stringify({ action: 'general' }), appointments: '[]',
           recipient_name: String(data.g_to_name || '').trim(), recipient_email: emails.join(', ') };
@@ -332,7 +344,7 @@ function mountDecreeForm(el, d, m0) {
     });
     if (!people.length) throw new Error('Συμπληρώστε τουλάχιστον έναν Αδελφό.');
     const id = await db.save(d ? `Διάταγμα ${decreeNo(d)}: ενημέρωση` : `Νέο Διάταγμα: ${matter}`, (tx) => {
-      const date = d ? d.decree_date : today(), no = d ? d.decree_no : nextDecreeNo(tx), year = d ? d.decree_year : new Date().getFullYear();
+      const date = d ? d.decree_date : today(), { no, year } = formDecreeNo(tx, data, d);
       const { body, rules } = decreeBody(matter, people, date, action, action === 'award' ? office : '', period);
       const row = { template_key: 'decree-appoint', decree_no: no, decree_year: year, decree_date: date, subject: `ΔΙΑΤΑΓΜΑ υπ’ αριθμ. ${no}/${year} – ${matter}`, body, matter,
         rules: JSON.stringify({ rules, action, award_office: action === 'award' ? office : '', decree_office: action === 'appoint' ? office : '', period: action === 'appoint' ? period : '' }),
@@ -661,7 +673,7 @@ function archive({ query }) {
   if (query.to) xs = xs.filter((d) => (d.decree_date || '') <= query.to);
   return {
     title: 'Αρχείο Διαταγμάτων',
-    html: `<div class="hero"><div><h1>Αρχείο Διαταγμάτων</h1><p class="muted">Ανεξάρτητο από το Αρχείο Επιστολών.</p></div><a class="btn primary" href="#/decrees/new">+ Νέο Διάταγμα</a></div>${notice(query.msg)}
+    html: `<div class="hero"><div><h1>Αρχείο Διαταγμάτων</h1><p class="muted">Ανεξάρτητο από το Αρχείο Επιστολών.</p></div><div class="toolbar"><a class="btn primary" href="#/decrees/new">+ Νέο Διάταγμα</a>${protocolGreenBtn()}</div></div>${notice(query.msg)}
 <form class="filters" id="flt"><input name="q" value="${esc(query.q || '')}" placeholder="Αριθμός, περί, όνομα" autofocus><input type="date" name="from" value="${esc(query.from || '')}"><input type="date" name="to" value="${esc(query.to || '')}"><button>Αναζήτηση</button></form>
 ${table(['Αρ. Διατάγματος', 'Ημερομηνία', 'Περί', 'Αδελφοί', 'Ενέργειες'], xs.slice(0, 500).map((d) => [`<span class="official-number">${esc(decreeNo(d))}</span>`, esc(fmtDate(d.decree_date)), esc(d.matter), esc(d.recipient_name),
   `<a href="#/decrees/${d.id}">Άνοιγμα</a> · <a href="#/decrees/${d.id}/edit">Επεξεργασία</a> · <a href="#/decrees/new?copy_from=${d.id}">Νέο πάνω σε αυτό</a> <button type="button" class="btn small danger" data-act="del" data-id="${d.id}">🗑 Διαγραφή</button>`]), 'Δεν βρέθηκαν Διατάγματα.')}`,
@@ -680,8 +692,8 @@ module({
       let src = query.copy_from ? db.get('decree_documents', query.copy_from) : null;
       if (src) src = { ...src, id: undefined };
       const { m, html } = decreeForm(src, query);
-      const n = Math.max(db.all('decree_documents').reduce((x, d) => Math.max(x, Number(d.decree_no) || 0), 0) + 1, Number(db.setting('decree_first_no')) || 513);
-      return { title: 'Νέο Διάταγμα', html: `<h1>Νέο Διάταγμα</h1><div class="card decree-banner"><b>Επόμενος αριθμός Διατάγματος: <span class="official-number">${n}/${new Date().getFullYear()}</span></b> · Ξεχωριστό αρχείο — δεν δημιουργεί επιστολή.</div>${html}`,
+      const n = suggestDecreeNo();
+      return { title: 'Νέο Διάταγμα', html: `<div class="hero"><h1>Νέο Διάταγμα</h1><div class="toolbar">${protocolGreenBtn()}</div></div><div class="card decree-banner"><b>Προτεινόμενος αριθμός Διατάγματος: <span class="official-number">${n}/${new Date().getFullYear()}</span></b> (αλλάζει στο πεδίο «Αρ. Διατάγματος») · Ξεχωριστό αρχείο — δεν δημιουργεί επιστολή.</div>${html}`,
         mount: (el) => mountDecreeForm(el, null, m) };
     },
     '/decrees/:id': viewDecree,
@@ -690,7 +702,7 @@ module({
       const d = db.get('decree_documents', params.id);
       if (!d) return '<h1>Δεν βρέθηκε το Διάταγμα</h1>';
       const { m, html } = decreeForm(d);
-      return { title: 'Επεξεργασία Διατάγματος', html: `<h1>Επεξεργασία Διατάγματος <span class="official-number">${esc(decreeNo(d))}</span></h1>${html}`, mount: (el) => mountDecreeForm(el, d, m) };
+      return { title: 'Επεξεργασία Διατάγματος', html: `<div class="hero"><h1>Επεξεργασία Διατάγματος <span class="official-number">${esc(decreeNo(d))}</span></h1><div class="toolbar">${protocolGreenBtn()}</div></div>${html}`, mount: (el) => mountDecreeForm(el, d, m) };
     },
   },
   tile: { order: 20, render: () => {

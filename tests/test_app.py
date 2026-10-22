@@ -2665,3 +2665,33 @@ def test_decree_delete_from_archive_with_confirmation(app):
     st = app.page.evaluate("async () => { const {db} = await import('./core/store.js'); return [db.all('decree_documents').map((d) => d.decree_no), db.all('member_degrees_offices').filter((o) => o.decree_no === 901).length]; }")
     assert 902 in st[0] and 901 not in st[0] and st[1] == 0, st
     assert app.page.locator('tr', has_text='902/2026').locator('button:has-text("🗑 Διαγραφή")').count() == 1
+
+
+def test_decree_number_editable_and_protocol_button(app):
+    # Αρ. Διατάγματος: προτείνεται ο επόμενος, αλλάζει (νέο και επεξεργασία), έλεγχος διπλού· το επόμενο έπεται του μεγαλύτερου·
+    # πράσινο κουμπί «Πρωτ ΜΓραμμ Εξερχόμενα» στο Αρχείο, στο Νέο και στην Επεξεργασία
+    app.connect_local()
+    app.page.evaluate("""async () => { const {db} = await import('./core/store.js');
+      await db.save('x', (tx) => { tx.insert('decree_documents', { decree_no: 520, decree_year: 2026, decree_date: '2026-10-01', matter: 'υπάρχον', body: 'x', template_key: 'decree-general', rules: '{"action":"general"}' }); }); }""")
+    app.go('/decrees')
+    assert app.page.locator('a.btn.protogreen:has-text("Πρωτ ΜΓραμμ Εξερχόμενα")').count() == 1
+    app.go('/decrees/new?kind=decree-general')
+    assert app.page.locator('a.btn.protogreen').count() == 1 and app.page.input_value('[name=decree_no]') == '521'
+    app.page.fill('[name=g_matter]', 'δοκιμής αριθμού')
+    app.page.fill('[name=decree_no]', '520')
+    app.page.click('button:has-text("Έκδοση Διατάγματος")')
+    app.page.wait_for_selector('.toast.error')
+    assert 'Υπάρχει ήδη Διάταγμα 520/' in app.text('.toast.error')
+    app.page.fill('[name=decree_no]', '600')
+    app.page.wait_for_function("() => document.querySelector('#dprev').innerText.includes('600/')")
+    app.page.click('button:has-text("Έκδοση Διατάγματος")')
+    app.page.wait_for_url('**/#/decrees/2')
+    assert '600/' in app.text('.paper')
+    app.go('/decrees/2/edit')
+    assert app.page.locator('a.btn.protogreen').count() == 1 and app.page.input_value('[name=decree_no]') == '600'
+    app.page.fill('[name=decree_no]', '610')
+    app.page.click('button:has-text("Αποθήκευση Διατάγματος")')
+    app.page.wait_for_url('**/#/decrees/2')
+    assert app.page.evaluate("async () => (await import('./core/store.js')).db.get('decree_documents', 2).decree_no") == 610
+    app.go('/decrees/new')
+    assert app.page.input_value('[name=decree_no]') == '611'  # το επόμενο έπεται του μεγαλύτερου

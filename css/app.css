@@ -464,3 +464,11 @@ input[type=file]{max-width:100%;min-width:0}
 .mc-cta-btn small{font-weight:400;color:#7a5a10;font-size:.8em}
 .mc-cta-btn:hover{background:#f6ebcf}
 #mcMail{margin-top:18px}
+/* Πράσινο κουμπί «Πρωτ ΜΓραμμ Εξερχόμενα» */
+.btn.protogreen{background:#15803d;border-color:#15803d;color:#fff;font-weight:700}
+.btn.protogreen:hover{background:#166534;border-color:#166534;color:#fff}
+/* Αρ. Διατάγματος (επεξεργάσιμος) */
+.dec-noedit{margin-top:12px}
+.dec-norow{display:flex;align-items:center;gap:8px;max-width:320px}
+.dec-norow input{width:auto;flex:1;min-width:0;font:700 1.1em/1.2 inherit}
+.dec-norow input[name=decree_year]{flex:.8}
