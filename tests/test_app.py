@@ -1742,7 +1742,7 @@ def test_decree_templates_general_decree_and_page_design(app):
     # τα δύο πρότυπα Διατάγματος στα Πρότυπα, όχι στη Νέα Επιστολή
     app.go('/templates')
     t = app.text()
-    assert 'ΓΕΝΙΚΟ ΔΙΑΤΑΓΜΑ' in t and 'ΔΙΑΤΑΓΜΑ ΔΙΟΡΙΣΜΟΥ ΜΑΞ' in t and '🎨 Σχεδίαση σελίδας' in t
+    assert all(n in t for n in ['ΓΕΝΙΚΟ ΔΙΑΤΑΓΜΑ', 'ΔΙΑΤΑΓΜΑ ΔΙΟΡΙΣΜΟΥ ΜΕΓΑΛΩΝ ΑΞΙΩΜΑΤΙΚΩΝ', 'ΔΙΑΤΑΓΜΑ ΕΠΑΡΧΙΑΚΟΥ / ΠΕΡΙΦΕΡΕΙΑΚΟΥ Μ.Δ. ΚΑΙ ΠΡΩΗΝ', 'ΔΙΑΤΑΓΜΑ ΤΑΞΕΩΣ ΜΕΓΑΛΟΥ ΔΙΔΑΣΚΑΛΟΥ', '🎨 Σχεδίαση σελίδας']), t
     app.go('/letters/new')
     assert 'ΓΕΝΙΚΟ ΔΙΑΤΑΓΜΑ' not in app.page.inner_text('#tplSel')
     # Γενικό Διάταγμα
@@ -2711,7 +2711,10 @@ def test_decree_updates_epeteirida_and_registry_title_with_confirmation(app):
     msgs = []
     app.page.on('dialog', lambda d: msgs.append(d.message))
     app.go('/decrees/new')
+    assert app.page.locator('#dOffice option', has_text='Επαρχιακός Μέγας Διδάσκαλος').count() == 0  # χωριστό πρότυπο
+    app.page.check('[name=template_key][value=decree-provincial]')
     assert app.page.locator('#dOffice option', has_text='Επαρχιακός Μέγας Διδάσκαλος').count() == 1  # Καν. 63
+    app.page.check('[name=template_key][value=decree-appoint]')
     app.page.select_option('#dOffice', 'Μέγας Γραμματεύς')
     app.pick('.registry-search', 'Παπαδ')
     app.click('Έκδοση Διατάγματος')
@@ -2793,3 +2796,25 @@ def test_master_mason_diploma_template_issue_and_design(app):
     assert lay['boxes'] == {'dno': {'x': 90}}, lay
     app.go(f'/members/diploma?id={mid}')
     assert 'left:90mm' in app.page.get_attribute('[data-box=dno]', 'style')
+
+
+def test_decree_template_follows_action_and_office(app):
+    # Τρία πρότυπα προσώπων: Μεγάλοι Αξιωματικοί · Επαρχιακός/Περιφερειακός Μ.Δ. και Πρώην · Τάξις Μ.Δ. — το πρότυπο ακολουθεί πράξη και αξίωμα
+    app.connect_local()
+    add_member(app)
+    app.go('/decrees/new')
+    app.page.select_option('#dAction', 'award')
+    assert app.page.is_checked('[name=template_key][value=decree-provincial]')
+    app.page.select_option('#dAction', 'service_award')
+    assert app.page.is_checked('[name=template_key][value=decree-service]')
+    app.page.check('[name=template_key][value=decree-provincial]')
+    assert app.page.input_value('#dAction') == 'appoint'
+    opts = app.page.eval_on_selector_all('#dOffice option', 'os => os.map((o) => o.value).filter(Boolean)')
+    assert opts == ['Επαρχιακός Μέγας Διδάσκαλος', 'Περιφερειακός Μέγας Διδάσκαλος'], opts
+    app.page.select_option('#dOffice', 'Περιφερειακός Μέγας Διδάσκαλος')
+    app.pick('.registry-search', 'Παπαδ')
+    app.click('Έκδοση Διατάγματος')
+    app.page.wait_for_url('**/#/decrees/1')
+    d = app.page.evaluate("async () => (await import('./core/store.js')).db.get('decree_documents', 1)")
+    assert d['template_key'] == 'decree-provincial' and 'ΠΕΡΙΦΕΡΕΙΑΚΟΝ ΜΕΓΑΝ ΔΙΔΑΣΚΑΛΟΝ' in d['body'], d
+    assert 'ΔΙΑΤΑΓΜΑ ΕΠΑΡΧΙΑΚΟΥ / ΠΕΡΙΦΕΡΕΙΑΚΟΥ' in app.text('main')

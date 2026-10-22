@@ -9,7 +9,7 @@ import { docTitle, driveBox, saveDocToDrive } from '../core/drive.js';
 import { letterhead, IMG, printPaper, pageLayers, layoutTop, customHead, defaultHead, headOn, HEAD_COLORS } from '../core/paper.js';
 import { mailButtons, senderBanner } from '../core/mail.js';
 import { attachPicker, memberItems, contactItems } from '../core/pickers.js';
-import { DECREE_KINDS, DECREE_PLACEHOLDERS, GENERAL_BODY, decreeKey, decreeTemplate, layoutOf } from './decree-templates.js';
+import { DECREE_KINDS, DECREE_PLACEHOLDERS, GENERAL_BODY, PROVINCIAL_OFFICES, keyFor, decreeKey, decreeTemplate, layoutOf } from './decree-templates.js';
 import { planDecreeSync, planChanges, planText, applyDecreeSync, revertDecreeSync, syncInfo, EP_LABEL } from './decree-sync.js';
 import { gmName } from './letter-fill.js';
 import { nextProtocol, askProtocol, claimProtocol } from './protocol.js';
@@ -182,7 +182,8 @@ function syncOffices(tx, d) {
 }
 
 // ---------------------------------------------------------------- φόρμα
-const officeOpts = (sel) => '<option value="">— Επιλογή ενεργού αξιώματος —</option>' + DEC_OFFICES.map(([p, o, r]) => `<option value="${esc(o)}"${o === sel ? ' selected' : ''}>${esc(o)} — Καν. ${r}${p == null ? ' — χωρίς αριθμό προβαδίσματος' : ''}</option>`).join('');
+// Αξιώματα ανά πρότυπο: «Επαρχιακού/Περιφερειακού» μόνο αυτά τα δύο, «Μεγάλων Αξιωματικών» όλα τα υπόλοιπα
+const officeOpts = (sel, key = 'decree-appoint') => '<option value="">— Επιλογή ενεργού αξιώματος —</option>' + DEC_OFFICES.filter(([, o]) => PROVINCIAL_OFFICES.includes(o) === (key === 'decree-provincial')).map(([p, o, r]) => `<option value="${esc(o)}"${o === sel ? ' selected' : ''}>${esc(o)} — Καν. ${r}${p == null ? ' — χωρίς αριθμό προβαδίσματος' : ''}</option>`).join('');
 const awardOpts = (sel) => '<option value="">— Επιλογή πρώην Μεγάλου Αξιωματικού —</option>' + AWARD_OFFICES.map(([o]) => `<option value="${esc(o)}"${o === sel ? ' selected' : ''}>${esc('Πρώην ' + o)}</option>`).join('');
 function personRow(a = {}) {
   let fn = a.first_name || '', ln = a.last_name || '';
@@ -216,7 +217,7 @@ function decreeForm(d, query = {}) {
   const m = d ? meta(d) : { action: ['appoint', 'award', 'service_award'].includes(query.action) ? query.action : 'appoint', award_office: '', decree_office: '', period: `${new Date().getFullYear()} - ${new Date().getFullYear() + 1}` };
   const list = d ? apps(d) : [];
   if (m.action === 'appoint' && !m.decree_office && list.length) m.decree_office = list[0].office || '';
-  const key = d ? decreeKey(d) : DECREE_KINDS[query.kind] ? query.kind : 'decree-appoint', gen = key === 'decree-general';
+  const key = d ? decreeKey(d) : DECREE_KINDS[query.kind] ? query.kind : keyFor(m.action), gen = key === 'decree-general';
   const gBody = d && gen ? d.body_src || d.body : decreeTemplate('decree-general').body || GENERAL_BODY;
   m.key = key;
   return { m, html: `<div class="dec-split"><div class="dec-formcol"><form id="df">
@@ -250,10 +251,15 @@ function decreeForm(d, query = {}) {
 function mountDecreeForm(el, d, m0) {
   const f = el.querySelector('#df'), sel = el.querySelector('#dOffice'), act = el.querySelector('#dAction');
   let mode = null;
+  const kindNow = () => (f.querySelector('[name=template_key]:checked') || f.querySelector('[name=template_key][type=hidden]') || {}).value || m0.key;
+  // Πράξη → πρότυπο: αν η πράξη δεν ανήκει στο επιλεγμένο πρότυπο, επιλέγεται αυτόματα το σωστό
+  const setKind = (k) => { const r = f.querySelector(`[name=template_key][value="${k}"]`); if (r && r.type === 'radio') r.checked = true; const h = f.querySelector('[name=template_key][type=hidden]'); if (h) h.value = k; };
   const sync = () => {
     const a = act.value, service = a === 'service_award', award = a === 'award';
-    if (mode !== a && !service) { sel.innerHTML = award ? awardOpts(mode === null ? m0.award_office : '') : officeOpts(mode === null ? m0.decree_office : ''); }
-    mode = a;
+    if (kindNow() !== 'decree-general' && !DECREE_KINDS[kindNow()].actions.includes(a)) setKind(keyFor(a));
+    const k = kindNow(), mk = `${a}|${k}`;
+    if (mode !== mk && !service) { sel.innerHTML = award ? awardOpts(mode === null ? m0.award_office : '') : officeOpts(mode === null ? m0.decree_office : '', k === 'decree-general' ? 'decree-appoint' : k); }
+    mode = mk;
     el.querySelector('#officeCard').hidden = service;
     el.querySelector('#officeLabel').textContent = award ? 'Πρώην Μέγας Αξιωματικός' : 'Ενεργός Μέγας Αξιωματικός';
     el.querySelector('#periodCard').hidden = a !== 'appoint';
@@ -275,10 +281,12 @@ function mountDecreeForm(el, d, m0) {
   act.addEventListener('change', sync); sel.addEventListener('change', syncHon);
   sync();
   // Είδος Διατάγματος: Γενικό (ελεύθερο κείμενο) ή Διορισμού ΜΑΞ (πρόσωπα)
-  const isGen = () => (f.querySelector('[name=template_key]:checked') || f.querySelector('[name=template_key][type=hidden]') || {}).value === 'decree-general';
+  const isGen = () => kindNow() === 'decree-general';
+  // Είδος (πρότυπο) → επιτρεπτές πράξεις και αξιώματα
   const syncKind = () => {
     const g = isGen(), gp = el.querySelector('#generalPart'), ap = el.querySelector('#appointPart');
     gp.disabled = gp.hidden = !g; ap.disabled = ap.hidden = g; el.querySelector('[data-act=addPerson]').hidden = g;
+    if (!g) { const allowed = DECREE_KINDS[kindNow()].actions; if (!allowed.includes(act.value)) act.value = allowed[0]; sync(); }
   };
   f.querySelectorAll('[name=template_key]').forEach((r) => r.addEventListener('change', syncKind));
   syncKind();
@@ -309,7 +317,7 @@ function mountDecreeForm(el, d, m0) {
     const date = data.decree_date || (d ? d.decree_date : today()), year = Number(data.decree_year) || (d ? d.decree_year : new Date().getFullYear());
     const no = Number(data.decree_no) || (d ? d.decree_no : suggestDecreeNo());
     const { body } = decreeBody(matter, people.length ? people : [{ first_name: DOTS, last_name: DOTS }], date, action, action === 'award' ? office || DOTS : '', period);
-    return { template_key: 'decree-appoint', decree_no: no, decree_year: year, decree_date: date, body, rules: JSON.stringify({ action }) };
+    return { template_key: keyFor(action, office), decree_no: no, decree_year: year, decree_date: date, body, rules: JSON.stringify({ action }) };
   };
   // αλλαγή ημερομηνίας → το έτος του αριθμού ακολουθεί (αλλάζει και χωριστά)
   const dIn = f.querySelector('[name=decree_date]'), yIn = f.querySelector('[name=decree_year]');
@@ -363,7 +371,7 @@ function mountDecreeForm(el, d, m0) {
       if (d && doSync) revertDecreeSync(tx, d); // οι προηγούμενες αλλαγές του ίδιου Διατάγματος, πριν από τις νέες
       const date = formDecreeDate(data, d), { no, year } = formDecreeNo(tx, data, d);
       const { body, rules } = decreeBody(matter, people, date, action, action === 'award' ? office : '', period);
-      const row = { template_key: 'decree-appoint', decree_no: no, decree_year: year, decree_date: date, subject: `ΔΙΑΤΑΓΜΑ υπ’ αριθμ. ${no}/${year} – ${matter}`, body, matter,
+      const row = { template_key: keyFor(action, office), decree_no: no, decree_year: year, decree_date: date, subject: `ΔΙΑΤΑΓΜΑ υπ’ αριθμ. ${no}/${year} – ${matter}`, body, matter,
         rules: JSON.stringify({ rules, action, award_office: action === 'award' ? office : '', decree_office: action === 'appoint' ? office : '', period: action === 'appoint' ? period : '' }),
         appointments: JSON.stringify(people), recipient_name: people.map((a) => a.full_name).join(', '), recipient_email: [...new Set(people.map((a) => a.email.toLowerCase()))].join(', ') };
       let r;
@@ -437,8 +445,9 @@ export const APPOINT_MATTER = 'Διορισμού Μεγάλων Αξιωματ�
 function sampleDecree(key) {
   const date = today(), year = new Date().getFullYear(), no = Math.max(db.all('decree_documents').reduce((x, y) => Math.max(x, Number(y.decree_no) || 0), 0) + 1, Number(db.setting('decree_first_no')) || 513);
   if (key === 'decree-general') return { template_key: key, decree_no: no, decree_year: year, decree_date: date, rules: '{"action":"general"}', body: fillGeneral(decreeTemplate(key).body || GENERAL_BODY, { matter: 'ιδρύσεως της Στοάς «Δείγμα»', date, no: `${no}/${year}` }) };
-  const { body } = decreeBody(APPOINT_MATTER, [{ first_name: 'Ιωάννης', last_name: 'Παπαδόπουλος', office: 'Μέγας Γραμματεύς', honorific: 'Πσεβ. Αδ.', rule: (DEC_MAP['Μέγας Γραμματεύς'] || {}).rule || '' }], date, 'appoint', '', `${year} - ${year + 1}`);
-  return { template_key: key, decree_no: no, decree_year: year, decree_date: date, rules: '{"action":"appoint"}', body };
+  const office = key === 'decree-provincial' ? PROVINCIAL_OFFICES[0] : 'Μέγας Γραμματεύς', action = key === 'decree-service' ? 'service_award' : 'appoint';
+  const { body } = decreeBody(action === 'appoint' ? APPOINT_MATTER : SERVICE_MATTER, [{ first_name: 'Ιωάννης', last_name: 'Παπαδόπουλος', office, honorific: (OFFICE_FORMS[office] || [])[2] || 'Πσεβ. Αδ.', rule: (DEC_MAP[office] || {}).rule || '' }], date, action, '', `${year} - ${year + 1}`);
+  return { template_key: key, decree_no: no, decree_year: year, decree_date: date, rules: JSON.stringify({ action, decree_office: office }), body };
 }
 function designPage({ params }) {
   const t = db.get('letter_templates', params.id);
