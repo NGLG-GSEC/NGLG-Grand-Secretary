@@ -2647,3 +2647,21 @@ def test_member_card_in_registry(app):
     app.pick('#mcFind', 'Παπαδ')
     app.page.wait_for_selector('.paper.member-card')
     assert 'Παπαδόπουλος' in app.text('.paper.member-card')
+
+
+def test_decree_delete_from_archive_with_confirmation(app):
+    # Αρχείο Διαταγμάτων: «🗑 Διαγραφή» σε κάθε γραμμή· επαλήθευση με τα στοιχεία του Διατάγματος και διαγραφή (και των αξιωμάτων του)
+    app.connect_local()
+    app.page.evaluate("""async () => { const {db} = await import('./core/store.js');
+      await db.save('x', (tx) => { const d = tx.insert('decree_documents', { decree_no: 901, decree_year: 2026, decree_date: '2026-10-01', matter: 'δοκιμής διαγραφής', recipient_name: 'Δοκιμαστής Αδελφός', body: 'x', template_key: 'decree-appoint' });
+        tx.insert('decree_documents', { decree_no: 902, decree_year: 2026, decree_date: '2026-10-02', matter: 'παραμένει', body: 'y', template_key: 'decree-appoint' });
+        tx.insert('member_degrees_offices', { member_id: 1, record_type: 'appoint', office: 'Μέγας Ξιφοφόρος', decree_id: d.id, decree_no: 901, decree_year: 2026, is_current: 1 }); }); }""")
+    msgs = []
+    app.page.on('dialog', lambda d: msgs.append(d.message))
+    app.go('/decrees')
+    app.page.locator('tr', has_text='901/2026').locator('button:has-text("🗑 Διαγραφή")').click()
+    app.page.wait_for_function("() => !document.querySelector('main').innerText.includes('901/2026')")
+    assert msgs and 'Οριστική διαγραφή του Διατάγματος 901/2026 «δοκιμής διαγραφής»' in msgs[0] and '1 εγγραφές αξιωμάτων' in msgs[0], msgs
+    st = app.page.evaluate("async () => { const {db} = await import('./core/store.js'); return [db.all('decree_documents').map((d) => d.decree_no), db.all('member_degrees_offices').filter((o) => o.decree_no === 901).length]; }")
+    assert 902 in st[0] and 901 not in st[0] and st[1] == 0, st
+    assert app.page.locator('tr', has_text='902/2026').locator('button:has-text("🗑 Διαγραφή")').count() == 1

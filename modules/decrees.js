@@ -378,11 +378,7 @@ function viewDecree({ params }) {
           await db.save(`Διάταγμα ${decreeNo(d)}: αρ. πρωτοκόλλου ${n}`, (tx) => { claimProtocol(tx, n); tx.update('decree_documents', d.id, { protocol_seq: n, protocol_no: String(n) }); });
           flash(`Ο αριθμός πρωτοκόλλου άλλαξε σε ${n}.`); go(`/decrees/${d.id}`);
         },
-        async del() {
-          if (!confirmDo('Οριστική διαγραφή του Διατάγματος;')) return;
-          await db.save(`Διαγραφή Διατάγματος ${decreeNo(d)}`, (tx) => { tx.remove('member_degrees_offices', (o) => o.decree_id === d.id); tx.remove('decree_documents', d.id); });
-          flash('Το Διάταγμα διαγράφηκε.'); go('/decrees');
-        },
+        async del() { if (await deleteDecree(d)) go('/decrees'); },
       });
     },
   };
@@ -647,6 +643,17 @@ ${k === 'bg' ? '<label>Διαφάνεια<input type="range" min="0.05" max="1" 
   };
 }
 
+// Οριστική διαγραφή Διατάγματος, μετά από επαλήθευση· σβήνονται και οι εγγραφές του στην Επετηρίδα των Διαταγμάτων (αξιώματα μελών)
+export async function deleteDecree(d) {
+  const offices = db.all('member_degrees_offices').filter((o) => o.decree_id === d.id).length;
+  const msg = [`Οριστική διαγραφή του Διατάγματος ${decreeNo(d)}${d.matter ? ` «${d.matter}»` : ''};`, d.recipient_name ? `Αδελφοί: ${d.recipient_name}` : '',
+    d.protocol_seq ? `Αρ. Πρωτ.: ${d.protocol_seq} (μένει στο Βιβλίο Πρωτοκόλλου)` : '', offices ? `Θα αφαιρεθούν και ${offices} εγγραφές αξιωμάτων που έγραψε στα μέλη.` : '', '', 'Η διαγραφή δεν αναιρείται.'].filter((x, i) => x || i > 3).join('\n');
+  if (!confirmDo(msg)) return false;
+  await db.save(`Διαγραφή Διατάγματος ${decreeNo(d)}`, (tx) => { tx.remove('member_degrees_offices', (o) => o.decree_id === d.id); tx.remove('decree_documents', d.id); });
+  flash(`Το Διάταγμα ${decreeNo(d)} διαγράφηκε.`);
+  return true;
+}
+
 function archive({ query }) {
   let xs = sortBy(db.all('decree_documents'), (d) => -(d.decree_year || 0), (d) => -(d.decree_no || 0));
   if (query.q) xs = xs.filter((d) => (/^\d+$/.test(query.q) && String(d.decree_no) === query.q) || matches(query.q, d.subject, d.matter, d.recipient_name, d.recipient_email));
@@ -657,8 +664,11 @@ function archive({ query }) {
     html: `<div class="hero"><div><h1>Αρχείο Διαταγμάτων</h1><p class="muted">Ανεξάρτητο από το Αρχείο Επιστολών.</p></div><a class="btn primary" href="#/decrees/new">+ Νέο Διάταγμα</a></div>${notice(query.msg)}
 <form class="filters" id="flt"><input name="q" value="${esc(query.q || '')}" placeholder="Αριθμός, περί, όνομα" autofocus><input type="date" name="from" value="${esc(query.from || '')}"><input type="date" name="to" value="${esc(query.to || '')}"><button>Αναζήτηση</button></form>
 ${table(['Αρ. Διατάγματος', 'Ημερομηνία', 'Περί', 'Αδελφοί', 'Ενέργειες'], xs.slice(0, 500).map((d) => [`<span class="official-number">${esc(decreeNo(d))}</span>`, esc(fmtDate(d.decree_date)), esc(d.matter), esc(d.recipient_name),
-  `<a href="#/decrees/${d.id}">Άνοιγμα</a> · <a href="#/decrees/${d.id}/edit">Επεξεργασία</a> · <a href="#/decrees/new?copy_from=${d.id}">Νέο πάνω σε αυτό</a>`]), 'Δεν βρέθηκαν Διατάγματα.')}`,
-    mount(el) { onSubmit(el.querySelector('#flt'), (q) => go('/decrees', q)); },
+  `<a href="#/decrees/${d.id}">Άνοιγμα</a> · <a href="#/decrees/${d.id}/edit">Επεξεργασία</a> · <a href="#/decrees/new?copy_from=${d.id}">Νέο πάνω σε αυτό</a> <button type="button" class="btn small danger" data-act="del" data-id="${d.id}">🗑 Διαγραφή</button>`]), 'Δεν βρέθηκαν Διατάγματα.')}`,
+    mount(el) {
+      onSubmit(el.querySelector('#flt'), (q) => go('/decrees', q));
+      bind(el, { async del(x) { const d = db.get('decree_documents', Number(x.id)); if (d && await deleteDecree(d)) go('/decrees', query); } });
+    },
   };
 }
 
