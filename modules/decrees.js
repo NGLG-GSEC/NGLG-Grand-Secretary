@@ -10,6 +10,7 @@ import { letterhead, IMG, printPaper, pageLayers, layoutTop, customHead, default
 import { mailButtons, senderBanner } from '../core/mail.js';
 import { attachPicker, memberItems, contactItems } from '../core/pickers.js';
 import { DECREE_KINDS, DECREE_PLACEHOLDERS, GENERAL_BODY, decreeKey, decreeTemplate, layoutOf } from './decree-templates.js';
+import { planDecreeSync, planChanges, planText, applyDecreeSync, revertDecreeSync, syncInfo } from './decree-sync.js';
 import { gmName } from './letter-fill.js';
 import { nextProtocol, askProtocol, claimProtocol } from './protocol.js';
 import { findMember, insertMember } from './members.js';
@@ -354,7 +355,12 @@ function mountDecreeForm(el, d, m0) {
         honorific: service ? '' : hon, former_office: service ? '' : q('.former'), email: em, mobile: mo, office: action === 'appoint' ? office : '', rule: action === 'appoint' ? DEC_MAP[office].rule : '19' };
     });
     if (!people.length) throw new Error('Συμπληρώστε τουλάχιστον έναν Αδελφό.');
+    // Διάταγμα → Επετηρίδα → Μητρώο: ερώτηση πριν από την αυτόματη ενημέρωση, με ό,τι θα αλλάξει
+    const plan = planDecreeSync({ action, office, award_office: office, decree_no: Number(data.decree_no), decree_year: Number(data.decree_year) }, people, db, d ? d.id : null);
+    const doSync = planChanges(plan).length ? confirmDo(`Με ${d ? 'την αποθήκευση' : 'την έκδοση'} του Διατάγματος θα ενημερωθούν αυτόματα η ΕΠΕΤΗΡΙΔΑ και ο Τίτλος στο ΜΗΤΡΩΟ:\n\n${planText(plan)}\n\nOK = ενημέρωση τώρα · Άκυρο = χωρίς ενημέρωση (γίνεται και αργότερα από τη σελίδα του Διατάγματος)`) : false;
+    let synced = [];
     const id = await db.save(d ? `Διάταγμα ${decreeNo(d)}: ενημέρωση` : `Νέο Διάταγμα: ${matter}`, (tx) => {
+      if (d && doSync) revertDecreeSync(tx, d); // οι προηγούμενες αλλαγές του ίδιου Διατάγματος, πριν από τις νέες
       const date = formDecreeDate(data, d), { no, year } = formDecreeNo(tx, data, d);
       const { body, rules } = decreeBody(matter, people, date, action, action === 'award' ? office : '', period);
       const row = { template_key: 'decree-appoint', decree_no: no, decree_year: year, decree_date: date, subject: `ΔΙΑΤΑΓΜΑ υπ’ αριθμ. ${no}/${year} – ${matter}`, body, matter,
@@ -364,8 +370,10 @@ function mountDecreeForm(el, d, m0) {
       if (d) r = tx.update('decree_documents', d.id, row);
       else r = tx.insert('decree_documents', { ...row, status: 'draft' }); // αρ. πρωτοκόλλου μόνο όταν οριστεί «Έτοιμο»
       if (service) tx.remove('member_degrees_offices', (o) => o.decree_id === r.id); else syncOffices(tx, r);
+      if (doSync) synced = applyDecreeSync(tx, tx.get('decree_documents', r.id));
       return r.id;
     });
+    if (synced.length) flash(`${d ? 'Το Διάταγμα αποθηκεύτηκε' : 'Το Διάταγμα εκδόθηκε'}. ✓ Ενημερώθηκαν Επετηρίδα και Μητρώο για: ${synced.map((c) => c.name).join(', ')} — δείτε «Επετηρίδα & Μητρώο» στη σελίδα του Διατάγματος.`);
     flash(d ? 'Το Διάταγμα αποθηκεύτηκε.' : 'Το Διάταγμα εκδόθηκε.'); go(`/decrees/${id}`);
   });
 }
@@ -383,12 +391,26 @@ function viewDecree({ params }) {
 <p class="send-help">Αρ. Πρωτ.: <b>${esc(d.protocol_no || 'θα δοθεί όταν οριστεί «Έτοιμο»')}</b>${d.protocol_seq ? ' <button class="btn small" data-act="protocol">✏ Αλλαγή αρ. πρωτοκόλλου</button>' : ''} · Κοινοποίηση: ${esc(db.setting('decree_cc'))} (αλλαγή στις Ρυθμίσεις).</p>${driveBox(d, fileName(d))}
 <div class="toolbar"><button class="btn" data-act="word">⬇ Word</button></div></section>
 <div class="toolbar noprint"><a class="btn" href="#/decrees/${d.id}/edit">Επεξεργασία Διατάγματος</a><a class="btn" href="#/decrees/new?copy_from=${d.id}">Νέο πάνω σε αυτό</a><a class="btn" href="#/decrees">Αρχείο Διαταγμάτων</a>
-<button class="btn danger" data-act="del">Διαγραφή</button></div><div class="print-area">${decreePaper(d)}</div>`,
+<button class="btn danger" data-act="del">Διαγραφή</button></div>${syncCard(d)}<div class="print-area">${decreePaper(d)}</div>`,
     mount(el) {
       bind(el, {
         pdf: () => printPaper(fileName(d)),
         async word() { download(fileName(d) + '.docx', await decreeDocxBlob(d)); },
         async drive() { await saveDocToDrive('decree_documents', d.id, fileName(d), null, el.querySelector('.print-area .paper')); flash('Αποθηκεύτηκε στο Drive (Word + PDF).'); go(`/decrees/${d.id}`); },
+        async sync() {
+          const plan = planDecreeSync(d, apps(d), db, d.id);
+          if (!planChanges(plan).length) { toast('Η Επετηρίδα και το Μητρώο είναι ήδη ενημερωμένα για αυτό το Διάταγμα.'); return; }
+          if (!confirmDo(`Ενημέρωση ΕΠΕΤΗΡΙΔΑΣ και ΜΗΤΡΩΟΥ από το Διάταγμα ${decreeNo(d)}:\n\n${planText(plan)}\n\nΣυνέχεια;`)) return;
+          let done = [];
+          await db.save(`Διάταγμα ${decreeNo(d)}: ενημέρωση Επετηρίδας`, (tx) => { revertDecreeSync(tx, d); done = applyDecreeSync(tx, tx.get('decree_documents', d.id)); });
+          flash(done.length ? `✓ Ενημερώθηκαν Επετηρίδα και Μητρώο για: ${done.map((c) => c.name).join(', ')}.` : 'Δεν χρειάστηκε αλλαγή — η Επετηρίδα ήταν ήδη ενημερωμένη.'); go(`/decrees/${d.id}`);
+        },
+        async unsync() {
+          if (!confirmDo(`Αναίρεση των αλλαγών που έκανε το Διάταγμα ${decreeNo(d)} στην Επετηρίδα (μόνο όσες δεν άλλαξαν στο μεταξύ);`)) return;
+          let n = 0;
+          await db.save(`Διάταγμα ${decreeNo(d)}: αναίρεση ενημέρωσης Επετηρίδας`, (tx) => { n = revertDecreeSync(tx, d); });
+          flash(`Αναιρέθηκαν ${n} αλλαγές στην Επετηρίδα.`); go(`/decrees/${d.id}`);
+        },
         async ready() {
           const manual = d.protocol_seq ? 0 : askProtocol({ table: 'decree_documents', id: d.id });
           if (manual === null) return;
@@ -666,18 +688,34 @@ ${k === 'bg' ? '<label>Διαφάνεια<input type="range" min="0.05" max="1" 
   };
 }
 
+// Κάρτα «Επετηρίδα & Μητρώο» στη σελίδα του Διατάγματος: τι ενημερώθηκε (υπενθύμιση) ή τι εκκρεμεί, με ενέργεια
+function syncCard(d) {
+  if (decreeKey(d) === 'decree-general') return '';
+  const s = syncInfo(d), pend = planChanges(planDecreeSync(d, apps(d), db, d.id));
+  const list = (t) => `<pre class="sync-list">${esc(t)}</pre>`;
+  if (s) return `<section class="card sync-card ok noprint"><h3>✓ Επετηρίδα & Μητρώο ενημερώθηκαν από αυτό το Διάταγμα</h3><p class="muted">${esc(fmtDate(String(s.at).slice(0, 10)))} · Ο Τίτλος των μελών στο Μητρώο ακολουθεί την Επετηρίδα.</p>${list(s.text || '')}
+${pend.length ? `<p class="vwarn">⚠ Από τότε κάτι άλλαξε — χρειάζεται νέα ενημέρωση:</p>${list(planText(pend))}` : ''}
+<div class="toolbar"><a class="btn" href="#/epeteirida/pinakas">📜 Άνοιγμα Επετηρίδας</a>${pend.length ? '<button class="btn primary" data-act="sync">🔄 Νέα ενημέρωση</button>' : ''}<button class="btn small" data-act="unsync">↶ Αναίρεση</button></div></section>`;
+  return `<section class="card sync-card ${pend.length ? 'warn' : ''} noprint"><h3>${pend.length ? '⚠ Η Επετηρίδα και το Μητρώο ΔΕΝ έχουν ενημερωθεί από αυτό το Διάταγμα' : 'Επετηρίδα & Μητρώο'}</h3>
+${pend.length ? `${list(planText(pend))}<div class="toolbar"><button class="btn primary" data-act="sync">🔄 Ενημέρωση Επετηρίδας & Μητρώου</button></div>` : '<p class="muted">Η Επετηρίδα είναι ήδη σύμφωνη με αυτό το Διάταγμα.</p>'}</section>`;
+}
+// Διατάγματα (διορισμού/απονομής/ΤΜΔ) που δεν έχουν περάσει ακόμη στην Επετηρίδα — για υπενθύμιση
+export const pendingDecreeSync = (year = new Date().getFullYear()) => db.all('decree_documents')
+  .filter((d) => decreeKey(d) !== 'decree-general' && !syncInfo(d) && Number(d.decree_year) >= year - 1 && planChanges(planDecreeSync(d, apps(d), db, d.id)).length);
+
 // Οριστική διαγραφή Διατάγματος, μετά από επαλήθευση· σβήνονται και οι εγγραφές του στην Επετηρίδα των Διαταγμάτων (αξιώματα μελών)
 export async function deleteDecree(d) {
   const offices = db.all('member_degrees_offices').filter((o) => o.decree_id === d.id).length;
   const msg = [`Οριστική διαγραφή του Διατάγματος ${decreeNo(d)}${d.matter ? ` «${d.matter}»` : ''};`, d.recipient_name ? `Αδελφοί: ${d.recipient_name}` : '',
-    d.protocol_seq ? `Αρ. Πρωτ.: ${d.protocol_seq} (μένει στο Βιβλίο Πρωτοκόλλου)` : '', offices ? `Θα αφαιρεθούν και ${offices} εγγραφές αξιωμάτων που έγραψε στα μέλη.` : '', '', 'Η διαγραφή δεν αναιρείται.'].filter((x, i) => x || i > 3).join('\n');
+    d.protocol_seq ? `Αρ. Πρωτ.: ${d.protocol_seq} (μένει στο Βιβλίο Πρωτοκόλλου)` : '', offices ? `Θα αφαιρεθούν και ${offices} εγγραφές αξιωμάτων που έγραψε στα μέλη.` : '', syncInfo(d) ? 'Θα αναιρεθούν και οι αλλαγές που έκανε στην Επετηρίδα (τίτλοι στο Μητρώο).' : '', '', 'Η διαγραφή δεν αναιρείται.'].filter((x, i, a) => x || i === a.length - 2).join('\n');
   if (!confirmDo(msg)) return false;
-  await db.save(`Διαγραφή Διατάγματος ${decreeNo(d)}`, (tx) => { tx.remove('member_degrees_offices', (o) => o.decree_id === d.id); tx.remove('decree_documents', d.id); });
+  await db.save(`Διαγραφή Διατάγματος ${decreeNo(d)}`, (tx) => { revertDecreeSync(tx, d); tx.remove('member_degrees_offices', (o) => o.decree_id === d.id); tx.remove('decree_documents', d.id); });
   flash(`Το Διάταγμα ${decreeNo(d)} διαγράφηκε.`);
   return true;
 }
 
 function archive({ query }) {
+  const pend = pendingDecreeSync(), pendIds = new Set(pend.map((d) => d.id));
   let xs = sortBy(db.all('decree_documents'), (d) => -(d.decree_year || 0), (d) => -(d.decree_no || 0));
   if (query.q) xs = xs.filter((d) => (/^\d+$/.test(query.q) && String(d.decree_no) === query.q) || matches(query.q, d.subject, d.matter, d.recipient_name, d.recipient_email));
   if (query.from) xs = xs.filter((d) => (d.decree_date || '') >= query.from);
@@ -686,7 +724,8 @@ function archive({ query }) {
     title: 'Αρχείο Διαταγμάτων',
     html: `<div class="hero"><div><h1>Αρχείο Διαταγμάτων</h1><p class="muted">Ανεξάρτητο από το Αρχείο Επιστολών.</p></div><div class="toolbar"><a class="btn primary" href="#/decrees/new">+ Νέο Διάταγμα</a>${protocolGreenBtn()}</div></div>${notice(query.msg)}
 <form class="filters" id="flt"><input name="q" value="${esc(query.q || '')}" placeholder="Αριθμός, περί, όνομα" autofocus><input type="date" name="from" value="${esc(query.from || '')}"><input type="date" name="to" value="${esc(query.to || '')}"><button>Αναζήτηση</button></form>
-${table(['Αρ. Διατάγματος', 'Ημερομηνία', 'Περί', 'Αδελφοί', 'Ενέργειες'], xs.slice(0, 500).map((d) => [`<span class="official-number">${esc(decreeNo(d))}</span>`, esc(fmtDate(d.decree_date)), esc(d.matter), esc(d.recipient_name),
+${pend.length ? `<div class="card sync-card warn"><b>⚠ ${pend.length} Διατάγματα δεν έχουν περάσει στην Επετηρίδα και στο Μητρώο:</b> ${pend.map((d) => `<a href="#/decrees/${d.id}">${esc(decreeNo(d))}</a>`).join(', ')} — ανοίξτε το καθένα και πατήστε «🔄 Ενημέρωση Επετηρίδας & Μητρώου».</div>` : ''}
+${table(['Αρ. Διατάγματος', 'Ημερομηνία', 'Περί', 'Αδελφοί', 'Ενέργειες'], xs.slice(0, 500).map((d) => [`<span class="official-number">${esc(decreeNo(d))}</span>${syncInfo(d) ? '<br><small class="vok" title="Η Επετηρίδα και το Μητρώο ενημερώθηκαν">✓ Επετηρίδα</small>' : pendIds.has(d.id) ? '<br><small class="vwarn">⚠ Επετηρίδα</small>' : ''}`, esc(fmtDate(d.decree_date)), esc(d.matter), esc(d.recipient_name),
   `<a href="#/decrees/${d.id}">Άνοιγμα</a> · <a href="#/decrees/${d.id}/edit">Επεξεργασία</a> · <a href="#/decrees/new?copy_from=${d.id}">Νέο πάνω σε αυτό</a> <button type="button" class="btn small danger" data-act="del" data-id="${d.id}">🗑 Διαγραφή</button>`]), 'Δεν βρέθηκαν Διατάγματα.')}`,
     mount(el) {
       onSubmit(el.querySelector('#flt'), (q) => go('/decrees', q));

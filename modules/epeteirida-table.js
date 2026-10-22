@@ -119,6 +119,7 @@ function tablePage() {
     title: 'Επετηρίδα',
     html: `<div class="noprint"><div class="hero"><div><h1>📜 Επετηρίδα</h1><p class="muted">Ο κατάλογος των Μεγάλων Αξιωματικών — επεξεργάσιμος. Κάθε γραμμή συνδέεται με το μέλος του Μητρώου·
 στο μέλος φαίνεται το ανώτατο αξίωμα και το διάταγμά του. <a href="#/epeteirida">Ιστορικό αξιωμάτων από τα Διατάγματα →</a></p></div></div>
+<div id="epSyncNote"></div><p class="muted ep-sync-help">Η Επετηρίδα ενημερώνεται αυτόματα από τα Διατάγματα (διορισμός Μεγάλου Αξιωματικού, Επαρχιακού ή Περιφερειακού Μεγάλου Διδασκάλου, απονομή «Πρώην», Τάξις ΜΔ), αφού το επιβεβαιώσετε· ο Τίτλος κάθε μέλους στο Μητρώο ακολουθεί την Επετηρίδα.</p>
 <div class="card ep-filters" id="epf"></div>
 <div class="toolbar ep-tools"><button class="btn primary" data-act="save" disabled>💾 Αποθήκευση αλλαγών</button><button class="btn" data-act="add">+ Νέα γραμμή</button>
 <button class="btn" data-act="relink">🔗 Σύνδεση με το Μητρώο</button><button class="btn" data-act="xlsx">⬇ Excel</button><button class="btn" data-act="print">🖨 Εκτύπωση</button>
@@ -130,6 +131,11 @@ function tablePage() {
 <div class="toolbar" style="margin-top:8px"><button class="btn primary">Εισαγωγή</button></div></form></details></div>
 <section id="eppa" class="print-area" hidden></section>`,
     mount(el) {
+      // υπενθύμιση: Διατάγματα που δεν έχουν περάσει στην Επετηρίδα
+      import('./decrees.js').then(({ pendingDecreeSync }) => {
+        const p = pendingDecreeSync(), box = el.querySelector('#epSyncNote');
+        if (box && p.length) box.innerHTML = `<div class="card sync-card warn"><b>⚠ ${p.length} Διατάγματα δεν έχουν περάσει ακόμη στην Επετηρίδα:</b> ${p.map((d) => `<a href="#/decrees/${d.id}">${esc(`${d.decree_no}/${d.decree_year}`)}</a>`).join(', ')}</div>`;
+      }).catch(() => {});
       let rows = epeteiridaAll().map((r) => ({ ...r }));
       const dirty = new Map(), removed = new Set();
       let nextTmp = -1, sort = { k: 'aa', dir: 1 };

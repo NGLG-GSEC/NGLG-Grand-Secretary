@@ -472,3 +472,9 @@ input[type=file]{max-width:100%;min-width:0}
 .dec-norow{display:flex;align-items:center;gap:8px;max-width:320px}
 .dec-norow input{width:auto;flex:1;min-width:0;font:700 1.1em/1.2 inherit}
 .dec-norow input[name=decree_year]{flex:.8}
+/* Διάταγμα → Επετηρίδα & Μητρώο */
+.sync-card{border-left:4px solid #9aa6bd}
+.sync-card.ok{border-left-color:#15803d;background:#f3fbf5}
+.sync-card.warn{border-left-color:#b45309;background:#fff8ec}
+.sync-card h3{margin:0 0 6px}
+.sync-list{white-space:pre-wrap;font:inherit;font-size:.92em;background:#fff;border:1px solid #e3e6ee;border-radius:8px;padding:8px 10px;margin:6px 0}

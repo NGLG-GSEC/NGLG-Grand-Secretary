@@ -2699,3 +2699,44 @@ def test_decree_number_editable_and_protocol_button(app):
     assert '610/2026, ημερ. 21/10/2026' in app.text('.paper')
     app.go('/decrees/new')
     assert app.page.input_value('[name=decree_no]') == '611'  # το επόμενο έπεται του μεγαλύτερου
+
+
+def test_decree_updates_epeteirida_and_registry_title_with_confirmation(app):
+    # Διάταγμα → Επετηρίδα → Μητρώο: ερώτηση με τις αλλαγές, εφαρμογή, υπενθύμιση στο Διάταγμα, αναίρεση στη διαγραφή
+    app.connect_local()
+    add_member(app)
+    mid = app.page.evaluate("async () => (await import('./core/store.js')).db.all('member_registry').find((m) => m.surname === 'Παπαδόπουλος').id")
+    app.page.evaluate(f"""async () => {{ const {{db}} = await import('./core/store.js');
+      await db.save('x', (tx) => {{ tx.insert('epeteirida', {{ aa: 50, active: 0, title: 'Πρώην Μέγας Ξιφοφόρος', honorific: 'Σεβ. Αδ.', full_name: 'Παπαδόπουλος Γεώργιος', rank: 'Πρώην Μέγας Ξιφοφόρος', province: '', decree_no: 400, decree_year: 2020, tmd: 0, tmd_decree: '', current: '', member_id: {mid} }}); }}); }}""")
+    msgs = []
+    app.page.on('dialog', lambda d: msgs.append(d.message))
+    app.go('/decrees/new')
+    assert app.page.locator('#dOffice option', has_text='Επαρχιακός Μέγας Διδάσκαλος').count() == 1  # Καν. 63
+    app.page.select_option('#dOffice', 'Μέγας Γραμματεύς')
+    app.pick('.registry-search', 'Παπαδ')
+    app.click('Έκδοση Διατάγματος')
+    app.page.wait_for_url('**/#/decrees/1')
+    q = next(m for m in msgs if 'ΕΠΕΤΗΡΙΔΑ' in m)
+    assert 'Παπαδόπουλος Γεώργιος' in q and 'Ανώτατο αξίωμα: Πρώην Μέγας Ξιφοφόρος → Μέγας Γραμματεύς' in q and 'Εν ενεργεία αξίωμα' in q, q
+    ep = app.page.evaluate("async () => (await import('./core/store.js')).db.all('epeteirida').find((r) => r.aa === 50)")
+    assert ep['rank'] == 'Μέγας Γραμματεύς' and ep['decree_no'] in (513, '513') and ep['active'] == 1 and 'Μέγας Γραμματεύς — Διάταγμα 513/' in ep['current'], ep
+    # υπενθύμιση στη σελίδα του Διατάγματος και στο Αρχείο
+    assert '✓ Επετηρίδα & Μητρώο ενημερώθηκαν από αυτό το Διάταγμα' in app.text('.sync-card')
+    app.go('/decrees')
+    assert '✓ Επετηρίδα' in app.text('main')
+    # ο Τίτλος του μέλους στο Μητρώο ακολουθεί την Επετηρίδα (αυτόματα)
+    app.page.wait_for_function(f"async () => {{ const m = (await import('./core/store.js')).db.get('member_registry', {mid}); return m.title && m.title !== 'Σεβ. Αδ.'; }}", polling=300)
+    # διαγραφή: αναίρεση των αλλαγών στην Επετηρίδα
+    app.page.locator('tr', has_text='513/').locator('button:has-text("🗑 Διαγραφή")').click()
+    app.page.wait_for_function("() => !document.querySelector('main').innerText.includes('513/')")
+    assert any('Θα αναιρεθούν και οι αλλαγές που έκανε στην Επετηρίδα' in m for m in msgs)
+    ep = app.page.evaluate("async () => (await import('./core/store.js')).db.all('epeteirida').find((r) => r.aa === 50)")
+    assert ep['rank'] == 'Πρώην Μέγας Ξιφοφόρος' and str(ep['decree_no']) == '400' and not ep['current'], ep
+    # Τάξις ΜΔ: νέα γραμμή στην Επετηρίδα με ΤΜΔ, για μέλος χωρίς γραμμή
+    add_member(app, surname='Τάξεως', first='Νικόλαος', email='t@example.com', mobile='6944000001')
+    app.go('/decrees/new?action=service_award')
+    app.pick('.registry-search', 'Τάξεως')
+    app.click('Έκδοση Διατάγματος')
+    app.page.wait_for_url('**/#/decrees/*')
+    ep = app.page.evaluate("async () => (await import('./core/store.js')).db.all('epeteirida').find((r) => r.full_name === 'Τάξεως Νικόλαος')")
+    assert ep and ep['tmd'] == 1 and ep['tmd_decree'].split('/')[0] in ('513', '514') and ep['member_id'], ep
