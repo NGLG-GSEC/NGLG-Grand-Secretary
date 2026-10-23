@@ -9,6 +9,7 @@ import { letterPaper, printPaper, signerProfile, IMG, fitPaper, letterFields, LE
 import { makeDocx, letterBlocks } from '../core/docx.js';
 import { docTitle, driveBox, saveDocToDrive } from '../core/drive.js';
 import { mailButtons, senderBanner, withLetterCc, senderFor, MAIL_SENDERS } from '../core/mail.js';
+import { sgyEmails } from './sgy.js';
 import { mailSheet, bccWithout } from '../core/gmail.js';
 import { attachPicker, contactItems } from '../core/pickers.js';
 import { nextProtocol, askProtocol, askNextProtocol, claimProtocol, setNextProtocol, suggestedProtocol, legacyDecreeLetterIds } from './protocol.js';
@@ -27,7 +28,7 @@ export const lettersAll = () => { const dec = legacyDecreeLetterIds(); return db
 const STATUS = { draft: 'Πρόχειρη', ready: 'Έτοιμη' };
 const statusPill = (s) => `<span class="pill ${s === 'ready' ? 'ok' : 'warn'}">${STATUS[s] || esc(s)}</span>`;
 // Όνομα αρχείου (PDF, Word, Drive): «20545 - ΕΠΙΣΤΟΛΗ Θέμα» — κατηγορία ΕΠΙΣΤΟΛΗ ή ΕΠΙΣΚΕΨΗ
-export const LETTER_CATEGORIES = { ΕΠΙΣΤΟΛΗ: 'Επιστολή', ΕΠΙΣΚΕΨΗ: 'Επίσκεψη' };
+export const LETTER_CATEGORIES = { ΕΠΙΣΤΟΛΗ: 'Επιστολή', ΕΠΙΣΚΕΨΗ: 'Επίσκεψη', ΣΓΥ: 'ΣΓΥ' };
 const category = (x) => (LETTER_CATEGORIES[x.category] ? x.category : 'ΕΠΙΣΤΟΛΗ');
 // Ο αριθμός πρωτοκόλλου δίνεται μόνο όταν η επιστολή οριστεί «Έτοιμη»· οι πρόχειρες δεν δεσμεύουν αριθμό.
 // Ενέργειες αριθμού πρωτοκόλλου (σελίδα επιστολής και Αρχείο): προσθήκη (η επιστολή γίνεται Έτοιμη) ή αλλαγή
@@ -259,7 +260,8 @@ const mailBody = (x) => { const p = signerProfile(x.signer);
 const MAIL_KINDS = { official: 1, general: 1 };
 const mailKind = (x) => { const t = x.template_id ? db.get('letter_templates', x.template_id) : null;
   return MAIL_KINDS[x.mail_kind] ? x.mail_kind : t && MAIL_KINDS[t.mail_kind] ? t.mail_kind : category(x) === 'ΕΠΙΣΚΕΨΗ' ? 'general' : 'official'; };
-const mailBcc = (x, to = '', cc = '') => (category(x) === 'ΕΠΙΣΚΕΨΗ' ? bccWithout(db.setting('visit_bcc') || '', to, cc) : '');
+// ΣΓΥ: όλα τα μέλη του Συμβουλίου σε Bcc (όχι ορατά μεταξύ τους)· Επίσκεψη: οι σταθεροί παραλήπτες Bcc των Ρυθμίσεων
+const mailBcc = (x, to = '', cc = '') => (category(x) === 'ΕΠΙΣΚΕΨΗ' ? bccWithout(db.setting('visit_bcc') || '', to, cc) : category(x) === 'ΣΓΥ' ? bccWithout(sgyEmails().join(', '), to, cc) : '');
 // PDF μιας επιστολής (χωρίς να είναι ανοιχτή στην οθόνη)
 export const letterFileName = (x) => fileName(x);
 export async function letterPdf(x) {
@@ -345,6 +347,7 @@ ${x.protocol_seq ? '<button class="btn" data-act="protocol">✏ Αλλαγή α�
 function archive({ query }) {
   let xs = sortBy(lettersAll(), (x) => -(x.protocol_seq || 0));
   if (query.q) xs = xs.filter((x) => matches(query.q, x.protocol_no, x.subject, x.recipient_name, x.recipient_email));
+  if (LETTER_CATEGORIES[query.category]) xs = xs.filter((x) => category(x) === query.category);
   if (query.from) xs = xs.filter((x) => (x.letter_date || '') >= query.from);
   if (query.to) xs = xs.filter((x) => (x.letter_date || '') <= query.to);
   const shown = xs.slice(0, 500);

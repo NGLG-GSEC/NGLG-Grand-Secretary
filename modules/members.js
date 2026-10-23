@@ -13,6 +13,7 @@ import { smallLodgesPage } from './small-lodges.js';
 import { diplomasPage } from './diplomas.js';
 import { memberCardPage } from './member-card.js';
 import { diplomaIssuePage } from './diploma.js';
+import { sgyRegistryPage } from './sgy.js';
 
 // Αρ. Μητρώου: μοναδικός και μόνιμος αριθμός κάθε προσώπου που είναι ή υπήρξε μέλος της ΕΜΣτΕ (και διαγραμμένου).
 // Ξεκινά από το 1200, δίνεται αυτόματα στο νέο μέλος (επόμενος ελεύθερος) και δεν αλλάζει ποτέ· μόνο ο διαχειριστής
@@ -202,7 +203,7 @@ function listPage({ query }) {
   return {
     title: 'Μητρώο Μελών',
     html: `<h1>Μητρώο Μελών</h1>${notice(query.msg)}<div class="toolbar"><a class="btn primary" href="#/members/new">+ Προσθήκη Μέλους</a>${(() => { const n = sameNameGroups().length; return n ? `<a class="btn" href="#/members/duplicates">Διπλές εγγραφές (${n})</a>` : ''; })()}<button class="btn" data-act="export">⬇ Excel</button><a class="btn" href="#/members/diplomas">🎓 Διπλώματα Διδασκάλου</a><a class="btn" href="#/members/small-lodges">🏛 Στοές με &lt; 12 κύρια μέλη</a></div>
-<div class="mc-cta"><a class="btn mc-cta-btn" href="#/members/card">🪪 <b>ΚΑΡΤΑ ΜΕΛΟΥΣ</b><small>αναζήτηση μέλους · προβολή · εκτύπωση · αποστολή με email</small></a></div>
+<div class="mc-cta"><a class="btn mc-cta-btn" href="#/members/card">🪪 <b>ΚΑΡΤΑ ΜΕΛΟΥΣ</b><small>αναζήτηση μέλους · προβολή · εκτύπωση · αποστολή με email</small></a><a class="btn mc-cta-btn" href="#/members/sgy">🏛 <b>ΜΗΤΡΩΟ ΜΕΛΩΝ ΣΓΥ</b><small>Συμβούλιο Γενικών Υποθέσεων · επιστολή · email · WhatsApp</small></a></div>
 <div class="card member-search"><h3 style="margin-top:0">Αναζήτηση μέλους</h3><form class="msearch" id="ms"><fieldset class="msfield"><legend>1. Τι θα δώσετε;</legend>
 ${MEMBER_FIELDS.map(([k, v]) => `<label class="chip"><input type="radio" name="field" value="${k}"${k === field ? ' checked' : ''}><span>${esc(v)}</span></label>`).join('')}</fieldset>
 <div><label for="msq" id="msqlabel">2. ${esc(qlabel)}</label><input id="msq" name="q" value="${esc(q)}" autofocus autocomplete="off" type="${itype}" placeholder="${esc(ph)}"${field === 'lodge' ? ' list="lodgelist"' : ''}>
@@ -605,6 +606,7 @@ module({
     '/members/diplomas': diplomasPage,
     '/members/card': memberCardPage,
     '/members/diploma': diplomaIssuePage,
+    '/members/sgy': (ctx) => sgyRegistryPage(ctx), // κυκλική εισαγωγή: κλήση τη στιγμή της πλοήγησης
     '/members/diplomas/print': memberCardPage, // παλιός σύνδεσμος
     '/members/:id': ({ params }) => { const m = db.get('member_registry', params.id); return m ? formPage(m) : '<h1>Δεν βρέθηκε το μέλος</h1>'; },
   },

@@ -2616,7 +2616,7 @@ def test_unified_menu_and_visits_flow(app):
     app.connect_local()
     app.go('/')
     groups = app.page.eval_on_selector_all('#mainnav details.navdrop > summary', 'els => els.map((e) => e.textContent.replace("▾", "").trim())')
-    assert groups == ['✉ Έγγραφα', '👥 Μητρώο', '📅 Επισκέψεις ΜΔ', '🎉 Εορτολόγιο & Πρότζεκτ', '🌐 Δημόσιες σελίδες', '⚙ Διαχείριση'], groups
+    assert groups == ['✉ Έγγραφα', '👥 Μητρώο', '🏛 ΣΓΥ', '📅 Επισκέψεις ΜΔ', '🎉 Εορτολόγιο & Πρότζεκτ', '🌐 Δημόσιες σελίδες', '⚙ Διαχείριση'], groups
     hrefs = app.page.eval_on_selector_all('#mainnav a', 'els => els.map((e) => e.getAttribute("href"))')
     inner = [h for h in hrefs if h.startswith('#/')]
     assert len(inner) == len(set(inner)), inner  # κάθε σελίδα μία φορά στο μενού
@@ -2847,3 +2847,38 @@ def test_taxis_md_decree_shows_jewel_automatically(app):
     # όχι σε Διάταγμα ΕΝ ΕΝΕΡΓΕΙΑ
     app.go('/decrees/new')
     assert app.page.locator('#dprev img.dec-jewel').count() == 0
+
+
+def test_sgy_council_registry_letter_and_whatsapp(app):
+    # ΣΓΥ: εκ του αξιώματος αυτόματα (Καν. 216, από Διάταγμα), ταυτοποίηση λίστας στο Μητρώο, Επιστολή ΣΓΥ με Bcc όλα τα μέλη, WhatsApp
+    app.connect_local()
+    add_member(app)
+    add_member(app, surname='Ιωάννου', first='Νικόλαος', email='n.ioannou@example.com', mobile='6977000111')
+    add_member(app, surname='Εκτός', first='Πέτρος', email='p@example.com', mobile='6977000222')
+    app.go('/decrees/new')
+    app.page.select_option('#dOffice', 'Μέγας Γραμματεύς')
+    app.pick('.registry-search', 'Παπαδ')
+    app.click('Έκδοση Διατάγματος')
+    app.page.wait_for_url('**/#/decrees/1')
+    app.go('/members/sgy')
+    t = app.text('main')
+    assert 'Μητρώο Μελών ΣΓΥ' in t and 'Γεώργιος Παπαδόπουλος' in t and 'Μέγας Γραμματεύς' in t and 'Κανών 216 — εκ του αξιώματος' in t, t
+    assert 'Ιωάννου' not in app.text('.print-area')
+    # ταυτοποίηση λίστας (email / κινητό / όνομα) και προσθήκη
+    app.page.click('summary:has-text("Ταυτοποίηση λίστας")')
+    app.page.fill('#sgyList', 'Νίκος <n.ioannou@example.com>\nΆγνωστος Κάποιος <x@nowhere.gr>')
+    app.page.click('button:has-text("🔎 Ταυτοποίηση")')
+    assert 'Νικόλαος Ιωάννου' in app.text('#sgyMatch') and 'Δεν βρέθηκε στο Μητρώο' in app.text('#sgyMatch')
+    app.page.click('#sgyAddAll')
+    app.page.wait_for_function("() => document.querySelector('.print-area').innerText.includes('Ιωάννου')")
+    assert 'Κανόνες 218–219 — εκλεγόμενο' in app.text('.print-area') and 'Εκτός' not in app.text('.print-area')
+    assert app.page.locator('.print-area a.sgy-wa[href="https://wa.me/306977000111"]').count() == 1
+    # ίδιος πίνακας στην ενότητα ΣΓΥ
+    app.go('/sgy')
+    assert 'Ιωάννου' in app.text('.print-area') and 'Παπαδόπουλος' in app.text('.print-area')
+    # Νέα Επιστολή προς ΣΓΥ → κατηγορία ΣΓΥ, Bcc όλα τα μέλη
+    app.page.click('main a.btn:has-text("✉ Νέα Επιστολή προς ΣΓΥ")')
+    app.page.wait_for_selector('[name=category]', state='attached')
+    assert app.page.input_value('[name=category]') == 'ΣΓΥ'
+    mod = app.page.evaluate("async () => { const s = await import('./modules/sgy.js'); return s.sgyEmails(); }")
+    assert sorted(mod) == ['g@example.com', 'n.ioannou@example.com'], mod
