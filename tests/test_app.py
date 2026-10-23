@@ -2929,3 +2929,24 @@ def test_sgy_match_comma_separated_recipients_with_latin_names(app):
     assert '4 παραλήπτες' in t and '1 βέβαιες' in t and '2 πιθανές' in t and '1 δεν βρέθηκαν' in t, t
     assert 'Βασίλειος Ζαχαρίου' in t and 'Αντώνιος Μπαλτάς' in t, t
     assert app.page.locator('#sgyMatch [data-mi]:checked').count() == 1  # οι πιθανές δεν επιλέγονται μόνες τους
+
+
+def test_home_sgy_tile_numbered_and_sgy_templates(app):
+    # Αρχική: πλακίδιο ΣΓΥ (αριθμημένα, πυκνά)· πρότυπα ΣΓΥ στα Πρότυπα και στη σελίδα ΣΓΥ· επιστολή από πρότυπο ΣΓΥ με Αρ. Πρωτ.
+    app.connect_local()
+    app.go('/')
+    tile = app.page.locator('.dash .dtile', has_text='ΣΓΥ').first
+    assert tile.count() == 1 and tile.locator('a:has-text("+ Επιστολή ΣΓΥ")').count() == 1
+    assert app.page.evaluate("() => getComputedStyle(document.querySelector('.dash .dtile h3'), '::before').content") == 'counter(dt)'  # αρίθμηση
+    app.page.set_viewport_size({'width': 390, 'height': 844})
+    cols = app.page.evaluate("() => getComputedStyle(document.querySelector('.dash')).gridTemplateColumns.split(' ').length")
+    assert cols == 2, cols
+    app.page.set_viewport_size({'width': 1280, 'height': 900})
+    app.go('/templates?category=ΣΓΥ')
+    t = app.text('main')
+    assert 'ΣΓΥ — Πρόσκληση σε Συνεδρίαση' in t and 'ΣΓΥ — Ενημέρωση Μελών' in t and 'Ελεύθερη επιστολή' not in t, t
+    app.go('/sgy')
+    app.page.click('a.btn:has-text("Πρόσκληση σε Συνεδρίαση")')
+    app.page.wait_for_selector('[name=subject]')
+    assert app.page.input_value('[name=category]') == 'ΣΓΥ' and 'Συμβουλίου Γενικών Υποθέσεων' in app.page.input_value('[name=subject]')
+    assert app.page.input_value('[name=recipient_name]') == 'Προς τα Μέλη του Συμβουλίου Γενικών Υποθέσεων'

@@ -7,7 +7,7 @@
 // Από εδώ: νέα Επιστολή προς ΣΓΥ (κατηγορία ΣΓΥ — Bcc όλα τα μέλη, πρωτόκολλο με το «Έτοιμο»), email και WhatsApp.
 import { db } from '../core/store.js';
 import { module, bind, go, flash, toast, confirmDo, table } from '../core/app.js';
-import { esc, fold, sortBy } from '../core/util.js';
+import { esc, fold, sortBy, protocolGreenBtn } from '../core/util.js';
 import { identify, canonicalId, regCode, digits10 } from '../core/people.js';
 import { attachPicker, memberItems, noContact, titledName, memberLodges } from '../core/pickers.js';
 import { precedenceOf } from './decree-catalog.js';
@@ -65,7 +65,20 @@ export function sgyMembers(src = db) {
 const usable = (x) => !noContact(x.m);
 export const sgyEmails = () => [...new Set(sgyMembers().filter(usable).map((x) => String(x.m.email || '').trim().toLowerCase()).filter(Boolean))];
 const waNo = (m) => { const d = digits10(m.mobile); return d.length === 10 ? '30' + d : ''; };
-export const sgyLetterUrl = () => `#/letters/new?category=ΣΓΥ&to_name=${encodeURIComponent(SGY_TO_NAME)}`;
+export const sgyLetterUrl = (tid) => `#/letters/new?category=ΣΓΥ&to_name=${encodeURIComponent(SGY_TO_NAME)}${tid ? `&template_id=${tid}` : ''}`;
+export const sgyTemplates = () => sortBy(db.all('letter_templates').filter((t) => t.category === 'ΣΓΥ' && t.active !== 0), 'name');
+// Επιστολές ΣΓΥ: οι ίδιες επιστολές του Αρχείου (κατηγορία ΣΓΥ), με αριθμό του ενιαίου Βιβλίου Πρωτοκόλλου (εξερχόμενα)
+export const sgyLetters = () => sortBy(db.all('letters').filter((l) => l.category === 'ΣΓΥ'), (l) => -(l.protocol_seq || 0), (l) => -(l.id || 0));
+
+// Πρότυπα ΣΓΥ (μία φορά· αλλάζουν από τα Πρότυπα)
+const SGY_TEMPLATES = [
+  { key: 'sgy-meeting', name: 'ΣΓΥ — Πρόσκληση σε Συνεδρίαση', subject: 'Πρόσκληση σε Συνεδρίαση του Συμβουλίου Γενικών Υποθέσεων',
+    body: 'Αγαπητοί Αδελφοί,\n\nΣας προσκαλούμε στην Τακτική Συνεδρίαση του Συμβουλίου Γενικών Υποθέσεων, την …… και ώρα ……, στο Τεκτονικό Μέγαρο ……\n\nΘέματα Ημερησίας Διατάξεως:\n1. Επικύρωση Πρακτικών της προηγούμενης Συνεδρίασης.\n2. ……\n3. Τρέχοντα θέματα.\n\nΠαρακαλούμε για την παρουσία σας.' },
+  { key: 'sgy-info', name: 'ΣΓΥ — Ενημέρωση Μελών', subject: 'Ενημέρωση προς τα Μέλη του Συμβουλίου Γενικών Υποθέσεων', body: 'Αγαπητοί Αδελφοί,\n\n……' },
+];
+db.migrate('sgy-templates-2026-10', (tx) => {
+  for (const t of SGY_TEMPLATES) if (!tx.all('letter_templates').some((x) => x.key === t.key)) tx.insert('letter_templates', { ...t, category: 'ΣΓΥ', closing: 'Με αδελφική αγάπη,', active: 1 });
+});
 
 // Λατινικό «κλειδί» ονόματος για σύγκριση ελληνικών ↔ λατινικών (Αλμπάνης = Albanis, Μπενετάτος = Benetatos)
 const latinKey = (v) => { const t = /[α-ωά-ώ]/i.test(v) ? greeklish(v) : String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
@@ -117,7 +130,8 @@ function sgyPage({ query = {} }, inRegistry = false) {
     title: inRegistry ? 'Μητρώο Μελών ΣΓΥ' : 'ΣΓΥ',
     html: `${back}<div class="hero"><div><h1>🏛 ${inRegistry ? 'Μητρώο Μελών ΣΓΥ' : 'ΣΓΥ — Συμβούλιο Γενικών Υποθέσεων'}</h1>
 <p class="muted">${xs.length} μέλη · ${emails.length} με email · ${xs.filter((x) => waNo(x.m)).length} με κινητό. Εκ του αξιώματος (Καν. 216) και διοριζόμενα (Καν. 217) έρχονται αυτόματα από τα Διατάγματα και την Επετηρίδα· τα εκλεγόμενα (Καν. 218–219) προστίθενται εδώ.</p></div>
-<div class="toolbar"><a class="btn primary" href="${sgyLetterUrl()}">✉ Νέα Επιστολή προς ΣΓΥ</a><button type="button" class="btn" data-act="wa">💬 WhatsApp σε όλους</button></div></div>
+<div class="toolbar"><a class="btn primary" href="${sgyLetterUrl()}">✉ Νέα Επιστολή προς ΣΓΥ</a><button type="button" class="btn" data-act="wa">💬 WhatsApp σε όλους</button>${protocolGreenBtn()}</div></div>
+${sgyCards()}
 <div class="card noprint" id="sgyWa" hidden><h3 style="margin-top:0">💬 Μήνυμα WhatsApp προς τα μέλη του ΣΓΥ</h3><textarea id="sgyWaText" rows="4">Αγαπητέ Αδελφέ,\n\n</textarea>
 <p class="muted">Πατήστε ένα-ένα τα ονόματα: ανοίγει η συνομιλία με έτοιμο το μήνυμα (το WhatsApp δεν επιτρέπει μαζική αποστολή από σύνδεσμο).</p><div class="sgy-walist">${xs.filter((x) => usable(x) && waNo(x.m)).map((x) => `<a class="btn small wa-btn" target="_blank" rel="noopener" data-wa="${waNo(x.m)}" href="https://wa.me/${waNo(x.m)}">${esc(`${x.m.surname} ${x.m.first_name}`)}</a>`).join(' ')}</div></div>
 <div class="toolbar noprint"><button type="button" class="btn small" data-act="copyEmails">📋 Αντιγραφή email (${emails.length})</button><button type="button" class="btn small" data-act="copyMobiles">📋 Αντιγραφή κινητών</button>
@@ -194,4 +208,19 @@ export async function addSgy(items) {
 }
 export const sgyRegistryPage = (ctx) => sgyPage(ctx, true);
 
-module({ id: 'sgy', routes: { '/sgy': (ctx) => sgyPage(ctx, false) } });
+// Πρότυπα ΣΓΥ και Επιστολές ΣΓΥ (με Αρ. Πρωτ.) — στη σελίδα ΣΓΥ
+function sgyCards() {
+  const ts = sgyTemplates(), ls = sgyLetters().slice(0, 8);
+  return `<div class="cols2 noprint"><div class="card"><h3 style="margin-top:0">📄 Πρότυπα ΣΓΥ</h3>${ts.length ? ts.map((t) => `<a class="btn small" href="${sgyLetterUrl(t.id)}">✉ ${esc(t.name.replace(/^ΣΓΥ\s*—\s*/, ''))}</a>`).join(' ') : '<p class="muted">Κανένα πρότυπο.</p>'}
+<p class="muted" style="margin:8px 0 0">Η επιστολή παίρνει <b>Αρ. Πρωτοκόλλου</b> (ενιαίο Βιβλίο — εξερχόμενα) με το «Έτοιμο» και στέλνεται από την εφαρμογή σε όλα τα μέλη (Bcc). <a href="#/templates?category=ΣΓΥ">Διαχείριση προτύπων ΣΓΥ</a></p></div>
+<div class="card"><h3 style="margin-top:0">✉ Επιστολές ΣΓΥ <a class="btn small" href="#/letters?category=ΣΓΥ">Όλες</a></h3>${ls.length ? `<ul class="sgy-letters">${ls.map((l) => `<li><a href="#/letters/${l.id}"><b>${esc(l.protocol_no || 'Πρόχειρη')}</b> — ${esc(l.subject || '')}</a></li>`).join('')}</ul>` : '<p class="muted">Δεν έχουν σταλεί ακόμη επιστολές ΣΓΥ.</p>'}</div></div>`;
+}
+
+module({
+  id: 'sgy', routes: { '/sgy': (ctx) => sgyPage(ctx, false) },
+  tile: { order: 15, render: () => {
+    const xs = sgyMembers(), ls = sgyLetters(), last = ls.find((l) => l.protocol_no);
+    return `<div class="dtile gold"><h3><a href="#/sgy">🏛 ΣΓΥ</a></h3><div class="big">${xs.length} <small>μέλη</small></div><div class="muted">${sgyEmails().length} με email${last ? ` · Τελευταία: ${esc(last.protocol_no)}` : ''}</div>
+<div class="acts"><a class="btn primary" href="${sgyLetterUrl()}">+ Επιστολή ΣΓΥ</a><a class="btn" href="#/sgy">Μέλη</a><a class="btn" href="#/letters?category=ΣΓΥ">Επιστολές</a><a class="btn" href="#/templates?category=ΣΓΥ">Πρότυπα</a></div></div>`;
+  } },
+});

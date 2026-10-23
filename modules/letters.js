@@ -9,7 +9,7 @@ import { letterPaper, printPaper, signerProfile, IMG, fitPaper, letterFields, LE
 import { makeDocx, letterBlocks } from '../core/docx.js';
 import { docTitle, driveBox, saveDocToDrive } from '../core/drive.js';
 import { mailButtons, senderBanner, withLetterCc, senderFor, MAIL_SENDERS } from '../core/mail.js';
-import { sgyEmails } from './sgy.js';
+import { sgyEmails, SGY_TO_NAME } from './sgy.js';
 import { mailSheet, bccWithout } from '../core/gmail.js';
 import { attachPicker, contactItems } from '../core/pickers.js';
 import { nextProtocol, askProtocol, askNextProtocol, claimProtocol, setNextProtocol, suggestedProtocol, legacyDecreeLetterIds } from './protocol.js';
@@ -182,6 +182,7 @@ function mountLetterForm(el, x, isNew) {
     f.body.value = body; f.subject.value = subject; auto = { body, subject };
     if (tpl.closing) f.closing.value = tpl.closing;
     if (LETTER_CATEGORIES[tpl.category]) f.category.value = tpl.category;
+    if (tpl.category === 'ΣΓΥ' && !f.recipient_name.value.trim()) f.recipient_name.value = SGY_TO_NAME; // παραλήπτες: όλα τα μέλη σε Bcc
     if (tpl.key === REP_VISIT.key && c.rep) {
       const r = repRecipients(c);
       f.recipient_name.value = r.toName; f.recipient_email.value = [r.to, r.cc].filter(Boolean).join(', '); f.cc_name.value = r.ccName; f.recipient_member_id.value = ''; autoRcpt = f.recipient_email.value;
@@ -434,8 +435,12 @@ module({
         { k: 'ask_proto_image', label: 'ΕΙΚΟΝΑ ΠΡΩΤΟΚΟΛΛΟΥ: ζητείται στη νέα επιστολή', type: 'select', options: [['', 'Αυτόματα — όταν το κείμενο έχει {Αρ. Πρωτ.}'], ['1', 'Ναι, πάντα'], ['0', 'Όχι']], help: 'Η εικόνα (π.χ. το εγκεκριμένο πρωτόκολλο-σφραγίδα) φορτώνεται σε κάθε επιστολή και μπαίνει κάτω από τη σφραγίδα, στο κέντρο, ~400×200.' }],
       defaults: { active: 1 },
       sort: (xs) => sortBy(xs.filter((t) => t.name !== 'ΔΙΑΤΑΓΜΑΤΑ'), 'id'),
+      // Κατηγορίες: Επιστολές · Επισκέψεις · ΣΓΥ · Διατάγματα (και τα πρότυπα ΣΓΥ μαζί στη σελίδα ΣΓΥ)
+      filter: (xs, q) => (q.category === 'ΔΙΑΤΑΓΜΑ' ? xs.filter((t) => t.kind === 'decree' || t.kind === 'diploma') : LETTER_CATEGORIES[q.category] ? xs.filter((t) => !t.kind && (t.category || 'ΕΠΙΣΤΟΛΗ') === q.category) : xs),
+      intro: () => { const q = (location.hash.split('?')[1] || '').match(/category=([^&]+)/), cur = q ? decodeURIComponent(q[1]) : '';
+        return `<div class="toolbar tpl-cats">${[['', 'Όλα'], ['ΕΠΙΣΤΟΛΗ', 'Επιστολές'], ['ΕΠΙΣΚΕΨΗ', 'Επισκέψεις'], ['ΣΓΥ', '🏛 ΣΓΥ'], ['ΔΙΑΤΑΓΜΑ', '📜 Διατάγματα & Δίπλωμα']].map(([k, l]) => `<a class="btn small${k === cur ? ' primary' : ''}" href="#/templates${k ? '?category=' + encodeURIComponent(k) : ''}">${l}</a>`).join('')}</div>`; },
       validate: (d) => ({ ...d, active: Number(d.active) ? 1 : 0 }),
-      columns: [{ label: 'Αρ.', v: (t) => `<b>${t.id}</b>` }, { label: 'Όνομα', v: (t) => `<b>${esc(t.name)}</b>${t.kind === 'decree' ? ' <span class="pill">📜 Διάταγμα</span><br><a class="btn small" href="#/templates/' + t.id + '/design">🎨 Σχεδίαση σελίδας</a>' : t.kind === 'diploma' ? ` <span class="pill">🎓 Δίπλωμα A3</span><br><a class="btn small" href="#/templates/${t.id}/diploma">🎨 Σχεδίαση Διπλώματος</a> <a class="btn small" href="#/members/diploma">🖨 Έκδοση</a>` : ''}${hasPlaceholders([t.body, t.subject].join(' ')) ? ' <span class="pill ok">⚙ από τη βάση</span>' : ''}` }, { label: 'Κορμός', v: (t) => `<small class="muted">${esc(String(t.body || '').slice(0, 120))}</small>` }, { label: 'Ενεργό', v: (t) => (t.active ? '✓' : '—') }],
+      columns: [{ label: 'Αρ.', v: (t) => `<b>${t.id}</b>` }, { label: 'Όνομα', v: (t) => `<b>${esc(t.name)}</b>${t.kind === 'decree' ? ' <span class="pill">📜 Διάταγμα</span><br><a class="btn small" href="#/templates/' + t.id + '/design">🎨 Σχεδίαση σελίδας</a>' : t.kind === 'diploma' ? ` <span class="pill">🎓 Δίπλωμα A3</span><br><a class="btn small" href="#/templates/${t.id}/diploma">🎨 Σχεδίαση Διπλώματος</a> <a class="btn small" href="#/members/diploma">🖨 Έκδοση</a>` : ''}${t.category === 'ΣΓΥ' && !t.kind ? ` <span class="pill">🏛 ΣΓΥ</span><br><a class="btn small" href="#/letters/new?category=ΣΓΥ&template_id=${t.id}&to_name=${encodeURIComponent(SGY_TO_NAME)}">✉ Νέα επιστολή ΣΓΥ</a>` : ''}${hasPlaceholders([t.body, t.subject].join(' ')) ? ' <span class="pill ok">⚙ από τη βάση</span>' : ''}` }, { label: 'Κορμός', v: (t) => `<small class="muted">${esc(String(t.body || '').slice(0, 120))}</small>` }, { label: 'Ενεργό', v: (t) => (t.active ? '✓' : '—') }],
     }),
   },
   tile: { order: 10, render: () => {
