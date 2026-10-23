@@ -50,15 +50,30 @@ export function sgyAuto(src = db) {
   }
   return out;
 }
-// Ο κατάλογος του ΣΓΥ: αυτόματα + χειροκίνητα (που υπερισχύουν), χωρίς τις εξαιρέσεις, κατά τάξη προβαδίσματος
+// Κατάλογος θέσεων ΣΓΥ (sgy_roster): κατηγορία · ιδιότητα · μέλος του Μητρώου (ή μόνο όνομα / κενή θέση) · Επαρχία — όπως στο Παρουσιολόγιο.
+// Όταν υπάρχει, είναι ο επίσημος κατάλογος· αλλιώς τα μέλη βγαίνουν αυτόματα από τα αξιώματα (Καν. 216/217).
+export const sgyRoster = (src = db) => sortBy(src.all('sgy_roster'), (r) => Number(r.seq) || 0, 'id');
+export const categoryBasis = (c) => (/αξιώματος/i.test(c) ? '216' : /διορισ/i.test(c) ? '217' : /αιρετ|εκλεγ/i.test(c) ? '218' : 'other');
+const termOf = (c) => (String(c).match(/\d{4}\s*[-–]\s*\d{4}/) || [''])[0].replace(/\s+/g, '');
+// Ο κατάλογος του ΣΓΥ: θέσεις του καταλόγου (ή αυτόματα από τα αξιώματα) + χειροκίνητα (που υπερισχύουν), χωρίς τις εξαιρέσεις
 export function sgyMembers(src = db) {
-  const map = sgyAuto(src);
+  const roster = sgyRoster(src), map = new Map(), order = new Map();
+  if (roster.length) roster.forEach((r, i) => {
+    const id = r.member_id ? canonicalId(r.member_id, src) : null; if (!id) return;
+    if (!order.has(id)) order.set(id, i);
+    const c = map.get(id), role = r.role || (categoryBasis(r.category) === '218' ? 'Αιρετό Μέλος' : categoryBasis(r.category) === '217' ? 'Διορισμένο Μέλος' : 'Μέλος');
+    if (c) { if (!c.role.includes(role)) c.role += ' · ' + role; return; }
+    map.set(id, { member_id: id, role, basis: categoryBasis(r.category), category: r.category, province: r.province || '', term: termOf(r.category), roster: true });
+  });
+  else for (const [k, v] of sgyAuto(src)) map.set(k, v);
   for (const r of src.all('sgy_members')) {
     const id = canonicalId(r.member_id, src); if (!id) continue;
     if (Number(r.excluded)) { map.delete(id); continue; }
     const a = map.get(id) || {};
-    map.set(id, { ...a, member_id: id, role: r.role || a.role || 'Μέλος', basis: r.basis || a.basis || 'other', province: r.province || '', term: r.term || '', notes: r.notes || '', row_id: r.id, auto: !!a.auto });
+    map.set(id, a.roster ? { ...a, row_id: r.id } // ο κατάλογος θέσεων ορίζει ιδιότητα/Επαρχία
+      : { ...a, member_id: id, role: r.role || a.role || 'Μέλος', basis: r.basis || a.basis || 'other', province: r.province || '', term: r.term || '', notes: r.notes || '', row_id: r.id, auto: !!a.auto });
   }
+  if (roster.length) return sortBy([...map.values()].map((x) => ({ ...x, m: src.get('member_registry', x.member_id) })).filter((x) => x.m), (x) => (order.has(x.member_id) ? order.get(x.member_id) : 1e6), (x) => x.m.surname || '');
   return sortBy([...map.values()].map((x) => ({ ...x, m: src.get('member_registry', x.member_id) })).filter((x) => x.m),
     (x) => roleOrder(x.role), (x) => x.m.surname || '', (x) => x.m.first_name || '');
 }
@@ -155,7 +170,7 @@ function sgyPage({ query = {} }, inRegistry = false) {
     title: inRegistry ? 'Μητρώο Μελών ΣΓΥ' : 'ΣΓΥ',
     html: `${back}<div class="hero"><div><h1>🏛 ${inRegistry ? 'Μητρώο Μελών ΣΓΥ' : 'ΣΓΥ — Συμβούλιο Γενικών Υποθέσεων'}</h1>
 <p class="muted">${xs.length} μέλη · ${emails.length} με email · ${xs.filter((x) => waNo(x.m)).length} με κινητό. Εκ του αξιώματος (Καν. 216) και διοριζόμενα (Καν. 217) έρχονται αυτόματα από τα Διατάγματα και την Επετηρίδα· τα εκλεγόμενα (Καν. 218–219) προστίθενται εδώ.</p></div>
-<div class="toolbar"><a class="btn primary" href="${sgyLetterUrl()}">✉ Νέα Επιστολή προς ΣΓΥ</a><button type="button" class="btn" data-act="wa">💬 WhatsApp σε όλους</button>${protocolGreenBtn()}</div></div>
+<div class="toolbar"><a class="btn primary" href="${sgyLetterUrl()}">✉ Νέα Επιστολή προς ΣΓΥ</a><a class="btn" href="#/sgy/attendance">📋 Παρουσιολόγιο</a><button type="button" class="btn" data-act="wa">💬 WhatsApp σε όλους</button>${protocolGreenBtn()}</div></div>
 ${sgyCards()}
 <div class="card noprint" id="sgyWa" hidden><h3 style="margin-top:0">💬 Μήνυμα WhatsApp προς τα μέλη του ΣΓΥ</h3><textarea id="sgyWaText" rows="4">Αγαπητέ Αδελφέ,\n\n</textarea>
 <p class="muted">Πατήστε ένα-ένα τα ονόματα: ανοίγει η συνομιλία με έτοιμο το μήνυμα (το WhatsApp δεν επιτρέπει μαζική αποστολή από σύνδεσμο).</p><div class="sgy-walist">${xs.filter((x) => usable(x) && waNo(x.m)).map((x) => `<a class="btn small wa-btn" target="_blank" rel="noopener" data-wa="${waNo(x.m)}" href="https://wa.me/${waNo(x.m)}">${esc(`${x.m.surname} ${x.m.first_name}`)}</a>`).join(' ')}</div></div>
@@ -275,6 +290,6 @@ module({
   tile: { order: 15, render: () => {
     const xs = sgyMembers(), ls = sgyLetters(), last = ls.find((l) => l.protocol_no);
     return `<div class="dtile gold"><h3><a href="#/sgy">🏛 ΣΓΥ</a></h3><div class="big">${xs.length} <small>μέλη</small></div><div class="muted">${sgyEmails().length} με email${last ? ` · Τελευταία: ${esc(last.protocol_no)}` : ''}</div>
-<div class="acts"><a class="btn primary" href="${sgyLetterUrl()}">+ Επιστολή ΣΓΥ</a><a class="btn" href="#/sgy">Μέλη</a><a class="btn" href="#/letters?category=ΣΓΥ">Επιστολές</a><a class="btn" href="#/templates?category=ΣΓΥ">Πρότυπα</a></div></div>`;
+<div class="acts"><a class="btn primary" href="${sgyLetterUrl()}">+ Επιστολή ΣΓΥ</a><a class="btn" href="#/sgy">Μέλη</a><a class="btn" href="#/sgy/attendance">Παρουσιολόγιο</a><a class="btn" href="#/letters?category=ΣΓΥ">Επιστολές</a><a class="btn" href="#/templates?category=ΣΓΥ">Πρότυπα</a></div></div>`;
   } },
 });

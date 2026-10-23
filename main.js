@@ -12,6 +12,7 @@ import './modules/lodges.js';
 import './modules/directory.js';
 import './modules/contacts.js';
 import './modules/sgy.js';
+import './modules/sgy-attendance.js';
 import './modules/visits.js';
 import './modules/declarations.js';
 import './modules/gm-decisions.js';

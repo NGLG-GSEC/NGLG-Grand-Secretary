@@ -524,3 +524,18 @@ input[type=file]{max-width:100%;min-width:0}
 .dash>.dtile .big{font-size:1.1rem}.dash>.dtile .acts a{padding:2px 6px;font-size:.74rem}.home-hero p{display:none}}
 .sgy-letters{margin:0;padding-left:18px}.sgy-letters li{margin:3px 0}
 @media screen and (max-width:600px){.home-hero{padding:6px 4px}.home-hero h1{font-size:1.15rem}.home-hero .toolbar{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}.home-hero .toolbar>*{flex:1 1 auto;width:auto;min-height:0}}
+/* 📋 Παρουσιολόγιο ΣΓΥ (A4, όπως το Word της Γραμματείας) */
+.sgy-att{font-family:'Palatino Linotype','Book Antiqua',Palatino,'Noto Serif',serif;color:#000;padding:18mm 15mm 18mm 20mm}
+.sgy-att .att-h1{text-align:center;font-weight:700;font-size:1.33em}.sgy-att .att-h2{text-align:center;font-weight:700;font-size:1.14em;margin-top:2mm}
+.sgy-att .att-date{font-weight:700;font-size:1.05em;margin:1mm 0 3mm;text-align:center}.sgy-att .att-title{text-align:center;font-weight:700;font-size:1.52em;margin:2mm 0 4mm;letter-spacing:.06em}
+.sgy-att .att-cat{text-align:center;font-weight:700;font-size:1.05em;margin:5mm 0 2mm;break-after:avoid}
+.paper.report.sgy-att table.att-t{width:100%;border-collapse:collapse;font-size:1em;table-layout:fixed}
+.paper.report.sgy-att .att-t td{border:1px solid #000;padding:1mm 2mm;vertical-align:middle;background:#fff}
+.sgy-att .att-t.att-ex td:nth-child(1){width:38%}.sgy-att .att-t.att-ex td:nth-child(2){width:35%}.sgy-att .att-t:not(.att-ex) td:nth-child(1){width:52%}
+.sgy-att tr{break-inside:avoid}.sgy-att .att-foot{margin-top:8mm;text-align:center;font-size:.8em;letter-spacing:.08em}
+.att-row{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1.1fr) minmax(0,1.3fr) minmax(0,.9fr) auto auto auto auto;gap:4px;align-items:center;margin:3px 0}
+.att-row input{min-height:32px;padding:4px 6px;font-size:.88rem}.att-row input[hidden]{display:block;visibility:hidden}.att-row .btn.small{padding:2px 7px}
+.att-ecat{font-weight:700;color:#0b2f63;margin:10px 0 2px;border-bottom:1px solid #d8deea}
+.att-split .dz-controls{max-width:none}
+@media screen and (max-width:800px){.att-row{grid-template-columns:1fr 1fr;}.att-row .att-name{grid-column:1/-1}}
+.att-split{grid-template-columns:minmax(0,1.15fr) minmax(0,1fr)}@media screen and (max-width:1100px){.att-split{grid-template-columns:1fr}}

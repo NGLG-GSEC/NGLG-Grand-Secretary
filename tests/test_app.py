@@ -2981,3 +2981,80 @@ def test_sgy_update_from_excel(app, tmp_path):
     assert 'Γεώργιος Παπαδόπουλος' in pa and 'Βασίλειος Ζαχαρίου' in pa and 'Παλαιός' not in pa, pa
     em = app.page.evaluate("async () => (await import('./core/store.js')).db.all('member_registry').find((m) => m.surname === 'Ζαχαρίου').email")
     assert em == 'vz@example.org'
+
+
+SGY_ROSTER_TEXT = """Μέλη εξ Αξιώματος
+Μέγας Διδάσκαλος
+Σεβτ. Αδ. Γεώργιος Παπαδόπουλος
+
+
+Πρώην Μέγας Διδάσκαλος
+Πέτρος Άγνωστος
+
+
+Μέγας Καγκελάριος
+
+
+
+Μέγας Γραμματέας Εκπ/σεως
+Νικόλαος Ιωάννου
+Ενώ τα αλλα μελη εχουν
+Διορισμένα Μέλη υπό του ΜΔ 2026 - 2027
+Νικόλαος Ιωάννου
+
+Και κατηγορία Αιρετά Μέλη Θητείας 2024 - 2027
+Βασίλειος Ζαχαρίου (Αθηνών)
+ Κενη θεση να συμπληρωθεί για Επαρχια    (Πειραιώς & Ν.Α.Α.)
+"""
+
+
+def _docx(path):
+    import zipfile
+    P = lambda t: f'<w:p><w:r><w:t>{t}</w:t></w:r></w:p>'
+    C = lambda t: f'<w:tc>{P(t)}</w:tc>'
+    T = lambda rows: '<w:tbl>' + ''.join('<w:tr>' + ''.join(C(c) for c in r) + '</w:tr>' for r in rows) + '</w:tbl>'
+    body = (P('ΣΥΜΒΟΥΛΙΟΝ ΓΕΝΙΚΩΝ ΥΠΟΘΕΣΕΩΝ') + P('Τεκτονική Περίοδος 2026-2027') + P('Τακτική Συνεδρίασις της') + P('2ας Νοεμβρίου 2026') + P('ΠΑΡΟΥΣΙΟΛΟΓΙΟ')
+            + P('Μέλη εξ Αξιώματος') + T([['Μέγας Διδάσκαλος', 'Σεβτ. Αδ. Γεώργιος Παπαδόπουλος', ''], ['Μέγας Καγκελάριος', '', ''], ['Μέγας Γραμματεύς', 'Νικόλαος Ιωάννου', '']])
+            + P('Αιρετά Μέλη Θητείας 2025 - 2028') + T([['Βασίλειος Ζαχαρίου (Αθηνών)', ''], ['      (Αθηνών)', '']]))
+    doc = f'<?xml version="1.0" encoding="UTF-8"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>{body}</w:body></w:document>'
+    with zipfile.ZipFile(path, 'w') as z:
+        z.writestr('[Content_Types].xml', '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"/>')
+        z.writestr('word/document.xml', doc)
+
+
+def test_sgy_attendance_builder_roster_text_and_docx(app, tmp_path):
+    # Παρουσιολόγιο ΣΓΥ: κατάλογος θέσεων από κείμενο και από Word, builder, αποθήκευση· ο πίνακας ΣΓΥ ακολουθεί τον κατάλογο
+    app.connect_local()
+    add_member(app)
+    add_member(app, surname='Ιωάννου', first='Νικόλαος', email='n.i@example.com', mobile='6977000111')
+    add_member(app, surname='Ζαχαρίου', first='Βασίλειος', email='vz@example.com', mobile='6977000333')
+    app.go('/sgy/attendance')
+    app.page.click('summary:has-text("Εισαγωγή καταλόγου")')
+    app.page.fill('#attText', SGY_ROSTER_TEXT)
+    app.page.click('button:has-text("↧ Από το κείμενο")')
+    pv = app.text('#attPrev')
+    for s in ['ΠΑΡΟΥΣΙΟΛΟΓΙΟ', 'Μέλη εξ Αξιώματος', 'Μέγας Καγκελάριος', 'Διορισμένα Μέλη υπό του ΜΔ 2026 - 2027', 'Αιρετά Μέλη Θητείας 2024 - 2027', 'Βασίλειος Ζαχαρίου (Αθηνών)', '(Πειραιώς & Ν.Α.Α.)']:
+        assert s in pv, s
+    assert 'Ενώ τα αλλα' not in pv and 'Κενη' not in pv
+    assert app.page.locator('#attRows .att-row').count() == 7, app.page.locator('#attRows .att-row').count()
+    # builder: αλλαγή ημερομηνίας και ιδιότητας
+    app.page.fill('[data-s=date]', '2026-11-02')
+    assert '2ας Νοεμβρίου 2026' in app.text('#attPrev')
+    app.page.locator('#attRows .att-row').nth(2).locator('[data-f=role]').fill('Μέγας Καγκελάριος (κενή)')
+    assert 'Μέγας Καγκελάριος (κενή)' in app.text('#attPrev')
+    app.page.click('button:has-text("💾 Αποθήκευση")')  # «Πέτρος Άγνωστος» δεν είναι στο Μητρώο → επιβεβαίωση (αυτόματα ΟΚ)
+    app.page.wait_for_selector('text=Το Παρουσιολόγιο και ο κατάλογος του ΣΓΥ αποθηκεύτηκαν')
+    assert app.page.evaluate("async () => (await import('./core/store.js')).db.all('sgy_roster').length") == 7
+    app.go('/sgy')
+    t = app.text('.print-area')
+    assert t.index('Παπαδόπουλος') < t.index('Ιωάννου') < t.index('Ζαχαρίου') and 'Μέγας Διδάσκαλος' in t and 'Αθηνών' in t, t
+    assert 'Μέγας Γραμματέας Εκπ/σεως · Διορισμένο Μέλος' in t
+    # Word του Παρουσιολογίου
+    f = tmp_path / 'p.docx'; _docx(f)
+    app.go('/sgy/attendance')
+    app.page.click('summary:has-text("Εισαγωγή καταλόγου")')
+    app.page.set_input_files('#attDocx', str(f))
+    app.page.wait_for_function("() => document.querySelector('#attPrev').innerText.includes('Αιρετά Μέλη Θητείας 2025 - 2028')")
+    pv = app.text('#attPrev')
+    assert 'Τεκτονική Περίοδος 2026-2027' in pv and '2ας Νοεμβρίου 2026' in pv and 'Μέγας Γραμματεύς' in pv and 'Μέγας Καγκελάριος' in pv, pv
+    assert app.page.locator('#attRows .att-row').count() == 5
