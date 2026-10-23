@@ -1155,6 +1155,22 @@ def test_invite_link_login_with_email_and_password(app, browser, base_url):
     p2.wait_for_selector('#lgForm')
     assert not errs, errs
     ctx.close()
+    # «Να μένω συνδεδεμένος» (π.χ. προσωπικό προφίλ Chrome): πλήρης πρόσβαση χωρίς κωδικό στα επόμενα ανοίγματα
+    ctx2 = browser.new_context()
+    q = ctx2.new_page()
+    q.route('https://api.github.com/**', gh.handle)
+    q.goto(link.replace(link.split('#')[0], base_url))
+    q.wait_for_selector('#lgForm')
+    q.fill('[name=password]', 'Dokimi-2026x')
+    q.check('[name=remember]')
+    q.locator('#lgForm button').click()
+    q.wait_for_selector('.dash', timeout=20000)
+    q2 = ctx2.new_page()
+    q2.route('https://api.github.com/**', gh.handle)
+    q2.goto(base_url + '#/members')
+    q2.wait_for_selector('h1:has-text("Μητρώο")', timeout=20000)
+    assert q2.locator('#lgForm').count() == 0
+    ctx2.close()
 
 
 GSI_FAKE = """window.google = { accounts: { oauth2: { initTokenClient: (o) => ({ requestAccessToken: () => setTimeout(() => o.callback({ access_token: 'g-token', expires_in: 3600 }), 10) }) } } };"""

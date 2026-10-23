@@ -80,14 +80,17 @@ ${query.error ? `<div class="card toast error" style="position:static">${esc(que
 <form class="card" id="lgForm" style="text-align:left"><h2 style="margin-top:0">Είσοδος</h2>
 <label>Email</label><input name="email" type="email" value="${esc(c.email || '')}" autocomplete="username" required>
 <label style="margin-top:12px">Κωδικός</label><input name="password" type="password" autocomplete="current-password" required autofocus>
+<label class="chk" style="margin-top:12px"><input type="checkbox" name="remember" value="1"> <b>Να μένω συνδεδεμένος σε αυτή τη συσκευή</b> (προσωπική συσκευή / προφίλ Chrome — χωρίς κωδικό την επόμενη φορά)</label>
 <div class="toolbar" style="margin-top:14px"><button class="btn primary">Είσοδος</button></div>
-<p class="muted" style="margin-bottom:0">Ο κωδικός δεν αποθηκεύεται· η είσοδος ισχύει μέχρι να κλείσει ο browser.</p></form>
+<p class="muted" style="margin-bottom:0">Χωρίς την επιλογή, ο κωδικός δεν αποθηκεύεται και η είσοδος ισχύει μέχρι να κλείσει ο browser. Αποσύνδεση: Ρυθμίσεις → «Αποσύνδεση».</p></form>
 <p><a href="#/connect" data-act="other">Άλλος τρόπος σύνδεσης</a></p></div>`,
     mount(el) {
       onSubmit(el.querySelector('#lgForm'), async (d) => {
         const x = await unseal(c.blob, d.email, d.password);
         setSession(x.token);
         try { await db.open(backendFor(c)); } catch (e) { setSession(''); throw new Error('Η πρόσβαση δεν είναι πλέον ενεργή: ' + e.message); }
+        // «Να μένω συνδεδεμένος»: η συσκευή κρατά τη σύνδεση όπως με κωδικό GitHub (μόνο σε αυτό το προφίλ του browser)
+        if (d.remember) { saveConnection({ kind: 'github', repo: c.repo, token: x.token, email: c.email }); setSession(''); }
         toast('Καλώς ήλθατε.');
         location.hash = '#/';
       });
