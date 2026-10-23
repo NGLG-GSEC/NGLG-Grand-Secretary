@@ -37,11 +37,15 @@ function connectPage({ query }) {
   const [owner] = DEFAULT_REPO.split('/');
   const newRepo = `https://github.com/new?owner=${owner}&name=nglg-grammateia-data&visibility=private&description=${encodeURIComponent('Δεδομένα Ψηφιακής Μεγάλης Γραμματείας (ιδιωτικό)')}`;
   const newToken = 'https://github.com/settings/tokens/new?scopes=repo&description=' + encodeURIComponent('Μεγάλη Γραμματεία');
+  const fineToken = `https://github.com/settings/personal-access-tokens/new?name=${encodeURIComponent('Μεγάλη Γραμματεία')}&target_name=${owner}&contents=write&expires_in=none`;
   return {
     title: 'Σύνδεση', bare: true,
     html: `<div class="auth" style="max-width:640px;text-align:left"><div style="text-align:center"><img class="logo" src="img/header_emblem.png" alt=""><h1>Ψηφιακή Μεγάλη Γραμματεία</h1>
 <p class="muted">Σύνδεση με τα δεδομένα — μία φορά σε κάθε συσκευή.</p></div>
-${query.error ? `<div class="card toast error" style="position:static">${esc(query.error)}</div>` : ''}
+${query.error ? `<div class="card toast error" style="position:static;white-space:pre-line">${esc(query.error)}</div>
+<div class="card" style="border-left:5px solid #187a3d"><b>Πώς να μπείτε από αυτή τη συσκευή</b><ol class="steps">
+<li><b>Ο πιο εύκολος τρόπος, χωρίς κωδικό GitHub:</b> από συσκευή/προφίλ όπου η εφαρμογή ήδη ανοίγει → Ρυθμίσεις → «👤 Πρόσκληση χρήστη» → ανοίξτε τον σύνδεσμο εδώ, γράψτε τον κωδικό και τσεκάρετε «Να μένω συνδεδεμένος».</li>
+<li><b>Ή νέος κωδικός GitHub με πρόσβαση:</b> <a href="${fineToken}" target="_blank" rel="noopener">δημιουργία κωδικού για το ${esc(DEFAULT_REPO)}</a> — «Resource owner»: <b>${esc(owner)}</b>, «Only select repositories»: <b>${esc(DEFAULT_REPO.split('/')[1])}</b>, «Contents»: <b>Read and write</b> → «Generate token» → επικόλληση παρακάτω.</li></ol></div>` : ''}
 <form class="card" id="ghForm"><h2 style="margin-top:0">Σύνδεση</h2>
 <label>Αποθετήριο δεδομένων (ιδιωτικό)</label><input name="repo" value="${esc(c.repo || DEFAULT_REPO)}" required>
 <label style="margin-top:12px">Κωδικός πρόσβασης GitHub (token)</label><input name="token" type="password" value="${esc(c.token || '')}" autocomplete="off" required placeholder="ghp_… ή github_pat_…">
@@ -51,6 +55,7 @@ ${query.error ? `<div class="card toast error" style="position:static">${esc(que
 <li><a href="${newToken}" target="_blank" rel="noopener">Δημιουργήστε κωδικό πρόσβασης</a> → κάτω-κάτω «Generate token» → αντιγράψτε τον (ξεκινά με <code>ghp_</code>).</li>
 <li>Επικολλήστε τον παραπάνω και πατήστε «Σύνδεση». Ο κωδικός μένει μόνο σε αυτή τη συσκευή.</li></ol>
 <p class="muted">Τα δεδομένα (μέλη, Στοές, πρωτόκολλο…) αποθηκεύονται μόνο στο ιδιωτικό αποθετήριο· κάθε αλλαγή κρατιέται στο ιστορικό του GitHub.</p></details></form>
+<div class="card"><b>🔑 Έχετε σύνδεσμο πρόσκλησης (email + κωδικός);</b><p class="muted" style="margin:6px 0 0">Ανοίξτε τον σύνδεσμο που σας στάλθηκε σε αυτή τη συσκευή — δεν χρειάζεται κωδικός GitHub. Νέος σύνδεσμος: Ρυθμίσεις → «👤 Πρόσκληση χρήστη» από συσκευή όπου η εφαρμογή ήδη ανοίγει.</p></div>
 <div class="card"><b>Δοκιμή χωρίς σύνδεση</b><p class="muted" style="margin:6px 0 10px">Τα δεδομένα μένουν μόνο σε αυτόν τον browser — για γνωριμία με την εφαρμογή.</p>
 <button class="btn" data-act="local">Δοκιμή σε αυτή τη συσκευή</button></div>
 <div class="card"><b>🏛 Πύλη Μεγάλης Γραμματείας</b><p class="muted" style="margin:6px 0 10px">Έντυπο Διατάγματος, Τεκτονικές Ομιλίες, φόρμες εγγραφής, άλλα Γραφεία.</p><a class="btn" href="#/portal">Άνοιγμα Πύλης</a></div></div>`,
@@ -58,7 +63,8 @@ ${query.error ? `<div class="card toast error" style="position:static">${esc(que
       onSubmit(el.querySelector('#ghForm'), async (d) => {
         const repo = d.repo.trim().replace(/^https:\/\/github\.com\//, '').replace(/\/$/, '');
         if (!/^[\w.-]+\/[\w.-]+$/.test(repo)) throw new Error('Γράψτε το αποθετήριο ως «οργανισμός/όνομα».');
-        await connect({ kind: 'github', repo, token: d.token.trim() });
+        try { await connect({ kind: 'github', repo, token: d.token.trim() }); }
+        catch (e) { db.backend = null; location.hash = '#/connect?error=' + encodeURIComponent(e.message || String(e)); return; } // με οδηγίες εισόδου
         toast('Συνδεθήκατε.');
         location.hash = '#/';
       });

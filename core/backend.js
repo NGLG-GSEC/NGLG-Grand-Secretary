@@ -25,8 +25,19 @@ export class GitHubBackend {
                  ...(opts.body ? { 'Content-Type': 'application/json' } : {}) },
     });
     if (r.status === 401) throw new Error('Ο κωδικός πρόσβασης GitHub (token) δεν είναι έγκυρος ή έληξε.');
-    if (r.status === 404 && path === '') throw new Error(`Δεν βρέθηκε το αποθετήριο ${this.label} ή ο κωδικός δεν έχει πρόσβαση σε αυτό.`);
+    if (r.status === 404 && path === '') throw new Error(`Δεν βρέθηκε το αποθετήριο ${this.label} ή ο κωδικός δεν έχει πρόσβαση σε αυτό.${await this.diagnose()}`);
     return r;
+  }
+  // Γιατί δεν φαίνεται το αποθετήριο: σε ποιον λογαριασμό ανήκει ο κωδικός και τι είδους είναι (για σαφή οδηγία στη σελίδα Σύνδεσης)
+  async diagnose() {
+    try {
+      const r = await fetch(`${this.api}/user`, { cache: 'no-store', headers: { Accept: 'application/vnd.github+json', Authorization: `Bearer ${this.token}` } });
+      if (!r.ok) return '';
+      const login = (await r.json()).login, scopes = r.headers.get('x-oauth-scopes'), fine = /^github_pat_/.test(this.token);
+      if (fine) return `\n\nΟ κωδικός (fine-grained) ανήκει στον λογαριασμό GitHub «${login}», αλλά δεν περιλαμβάνει το ${this.label}: στο token πρέπει «Resource owner» = ${this.owner} και «Only select repositories» → ${this.repo}, με «Contents: Read and write» — ή εκκρεμεί η έγκρισή του από τον οργανισμό.`;
+      if (scopes != null && !/\brepo\b/.test(scopes)) return `\n\nΟ κωδικός ανήκει στον λογαριασμό GitHub «${login}» αλλά δεν έχει το δικαίωμα «repo». Φτιάξτε νέο κωδικό με το κουτάκι «repo» επιλεγμένο.`;
+      return `\n\nΟ κωδικός ανήκει στον λογαριασμό GitHub «${login}», ο οποίος δεν έχει πρόσβαση στο ιδιωτικό ${this.label}. Χρησιμοποιήστε κωδικό από λογαριασμό που έχει πρόσβαση, ή ζητήστε από τον διαχειριστή του ${this.owner} να προσθέσει τον «${login}».`;
+    } catch { return ''; }
   }
   async json(path, opts) {
     const r = await this.req(path, opts);

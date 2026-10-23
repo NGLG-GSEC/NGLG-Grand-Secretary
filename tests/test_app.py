@@ -403,6 +403,16 @@ def test_github_errors(app):
     connect_github(app, MockGitHub(private=False))
     app.page.wait_for_selector('text=είναι δημόσιο')
     app.errors.clear()
+    # αποθετήριο που δεν φαίνεται: διάγνωση λογαριασμού και οδηγίες εισόδου από αυτή τη συσκευή
+    connect_github(app, MockGitHub(visible=False, login='dskiad-gh'))
+    app.page.wait_for_selector('text=Πώς να μπείτε από αυτή τη συσκευή')
+    t = app.text()
+    assert 'λογαριασμό GitHub «dskiad-gh»' in t and 'Πρόσκληση χρήστη' in t and 'Να μένω συνδεδεμένος' in t, t
+    assert app.page.locator('a[href*="personal-access-tokens/new"][href*="target_name=NGLG-GSEC"]').count() == 1
+    app.errors.clear()
+    connect_github(app, MockGitHub(visible=False, scopes='read:user'))
+    app.page.wait_for_selector('text=δεν έχει το δικαίωμα «repo»')
+    app.errors.clear()
 
 
 def test_portal_and_old_links(browser, base_url):

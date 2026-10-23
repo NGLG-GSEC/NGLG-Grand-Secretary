@@ -6,8 +6,8 @@ import re
 
 
 class MockGitHub:
-    def __init__(self, token='good-token', private=True):
-        self.token, self.private = token, private
+    def __init__(self, token='good-token', private=True, visible=True, login='test-user', scopes='repo'):
+        self.token, self.private, self.visible, self.login, self.scopes = token, private, visible, login, scopes
         self.blobs, self.trees, self.commits, self.ref = {}, {}, {}, None
         self.requests = []
 
@@ -50,6 +50,10 @@ class MockGitHub:
         self.requests.append((method, url))
         if request.headers.get('authorization') != f'Bearer {self.token}':
             return route.fulfill(status=401, json={'message': 'Bad credentials'})
+        if url.split('?')[0] == 'https://api.github.com/user':
+            return route.fulfill(status=200, json={'login': self.login}, headers={'x-oauth-scopes': self.scopes, 'access-control-expose-headers': 'X-OAuth-Scopes'})
+        if not self.visible:
+            return route.fulfill(status=404, json={'message': 'Not Found'})
         m = re.match(r'https://api\.github\.com/repos/([^/]+)/([^/]+)(/[^?]*)?', url)
         path = (m.group(3) or '') if m else ''
         body = json.loads(request.post_data or '{}') if request.post_data else {}
