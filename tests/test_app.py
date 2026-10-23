@@ -410,6 +410,9 @@ def test_github_errors(app):
     assert 'λογαριασμό GitHub «dskiad-gh»' in t and 'Πρόσκληση χρήστη' in t and 'Να μένω συνδεδεμένος' in t, t
     assert app.page.locator('a[href*="personal-access-tokens/new"][href*="target_name=NGLG-GSEC"]').count() == 1
     app.errors.clear()
+    connect_github(app, MockGitHub(visible=False, login='NGLG-GSEC', token='github_pat_x'), token='github_pat_x')
+    app.page.wait_for_selector('text=δεν του δόθηκε πρόσβαση')
+    app.errors.clear()
     connect_github(app, MockGitHub(visible=False, scopes='read:user'))
     app.page.wait_for_selector('text=δεν έχει το δικαίωμα «repo»')
     app.errors.clear()
