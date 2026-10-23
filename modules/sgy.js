@@ -14,6 +14,7 @@ import { precedenceOf } from './decree-catalog.js';
 import { highestOfficeText, epeteiridaAll } from './epeteirida-table.js';
 import { hasActiveList, isCurrentRecord } from './epeteirida-import.js';
 import { masonicYear } from './visits.js';
+import { greeklish } from './diploma.js';
 
 export const SGY_NAME = 'Συμβούλιο Γενικών Υποθέσεων';
 export const SGY_TO_NAME = 'Προς τα Μέλη του Συμβουλίου Γενικών Υποθέσεων';
@@ -66,14 +67,35 @@ export const sgyEmails = () => [...new Set(sgyMembers().filter(usable).map((x) =
 const waNo = (m) => { const d = digits10(m.mobile); return d.length === 10 ? '30' + d : ''; };
 export const sgyLetterUrl = () => `#/letters/new?category=ΣΓΥ&to_name=${encodeURIComponent(SGY_TO_NAME)}`;
 
-// Ταυτοποίηση λίστας (ονόματα, email, κινητά — μία γραμμή ανά Αδελφό) στο Μητρώο
+// Λατινικό «κλειδί» ονόματος για σύγκριση ελληνικών ↔ λατινικών (Αλμπάνης = Albanis, Μπενετάτος = Benetatos)
+const latinKey = (v) => { const t = /[α-ωά-ώ]/i.test(v) ? greeklish(v) : String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+  return t.replace(/[^A-Z]/g, '').replace(/MP/g, 'B').replace(/NT/g, 'D').replace(/G[KG]/g, 'G').replace(/KS/g, 'X').replace(/PH/g, 'F').replace(/OU/g, 'U')
+    .replace(/(EI|OI|Y|H)/g, 'I').replace(/W/g, 'O').replace(/(.)\1/g, '$1'); };
+// Ταυτοποίηση λίστας στο Μητρώο: μία γραμμή ανά Αδελφό ή λίστα παραληπτών email χωρισμένη με κόμματα («Όνομα <email>, email, …»).
+// Πρώτα βέβαιη ταύτιση (email, κινητό, ονοματεπώνυμο)· αλλιώς «πιθανή» από το επώνυμο στο όνομα ή μέσα στο email (για έλεγχο).
 export function matchList(text) {
-  return String(text || '').split(/\n/).map((l) => l.trim()).filter(Boolean).map((line) => {
+  const entries = String(text || '').split(/\n/).flatMap((l) => ((l.match(/@/g) || []).length > 1 ? l.split(/[,;](?![^<]*>)/) : [l]))
+    .map((l) => l.replace(/^[\s:;,]+|[\s,;]+$/g, '').trim()).filter(Boolean);
+  const ms = db.all('member_registry').filter((m) => !noContact(m) && m.surname), bySur = new Map();
+  for (const m of ms) { const k = latinKey(m.surname); if (k.length >= 4) (bySur.get(k) || bySur.set(k, []).get(k)).push(m); }
+  const guess = (name, email) => {
+    const toks = name.split(' ').map(latinKey).filter((k) => k.length >= 4);
+    for (const t of toks) {
+      let c = bySur.get(t) || [];
+      if (c.length > 1) { const f = toks.filter((x) => x !== t); c = c.filter((m) => f.some((x) => latinKey(m.first_name).slice(0, 2) === x.slice(0, 2))); }
+      if (c.length === 1) return c[0];
+    }
+    const local = latinKey(String(email).split('@')[0]);
+    const hits = local.length >= 5 ? [...bySur.entries()].filter(([k]) => k.length >= 5 && local.includes(k)).flatMap(([, v]) => v) : [];
+    return hits.length === 1 ? hits[0] : null;
+  };
+  return entries.map((line) => {
     const email = ((line.match(/[^\s<>,;"'()]+@[^\s<>,;"'()]+\.[a-z]{2,}/i) || [''])[0]).toLowerCase(), mob = digits10((line.match(/(?:\+?30)?\s*69\d[\d\s]{7,}/) || [''])[0]);
     const name = line.replace(/[^\s,;<>]+@[^\s,;<>]+/g, ' ').replace(/(?:\+?30)?\s*69\d[\d\s]{7,}/g, ' ').replace(/[<>,;:|\t"]+/g, ' ').replace(/\s+/g, ' ').trim();
     const parts = name.split(' ');
     const id = identify({ email, mobile: mob, full_name: name }) || (parts.length >= 2 ? identify({ surname: parts[parts.length - 1], first_name: parts[0] }) : null);
-    return { line, name, email, mobile: mob, member_id: id ? canonicalId(id) : null };
+    const g = id ? null : guess(name, email);
+    return { line, name, email, mobile: mob, member_id: id ? canonicalId(id) : g ? canonicalId(g.id) : null, guess: !!g };
   });
 }
 
@@ -139,10 +161,11 @@ function sgyPage({ query = {} }, inRegistry = false) {
         },
         match() {
           const res = matchList(el.querySelector('#sgyList').value), have = new Set(xs.map((x) => x.member_id)), box = el.querySelector('#sgyMatch');
-          box.innerHTML = table(['Γραμμή', 'Μέλος του Μητρώου', 'Τίτλος / Επετηρίδα', 'Email / Κινητό', ''], res.map((r, i) => {
+          const sure = res.filter((r) => r.member_id && !r.guess).length, maybe = res.filter((r) => r.guess).length;
+          box.innerHTML = `<p><b>${res.length}</b> παραλήπτες · <span class="vok">${sure} βέβαιες ταυτίσεις</span> · <span class="vwarn">${maybe} πιθανές</span> · ${res.length - sure - maybe} δεν βρέθηκαν στο Μητρώο</p>` + table(['Γραμμή', 'Μέλος του Μητρώου', 'Τίτλος / Επετηρίδα', 'Email / Κινητό', ''], res.map((r, i) => {
             const m = r.member_id && db.get('member_registry', r.member_id);
             return [esc(r.line), m ? `<b>${esc(titledName(m))}</b><br><small class="muted">${esc(regCode(m))}</small>` : '<span class="vwarn">Δεν βρέθηκε στο Μητρώο</span>', m ? `<small>${esc(highestOfficeText(m.id) || '—')}</small>` : '',
-              m ? `<small>${esc(m.email || '—')}<br>${esc(m.mobile || '—')}</small>` : '', m ? (have.has(m.id) ? '<span class="vok">✓ ήδη στο ΣΓΥ</span>' : `<label class="chk"><input type="checkbox" data-mi="${i}" checked> προσθήκη</label>`) : ''];
+              m ? `<small>${esc(m.email || '—')}<br>${esc(m.mobile || '—')}</small>` : '', m ? (have.has(m.id) ? '<span class="vok">✓ ήδη στο ΣΓΥ</span>' : `${r.guess ? '<span class="vwarn">πιθανή ταύτιση — ελέγξτε</span><br>' : ''}<label class="chk"><input type="checkbox" data-mi="${i}"${r.guess ? '' : ' checked'}> προσθήκη</label>`) : ''];
           })) + (res.some((r) => r.member_id && !have.has(r.member_id)) ? '<div class="toolbar"><button type="button" class="btn primary" id="sgyAddAll">+ Προσθήκη των επιλεγμένων (Κανόνες 218–219)</button></div>' : '');
           const btn = box.querySelector('#sgyAddAll');
           if (btn) btn.addEventListener('click', async () => {

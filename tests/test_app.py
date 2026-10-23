@@ -2882,3 +2882,19 @@ def test_sgy_council_registry_letter_and_whatsapp(app):
     assert app.page.input_value('[name=category]') == 'ΣΓΥ'
     mod = app.page.evaluate("async () => { const s = await import('./modules/sgy.js'); return s.sgyEmails(); }")
     assert sorted(mod) == ['g@example.com', 'n.ioannou@example.com'], mod
+
+
+def test_sgy_match_comma_separated_recipients_with_latin_names(app):
+    # Λίστα παραληπτών email (με κόμματα, λατινικά ονόματα): βέβαιη ταύτιση από email, πιθανή από επώνυμο (όνομα ή email)
+    app.connect_local()
+    add_member(app)
+    add_member(app, surname='Ζαχαρίου', first='Βασίλειος', email='vz.home@example.com', mobile='6977000333')
+    add_member(app, surname='Μπαλτάς', first='Αντώνιος', email='', mobile='6977000444')
+    app.go('/sgy')
+    app.page.click('summary:has-text("Ταυτοποίηση λίστας")')
+    app.page.fill('#sgyList', ': g@example.com, Vasilis Zachariou <vz.work@example.org>, a.baltas77@example.net, nobody@example.net')
+    app.page.click('button:has-text("🔎 Ταυτοποίηση")')
+    t = app.text('#sgyMatch')
+    assert '4 παραλήπτες' in t and '1 βέβαιες' in t and '2 πιθανές' in t and '1 δεν βρέθηκαν' in t, t
+    assert 'Βασίλειος Ζαχαρίου' in t and 'Αντώνιος Μπαλτάς' in t, t
+    assert app.page.locator('#sgyMatch [data-mi]:checked').count() == 1  # οι πιθανές δεν επιλέγονται μόνες τους
