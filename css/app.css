@@ -539,3 +539,6 @@ input[type=file]{max-width:100%;min-width:0}
 .att-split .dz-controls{max-width:none}
 @media screen and (max-width:800px){.att-row{grid-template-columns:1fr 1fr;}.att-row .att-name{grid-column:1/-1}}
 .att-split{grid-template-columns:minmax(0,1.15fr) minmax(0,1fr)}@media screen and (max-width:1100px){.att-split{grid-template-columns:1fr}}
+.paper.report.sgy-att .att-t td.att-vac{background:#f8d7d7;color:#9b1c1c;font-weight:700;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.paper.report.sgy-att .att-t td.att-miss{color:#8a8f99;font-style:italic;text-align:center}
+.att-row .att-st .muted{color:#b42318;font-weight:700}

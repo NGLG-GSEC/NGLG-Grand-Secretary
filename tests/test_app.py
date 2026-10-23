@@ -3036,6 +3036,9 @@ def test_sgy_attendance_builder_roster_text_and_docx(app, tmp_path):
     for s in ['ΠΑΡΟΥΣΙΟΛΟΓΙΟ', 'Μέλη εξ Αξιώματος', 'Μέγας Καγκελάριος', 'Διορισμένα Μέλη υπό του ΜΔ 2026 - 2027', 'Αιρετά Μέλη Θητείας 2024 - 2027', 'Βασίλειος Ζαχαρίου (Αθηνών)', '(Πειραιώς & Ν.Α.Α.)']:
         assert s in pv, s
     assert 'Ενώ τα αλλα' not in pv and 'Κενη' not in pv
+    assert app.page.locator('#attPrev td.att-vac').count() == 2 and app.page.locator('#attPrev td.att-miss:has-text("Λείπει Διορισμός")').count() == 2
+    assert app.page.locator('#attPrev td.att-vac', has_text='(Πειραιώς & Ν.Α.Α.)').count() == 1
+    assert app.page.evaluate("() => getComputedStyle(document.querySelector('#attPrev td.att-vac')).backgroundColor") == 'rgb(248, 215, 215)'
     assert app.page.locator('#attRows .att-row').count() == 7, app.page.locator('#attRows .att-row').count()
     # builder: αλλαγή ημερομηνίας και ιδιότητας
     app.page.fill('[data-s=date]', '2026-11-02')

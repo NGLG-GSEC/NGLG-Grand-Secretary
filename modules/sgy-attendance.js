@@ -75,6 +75,8 @@ export async function docxRoster(file) {
 const linkSeat = (s) => { if (s.member_id || !s.name) return s; const r = matchList(s.name.replace(HONORIFIC, ''))[0]; return r && r.member_id && !r.guess ? { ...s, member_id: r.member_id } : { ...s, guess_id: r && r.member_id }; };
 
 // Το έντυπο (A4): ίδια διάταξη με το Word της Γραμματείας
+// Κενή θέση: το κελί του ονόματος κόκκινο και στην προέκταση (στήλη υπογραφής) γκρι «Λείπει Διορισμός»
+const VACANT = '<td class="att-vac"></td><td class="att-miss">Λείπει Διορισμός</td>';
 export function attendancePaper(seats, s) {
   const cats = []; for (const x of seats) { const c = cats.find((k) => k.name === x.category) || (cats.push({ name: x.category, xs: [] }), cats[cats.length - 1]); c.xs.push(x); }
   const row = `style="height:${+s.row || 9}mm"`;
@@ -82,8 +84,8 @@ export function attendancePaper(seats, s) {
 <div class="att-h1">${esc(s.council)}</div><div class="att-h1">${esc(s.period)}</div><div class="att-h2">${esc(s.meeting)}</div><div class="att-date">${esc(attDate(s))}</div>
 <div class="att-title">${esc(s.title)}</div>
 ${cats.map((c) => `<div class="att-cat">${esc(c.name)}</div><table class="att-t${categoryBasis(c.name) === '216' ? ' att-ex' : ''}"><tbody>${c.xs.map((x) => (categoryBasis(c.name) === '216'
-    ? `<tr ${row}><td>${esc(x.role)}</td><td>${esc(x.name)}</td><td></td></tr>`
-    : `<tr ${row}><td>${x.name ? esc(x.name) : '<span class="att-vac">&nbsp;</span>'}${x.province ? ` (${esc(x.province)})` : ''}</td><td></td></tr>`)).join('')}</tbody></table>`).join('')}
+    ? `<tr ${row}><td>${esc(x.role)}</td>${x.name ? `<td>${esc(x.name)}</td><td></td>` : VACANT}</tr>`
+    : `<tr ${row}>${x.name ? `<td>${esc(x.name)}${x.province ? ` (${esc(x.province)})` : ''}</td><td></td>` : VACANT.replace('<td class="att-vac">', `<td class="att-vac">${x.province ? `(${esc(x.province)})` : ''}`)}</tr>`)).join('')}</tbody></table>`).join('')}
 ${s.footer ? `<div class="att-foot">${esc(s.footer)}</div>` : ''}</article>`;
 }
 
@@ -115,7 +117,7 @@ ${f('date_text', 'Ημερομηνία ως κείμενο (προαιρετικ
         rowsBox.innerHTML = seats.map((x, i) => `${i === 0 || seats[i - 1].category !== x.category ? `<div class="att-ecat">${esc(x.category)}</div>` : ''}<div class="att-row" data-i="${i}">
 <input data-f="category" list="attCats" value="${esc(x.category)}" title="Κατηγορία"><input data-f="role" value="${esc(x.role)}" placeholder="Ιδιότητα"${categoryBasis(x.category) === '216' ? '' : ' hidden'}>
 <span class="att-name"><input data-f="name" value="${esc(x.name)}" placeholder="Όνομα (κενό = κενή θέση)" autocomplete="off"></span><input data-f="province" value="${esc(x.province)}" placeholder="Επαρχία">
-<span class="att-st">${x.member_id ? '<span class="vok" title="Μέλος του Μητρώου">✓</span>' : x.name ? '<span class="vwarn" title="Δεν συνδέθηκε με μέλος του Μητρώου — επιλέξτε από τη λίστα">⚠</span>' : '<span class="muted">κενή</span>'}</span>
+<span class="att-st">${x.member_id ? '<span class="vok" title="Μέλος του Μητρώου">✓</span>' : x.name ? '<span class="vwarn" title="Δεν συνδέθηκε με μέλος του Μητρώου — επιλέξτε από τη λίστα">⚠</span>' : '<span class="muted" title="Λείπει Διορισμός">κενή</span>'}</span>
 <button type="button" class="btn small" data-mv="-1" title="Πάνω">↑</button><button type="button" class="btn small" data-mv="1" title="Κάτω">↓</button><button type="button" class="btn small danger" data-rm title="Αφαίρεση">✕</button></div>`).join('');
         rowsBox.querySelectorAll('[data-f=name]').forEach((inp) => attachPicker(inp, (q) => memberItems(q), (m) => {
           const i = +inp.closest('[data-i]').dataset.i; seats[i] = { ...seats[i], member_id: m.id, name: `${m.first_name || ''} ${m.surname || ''}`.trim() }; rows(); draw();
