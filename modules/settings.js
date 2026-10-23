@@ -5,6 +5,7 @@ import { esc, EMAIL_RE, splitEmails } from '../core/util.js';
 import { MAIL_SENDERS } from '../core/mail.js';
 import { disconnect, makeInvite, isSealed, lockSession } from '../core/connect.js';
 import { copyText } from '../core/mail.js';
+import { loadScript } from '../core/pdf.js';
 import { historyLink, exportAll } from './database.js';
 
 // Αφαίρεση διευθύνσεων από όλες τις λίστες Κοιν./Bcc των Ρυθμίσεων. Στον (δημόσιο) κώδικα μένει μόνο αποτύπωμα (FNV-1a)
@@ -74,8 +75,12 @@ ${t === 'emails' || t === 'textarea' ? `<textarea name="${k}" class="short">${es
         const link = await makeInvite({ email: d.email, password: d.password, token: d.token });
         el.querySelector('#invForm').reset();
         el.querySelector('#invOut').innerHTML = `<label style="margin-top:12px">Προσωπικός σύνδεσμος για ${esc(d.email)}</label><textarea class="short" readonly id="invLink">${esc(link)}</textarea>
-<div class="toolbar"><button type="button" class="btn" id="invCopy">📋 Αντιγραφή συνδέσμου</button></div>`;
+<div class="toolbar"><button type="button" class="btn" id="invCopy">📋 Αντιγραφή συνδέσμου</button><a class="btn wa-btn" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent(link)}">WhatsApp</a><a class="btn" href="mailto:${esc(d.email)}?subject=${encodeURIComponent('Ψηφιακή Μεγάλη Γραμματεία — σύνδεσμος εισόδου')}&body=${encodeURIComponent(link)}">✉ Email</a></div>
+<div class="card inv-qr"><b>📱 Στο κινητό: σκανάρετε με την κάμερα</b><div id="invQr"></div><small class="muted">Ανοίγει τη σελίδα εισόδου· γράψτε τον κωδικό και τσεκάρετε «Να μένω συνδεδεμένος σε αυτή τη συσκευή».</small></div>`;
         el.querySelector('#invCopy').onclick = async () => { await copyText(link); toast('Ο σύνδεσμος αντιγράφηκε.'); };
+        // QR code του συνδέσμου (τοπική βιβλιοθήκη vendor/qrcode.js — καμία εξωτερική υπηρεσία)
+        try { await loadScript('../vendor/qrcode.js'); const q = window.qrcode(0, 'L'); q.addData(link); q.make(); el.querySelector('#invQr').innerHTML = q.createSvgTag({ cellSize: 4, margin: 2 }); }
+        catch { el.querySelector('#invQr').textContent = 'Το QR δεν δημιουργήθηκε — χρησιμοποιήστε την αντιγραφή ή το WhatsApp.'; }
       });
       bind(el, { lock: lockSession, backup: exportAll, logout() { if (confirmDo('Αποσύνδεση από αυτή τη συσκευή; (Τα δεδομένα μένουν ασφαλή στο GitHub.)')) disconnect(); } });
     },

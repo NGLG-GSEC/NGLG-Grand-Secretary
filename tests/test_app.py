@@ -1142,6 +1142,8 @@ def test_invite_link_login_with_email_and_password(app, browser, base_url):
     app.page.wait_for_selector('#invLink', timeout=20000)
     link = app.page.input_value('#invLink')
     assert '#/login?invite=' in link and 'good-token' not in link
+    app.page.wait_for_selector('#invQr svg')  # QR για το κινητό
+    assert app.page.locator('#invOut a.wa-btn[href^="https://wa.me/?text="]').count() == 1
     # ο χρήστης σε δική του συσκευή
     ctx = browser.new_context()
     p = ctx.new_page()
