@@ -2926,7 +2926,7 @@ def test_sgy_match_comma_separated_recipients_with_latin_names(app):
     app.page.fill('#sgyList', ': g@example.com, Vasilis Zachariou <vz.work@example.org>, a.baltas77@example.net, nobody@example.net')
     app.page.click('button:has-text("🔎 Ταυτοποίηση")')
     t = app.text('#sgyMatch')
-    assert '4 παραλήπτες' in t and '1 βέβαιες' in t and '2 πιθανές' in t and '1 δεν βρέθηκαν' in t, t
+    assert '4 γραμμές' in t and '1 βέβαιες' in t and '2 πιθανές' in t and '1 δεν βρέθηκαν' in t, t
     assert 'Βασίλειος Ζαχαρίου' in t and 'Αντώνιος Μπαλτάς' in t, t
     assert app.page.locator('#sgyMatch [data-mi]:checked').count() == 1  # οι πιθανές δεν επιλέγονται μόνες τους
 
@@ -2950,3 +2950,34 @@ def test_home_sgy_tile_numbered_and_sgy_templates(app):
     app.page.wait_for_selector('[name=subject]')
     assert app.page.input_value('[name=category]') == 'ΣΓΥ' and 'Συμβουλίου Γενικών Υποθέσεων' in app.page.input_value('[name=subject]')
     assert app.page.input_value('[name=recipient_name]') == 'Προς τα Μέλη του Συμβουλίου Γενικών Υποθέσεων'
+
+
+def test_sgy_update_from_excel(app, tmp_path):
+    # Excel μελών ΣΓΥ (Name / Family Name / Given Name / E-mail 1 - Value): ταύτιση, email όπου λείπει, νέο μέλος στο Μητρώο, πλήρης κατάλογος
+    import openpyxl
+    app.connect_local()
+    add_member(app)
+    add_member(app, surname='Ζαχαρίου', first='Βασίλειος', email='', mobile='6977000333')
+    add_member(app, surname='Παλαιός', first='Πέτρος', email='old@example.com', mobile='6977000555')
+    app.page.evaluate("""async () => { const s = await import('./modules/sgy.js'); const {db} = await import('./core/store.js');
+      await s.addSgy([{ member_id: db.all('member_registry').find((m) => m.surname === 'Παλαιός').id, role: 'Μέλος', basis: '218' }]); }""")
+    wb = openpyxl.Workbook(); ws = wb.active
+    ws.append(['νο', 'Name', 'Family Name', 'Given Name', 'E-mail 1 - Value'])
+    ws.append([1, 'Γεώργιος Παπαδόπουλος', 'Παπαδόπουλος', 'Γεώργιος', 'g@example.com'])
+    ws.append([2, 'Βασίλειος Ζαχαρίου', 'Ζαχαρίου', 'Βασίλειος', 'vz@example.org'])
+    ws.append([3, 'Νέος Αδελφός', 'Αδελφός', 'Νέος', 'neos@example.net'])
+    f = tmp_path / 'sgy.xlsx'; wb.save(f)
+    app.go('/sgy')
+    app.page.click('summary:has-text("Ταυτοποίηση λίστας")')
+    app.page.set_input_files('#sgyXlsx', str(f))
+    app.page.wait_for_selector('#sgyMatch table')
+    t = app.text('#sgyMatch')
+    assert '3 γραμμές' in t and '2 βέβαιες' in t and '1 δεν βρέθηκαν' in t and '+ vz@example.org' in t, t
+    app.page.click('#sgyAllNew')
+    app.page.check('#sgyReplace')
+    app.page.click('#sgyAddAll')
+    app.page.wait_for_function("() => document.querySelector('.print-area').innerText.includes('Νέος Αδελφός')")
+    pa = app.text('.print-area')
+    assert 'Γεώργιος Παπαδόπουλος' in pa and 'Βασίλειος Ζαχαρίου' in pa and 'Παλαιός' not in pa, pa
+    em = app.page.evaluate("async () => (await import('./core/store.js')).db.all('member_registry').find((m) => m.surname === 'Ζαχαρίου').email")
+    assert em == 'vz@example.org'

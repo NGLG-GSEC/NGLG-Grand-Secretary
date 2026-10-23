@@ -80,6 +80,31 @@ db.migrate('sgy-templates-2026-10', (tx) => {
   for (const t of SGY_TEMPLATES) if (!tx.all('letter_templates').some((x) => x.key === t.key)) tx.insert('letter_templates', { ...t, category: 'ΣΓΥ', closing: 'Με αδελφική αγάπη,', active: 1 });
 });
 
+// Excel μελών ΣΓΥ (π.χ. «Name / Family Name / Given Name / E-mail 1 - Value» ή Επώνυμο / Όνομα / Email / Κινητό) → γραμμές «Όνομα Επώνυμο <email> κινητό».
+// Με πολλά φύλλα κατάλογος είναι το τελευταίο (το νεότερο)· τα άλλα συμπληρώνουν μόνο email/κινητό που λείπουν.
+export function sgyExcelLines(sheets) {
+  const fk = (v) => String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+  const lists = [];
+  for (const { rows } of sheets) {
+    const isHead = (c) => String(c).length < 40 && /e-?mail|ηλεκτρ/i.test(String(c)); // επικεφαλίδα, όχι κείμενο (π.χ. φύλλο καταγραφής)
+    const hi = rows.findIndex((r) => r.some(isHead)); if (hi < 0) continue;
+    const h = rows[hi].map((c) => fk(c));
+    const col = (re) => h.findIndex((c) => c.length < 40 && re.test(c)), iE = col(/e-?mail|ηλεκτρ/), iS = col(/family|surname|last|^επωνυμο/), iF = col(/given|first|^ονομα$/), iN = col(/^name$|ονοματεπ/), iM = col(/mobile|κινητ|phone|τηλ/);
+    if (iN < 0 && (iS < 0 || iF < 0)) continue;
+    const xs = [], seen = new Set();
+    for (const r of rows.slice(hi + 1)) {
+      const g = (i) => (i >= 0 ? String(r[i] ?? '').trim() : ''), name = (g(iF) && g(iS) ? `${g(iF)} ${g(iS)}` : g(iN)).replace(/\s+/g, ' ');
+      if (!name && !g(iE)) continue;
+      const k = fk(name) || g(iE).toLowerCase(); if (seen.has(k)) continue; seen.add(k);
+      xs.push({ k, name, email: g(iE), mobile: g(iM) });
+    }
+    if (xs.length) lists.push(xs);
+  }
+  if (!lists.length) return [];
+  const base = lists[lists.length - 1], extra = new Map(lists.slice(0, -1).flat().map((x) => [x.k, x]));
+  return base.map((x) => { const o = extra.get(x.k) || {}, email = x.email || o.email || '', mobile = x.mobile || o.mobile || '';
+    return `${x.name}${email ? ` <${email}>` : ''}${mobile ? ' ' + mobile : ''}`; });
+}
 // Λατινικό «κλειδί» ονόματος για σύγκριση ελληνικών ↔ λατινικών (Αλμπάνης = Albanis, Μπενετάτος = Benetatos)
 const latinKey = (v) => { const t = /[α-ωά-ώ]/i.test(v) ? greeklish(v) : String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
   return t.replace(/[^A-Z]/g, '').replace(/MP/g, 'B').replace(/NT/g, 'D').replace(/G[KG]/g, 'G').replace(/KS/g, 'X').replace(/PH/g, 'F').replace(/OU/g, 'U')
@@ -108,7 +133,7 @@ export function matchList(text) {
     const parts = name.split(' ');
     const id = identify({ email, mobile: mob, full_name: name }) || (parts.length >= 2 ? identify({ surname: parts[parts.length - 1], first_name: parts[0] }) : null);
     const g = id ? null : guess(name, email);
-    return { line, name, email, mobile: mob, member_id: id ? canonicalId(id) : g ? canonicalId(g.id) : null, guess: !!g };
+    return { line, name, email, mobile: mob, member_id: id ? canonicalId(id) : g ? canonicalId(g.id) : null, guess: !!g, first: parts.slice(0, -1).join(' '), last: parts[parts.length - 1] || '' };
   });
 }
 
@@ -146,6 +171,7 @@ ${sgyCards()}
 </div><div class="toolbar"><button type="button" class="btn primary" data-act="add">+ Προσθήκη στο ΣΓΥ</button></div></details>
 <details class="card fold noprint"><summary><b>📥 Ταυτοποίηση λίστας ονομάτων / email / κινητών στο Μητρώο</b></summary>
 <p class="muted">Επικολλήστε μία γραμμή ανά Αδελφό (όνομα, email ή κινητό — π.χ. από email προς το ΣΓΥ ή από ομάδα Επαφών Google). Η εφαρμογή βρίσκει ποιος είναι στο Μητρώο, με τίτλο, αξίωμα και στοιχεία· μετά «Προσθήκη».</p>
+<label class="dz-file">⬆ ή Excel με τα μέλη (στήλες Ονοματεπώνυμο ή Επώνυμο/Όνομα, Email, Κινητό)<input type="file" id="sgyXlsx" accept=".xlsx,.xls,.csv"></label>
 <textarea id="sgyList" rows="6" placeholder="Παπαδόπουλος Γεώργιος <g.papadopoulos@example.com>&#10;6944123456&#10;…"></textarea>
 <div class="toolbar"><button type="button" class="btn" data-act="match">🔎 Ταυτοποίηση</button></div><div id="sgyMatch"></div></details>`,
     mount(el) {
@@ -175,25 +201,53 @@ ${sgyCards()}
         },
         match() {
           const res = matchList(el.querySelector('#sgyList').value), have = new Set(xs.map((x) => x.member_id)), box = el.querySelector('#sgyMatch');
-          const sure = res.filter((r) => r.member_id && !r.guess).length, maybe = res.filter((r) => r.guess).length;
-          box.innerHTML = `<p><b>${res.length}</b> παραλήπτες · <span class="vok">${sure} βέβαιες ταυτίσεις</span> · <span class="vwarn">${maybe} πιθανές</span> · ${res.length - sure - maybe} δεν βρέθηκαν στο Μητρώο</p>` + table(['Γραμμή', 'Μέλος του Μητρώου', 'Τίτλος / Επετηρίδα', 'Email / Κινητό', ''], res.map((r, i) => {
-            const m = r.member_id && db.get('member_registry', r.member_id);
+          const sure = res.filter((r) => r.member_id && !r.guess).length, maybe = res.filter((r) => r.guess).length, none = res.length - sure - maybe;
+          box.innerHTML = `<p><b>${res.length}</b> γραμμές · <span class="vok">${sure} βέβαιες ταυτίσεις</span> · <span class="vwarn">${maybe} πιθανές</span> · ${none} δεν βρέθηκαν στο Μητρώο</p>` + table(['Γραμμή', 'Μέλος του Μητρώου', 'Τίτλος / Επετηρίδα', 'Email / Κινητό', ''], res.map((r, i) => {
+            const m = r.member_id && db.get('member_registry', r.member_id), fill = m && r.email && !String(m.email || '').trim();
             return [esc(r.line), m ? `<b>${esc(titledName(m))}</b><br><small class="muted">${esc(regCode(m))}</small>` : '<span class="vwarn">Δεν βρέθηκε στο Μητρώο</span>', m ? `<small>${esc(highestOfficeText(m.id) || '—')}</small>` : '',
-              m ? `<small>${esc(m.email || '—')}<br>${esc(m.mobile || '—')}</small>` : '', m ? (have.has(m.id) ? '<span class="vok">✓ ήδη στο ΣΓΥ</span>' : `${r.guess ? '<span class="vwarn">πιθανή ταύτιση — ελέγξτε</span><br>' : ''}<label class="chk"><input type="checkbox" data-mi="${i}"${r.guess ? '' : ' checked'}> προσθήκη</label>`) : ''];
-          })) + (res.some((r) => r.member_id && !have.has(r.member_id)) ? '<div class="toolbar"><button type="button" class="btn primary" id="sgyAddAll">+ Προσθήκη των επιλεγμένων (Κανόνες 218–219)</button></div>' : '');
-          const btn = box.querySelector('#sgyAddAll');
-          if (btn) btn.addEventListener('click', async () => {
-            const pick = [...box.querySelectorAll('[data-mi]:checked')].map((c) => res[+c.dataset.mi]).filter((r) => r.member_id);
-            await addSgy([...new Map(pick.map((r) => [r.member_id, { member_id: r.member_id, role: 'Μέλος', basis: '218' }])).values()]);
+              m ? `<small>${esc(m.email || '—')}${fill ? ` <span class="pill ok">+ ${esc(r.email)}</span>` : ''}<br>${esc(m.mobile || '—')}</small>` : '',
+              m ? (have.has(m.id) ? '<span class="vok">✓ ήδη στο ΣΓΥ</span>' : `${r.guess ? '<span class="vwarn">πιθανή ταύτιση — ελέγξτε</span><br>' : ''}<label class="chk"><input type="checkbox" data-mi="${i}"${r.guess ? '' : ' checked'}> προσθήκη</label>`)
+                : r.last && r.first ? `<label class="chk"><input type="checkbox" data-new="${i}"> νέο μέλος στο Μητρώο + ΣΓΥ</label>` : ''];
+          })) + `<div class="toolbar">${none ? '<button type="button" class="btn small" id="sgyAllNew">☑ Όλα τα «νέο μέλος»</button>' : ''}
+<label class="chk"><input type="checkbox" id="sgyReplace"> Η λίστα είναι ο πλήρης κατάλογος: αφαίρεση από το ΣΓΥ όσων προστέθηκαν χειροκίνητα και δεν είναι στη λίστα</label>
+<button type="button" class="btn primary" id="sgyAddAll">✔ Ενημέρωση ΣΓΥ</button></div><p class="muted">Συμπληρώνεται και το email στην καρτέλα του μέλους όπου λείπει. Τα μέλη εκ του αξιώματος (Καν. 216/217) μένουν πάντα.</p>`;
+          const all = box.querySelector('#sgyAllNew'); if (all) all.addEventListener('click', () => box.querySelectorAll('[data-new]').forEach((c) => { c.checked = true; }));
+          box.querySelector('#sgyAddAll').addEventListener('click', async () => {
+            const pick = [...box.querySelectorAll('[data-mi]:checked')].map((c) => res[+c.dataset.mi]), fresh = [...box.querySelectorAll('[data-new]:checked')].map((c) => res[+c.dataset.new]);
+            const n = await applySgyList({ pick, fresh, all: res.filter((r) => r.member_id && !r.guess).concat(pick), replace: box.querySelector('#sgyReplace').checked });
+            flash(`ΣΓΥ: ${n.added} προστέθηκαν${n.created ? `, ${n.created} νέα μέλη στο Μητρώο` : ''}${n.emails ? `, ${n.emails} email συμπληρώθηκαν` : ''}${n.removed ? `, ${n.removed} αφαιρέθηκαν` : ''}.`);
             go(location.hash.slice(1).split('?')[0], query);
           });
         },
+      });
+      el.querySelector('#sgyXlsx').addEventListener('change', async (e) => {
+        const f = e.target.files[0]; if (!f) return;
+        try { const { readXlsx } = await import('../core/util.js'); const lines = sgyExcelLines(await readXlsx(f));
+          if (!lines.length) throw new Error('Δεν βρέθηκε στήλη Email στο Excel.');
+          el.querySelector('#sgyList').value = lines.join('\n'); el.querySelector('[data-act=match]').click(); }
+        catch (err) { toast(err.message || String(err), 'error'); }
       });
       el.querySelector('#sgyWaText').addEventListener('input', (e) => { for (const a of el.querySelectorAll('[data-wa]')) a.href = `https://wa.me/${a.dataset.wa}?text=${encodeURIComponent(e.target.value)}`; });
       attachPicker(el.querySelector('#sgyFind'), (q2) => memberItems(q2), (m) => { el.querySelector('#sgyMid').value = m.id; el.querySelector('#sgyPicked').textContent = `✓ ${titledName(m)} ${regCode(m)} — ${highestOfficeText(m.id) || ''}`; });
       el.querySelector('#sgyFlt').addEventListener('submit', (e) => { e.preventDefault(); go(location.hash.slice(1).split('?')[0], { q: e.target.q.value }); });
     },
   };
+}
+// Ενημέρωση ΣΓΥ από λίστα/Excel: προσθήκη επιλεγμένων, νέα μέλη στο Μητρώο, email όπου λείπει, προαιρετική αφαίρεση όσων δεν είναι στη λίστα
+export async function applySgyList({ pick = [], fresh = [], all = [], replace = false }) {
+  const n = { added: 0, created: 0, emails: 0, removed: 0 }, { insertMember } = await import('./members.js');
+  const keep = new Set(all.map((r) => canonicalId(r.member_id)));
+  await db.save(`ΣΓΥ: ενημέρωση από λίστα (${pick.length + fresh.length})`, (tx) => {
+    const put = (mid) => { tx.remove('sgy_members', (r) => canonicalId(r.member_id) === canonicalId(mid)); tx.insert('sgy_members', { member_id: mid, role: 'Μέλος', basis: '218', province: '', term: '', notes: '', excluded: 0 }); n.added++; keep.add(canonicalId(mid)); };
+    for (const r of pick) {
+      const m = tx.get('member_registry', r.member_id); if (!m) continue;
+      if (r.email && !String(m.email || '').trim()) { tx.update('member_registry', m.id, { email: r.email }); n.emails++; }
+      put(m.id);
+    }
+    for (const r of fresh) { const id = insertMember(tx, { surname: r.last, first_name: r.first, email: r.email, mobile: r.mobile || '' }); n.created++; put(id); }
+    if (replace) for (const r of tx.all('sgy_members')) if (!Number(r.excluded) && !keep.has(canonicalId(r.member_id))) { tx.remove('sgy_members', r.id); n.removed++; }
+  });
+  return n;
 }
 export async function addSgy(items) {
   if (!items.length) return 0;
