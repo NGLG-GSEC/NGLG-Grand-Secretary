@@ -2,7 +2,7 @@
 import { db } from './store.js';
 import { esc, matches, sortBy } from './util.js';
 
-// Διαγραμμένο μέλος (All_Deregistered = ΝΑΙ ή Status_1 = «5. ΔΙΑΓΡΑΦΕΝ»): απαγορεύεται κάθε επικοινωνία.
+// Διαγραμμένο μέλος (ΔΙΑΓΡΑΦΕΝ σε όλες τις Στοές του — members.js isDereg): απαγορεύεται κάθε επικοινωνία.
 export const noContact = (m) => !!m && Number(m.no_contact) === 1;
 export const NO_CONTACT = '⛔ Διαγραμμένος — απαγορεύεται κάθε επικοινωνία';
 export const memberName = (m) => `${m.surname || ''} ${m.first_name || ''}`.trim();

@@ -334,7 +334,7 @@ ${m ? epCard(m) : ''}${offices.length ? `<h2>Ιστορικό αξιωμάτων
         if (m && isAdmin() && dn !== String(m.diploma_no ?? '') && m.diploma_no && !confirmDo(`Αλλαγή του αριθμού Διπλώματος από ${m.diploma_no} σε ${dn || '—'};`)) return;
         const lodges = readLodgesEditor(el);
         const row = { ...Object.fromEntries(['surname', 'first_name', 'email', 'other_emails', 'mobile', 'other_mobiles', 'degree', 'deregistered_note', 'additional_lodges', 'surname_variants', 'first_name_variants', 'mm_lodge_name', 'mm_lodge_number', ...MEMBER_DATES.map(([k]) => k)].map((k) => [k, String(d[k] || '').trim()])),
-          active: d.active === '1' ? 1 : 0, no_contact: d.no_contact === '1' || isDereg('', lodges[0]?.status) ? 1 : 0, registry_no: rn ? Number(rn) : null, diploma_no: dn, declared_lodge_count: String(lodges.length), lodges };
+          active: d.active === '1' ? 1 : 0, no_contact: d.no_contact === '1' || isDereg('', lodges.map((l) => l.status)) ? 1 : 0, registry_no: rn ? Number(rn) : null, diploma_no: dn, declared_lodge_count: String(lodges.length), lodges };
         const id = await db.save(m ? `Μέλος #${m.id}: ενημέρωση` : 'Νέο μέλος', (tx) => {
           if (rn && tx.find('member_registry', (x) => x.registry_no === Number(rn) && (!m || x.id !== m.id))) throw new Error(`Ο αριθμός μητρώου ${rn} υπάρχει ήδη.`);
           const dup = dn && tx.find('member_registry', (x) => String(x.diploma_no ?? '') === dn && (!m || x.id !== m.id));
@@ -375,8 +375,10 @@ const hkey = (x) => String(x || '').toLowerCase().replace(/[^0-9a-zͰ-Ͽ]/g, '')
 const splitMulti = (v) => String(v || '').split(/[;\n]+/).map((p) => p.trim().replace(/^,|,$/g, '').trim()).filter(Boolean);
 const plainUpper = (v) => String(v || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().trim();
 const yes = (v) => ['ΝΑΙ', 'NAI', 'YES', 'TRUE', '1', 'Y'].includes(plainUpper(v));
-// Κανόνας διαγραφής: All_Deregistered = ΝΑΙ ή Status_1 (κατάσταση στην πρώτη Στοά) = «5. ΔΙΑΓΡΑΦΕΝ»
-export const isDereg = (all, status1) => yes(all) || /ΔΙΑΓΡΑΦ/.test(plainUpper(status1));
+// Κανόνας διαγραφής (απαγορεύεται η επικοινωνία): ΔΙΑΓΡΑΦΕΝ σε ΟΛΕΣ τις Στοές του μέλους — η διαγραφή από μία Στοά δεν αρκεί.
+// Χωρίς καταστάσεις Στοών: η ένδειξη All_Deregistered της πηγής.
+export const deregEverywhere = (statuses) => { const st = statuses.map(plainUpper).filter(Boolean); return st.length > 0 && st.every((x) => /ΔΙΑΓΡΑΦ/.test(x)); };
+export const isDereg = (all, statuses = []) => (statuses.some((x) => String(x || '').trim()) ? deregEverywhere(statuses) : yes(all));
 // Αριθμός Στοάς από το όνομα όταν λείπει. Ονόματα που υπάρχουν δύο φορές (ΠΛΑΤΩΝ 70/103, ΑΚΡΟΠΟΛΙΣ 2/104) ξεχωρίζουν με το έτος.
 const lodgeKey = (v) => plainUpper(v).replace(/[ABEZHIKMNOPTXY]/g, (c) => 'ΑΒΕΖΗΙΚΜΝΟΡΤΧΥ'['ABEZHIKMNOPTXY'.indexOf(c)]).replace(/[^0-9Α-Ω]/g, '');
 const LODGE_ALIASES = { ΑΚΡΟΠΟΛΙΣ2010: '104', ΠΛΑΤΩΝ1990: '103', ΠΡΟΜΗΘΕΥΣ2014: '105', ΔΗΜΗΤΗΡ: '113', ΕΝΩΣΙΣΚΥΠΡΟΣ: '55', ΦΟΙΝΙΞΚΕΡΚΥΡΑΣ: 'Φ', ΦΟΙΝΙΞ: 'Φ' };
@@ -400,7 +402,7 @@ function sourceMember(d, rn) {
     const mm = /^(.*?)\s+(\S+)\s*\((.*)\)\s*$/.exec(part);
     if (mm) lodges.push({ seq: lodges.length + 1, name: mm[1].trim(), number: lodgeNumberFor(mm[1], mm[2]), status: mm[3].trim() }); else bad.push(part);
   }
-  const dereg = isDereg(g('All_Deregistered (ΔΙΑΓΡΑΦΕΝ)', 'All_Deregistered'), g('Status_1')), sts = lodges.map((l) => l.status.toUpperCase()).filter(Boolean);
+  const dereg = isDereg(g('All_Deregistered (ΔΙΑΓΡΑΦΕΝ)', 'All_Deregistered'), lodges.map((l) => l.status)), sts = lodges.map((l) => l.status.toUpperCase()).filter(Boolean);
   const deceased = sts.length > 0 && sts.every((x) => x.includes('ΜΕΤΕΣΘΕΝ'));
   const variants = (v, name) => { const vs = splitMulti(v); return vs.some((x) => plainUpper(x) !== plainUpper(name)) ? vs.join('; ') : ''; };
   const rid = String(g('Member_ID')).replace('.0', '');
@@ -481,8 +483,19 @@ db.migrate('members-no-contact-2026-10', (tx) => {
   const first = {};
   for (const l of sortBy(tx.all('member_lodges'), 'seq', 'id')) first[l.member_id] ??= l.member_status;
   for (const m of tx.all('member_registry')) {
-    if (noContact(m) || !(/ΔΙΑΓΡΑΦ/.test(plainUpper(m.deregistered_note)) || isDereg('', first[m.id]))) continue;
+    if (noContact(m) || !(/ΔΙΑΓΡΑΦ/.test(plainUpper(m.deregistered_note)) || /ΔΙΑΓΡΑΦ/.test(plainUpper(first[m.id])))) continue;
     tx.update('member_registry', m.id, { no_contact: 1, active: 0 });
+  }
+});
+// Διόρθωση: όσοι σημειώθηκαν διαγραμμένοι ενώ είναι ακόμη μέλη σε άλλη Στοά → επιτρέπεται η επικοινωνία (μένει η κατάσταση ανά Στοά)
+db.migrate('members-no-contact-all-lodges-2026-10', (tx) => {
+  const st = {};
+  for (const l of tx.all('member_lodges')) (st[l.member_id] ||= []).push(l.member_status);
+  for (const m of tx.all('member_registry')) {
+    const xs = (st[m.id] || []).filter((x) => String(x || '').trim());
+    if (!noContact(m) || !xs.length || deregEverywhere(xs)) continue;
+    const dead = xs.every((x) => /ΜΕΤΕΣΘ/.test(plainUpper(x)));
+    tx.update('member_registry', m.id, { no_contact: 0, active: dead ? 0 : 1, deregistered_note: /^ΔΙΑΓΡΑΦΕΝ — απαγορεύεται/.test(m.deregistered_note || '') ? '' : m.deregistered_note || '' });
   }
 });
 
@@ -495,7 +508,8 @@ export function mergeMembers(tx, mainId, otherIds) {
   const emails = uniq(all.flatMap((m) => [m.email, ...String(m.other_emails || '').split(/[;,\s]+/)]));
   const mobiles = uniq(all.flatMap((m) => [m.mobile, ...String(m.other_mobiles || '').split(/[;,]/)])).filter((v, i, a) => a.findIndex((w) => digits10(w) === digits10(v)) === i);
   const vars = (k, vk) => { const base = plainUpper(main[k]); const vs = uniq(all.flatMap((m) => [m[k], ...String(m[vk] || '').split(';')])).filter((v) => plainUpper(v) !== base || v !== main[k]); return vs.filter((v) => plainUpper(v) !== base).join('; '); };
-  const regs = all.map((m) => m.registry_no).filter((x) => x != null), blocked = all.some((m) => Number(m.no_contact) === 1);
+  const ids0 = new Set(all.map((m) => m.id)), sts = tx.all('member_lodges').filter((l) => ids0.has(l.member_id)).map((l) => l.member_status);
+  const regs = all.map((m) => m.registry_no).filter((x) => x != null), blocked = sts.some((x) => String(x || '').trim()) ? deregEverywhere(sts) : all.some((m) => Number(m.no_contact) === 1);
   tx.update('member_registry', main.id, {
     email: main.email || emails[0] || '', other_emails: emails.filter((e) => e.toLowerCase() !== String(main.email || emails[0] || '').toLowerCase()).join('; '),
     mobile: main.mobile || mobiles[0] || '', other_mobiles: mobiles.filter((m) => digits10(m) !== digits10(main.mobile || mobiles[0] || '')).join('; '),

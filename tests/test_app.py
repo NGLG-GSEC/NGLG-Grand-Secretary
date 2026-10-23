@@ -526,7 +526,7 @@ def test_official_lodges_applied_to_existing_database(app):
 
 
 def test_paste_member_registry_and_deregistered_no_contact(app):
-    # Επικόλληση από το Excel-πηγή: All_Deregistered = ΝΑΙ ή Status_1 = «5. ΔΙΑΓΡΑΦΕΝ» → διαγραμμένος, απαγορεύεται κάθε επικοινωνία
+    # Επικόλληση από το Excel-πηγή: διαγραμμένος (απαγορεύεται η επικοινωνία) μόνο με ΔΙΑΓΡΑΦΕΝ σε ΟΛΕΣ τις Στοές του· διαγραφή από μία Στοά δεν αρκεί
     head = ['Member_ID', 'Surname', 'First_Name', 'Name_Has_Variants', 'All_Surname_Variants', 'All_FirstName_Variants', 'Email', 'Multiple_Emails', 'Mobile',
             'Multiple_Mobiles', 'Degree', 'Number_of_Lodges', 'All_Deregistered (ΔΙΑΓΡΑΦΕΝ)']
     for j in range(1, 7):
@@ -549,24 +549,24 @@ def test_paste_member_registry_and_deregistered_no_contact(app):
     with app.page.expect_download():
         app.page.locator('#imp button').click()
     app.page.wait_for_selector('text=Γενική αντικατάσταση ολοκληρώθηκε')
-    assert '3 εγγραφές' in app.text('body') and '2 διαγραμμένα μέλη' in app.text('body')
+    assert '3 εγγραφές' in app.text('body') and '1 διαγραμμένα μέλη' in app.text('body')
     ms = app.page.evaluate("async () => { const m = await import('./core/store.js'); return [m.db.all('member_registry'), m.db.all('member_lodges')]; }")
     by = {m['surname']: m for m in ms[0]}
     assert by['Ενεργόπουλος']['no_contact'] == 0 and by['Ενεργόπουλος']['active'] == 1
     assert by['Διαγραμμένος']['no_contact'] == 1 and by['Διαγραμμένος']['active'] == 0
-    assert by['Πρώτοδιαγραφείς']['no_contact'] == 1
+    assert by['Πρώτοδιαγραφείς']['no_contact'] == 0 and by['Πρώτοδιαγραφείς']['active'] == 1  # ενεργός στην ΑΚΡΟΠΟΛΙΣ
     nums = sorted(l['lodge_number'] for l in ms[1])
     assert nums == ['103', '104', '3', '3', '95']
-    assert app.page.locator('.pill.bad').count() == 2
+    assert app.page.locator('.pill.bad').count() == 1
     # δεν εμφανίζονται ως παραλήπτες επιστολών, ούτε στα μέλη για διατάγματα / εκπροσώπους
     found = app.page.evaluate("async () => { const p = await import('./core/pickers.js'); return [p.contactItems('Γεώργιος').map((x) => x.label), p.memberItems('Γεώργιος').map((x) => x.label)]; }")
-    assert found == [['Ενεργόπουλος Γεώργιος'], ['Ενεργόπουλος Γεώργιος']]
+    assert sorted(found[1]) == ['Ενεργόπουλος Γεώργιος', 'Πρώτοδιαγραφείς Γεώργιος'] and 'Διαγραμμένος Γεώργιος' not in found[0]
     # η καρτέλα του μέλους δείχνει την απαγόρευση και δεν έχει κουμπί επιστολής
     app.go(f"/members/{by['Διαγραμμένος']['id']}")
     assert 'απαγορεύεται κάθε επικοινωνία' in app.text() and app.page.locator('a:has-text("✉ Επιστολή")').count() == 0
     # ευχές: δεν εμφανίζεται στους εορτάζοντες
     cel = app.page.evaluate("async () => { const n = await import('./modules/namedays.js'); return JSON.stringify(n.celebrants('2026-01-01', '2026-12-31')); }")
-    assert 'Διαγραμμένος' not in cel and 'Πρώτοδιαγραφείς' not in cel
+    assert 'Διαγραμμένος' not in cel
 
 
 def test_existing_deregistered_members_marked_once(app):
@@ -586,7 +586,8 @@ def test_existing_deregistered_members_marked_once(app):
     app.page.wait_for_selector('.dash')
     ms = {m['id']: m for m in gh.read_json('data/member_registry.json')}
     assert not ms[1].get('no_contact') and ms[1]['active'] == 1
-    assert ms[2]['no_contact'] == 1 and ms[3]['no_contact'] == 1 and ms[3]['active'] == 0
+    assert ms[2]['no_contact'] == 1  # ΔΙΑΓΡΑΦΕΝ από όλες τις Στοές
+    assert ms[3]['no_contact'] == 0 and ms[3]['active'] == 1  # διαγραφή μόνο από την 1η Στοά — μέλος ακόμη στην άλλη
 
 
 def test_official_provinces_applied_and_lodges_counted(app):
