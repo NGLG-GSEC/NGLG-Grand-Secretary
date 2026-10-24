@@ -8,7 +8,7 @@ import { go, flash, toast, table, bind } from '../core/app.js';
 import { esc, fold, sortBy, readXlsx, parsePasted, exportXlsx, fmtDate } from '../core/util.js';
 import { identify, regCode, matchesCode } from '../core/people.js';
 import { attachPicker, memberItems, noContact } from '../core/pickers.js';
-import { regBadge, isAdmin, isoOf, lodgesByMember } from './members.js';
+import { regBadge, isAdmin, isoOf, lodgesByMember, exportBar, bindExport } from './members.js';
 import { lodgeNoKey, lodgesAll } from './lodges.js';
 
 // Πεδία του Excel (και του προτύπου) → πεδία του Μητρώου
@@ -121,7 +121,7 @@ export function diplomasPage({ query = {} } = {}) {
   const ms = db.all('member_registry'), withD = ms.filter(hasDip), byM = lodgesByMember();
   const nav = `<nav class="decltabs">${TABS.map(([k, l]) => `<a class="btn${k === tab ? ' primary' : ''}" href="#/members/diplomas?tab=${k}">${l}</a>`).join('')}
 <button type="button" class="btn" data-act="template">⬇ Πρότυπο Excel</button></nav>`;
-  let body = '';
+  let body = '', pageMembers = null;
   if (tab === 'list') {
     const q = String(query.q || '').trim(), lno = String(query.lodge || '').trim(), yr = String(query.year || '').trim();
     const mode = ['without', 'all'].includes(query.mode) ? query.mode : 'with';
@@ -130,13 +130,14 @@ export function diplomasPage({ query = {} } = {}) {
     if (yr) xs = xs.filter((m) => String(isoOf(m.date_mm)).startsWith(yr));
     if (q) xs = xs.filter((m) => matchesCode(m, q) || fold(`${m.surname} ${m.first_name} ${m.first_name} ${m.surname} ${lodgeLine(m)}`).includes(fold(q)));
     xs = sortBy(xs, (m) => (hasDip(m) ? Number(m.diploma_no) || 0 : 1e9), 'surname', 'first_name');
+    pageMembers = xs;
     const years = [...new Set(withD.map((m) => String(isoOf(m.date_mm)).slice(0, 4)).filter((y) => /^\d{4}$/.test(y)))].sort().reverse();
     const printIds = xs.slice(0, 200).map((m) => m.id).join(',');
     body = `<form class="card filters vfilters" id="dpf"><input name="q" value="${esc(q)}" placeholder="🔎 Αδελφός, MM/M αριθμός, Στοά…">
 <select name="mode"><option value="with"${mode === 'with' ? ' selected' : ''}>Με Δίπλωμα (${withD.length})</option><option value="without"${mode === 'without' ? ' selected' : ''}>Ενεργοί χωρίς Δίπλωμα</option><option value="all"${mode === 'all' ? ' selected' : ''}>Όλα τα μέλη</option></select>
 <select name="lodge"><option value="">Όλες οι Στοές</option>${lodgesAll().map((l) => `<option value="${esc(l.number)}"${lno && lodgeNoKey(l.number) === lodgeNoKey(lno) ? ' selected' : ''}>${esc(l.number)} · ${esc(l.name)}</option>`).join('')}</select>
 <select name="year"><option value="">Κάθε έτος Εγέρσεως</option>${years.map((y) => `<option${y === yr ? ' selected' : ''}>${y}</option>`).join('')}</select><button>Αναζήτηση</button></form>
-<div class="toolbar"><span class="muted">${xs.length} μέλη</span><button type="button" class="btn small" data-act="exportList">⬇ Excel Διπλωμάτων</button>${printIds ? `<a class="btn small" href="#/members/card?ids=${printIds}">🪪 Κάρτες Μέλους της λίστας</a>` : ''}</div>
+<div class="toolbar"><span class="muted">${xs.length} μέλη</span>${exportBar()}<button type="button" class="btn small" data-act="exportList">⬇ Excel Διπλωμάτων</button>${printIds ? `<a class="btn small" href="#/members/card?ids=${printIds}">🪪 Κάρτες Μέλους της λίστας</a>` : ''}</div>
 <div class="memtable">${table(['Αρ. Μητρώου', 'Ονοματεπώνυμο', 'Μαθητής', 'Εταίρος', 'Διδάσκαλος', 'Στοά Εγέρσεως', 'Στοές μέλους', ''], xs.slice(0, 500).map((m) => [regBadge(m),
   `<a href="#/members/${m.id}">${esc(m.surname)} ${esc(m.first_name)}</a>`, esc(fmtDate(isoOf(m.date_ea))), esc(fmtDate(isoOf(m.date_fc))), esc(fmtDate(isoOf(m.date_mm))), esc(lodgeLine(m)),
   `<small>${esc((byM[m.id] || []).map((l) => `${l.lodge_name} ${l.lodge_number}`.trim()).join(', '))}</small>`,
@@ -164,6 +165,7 @@ ${table(['Αρ.', 'Στοά', 'Ενεργά μέλη', 'Με Δίπλωμα', '�
 <p class="muted">Ο αριθμός Διπλώματος είναι ο <b>πραγματικός αριθμός μητρώου</b> (<span class="regno mm">MM12345</span>)· όσοι δεν έχουν κρατούν τον αριθμό τους με M (<span class="regno m">M1200</span>).</p>
 <div class="vstats"><span><b>${withD.length}</b> με Δίπλωμα (MM)</span><span><b>${ms.length - withD.length}</b> χωρίς Δίπλωμα (M)</span></div>${nav}${body}`,
     mount(el) {
+      if (pageMembers) bindExport(el, () => pageMembers, 'Διπλώματα Διδασκάλου');
       const f = el.querySelector('#dpf');
       if (f) f.addEventListener('submit', (e) => { e.preventDefault(); go('/members/diplomas', { tab: 'list', ...Object.fromEntries(new FormData(f)) }); });
       bind(el, {

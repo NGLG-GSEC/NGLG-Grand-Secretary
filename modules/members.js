@@ -148,6 +148,15 @@ export function insertMember(tx, m, id) {
   setMemberLodges(tx, r.id, m.lodges || []);
   return r.id;
 }
+// Προσθήκη / Συμπλήρωση: μόνο τα κενά πεδία του μέλους και οι Στοές που λείπουν — δεν σβήνει και δεν αλλάζει τίποτα υπάρχον
+export function fillMember(tx, id, m) {
+  const cur = tx.get('member_registry', id), row = {};
+  for (const k of MEMBER_COLS) if (!['registry_no', 'active', 'no_contact', 'source_row'].includes(k) && m[k] != null && String(m[k]).trim() && !String(cur[k] ?? '').trim()) row[k] = m[k];
+  if (Object.keys(row).length) tx.update('member_registry', id, row);
+  const old = sortBy(tx.all('member_lodges').filter((l) => l.member_id === id), 'seq'), keys = new Set(old.map((l) => lodgeNoKey(l.lodge_number)));
+  const add = (m.lodges || []).filter((l) => { const k = lodgeNoKey(l.number ?? l.lodge_number); return k && !keys.has(k); });
+  if (add.length) setMemberLodges(tx, id, [...old, ...add.map((l, i) => ({ ...l, seq: old.length + i + 1 }))]);
+}
 export function updateMember(tx, id, m) {
   const row = Object.fromEntries(MEMBER_COLS.filter((k) => m[k] !== undefined).map((k) => [k, m[k]]));
   if ('active' in row) row.active = row.active === false || row.active === 0 ? 0 : 1;
@@ -193,6 +202,31 @@ const memberResults = (query) => {
   return { field, q, status, all, xs: status ? all.filter((x) => statusOf(x) === status) : all };
 };
 const lodgesLine = (ls) => (ls || []).map((l) => `${l.lodge_name} ${l.lodge_number}`.trim() + (l.member_status ? ` (${l.member_status})` : '')).join(' · ');
+// ⬆ Εισαγωγή / Επανεισαγωγή από Excel: τρεις λειτουργίες (Προσθήκη/Συμπλήρωση · Αντικατάσταση στοιχείων των μελών του αρχείου · Γενική αντικατάσταση)
+const IMPORT_MODES = [['add', 'Προσθήκη / Συμπλήρωση — μόνο κενά πεδία, νέες Στοές και νέα μέλη· δεν σβήνει τίποτα (συνιστάται)'],
+  ['merge', 'Αντικατάσταση στοιχείων των μελών του αρχείου — παίρνουν ακριβώς τις τιμές του αρχείου (και τις Στοές του)· τα υπόλοιπα μένουν'],
+  ['replace', 'Γενική αντικατάσταση όλου του Μητρώου — μόνο με πλήρες αρχείο']];
+const importBox = (open = false) => `<details class="card fold" id="impBox"${open ? ' open' : ''}><summary><b>⬆ Εισαγωγή / Επανεισαγωγή μελών από Excel</b></summary><form id="imp" style="margin-top:10px">
+<p class="muted">Δεκτά: το Excel που κατεβάζει η εφαρμογή («⬇ Excel» σε κάθε σελίδα του Μητρώου — και διορθωμένο) ή το αρχείο-πηγή (Member_ID, Surname, First_Name, …, Lodge_1, Number_1, Status_1, …).</p>
+<label>Αρχείο (.xlsx, .csv)</label><input type="file" name="file" accept=".xlsx,.xls,.csv">
+<label style="margin-top:10px">ή Επικόλληση από Excel (μαζί με τη γραμμή επικεφαλίδων)</label><textarea name="paste" class="short" placeholder="ID	Επώνυμο	Όνομα	…"></textarea>
+<p class="muted">Μέλη με <b>ΔΙΑΓΡΑΦΕΝ σε όλες τις Στοές τους</b> (ή All_Deregistered = ΝΑΙ χωρίς Στοές) καταχωρούνται ως <b>διαγραμμένα</b>: απαγορεύεται κάθε επικοινωνία. Πριν από κάθε εισαγωγή κατεβαίνει αυτόματα αντίγραφο όλου του Μητρώου.</p>
+<label style="margin-top:10px">Λειτουργία</label>${IMPORT_MODES.map(([k, l], i) => `<label class="chk"><input type="radio" name="mode" value="${k}"${i === 0 ? ' checked' : ''}> ${esc(l)}</label>`).join('')}
+<div class="toolbar" style="margin-top:10px"><button class="btn primary">Εισαγωγή</button></div></form></details>`;
+function mountImport(el) {
+  onSubmit(el.querySelector('#imp'), async (d) => {
+    const paste = String(d.paste || '').trim(), hasFile = d.file && d.file.size;
+    if (!paste && !hasFile) throw new Error('Επιλέξτε αρχείο ή επικολλήστε τις γραμμές από το Excel.');
+    if (d.mode === 'replace' && !confirmDo('Γενική αντικατάσταση: ΟΛΟ το Μητρώο θα αντικατασταθεί από το αρχείο (η προηγούμενη μορφή μένει στο ιστορικό του GitHub). Μέλη που δεν υπάρχουν στο αρχείο θα διαγραφούν. Συνέχεια;')) return;
+    await exportMembers(); // αντίγραφο ασφαλείας πριν από κάθε εισαγωγή
+    const msg = await importMembers(hasFile ? d.file : paste, d.mode);
+    flash(msg); go('/members');
+  });
+}
+function importPage() {
+  return { title: 'Επανεισαγωγή Μητρώου', html: `<p><a href="#/members">← Μητρώο Μελών</a></p><h1>⬆ Εισαγωγή / Επανεισαγωγή μελών</h1>
+<p class="muted">Κατεβάστε τη λίστα από οποιαδήποτε σελίδα του Μητρώου («⬇ Excel»), διορθώστε ή συμπληρώστε τα στοιχεία και ανεβάστε την εδώ.</p>${importBox(true)}`, mount: mountImport };
+}
 // 🖨 Λίστα Διαγραμμένων (ή όποιου φίλτρου): εκτύπωση / PDF
 function deregisteredPage({ query }) {
   const { xs, q } = memberResults({ ...query, status: 'dereg' }), byM = lodgesByMember(), title = 'Κατάλογος Διαγραμμένων Μελών';
@@ -207,9 +241,10 @@ function deregisteredPage({ query }) {
   return {
     title,
     html: `<div class="noprint"><p><a href="#/members?${new URLSearchParams({ ...(q ? { q, field: query.field || 'surname' } : {}), status: 'dereg' })}">← Μητρώο Μελών (⛔ Διαγραμμένοι)</a></p>
-<div class="toolbar"><button type="button" class="btn primary" data-act="print">🖨 Εκτύπωση</button><button type="button" class="btn" data-act="pdf">⬇ PDF</button></div></div>
+<div class="toolbar"><button type="button" class="btn primary" data-act="print">🖨 Εκτύπωση</button><button type="button" class="btn" data-act="pdf">⬇ PDF</button>${exportBar()}</div></div>
 <div class="print-area">${reportPaper(title, sub, inner)}</div>`,
     mount(el) {
+      bindExport(el, () => xs, 'Διαγραμμένοι');
       bind(el, { print: () => printPaper(title), async pdf() { const { paperPdf } = await import('../core/pdf.js'); const { download } = await import('../core/util.js'); download(title + '.pdf', await paperPdf(el.querySelector('.paper'), { title }), 'application/pdf'); } });
     },
   };
@@ -236,22 +271,16 @@ function listPage({ query }) {
 ${status === 'dereg' ? `<a class="btn small primary" href="#/members/deregistered?${new URLSearchParams({ q, field })}">🖨 Λίστα Διαγραμμένων (PDF)</a>` : ''}</div>`;
   return {
     title: 'Μητρώο Μελών',
-    html: `<h1>Μητρώο Μελών</h1>${notice(query.msg)}<div class="toolbar"><a class="btn primary" href="#/members/new">+ Προσθήκη Μέλους</a>${(() => { const n = sameNameGroups().length; return n ? `<a class="btn" href="#/members/duplicates">Διπλές εγγραφές (${n})</a>` : ''; })()}<button class="btn" data-act="export">⬇ Excel</button><a class="btn" href="#/members/diplomas">🎓 Διπλώματα Διδασκάλου</a><a class="btn" href="#/members/small-lodges">🏛 Στοές με &lt; 12 κύρια μέλη</a></div>
+    html: `<h1>Μητρώο Μελών</h1>${notice(query.msg)}<div class="toolbar"><a class="btn primary" href="#/members/new">+ Προσθήκη Μέλους</a>${(() => { const n = sameNameGroups().length; return n ? `<a class="btn" href="#/members/duplicates">Διπλές εγγραφές (${n})</a>` : ''; })()}<button class="btn" data-act="export" title="Όλο το Μητρώο">⬇ Excel (όλο)</button><a class="btn" href="#/members/diplomas">🎓 Διπλώματα Διδασκάλου</a><a class="btn" href="#/members/small-lodges">🏛 Στοές με &lt; 12 κύρια μέλη</a></div>
 <div class="mc-cta"><a class="btn mc-cta-btn" href="#/members/card">🪪 <b>ΚΑΡΤΑ ΜΕΛΟΥΣ</b><small>αναζήτηση μέλους · προβολή · εκτύπωση · αποστολή με email</small></a><a class="btn mc-cta-btn" href="#/members/sgy">🏛 <b>ΜΗΤΡΩΟ ΜΕΛΩΝ ΣΓΥ</b><small>Συμβούλιο Γενικών Υποθέσεων · επιστολή · email · WhatsApp</small></a></div>
 <div class="card member-search"><h3 style="margin-top:0">Αναζήτηση μέλους</h3><form class="msearch" id="ms"><fieldset class="msfield"><legend>1. Τι θα δώσετε;</legend>
 ${MEMBER_FIELDS.map(([k, v]) => `<label class="chip"><input type="radio" name="field" value="${k}"${k === field ? ' checked' : ''}><span>${esc(v)}</span></label>`).join('')}</fieldset>
 <div><label for="msq" id="msqlabel">2. ${esc(qlabel)}</label><input id="msq" name="q" value="${esc(q)}" autofocus autocomplete="off" type="${itype}" placeholder="${esc(ph)}"${field === 'lodge' ? ' list="lodgelist"' : ''}>
 <datalist id="lodgelist">${lodgesAll().map((l) => `<option value="${esc(l.number)} · ${esc(l.name)}">`).join('')}</datalist></div>
 <div class="msbtns"><button class="btn primary">Αναζήτηση</button>${q ? '<a class="btn" href="#/members">Καθαρισμός</a>' : ''}</div></form><p class="msresult">${summary}</p></div>
-${stBar}<div class="memtable">${table(['ID', 'Αρ. Μητρώου', 'Επώνυμο', 'Όνομα', 'Email', 'Κινητό', 'Βαθμός', 'Ανώτατο αξίωμα (Επετηρίδα)', 'Στοές', 'Ενεργός', 'Ενέργειες'], rows, q ? `Δεν βρέθηκε μέλος για «${q}» σε: ${flabel}. Δοκιμάστε «Όλα» ή λιγότερες λέξεις.` : 'Δεν υπάρχουν εγγραφές.')}</div>
+${stBar}<div class="toolbar"><small class="muted">Αποτελέσματα σελίδας (${xs.length}):</small>${exportBar()}</div><div class="memtable">${table(['ID', 'Αρ. Μητρώου', 'Επώνυμο', 'Όνομα', 'Email', 'Κινητό', 'Βαθμός', 'Ανώτατο αξίωμα (Επετηρίδα)', 'Στοές', 'Ενεργός', 'Ενέργειες'], rows, q ? `Δεν βρέθηκε μέλος για «${q}» σε: ${flabel}. Δοκιμάστε «Όλα» ή λιγότερες λέξεις.` : 'Δεν υπάρχουν εγγραφές.')}</div>
 ${pager(xs.length, pg, PAGE, mk)}
-<details class="card fold"><summary><b>Εισαγωγή μελών από Excel (Προσθήκη / Γενική Αντικατάσταση)</b></summary><form id="imp" style="margin-top:10px">
-<p class="muted">Δεκτά: το αρχείο-πηγή του Μητρώου (Member_ID, Surname, First_Name, …, Lodge_1, Number_1, Status_1, …) ή το Excel που κατεβάζει η εφαρμογή.</p>
-<label>Αρχείο (.xlsx, .csv)</label><input type="file" name="file" accept=".xlsx,.xls,.csv">
-<label style="margin-top:10px">ή Επικόλληση από Excel (επιλέξτε όλο το φύλλο μαζί με τις επικεφαλίδες, Ctrl+C, και Ctrl+V εδώ)</label><textarea name="paste" class="short" placeholder="Member_ID	Surname	First_Name	…"></textarea>
-<p class="muted">Μέλη με <b>ΔΙΑΓΡΑΦΕΝ σε όλες τις Στοές τους</b> (ή All_Deregistered = ΝΑΙ χωρίς Στοές) καταχωρούνται ως <b>διαγραμμένα</b>: απαγορεύεται κάθε επικοινωνία (δεν εμφανίζονται σε παραλήπτες, ευχές, εκπροσώπους).</p>
-<label style="margin-top:10px">Λειτουργία</label><select name="mode"><option value="merge">Προσθήκη / Ενημέρωση (συνιστάται)</option><option value="replace">Γενική Αντικατάσταση</option></select>
-<div class="toolbar" style="margin-top:10px"><button class="btn primary">Εισαγωγή</button></div></form></details>`,
+${importBox()}`,
     mount(el) {
       const qi = el.querySelector('#msq'), lab = el.querySelector('#msqlabel');
       el.querySelectorAll('.msfield input').forEach((r) => r.addEventListener('change', () => {
@@ -259,15 +288,9 @@ ${pager(xs.length, pg, PAGE, mk)}
         if (r.value === 'lodge') qi.setAttribute('list', 'lodgelist'); else qi.removeAttribute('list'); qi.focus();
       }));
       onSubmit(el.querySelector('#ms'), (d) => go('/members', { q: d.q, field: d.field, ...(status ? { status } : {}) }));
-      bind(el, { export: exportMembers });
-      onSubmit(el.querySelector('#imp'), async (d) => {
-        const paste = String(d.paste || '').trim(), hasFile = d.file && d.file.size;
-        if (!paste && !hasFile) throw new Error('Επιλέξτε αρχείο ή επικολλήστε τις γραμμές από το Excel.');
-        if (d.mode === 'replace' && !confirmDo('Γενική αντικατάσταση: όλο το Μητρώο θα αντικατασταθεί από το αρχείο (η προηγούμενη μορφή μένει στο ιστορικό του GitHub). Συνέχεια;')) return;
-        await exportMembers(); // αντίγραφο ασφαλείας πριν από κάθε εισαγωγή
-        const msg = await importMembers(hasFile ? d.file : paste, d.mode);
-        flash(msg); go('/members');
-      });
+      bind(el, { export: () => exportMembers() });
+      bindExport(el, () => xs, [flabel && q ? `${flabel} ${q}` : '', (MEMBER_STATUS.find(([k]) => k === status) || [])[1] && status ? MEMBER_STATUS.find(([k]) => k === status)[1].replace(/[^\p{L}\s]/gu, '').trim() : ''].filter(Boolean).join(' · ') || 'Μητρώο Μελών');
+      mountImport(el);
     },
   };
 }
@@ -391,18 +414,43 @@ ${m ? epCard(m) : ''}${offices.length ? `<h2>Ιστορικό αξιωμάτων
 }
 
 // ---------------------------------------------------------------- Excel
-export async function exportMembers() {
+// Excel του Μητρώου σε μορφή επανεισαγωγής (ΜΗΤΡΩΟ ΜΕΛΩΝ · ΣΤΟΕΣ ΜΕΛΩΝ · ΒΑΘΜΟΙ & ΑΞΙΩΜΑΤΑ). Με list: μόνο τα μέλη που δείχνει η σελίδα.
+export async function exportMembers(list = null, label = '') {
   const X = await XLSX();
-  const ms = sortBy(membersAll(), 'surname', 'first_name', 'id');
+  const ms = Array.isArray(list) ? list : sortBy(membersAll(), 'surname', 'first_name', 'id'), ids = new Set(ms.map((m) => m.id));
   const wb = X.utils.book_new();
   const add = (name, rows) => { const ws = X.utils.aoa_to_sheet(rows); ws['!cols'] = rows[0].map(() => ({ wch: 20 })); X.utils.book_append_sheet(wb, ws, name); };
   add('ΜΗΤΡΩΟ ΜΕΛΩΝ', [['ID', 'Αρ. Μητρώου', 'Δίπλωμα Διδασκάλου', 'Εσωτερικός αριθμός', 'Επώνυμο', 'Όνομα', 'Κύριο Email', 'Άλλα Email', 'Κύριο Κινητό', 'Άλλα Κινητά', 'Τεκτονικός Βαθμός', 'Ενεργός', 'Σημείωση Διαγραφής', 'Δηλωμένος Αρ. Στοών', 'Πρόσθετες Στοές', 'Γραμμή Πηγής', 'Ενημερώθηκε', 'Παραλλαγές Επωνύμου', 'Παραλλαγές Ονόματος', 'Απαγορεύεται Επικοινωνία', 'Τίτλος (Επετηρίδα)', ...MEMBER_DATES.map(([, l]) => l)],
     ...ms.map((m) => [m.id, regCode(m), m.diploma_no || '', m.registry_no ?? '', m.surname, m.first_name, m.email, m.other_emails, m.mobile, m.other_mobiles, m.degree, m.active ? 'ΝΑΙ' : 'ΟΧΙ', m.deregistered_note, m.declared_lodge_count, m.additional_lodges, m.source_row ?? '', m.updated_at, m.surname_variants || '', m.first_name_variants || '', noContact(m) ? 'ΝΑΙ' : 'ΟΧΙ', m.title || '', ...MEMBER_DATES.map(([k]) => m[k] || '')])]);
-  add('ΣΤΟΕΣ ΜΕΛΩΝ', [['ID Μέλους', 'Α/Α Στοάς', 'Στοά', 'Αριθμός Στοάς', 'Κατάσταση', 'Ιδιότητα', 'Συνδρομή', ...LODGE_DATES.map(([, l]) => l)], ...sortBy(db.all('member_lodges'), 'member_id', 'seq').map((l) => [l.member_id, l.seq, l.lodge_name, l.lodge_number, l.member_status, capacityOf(l), feeRankLabel(l.fee_rank), ...LODGE_DATES.map(([k]) => l[k] || '')])]);
+  add('ΣΤΟΕΣ ΜΕΛΩΝ', [['ID Μέλους', 'Α/Α Στοάς', 'Στοά', 'Αριθμός Στοάς', 'Κατάσταση', 'Ιδιότητα', 'Συνδρομή', ...LODGE_DATES.map(([, l]) => l)], ...sortBy(db.all('member_lodges').filter((l) => ids.has(l.member_id)), 'member_id', 'seq').map((l) => [l.member_id, l.seq, l.lodge_name, l.lodge_number, l.member_status, capacityOf(l), feeRankLabel(l.fee_rank), ...LODGE_DATES.map(([k]) => l[k] || '')])]);
   add('ΒΑΘΜΟΙ & ΑΞΙΩΜΑΤΑ', [['ID', 'ID Μέλους', 'Τύπος Εγγραφής', 'Βαθμός', 'Αξίωμα', 'ID Διατάγματος', 'Αρ. Διατάγματος', 'Έτος', 'Από', 'Έως', 'Ενεργό', 'Σημειώσεις'],
-    ...sortBy(db.all('member_degrees_offices'), 'member_id', 'id').map((o) => [o.id, o.member_id, o.record_type, o.degree, o.office, o.decree_id, o.decree_no, o.decree_year, o.valid_from, o.valid_to, o.is_current ? 'ΝΑΙ' : 'ΟΧΙ', o.notes])]);
-  const d = new Date();
-  X.writeFile(wb, `EMSTE_MEMBER_REGISTRY_${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}.xlsx`);
+    ...sortBy(db.all('member_degrees_offices').filter((o) => ids.has(o.member_id)), 'member_id', 'id').map((o) => [o.id, o.member_id, o.record_type, o.degree, o.office, o.decree_id, o.decree_no, o.decree_year, o.valid_from, o.valid_to, o.is_current ? 'ΝΑΙ' : 'ΟΧΙ', o.notes])]);
+  add('ΟΔΗΓΙΕΣ', [['Επανεισαγωγή μετά από διόρθωση'], [`Περιεχόμενο: ${label || 'όλο το Μητρώο'} — ${ms.length} μέλη`],
+    ['1. Διορθώστε/συμπληρώστε στα φύλλα «ΜΗΤΡΩΟ ΜΕΛΩΝ» και «ΣΤΟΕΣ ΜΕΛΩΝ». Μην αλλάζετε τη στήλη ID (ταυτίζει το μέλος). Νέο μέλος: νέα γραμμή χωρίς ID.'],
+    ['2. Εφαρμογή → Μητρώο → «⬆ Επανεισαγωγή» → επιλέξτε το αρχείο και τη λειτουργία:'],
+    ['   • Προσθήκη / Συμπλήρωση: μόνο κενά πεδία, νέες Στοές και νέα μέλη — δεν σβήνει τίποτα.'],
+    ['   • Αντικατάσταση στοιχείων των μελών του αρχείου: τα μέλη του αρχείου παίρνουν ακριβώς τις τιμές του (και τις Στοές του)· τα υπόλοιπα μένουν.'],
+    ['   • Γενική αντικατάσταση όλου του Μητρώου: μόνο με πλήρες αρχείο όλου του Μητρώου.'],
+    ['Ο Αρ. Μητρώου και το Δίπλωμα δεν αλλάζουν από εισαγωγή (μόνο από την καρτέλα, από διαχειριστή).']]);
+  const d = new Date(), tag = label ? '_' + String(label).replace(/[^\p{L}\p{N}]+/gu, '_').replace(/^_|_$/g, '').slice(0, 40) : '';
+  X.writeFile(wb, `EMSTE_MEMBER_REGISTRY${tag}_${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}.xlsx`);
+}
+// Λίστα PDF των μελών της σελίδας
+export async function exportMembersPdf(ms, title = 'Μητρώο Μελών') {
+  const byM = lodgesByMember(), box = document.createElement('div');
+  box.className = 'print-area'; box.style.cssText = 'position:absolute;left:-10000px;top:0;width:210mm';
+  box.innerHTML = reportPaper(title, `${ms.length} μέλη · ${fmtDate(new Date().toISOString().slice(0, 10))}`, `<table><thead><tr><th>Α/Α</th><th>Αρ. Μητρώου</th><th>Επώνυμο</th><th>Όνομα</th><th>Email</th><th>Κινητό</th><th>Στοές (κατάσταση)</th></tr></thead><tbody>${ms.map((x, i) => `<tr><td>${i + 1}</td><td>${esc(regCode(x) || '')}</td><td><b>${esc(x.surname || '')}</b></td><td>${esc(x.first_name || '')}</td><td>${noContact(x) ? '⛔' : esc(x.email || '')}</td><td>${noContact(x) ? '⛔' : esc(x.mobile || '')}</td><td>${esc(lodgesLine(byM[x.id]))}</td></tr>`).join('')}</tbody></table>`);
+  document.body.appendChild(box);
+  try { const { paperPdf } = await import('../core/pdf.js'), { download } = await import('../core/util.js'); download(title + '.pdf', await paperPdf(box.querySelector('.paper'), { title }), 'application/pdf'); }
+  finally { box.remove(); }
+}
+// Κουμπιά εξαγωγής για κάθε σελίδα του Μητρώου (τα μέλη που δείχνει η σελίδα) και επανεισαγωγή
+export const exportBar = () => '<span class="mexport"><button type="button" class="btn" data-act="mxlsx" title="Excel σε μορφή επανεισαγωγής">⬇ Excel</button><button type="button" class="btn" data-act="mpdf">⬇ PDF</button><a class="btn" href="#/members/import">⬆ Επανεισαγωγή</a></span>';
+export function bindExport(el, getMembers, title) {
+  bind(el, {
+    async mxlsx() { const ms = getMembers(); await exportMembers(ms, title); toast(`Excel: ${ms.length} μέλη.`); },
+    async mpdf() { const ms = getMembers(); toast('Δημιουργία PDF…'); await exportMembersPdf(ms, title); },
+  });
 }
 
 const hkey = (x) => String(x || '').toLowerCase().replace(/[^0-9a-zͰ-Ͽ]/g, '');
@@ -476,6 +524,8 @@ export async function importMembers(file, mode = 'merge') {
 // Κοινή εφαρμογή εισαγωγής μελών (Excel, ή το Μητρώο από τις ρυθμίσεις της παλιάς εφαρμογής στο Render)
 export async function applyMemberItems(items, mode = 'merge') {
   if (!items.length) throw new Error('Δεν βρέθηκαν εγγραφές μελών.');
+  const have = db.all('member_registry').length;
+  if (mode === 'replace' && have > 20 && items.length < have * 0.8 && !confirmDo(`Το αρχείο έχει μόνο ${items.length} μέλη ενώ το Μητρώο έχει ${have}. Με «Γενική αντικατάσταση» θα χαθούν ${have - items.length} μέλη.\n\nΓια διορθώσεις μιας λίστας χρησιμοποιήστε «Προσθήκη / Συμπλήρωση» ή «Αντικατάσταση στοιχείων των μελών του αρχείου». Συνέχεια παρ' όλα αυτά;`)) throw new Error('Η γενική αντικατάσταση ακυρώθηκε.');
   let added = 0, updated = 0;
   await db.save(mode === 'replace' ? 'Μητρώο Μελών: γενική αντικατάσταση' : 'Μητρώο Μελών: εισαγωγή', (tx) => {
     added = updated = 0;
@@ -497,19 +547,19 @@ export async function applyMemberItems(items, mode = 'merge') {
       tx.replace('member_lodges', []); tx.replace('member_degrees_offices', []); tx.replace('member_registry', []);
     }
     for (const { id, member: m } of items) {
-      if (mode === 'merge') {
+      if (mode === 'merge' || mode === 'add') {
         let mid = id && tx.get('member_registry', id) ? id : null;
         if (!mid && m.registry_no != null) mid = (tx.find('member_registry', (x) => x.registry_no === m.registry_no) || {}).id || null;
         if (!mid && m.source_member_id != null) mid = (tx.find('member_registry', (x) => x.source_member_id === m.source_member_id) || {}).id || null;
         if (!mid) mid = findMember(tx, m, true);
-        if (mid) { updateMember(tx, mid, m); updated++; continue; }
+        if (mid) { if (mode === 'add') fillMember(tx, mid, m); else updateMember(tx, mid, m); updated++; continue; }
       }
-      if (mode === 'merge' && m.registry_no != null && tx.find('member_registry', (x) => x.registry_no === m.registry_no)) m.registry_no = null;
+      if (mode !== 'replace' && m.registry_no != null && tx.find('member_registry', (x) => x.registry_no === m.registry_no)) m.registry_no = null;
       insertMember(tx, m, mode === 'replace' && id ? id : undefined); added++;
     }
   });
   const lodges = items.reduce((s, x) => s + (x.member.lodges || []).length, 0), blocked = items.filter((x) => x.member.no_contact).length;
-  return `${mode === 'replace' ? 'Γενική αντικατάσταση' : 'Προσθήκη / ενημέρωση'} ολοκληρώθηκε: ${items.length} εγγραφές (${added} νέες, ${updated} ενημερωμένες), ${lodges} συμμετοχές σε Στοές, ${blocked} διαγραμμένα μέλη (απαγορεύεται η επικοινωνία).`;
+  return `${mode === 'replace' ? 'Γενική αντικατάσταση' : mode === 'add' ? 'Προσθήκη / συμπλήρωση' : 'Αντικατάσταση στοιχείων'} ολοκληρώθηκε: ${items.length} εγγραφές (${added} νέες, ${updated} ενημερωμένες), ${lodges} συμμετοχές σε Στοές, ${blocked} διαγραμμένα μέλη (απαγορεύεται η επικοινωνία).`;
 }
 
 // Εφάπαξ: σήμανση των ήδη καταχωρημένων διαγραμμένων μελών (σημείωση ΔΙΑΓΡΑΦΕΝ ή 1η Στοά «5. ΔΙΑΓΡΑΦΕΝ»)
@@ -655,6 +705,7 @@ module({
     '/members/card': memberCardPage,
     '/members/diploma': diplomaIssuePage,
     '/members/deregistered': deregisteredPage,
+    '/members/import': importPage,
     '/members/sgy': (ctx) => sgyRegistryPage(ctx), // κυκλική εισαγωγή: κλήση τη στιγμή της πλοήγησης
     '/members/diplomas/print': memberCardPage, // παλιός σύνδεσμος
     '/members/:id': ({ params }) => { const m = db.get('member_registry', params.id); return m ? formPage(m) : '<h1>Δεν βρέθηκε το μέλος</h1>'; },

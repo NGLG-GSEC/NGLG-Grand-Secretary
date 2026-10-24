@@ -545,7 +545,7 @@ def test_paste_member_registry_and_deregistered_no_contact(app):
     app.connect_local().go('/members')
     app.page.locator('details.fold summary').click()
     app.page.fill('[name=paste]', '\n'.join('\t'.join(r) for r in rows))
-    app.fill(mode='replace')
+    app.page.check('#imp [name=mode][value=replace]')
     with app.page.expect_download():
         app.page.locator('#imp button').click()
     app.page.wait_for_selector('text=Γενική αντικατάσταση ολοκληρώθηκε')
@@ -3083,3 +3083,46 @@ def test_members_status_filter_and_deregistered_pdf_list(app):
     with app.page.expect_download() as dl:
         app.page.click('button:has-text("⬇ PDF")')
     assert dl.value.suggested_filename.endswith('.pdf')
+
+
+def test_members_page_export_excel_pdf_and_reimport_add_or_replace(app, tmp_path):
+    # Κάθε σελίδα του Μητρώου: ⬇ Excel (μόνο τα αποτελέσματα, μορφή επανεισαγωγής) και ⬇ PDF· επανεισαγωγή με Προσθήκη/Συμπλήρωση ή Αντικατάσταση στοιχείων
+    import openpyxl
+    app.connect_local()
+    add_member(app)
+    add_member(app, surname='Ανενεργός', first='Πέτρος', email='', mobile='6977000999')
+    mid = app.page.evaluate("""async () => { const {db} = await import('./core/store.js'); const m = db.all('member_registry').find((x) => x.surname === 'Ανενεργός');
+      await db.save('x', (tx) => tx.update('member_registry', m.id, { active: 0 })); return m.id; }""")
+    app.go('/members?q=&field=surname&status=inactive')
+    app.page.wait_for_function("() => !document.querySelector('.memtable').innerText.includes('Παπαδόπουλος')")
+    with app.page.expect_download() as dl:
+        app.page.click('.mexport [data-act=mxlsx]')
+    f = tmp_path / 'out.xlsx'; dl.value.save_as(f)
+    wb = openpyxl.load_workbook(f)
+    ws = wb['ΜΗΤΡΩΟ ΜΕΛΩΝ']; rows = list(ws.iter_rows(values_only=True))
+    assert len(rows) == 2 and rows[1][4] == 'Ανενεργός', rows
+    assert 'ΟΔΗΓΙΕΣ' in wb.sheetnames and len(list(wb['ΣΤΟΕΣ ΜΕΛΩΝ'].iter_rows())) == 2
+    with app.page.expect_download() as dl2:
+        app.page.click('.mexport [data-act=mpdf]')
+    assert dl2.value.suggested_filename.endswith('.pdf')
+    # διόρθωση στο Excel: συμπλήρωση email και αλλαγή κινητού
+    h = list(rows[0]); ws.cell(row=2, column=h.index('Κύριο Email') + 1, value='petros@example.com'); ws.cell(row=2, column=h.index('Κύριο Κινητό') + 1, value='6900000000')
+    wb.save(f)
+    app.go('/members/import')
+    app.page.set_input_files('#imp [name=file]', str(f))
+    app.page.check('#imp [name=mode][value=add]')
+    with app.page.expect_download():
+        app.page.click('#imp button')
+    app.page.wait_for_selector('text=Προσθήκη / συμπλήρωση ολοκληρώθηκε')
+    m = app.page.evaluate(f"async () => (await import('./core/store.js')).db.get('member_registry', {mid})")
+    assert m['email'] == 'petros@example.com' and m['mobile'] == '6977000999', m  # συμπληρώθηκε το κενό, δεν άλλαξε το υπάρχον
+    n = app.page.evaluate("async () => (await import('./core/store.js')).db.all('member_registry').length")
+    app.go('/members/import')
+    app.page.set_input_files('#imp [name=file]', str(f))
+    app.page.check('#imp [name=mode][value=merge]')
+    with app.page.expect_download():
+        app.page.click('#imp button')
+    app.page.wait_for_selector('text=Αντικατάσταση στοιχείων ολοκληρώθηκε')
+    m = app.page.evaluate(f"async () => (await import('./core/store.js')).db.get('member_registry', {mid})")
+    assert m['mobile'] == '6900000000', m
+    assert app.page.evaluate("async () => (await import('./core/store.js')).db.all('member_registry').length") == n  # τα άλλα μέλη μένουν

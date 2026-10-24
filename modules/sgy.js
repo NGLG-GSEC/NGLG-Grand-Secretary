@@ -15,6 +15,7 @@ import { highestOfficeText, epeteiridaAll } from './epeteirida-table.js';
 import { hasActiveList, isCurrentRecord } from './epeteirida-import.js';
 import { masonicYear } from './visits.js';
 import { greeklish } from './diploma.js';
+import { exportBar, bindExport } from './members.js';
 
 export const SGY_NAME = 'Συμβούλιο Γενικών Υποθέσεων';
 export const SGY_TO_NAME = 'Προς τα Μέλη του Συμβουλίου Γενικών Υποθέσεων';
@@ -175,7 +176,7 @@ ${sgyCards()}
 <div class="card noprint" id="sgyWa" hidden><h3 style="margin-top:0">💬 Μήνυμα WhatsApp προς τα μέλη του ΣΓΥ</h3><textarea id="sgyWaText" rows="4">Αγαπητέ Αδελφέ,\n\n</textarea>
 <p class="muted">Πατήστε ένα-ένα τα ονόματα: ανοίγει η συνομιλία με έτοιμο το μήνυμα (το WhatsApp δεν επιτρέπει μαζική αποστολή από σύνδεσμο).</p><div class="sgy-walist">${xs.filter((x) => usable(x) && waNo(x.m)).map((x) => `<a class="btn small wa-btn" target="_blank" rel="noopener" data-wa="${waNo(x.m)}" href="https://wa.me/${waNo(x.m)}">${esc(`${x.m.surname} ${x.m.first_name}`)}</a>`).join(' ')}</div></div>
 <div class="toolbar noprint"><button type="button" class="btn small" data-act="copyEmails">📋 Αντιγραφή email (${emails.length})</button><button type="button" class="btn small" data-act="copyMobiles">📋 Αντιγραφή κινητών</button>
-<a class="btn small" href="mailto:?bcc=${encodeURIComponent(emails.join(','))}">✉ Email σε όλους (Bcc)</a><button type="button" class="btn small" data-act="xlsx">⬇ Excel</button><button type="button" class="btn small" data-act="print">🖨 Εκτύπωση</button></div>
+${exportBar()}<a class="btn small" href="mailto:?bcc=${encodeURIComponent(emails.join(','))}">✉ Email σε όλους (Bcc)</a><button type="button" class="btn small" data-act="xlsx">⬇ Excel ΣΓΥ (ιδιότητες)</button><button type="button" class="btn small" data-act="print">🖨 Εκτύπωση</button></div>
 <form class="filters noprint" id="sgyFlt"><input name="q" value="${esc(query.q || '')}" placeholder="Αναζήτηση: όνομα, ιδιότητα, email, MM/M"><button>Αναζήτηση</button></form>
 <div class="print-area">${table(['Α/Α', 'Ονοματεπώνυμο (Μητρώο)', 'Ιδιότητα στο ΣΓΥ', 'Επετηρίδα', 'Email', 'Κινητό', ''], rows, 'Δεν υπάρχουν μέλη ΣΓΥ — προσθέστε από κάτω.')}</div>
 <details class="card fold noprint" open><summary><b>+ Προσθήκη μέλους ΣΓΥ</b></summary><div class="grid" style="margin-top:10px">
@@ -190,6 +191,7 @@ ${sgyCards()}
 <textarea id="sgyList" rows="6" placeholder="Παπαδόπουλος Γεώργιος <g.papadopoulos@example.com>&#10;6944123456&#10;…"></textarea>
 <div class="toolbar"><button type="button" class="btn" data-act="match">🔎 Ταυτοποίηση</button></div><div id="sgyMatch"></div></details>`,
     mount(el) {
+      bindExport(el, () => xs.map((x) => x.m), 'Μέλη ΣΓΥ');
       bind(el, {
         wa() { const c = el.querySelector('#sgyWa'); c.hidden = !c.hidden; },
         async copyEmails() { await navigator.clipboard.writeText(emails.join(', ')).catch(() => {}); toast(`Αντιγράφηκαν ${emails.length} email.`); },
