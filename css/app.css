@@ -543,3 +543,11 @@ input[type=file]{max-width:100%;min-width:0}
 .paper.report.sgy-att .att-t td.att-miss{color:#8a8f99;font-style:italic;text-align:center}
 .att-row .att-st .muted{color:#b42318;font-weight:700}
 .paper.report h3.dg-prov{color:#0b2f63;border-bottom:2px solid #b18a43;margin:6mm 0 2mm;font-size:11.5pt;break-after:avoid}.paper.report h3.dg-prov small{color:#555;font-weight:normal}
+/* ③ Αποφάσεις Μ.Δ. — κάρτες ανά Εργασία (κινητό) */
+.gd-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:8px}
+.gd-card{padding:10px 12px;border-left:5px solid #187a3d;margin:0}.gd-card.gd-open{border-left-color:#b42318}
+.gd-head{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;align-items:start}.gd-date{font-weight:700;color:#0b2f63;min-width:7.5em}
+.gd-cur{grid-column:1/-1;font-size:.92rem}.gd-decl{margin:6px 0;font-size:.9rem}.gd-decl .btn{margin:2px 2px 0 0}
+.gd-sel{width:100%;margin-top:6px}.gd-sel.gd-changed{outline:3px solid #e2a03f}
+.gd-save{position:sticky;bottom:0;background:#f4f6fa;padding:8px 0;z-index:5}
+@media screen and (max-width:600px){.gd-list{grid-template-columns:1fr}}

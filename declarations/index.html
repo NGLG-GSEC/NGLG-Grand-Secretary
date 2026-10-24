@@ -1253,7 +1253,23 @@
       document.getElementById("admin-pass").value = "";
     }
 
-    window.onload = function() {
+    // Οι Εργασίες έρχονται από τις Επισκέψεις της εφαρμογής (meetings.json)· οι παλιές του config.js μένουν μόνο αν δεν αντιστοιχούν σε αυτές
+    async function loadMeetings() {
+      try {
+        const r = await fetch("meetings.json?t=" + Date.now(), { cache: "no-store" });
+        if (!r.ok) return;
+        const pub = ((await r.json()).meetings || []).filter(m => m && m.id && m.date);
+        if (!pub.length) return;
+        const key = m => String(m.no).trim() + "|" + (String(m.date).match(/\d{2}\/\d{2}\/\d{4}/) || [""])[0];
+        const have = new Set(pub.map(key));
+        const iso = m => { const x = String(m.date).match(/(\d{2})\/(\d{2})\/(\d{4})/); return x ? x[3] + "-" + x[2] + "-" + x[1] : ""; };
+        const today = new Date().toISOString().slice(0, 10);
+        MEETINGS = pub.concat(MEETINGS.filter(m => !have.has(key(m)) && iso(m) >= today)).sort((a, b) => iso(a).localeCompare(iso(b)));
+      } catch (e) { /* χωρίς meetings.json: ο κατάλογος του config.js */ }
+    }
+
+    window.onload = async function() {
+      await loadMeetings();
       initMeetingsGrid();
       loadDecisions();
       resetFormFields();

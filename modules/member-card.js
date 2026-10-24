@@ -10,6 +10,7 @@ import { IMG, printPaper, gsSignatureText } from '../core/paper.js';
 import { senderBanner } from '../core/mail.js';
 import { isoOf, lodgesByMember, capacityOf, feeRankLabel } from './members.js';
 import { epeteiridaOf } from './epeteirida-table.js';
+import { memberVisits } from './visits.js';
 
 const d = (v) => esc(fmtDate(isoOf(v)) || '');
 const dash = (v) => (String(v ?? '').trim() ? esc(v) : '<span class="mc-empty">—</span>');
@@ -45,6 +46,7 @@ ${offices.length ? `<p class="mc-sub">Αξιώματα σε Στοές: ${office
 <section><h3>Επετηρίδα</h3>${tbl(['Ανώτατο αξίωμα / βαθμός', 'Τίτλος κατά το Σύνταγμα', 'Προσφώνηση', 'Διάταγμα', 'Εν ενεργεία', 'ΤΜΔ', 'Επαρχία / Στοά'],
   ep.map((r) => [`<b>${dash(r.rank)}</b>`, dash(r.title), dash(r.honorific), dash(r.decree_no ? `${r.decree_no}${r.decree_year ? '/' + r.decree_year : ''}` : r.decree_year), Number(r.active) ? `ΝΑΙ${r.current ? ' — ' + esc(r.current) : ''}` : dash(r.current),
     Number(r.tmd) ? `ΝΑΙ ${esc(r.tmd_decree || '')}` : '—', dash(r.province)]), 'Δεν υπάρχει στην Επετηρίδα.')}</section>
+${(() => { const vs = memberVisits(m.id); return vs.length ? `<section><h3>Εκπροσωπήσεις του Μεγάλου Διδασκάλου</h3>${tbl(['Ημερομηνία', 'Στοά', 'Επαρχία'], vs.map((v) => [d(v.visit_date), esc(`${v.lodge || ''} Αρ. ${v.lodge_number || ''}`), dash(v.province)]), '')}</section>` : ''; })()}
 <section><h3>Διατάγματα</h3>${tbl(['Διάταγμα', 'Ημερομηνία', 'Αξίωμα / Τίτλος', 'Περί'],
   decs.map((o) => [`<b>${esc(o.decree_no ? `${o.decree_no}/${o.decree_year || ''}` : o.decree_year || '')}</b>`, o.doc ? d(o.doc.decree_date) : '', dash(o.office), dash(o.doc && o.doc.matter)]), 'Δεν υπάρχουν Διατάγματα στο Αρχείο.')}</section>
 ${m.deregistered_note || m.additional_lodges ? `<section><h3>Σημειώσεις</h3>${m.deregistered_note ? `<p>${esc(m.deregistered_note)}</p>` : ''}${m.additional_lodges ? `<p class="mc-sub">${esc(m.additional_lodges)}</p>` : ''}</section>` : ''}

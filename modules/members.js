@@ -3,7 +3,8 @@
 // Κάθε αλλαγή μένει στο ιστορικό του GitHub, άρα και μια διαγραφή μπορεί να ανακτηθεί.
 import { db } from '../core/store.js';
 import { module, onSubmit, go, flash, bind, confirmDo, table, notice, pager, toast } from '../core/app.js';
-import { esc, fold, sortBy, readXlsx, XLSX, parsePasted, fmtDate } from '../core/util.js';
+import { esc, fold, sortBy, readXlsx, XLSX, parsePasted, fmtDate, today } from '../core/util.js';
+import { memberVisits } from './visits.js';
 import { lodgeNoKey, lodgesAll, lodgeByNumber } from './lodges.js';
 import { provincialChoices } from './provinces.js';
 import { noContact, NO_CONTACT } from '../core/pickers.js';
@@ -296,6 +297,13 @@ ${importBox()}`,
 }
 
 // Πού εμφανίζεται το μέλος (οι λίστες δείχνουν σε αυτό — δεν κρατούν δικά τους αντίγραφα)
+// Εκπροσωπήσεις του Μεγάλου Διδασκάλου από το μέλος (από τις Επισκέψεις Στοών — ίδια δεδομένα, καμία χωριστή καταγραφή)
+function visitsCard(m) {
+  const vs = memberVisits(m.id); if (!vs.length) return '';
+  const t = today();
+  return `<details class="card fold mv-card"${vs.some((v) => v.visit_date >= t) ? ' open' : ''}><summary><b>🎖 Εκπροσωπήσεις του Μεγάλου Διδασκάλου</b> <small class="muted">(${vs.length})</small></summary>
+${table(['Ημερομηνία', 'Στοά', 'Επαρχία', ''], vs.map((v) => [`<b>${esc(fmtDate(v.visit_date))}</b>${v.visit_date >= t ? ' <span class="pill ok">προσεχής</span>' : ''}`, `${esc(v.lodge || '')} Αρ. ${esc(v.lodge_number || '')}`, esc(v.province || ''), `<a class="btn small" href="#/visits/edit/${v.id}">Επίσκεψη</a>`]))}</details>`;
+}
 function usesOf(m) {
   const reps = db.all('reps').filter((r) => r.member_id === m.id), offs = db.all('member_degrees_offices').filter((o) => o.member_id === m.id), gr = db.all('greetings_log').filter((g) => g.member_id === m.id);
   const parts = [reps.length && `Εκπρόσωπος ΜΔ: ${reps.map((r) => `<a href="#/reps/edit/${r.id}">${esc(String(r.office || 'χωρίς αξίωμα').split(' · ')[0])}</a>`).join(', ')}`,
@@ -363,7 +371,7 @@ function formPage(m) {
   const offices = m ? sortBy(db.all('member_degrees_offices').filter((o) => o.member_id === m.id), (o) => -(o.decree_year || 0)) : [];
   return {
     title: m ? `Μέλος #${m.id}` : 'Νέο Μέλος',
-    html: `<p><a href="#/members">← Μητρώο Μελών</a></p><h1>${m ? `${esc(m.surname)} ${esc(m.first_name)} <small class="muted">#${m.id}</small>` : 'Νέο Μέλος'}</h1>${m ? `<div class="toolbar"><a class="btn primary" href="#/members/card?ids=${m.id}">🪪 Κάρτα Μέλους</a><a class="btn" href="#/members/diploma?id=${m.id}">🎓 Δίπλωμα Διδασκάλου</a></div>` : ''}${noContact(m) ? `<div class="card nocontact">${NO_CONTACT}</div>` : ''}${m ? usesOf(m) : ''}
+    html: `<p><a href="#/members">← Μητρώο Μελών</a></p><h1>${m ? `${esc(m.surname)} ${esc(m.first_name)} <small class="muted">#${m.id}</small>` : 'Νέο Μέλος'}</h1>${m ? `<div class="toolbar"><a class="btn primary" href="#/members/card?ids=${m.id}">🪪 Κάρτα Μέλους</a><a class="btn" href="#/members/diploma?id=${m.id}">🎓 Δίπλωμα Διδασκάλου</a></div>` : ''}${noContact(m) ? `<div class="card nocontact">${NO_CONTACT}</div>` : ''}${m ? usesOf(m) + visitsCard(m) : ''}
 <form id="mf"><div class="grid card"><div class="full regcode-row"><label>Αρ. Μητρώου</label><div class="regcode">${m ? regBadge(m) : '<span class="muted">αυτόματα (M + επόμενος ελεύθερος· MM + αριθμός Διπλώματος, αν υπάρχει)</span>'}</div></div>
 ${isAdmin() ? f('diploma_no', 'Δίπλωμα Διδασκάλου Τέκτονος <small class="muted">(Certificate Master Mason) — ο πραγματικός αριθμός μητρώου</small>', 'inputmode="numeric" placeholder="αριθμός διπλώματος"')
   : `<div><label>Δίπλωμα Διδασκάλου Τέκτονος</label><input value="${esc(x.diploma_no || '—')}" disabled></div>`}

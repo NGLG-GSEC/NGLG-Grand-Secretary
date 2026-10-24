@@ -2440,29 +2440,45 @@ def test_declarations_gm_decision_on_the_spot(browser, base_url):
     page.close()
 
 
-def test_gm_decisions_applied_to_visits(app):
-    # Αποφάσεις Μ.Δ. (Apps Script των Δηλώσεων) → εκπρόσωπος στις Επισκέψεις Στοών· η επίσκεψη που λείπει δημιουργείται
+def test_gm_decisions_in_app_with_declarations(app):
+    # ③ Αποφάσεις Μ.Δ. μέσα στην εφαρμογή, πάνω στις Επισκέψεις: δηλώσεις διάθεσης (κωδικός, μόνο στην καρτέλα), απόφαση της σελίδας Δηλώσεων
+    # (παλιοί κωδικοί του config.js), επιλογή και αποθήκευση· ο εκπρόσωπος φαίνεται στην καρτέλα του μέλους
     app.connect_local()
-    decisions = {'atlas_118': 'Διαβάτης Χρήστος (Βοηθός Μέγας Γραμματεύς)', 'akropolis_104': 'Ο Μέγας Διδάσκαλος (αυτοπροσώπως)',
-                 'isotis_97': 'Ανύπαρκτος Κάποιος (Μέγας Στεγαστής)'}
-    app.page.route('https://script.google.com/**', lambda r: r.fulfill(json={'ok': True, 'decisions': decisions}))
-    app.page.evaluate("""async () => { const {db} = await import('./core/store.js');
+    import json as _j
+    def api(route):
+        b = _j.loads(route.request.post_data or '{}')
+        if b.get('action') == 'decisions':
+            return route.fulfill(json={'ok': True, 'decisions': {'atlas_118': 'Διαβάτης Χρήστος (Βοηθός Μέγας Γραμματεύς)'}})
+        if b.get('action') == 'report':
+            ok = b.get('key') == 'kleidi'
+            return route.fulfill(json={'ok': ok, 'error': '' if ok else 'unauthorized', 'data': {'l104_20261102': [{'officer': 'Διαβάτης Χρήστος (Βοηθός Μέγας Γραμματεύς)', 'rank': 5}]}})
+        return route.fulfill(json={'ok': False, 'error': 'unknown_action'})
+    app.page.route('https://script.google.com/**', api)
+    add_member(app, surname='Διαβάτης', first='Χρήστος', email='d@example.com', mobile='6977000123')
+    app.page.evaluate("""async () => { const {db} = await import('./core/store.js'); const m = db.all('member_registry').find((x) => x.surname === 'Διαβάτης');
       await db.save('x', (tx) => { tx.replace('visits', []);
-        tx.insert('reps', { name: 'Χρήστος', surname: 'Διαβάτης', office: 'Βοηθός Μέγας Γραμματεύς', email: '', mobile: '' });
-        tx.insert('visits', { visit_date: '2026-11-02', lodge: 'ΑΤΛΑΣ', lodge_number: '118', location: '', province: '', rep_id: null, notes: '' }); }); }""")
-    app.go('/visits')
-    app.page.click('a.btn:has-text("🗳 Αποφάσεις Μ.Δ.")')
-    app.page.wait_for_selector('#gmdApply')
-    t = app.text()
-    assert 'Θα οριστεί' in t and 'Νέα επίσκεψη + ορισμός' in t and 'Δεν βρέθηκε στους Εκπροσώπους' in t and 'Εκκρεμεί απόφαση' in t
-    app.page.click('#gmdApply')
-    app.page.wait_for_url('**/#/visits')
-    st = app.page.evaluate("async () => { const {db} = await import('./core/store.js'); return db.all('visits').map((v) => [v.lodge_number, v.visit_date, (db.get('reps', v.rep_id) || {}).surname, (db.get('reps', v.rep_id) || {}).office]); }")
-    by = {s[0]: s for s in st}
-    assert by['118'][2] == 'Διαβάτης' and by['104'][1] == '2026-11-02' and by['104'][3] == 'Μέγας Διδάσκαλος' and '97' not in by, st
+        tx.insert('reps', { name: 'Χρήστος', surname: 'Διαβάτης', office: 'Βοηθός Μέγας Γραμματεύς', email: '', mobile: '', member_id: m.id });
+        tx.insert('visits', { visit_date: '2026-11-02', lodge: 'ΑΤΛΑΣ', lodge_number: '118', location: '', province: 'ΕπΜΣτ. Πειραιώς', rep_id: null, notes: '' });
+        tx.insert('visits', { visit_date: '2026-11-02', lodge: 'ΑΚΡΟΠΟΛΙΣ', lodge_number: '104', location: '', province: 'ΕπΜΣτ. Αθηνών', rep_id: null, notes: '' }); });
+      sessionStorage.setItem('nglg-decl-key', 'kleidi'); }""")
     app.go('/visits/decisions')
-    app.page.wait_for_selector('#gmdApply')
-    assert app.text().count('Ήδη ορισμένος') == 2 and app.page.locator('#gmdApply').is_disabled()
+    app.page.wait_for_selector('text=1 δηλώσεις διάθεσης')
+    atlas = app.page.locator('.gd-card', has_text='ΑΤΛΑΣ'); akro = app.page.locator('.gd-card', has_text='ΑΚΡΟΠΟΛΙΣ')
+    assert 'Απόφαση στη σελίδα Δηλώσεων' in atlas.inner_text() and '✋ Δήλωσαν' in akro.inner_text()
+    atlas.locator('.gd-decl [data-pick]').click()
+    akro.locator('.gd-decl [data-pick]').click()
+    app.page.click('#gdSave')
+    app.page.wait_for_selector('text=Αποθηκεύτηκαν 2 αποφάσεις')
+    st = app.page.evaluate("async () => { const {db} = await import('./core/store.js'); return db.all('visits').map((v) => (db.get('reps', v.rep_id) || {}).surname); }")
+    assert st == ['Διαβάτης', 'Διαβάτης'], st
+    # Μητρώο: η καρτέλα του μέλους δείχνει τις εκπροσωπήσεις του ΜΔ
+    mid = app.page.evaluate("async () => (await import('./core/store.js')).db.all('member_registry').find((x) => x.surname === 'Διαβάτης').id")
+    app.go(f'/members/{mid}')
+    t = app.text('.mv-card')
+    assert 'Εκπροσωπήσεις του Μεγάλου Διδασκάλου' in t and 'ΑΤΛΑΣ' in t and 'ΑΚΡΟΠΟΛΙΣ' in t, t
+    # η σελίδα Δηλώσεων παίρνει τις Εργασίες από τις Επισκέψεις (κοινός κωδικός)
+    ms = app.page.evaluate("async () => (await import('./modules/visits.js')).publicMeetings('2026-10-24').map((m) => m.id + ' ' + m.date)")
+    assert 'l104_20261102 Δευτέρα 02/11/2026' in ms and 'l118_20261102 Δευτέρα 02/11/2026' in ms, ms
 
 
 def test_decree_design_header_builder_and_office_image(app):

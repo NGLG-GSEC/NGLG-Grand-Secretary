@@ -43,6 +43,11 @@ jobs:
             "https://api.github.com/repos/$DATA_REPO/contents/files/public/programme.json" -o programme/programme.json \
             && python3 -c "import json; d=json.load(open('programme/programme.json')); print('Πρόγραμμα:', len(d.get('rows', [])), 'επισκέψεις')" \
             || { echo "Δεν βρέθηκε ακόμη πρόγραμμα στα δεδομένα."; rm -f programme/programme.json; }
+          # Εργασίες για τη σελίδα Δηλώσεων (declarations/): οι Επισκέψεις της εφαρμογής (ημερομηνία, Στοά, αριθμός, Επαρχία)
+          curl -fsSL -H "Authorization: Bearer $DATA_TOKEN" -H "Accept: application/vnd.github.raw" \
+            "https://api.github.com/repos/$DATA_REPO/contents/files/public/meetings.json" -o declarations/meetings.json \
+            && python3 -c "import json; d=json.load(open('declarations/meetings.json')); print('Εργασίες:', len(d.get('meetings', [])))" \
+            || { echo "Δεν βρέθηκαν ακόμη Εργασίες στα δεδομένα."; rm -f declarations/meetings.json; }
       - name: Upload site
         uses: actions/upload-pages-artifact@v3
         with:

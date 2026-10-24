@@ -3,10 +3,10 @@
 // και οι Εργασίες από το declarations/config.js. Κάθε απόφαση αντιστοιχίζεται σε επίσκεψη (αριθμός Στοάς + ημερομηνία)
 // και σε εκπρόσωπο (Εκπρόσωποι ή Επετηρίδα)· με «Εφαρμογή» ορίζεται ο εκπρόσωπος στην επίσκεψη (ή δημιουργείται η επίσκεψη).
 import { db } from '../core/store.js';
-import { module, go, flash, toast, table } from '../core/app.js';
-import { esc, fold, dayStr } from '../core/util.js';
+import { module, go, flash, toast, onSubmit } from '../core/app.js';
+import { esc, fold, dayStr, today, addDays } from '../core/util.js';
 import { lodgeNoKey } from './lodges.js';
-import { repCandidates, candRep, repIdIn, repLabel, isGM, visitsAll, visitsFlow } from './visits.js';
+import { repCandidates, candRep, repIdIn, repLabel, isGM, visitsAll, visitsFlow, repOptions, NOBODY, meetingIdOf } from './visits.js';
 
 export const GM_SELF = 'Ο Μέγας Διδάσκαλος (αυτοπροσώπως)';
 const CONFIG_URL = 'declarations/config.js';
@@ -75,14 +75,6 @@ export function decisionPlan(meetings, decisions) {
     return { m, iso, v, cur, d, rep, status };
   });
 }
-const STATUS = {
-  pending: '<span class="muted">Εκκρεμεί απόφαση</span>',
-  same: '<span class="vok">✓ Ήδη ορισμένος</span>',
-  set: '<span class="pill ok">Θα οριστεί</span>',
-  change: '<span class="pill warn">Θα αλλάξει</span>',
-  create: '<span class="pill ok">Νέα επίσκεψη + ορισμός</span>',
-  norep: '<span class="vwarn">⚠ Δεν εφαρμόζεται</span>',
-};
 const actionable = (r) => ['set', 'change', 'create'].includes(r.status);
 
 export async function applyPlan(rows) {
@@ -100,42 +92,93 @@ export async function applyPlan(rows) {
   return todo.length;
 }
 
-function decisionsPage() {
+// ③ Αποφάσεις Μ.Δ. — μέσα στην εφαρμογή, πάνω στις ίδιες τις Επισκέψεις (μία πηγή: πίνακας visits, πεδίο rep_id).
+// Για κάθε προσεχή Εργασία: ποιοι δήλωσαν διάθεση (σελίδα Δηλώσεων, με τον κωδικό πρόσβασης), τυχόν απόφαση που πάρθηκε εκεί,
+// και επιλογή εκπροσώπου: ο ίδιος ο ΜΔ · όσοι δήλωσαν · εν ενεργεία Μεγάλοι Αξιωματικοί · Πρώην Μεγάλοι Αξιωματικοί · ΟΥΔΕΙΣ.
+const KEY_STORE = 'nglg-decl-key';
+const sessKey = () => { try { return sessionStorage.getItem(KEY_STORE) || ''; } catch { return ''; } };
+const setSessKey = (k) => { try { if (k) sessionStorage.setItem(KEY_STORE, k); else sessionStorage.removeItem(KEY_STORE); } catch { /* */ } };
+async function postApi(url, body) {
+  const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(body) });
+  if (!res.ok) throw new Error('Το Apps Script δεν απάντησε (' + res.status + ').');
+  return res.json();
+}
+// Κωδικός Εργασίας της σελίδας Δηλώσεων → Επίσκεψη (νέοι κωδικοί l<αρ>_<ημ/νία>, και οι παλιοί του config.js)
+export function visitOfMeetingId(id, oldMeetings = [], vs = visitsAll()) {
+  const v = vs.find((x) => meetingIdOf(x) === id); if (v) return v;
+  const m = oldMeetings.find((x) => x.id === id); return m ? visitForMeeting(m, vs) : null;
+}
+function decisionsPage({ query = {} }) {
+  const frm = query.frm || today(), to = query.to || addDays(frm, 60), prov = query.prov || '', open = query.open === '1';
+  const vs = visitsAll().filter((v) => v.visit_date >= frm && v.visit_date <= to && (!prov || v.province === prov) && (!open || !Number(v.rep_id)));
+  const provs = [...new Set(visitsAll().map((v) => v.province).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'el'));
   return {
     title: 'Αποφάσεις Μ.Δ.',
-    html: `${visitsFlow(3)}<div class="hero"><h1>🗳 Αποφάσεις Μ.Δ. → Επισκέψεις Στοών</h1></div>
-<p class="muted">Οι αποφάσεις που παίρνει ο Μέγας Διδάσκαλος στη <a href="#/declarations">Διαχειριστική Αναφορά των Δηλώσεων</a> («Απόφαση Μ.Δ. — Εκπρόσωπος»)
-ορίζουν τον εκπρόσωπο στην αντίστοιχη επίσκεψη. Ελέγξτε τον πίνακα και πατήστε «Εφαρμογή».</p>
-<div class="toolbar"><a class="btn" href="#/visits">← Επισκέψεις Στοών</a><button class="btn" id="gmdReload">⟳ Ανανέωση</button></div>
-<div id="gmdBody"><div class="card">Φόρτωση αποφάσεων…</div></div>`,
+    html: `${visitsFlow(3)}<div class="hero"><h1>🗳 Αποφάσεις Μ.Δ. — Εκπρόσωποι στις Εγκαταστάσεις</h1></div>
+<details class="card fold"><summary><b>Πώς λειτουργεί</b></summary><ol class="steps"><li>Οι Εργασίες είναι οι <a href="#/visits">Επισκέψεις Στοών</a> (① Πρόγραμμα Εγκαταστάσεων)· η σελίδα Δηλώσεων τις παίρνει αυτόματα.</li>
+<li>Οι Μεγάλοι Αξιωματικοί δηλώνουν διάθεση στη <a href="#/declarations">σελίδα Δηλώσεων</a> (②). Εδώ φαίνονται με «🔒 Δηλώσεις» (κωδικός πρόσβασης, μόνο για αυτή την καρτέλα).</li>
+<li>Για κάθε Εργασία ο ΜΔ αποφασίζει: ο ίδιος, κάποιος που δήλωσε, εν ενεργεία ή Πρώην Μέγας Αξιωματικός, ή ΟΥΔΕΙΣ — «✔ Αποθήκευση». Η απόφαση γράφεται στην Επίσκεψη και φαίνεται παντού (πρόγραμμα, δημόσια σελίδα, Μητρώο του μέλους).</li>
+<li>Μετά: ④ Ενημερώσεις (εκπρόσωπος, Επαρχία) και ⑤ Αναφορά.</li></ol></details>
+<form class="card filters vfilters" id="gdf"><input type="date" name="frm" value="${esc(frm)}"><input type="date" name="to" value="${esc(to)}">
+<select name="prov"><option value="">Όλες οι Επαρχίες</option>${provs.map((p) => `<option${p === prov ? ' selected' : ''}>${esc(p)}</option>`).join('')}</select>
+<label class="chk"><input type="checkbox" name="open" value="1"${open ? ' checked' : ''}> Μόνο χωρίς εκπρόσωπο</label><button>Προβολή</button></form>
+<div class="toolbar"><button type="button" class="btn" id="gdKey">🔒 Δηλώσεις διάθεσης</button><span class="muted" id="gdState"></span></div>
+<div class="vstats"><span><b>${vs.length}</b> Εργασίες</span><span class="${vs.filter((v) => !Number(v.rep_id)).length ? 'warn' : ''}"><b>${vs.filter((v) => !Number(v.rep_id)).length}</b> χωρίς εκπρόσωπο</span></div>
+<div id="gdList" class="gd-list">${vs.length ? '' : '<div class="card">Δεν υπάρχουν Εργασίες στο διάστημα.</div>'}</div>
+${vs.length ? '<div class="toolbar gd-save"><button type="button" class="btn primary" id="gdSave">✔ Αποθήκευση αποφάσεων</button></div>' : ''}`,
     mount(el) {
-      const box = el.querySelector('#gmdBody');
-      const load = async () => {
-        box.innerHTML = '<div class="card">Φόρτωση αποφάσεων…</div>';
-        let rows;
-        try { const cfg = await declarationsConfig(); rows = decisionPlan(cfg.MEETINGS, await fetchDecisions(cfg.API_URL)); }
-        catch (e) { box.innerHTML = `<div class="card nocontact">${esc(e.message || String(e))}</div>`; return; }
-        const n = rows.filter(actionable).length;
-        box.innerHTML = `<div class="vstats"><span><b>${rows.filter((r) => r.d).length}</b> αποφάσεις</span><span class="${n ? 'warn' : ''}"><b>${n}</b> προς εφαρμογή</span><span><b>${rows.filter((r) => r.status === 'pending').length}</b> εκκρεμούν</span></div>
-${table(['Ημερομηνία', 'Στοά', 'Απόφαση Μ.Δ.', 'Εκπρόσωπος στην εφαρμογή', 'Τρέχων εκπρόσωπος', 'Ενέργεια'], rows.map((r) => [
-    esc(r.iso ? dayStr(r.iso) : r.m.date),
-    `<b>${esc(r.m.name)}</b> Αρ. ${esc(r.m.no)}${r.v ? `<br><a href="#/visits/edit/${r.v.id}">επίσκεψη ${esc(dayStr(r.v.visit_date))}</a>` : '<br><small class="muted">χωρίς επίσκεψη</small>'}`,
-    r.d ? `<b>${esc(r.d)}</b>` : '—',
-    r.rep ? (r.rep.error ? `<span class="vwarn">${esc(r.rep.error)}</span>` : esc(r.rep.label)) : '—',
-    r.cur ? esc(repLabel(r.cur)) : '<span class="muted">—</span>',
-    STATUS[r.status],
-  ]))}
-<p><button class="btn primary" id="gmdApply"${n ? '' : ' disabled'}>✔ Εφαρμογή ${n} ${n === 1 ? 'απόφασης' : 'αποφάσεων'} στις Επισκέψεις</button>
-${rows.some((r) => r.status === 'norep') ? ' <a class="btn" href="#/reps">Εκπρόσωποι</a>' : ''}</p>`;
-        const b = box.querySelector('#gmdApply');
-        b.addEventListener('click', async () => {
-          b.disabled = true;
-          try { const k = await applyPlan(rows); flash(`Εφαρμόστηκαν ${k} αποφάσεις του Μ.Δ. στις Επισκέψεις Στοών.`); go('/visits'); }
-          catch (e) { toast(e.message || String(e), 'error'); b.disabled = false; }
-        });
+      onSubmit(el.querySelector('#gdf'), (d) => go('/visits/decisions', { ...d, open: d.open ? '1' : '' }));
+      const box = el.querySelector('#gdList'), state = el.querySelector('#gdState');
+      let declared = {}, decided = {}, oldMeetings = [], cfg = null;
+      const cands = repCandidates();
+      const draw = () => {
+        if (!vs.length) return;
+        box.innerHTML = vs.map((v) => {
+          const r = Number(v.rep_id) > 0 ? db.get('reps', Number(v.rep_id)) : null, ds = declared[v.id] || [], dec = decided[v.id];
+          const dOpts = ds.map((o) => ({ o, rep: repForDecision(o.officer, cands) })).filter((x) => !x.rep.error);
+          const decRep = dec ? repForDecision(dec, cands) : null;
+          return `<div class="card gd-card${Number(v.rep_id) ? '' : ' gd-open'}" data-v="${v.id}"><div class="gd-head"><div class="gd-date">${esc(dayStr(v.visit_date))}</div>
+<div><b>${esc(v.lodge || '')}</b> Αρ. ${esc(v.lodge_number || '')}<br><small class="muted">${esc(v.province || '')}${v.location ? ' · ' + esc(v.location) : ''}</small></div>
+<div class="gd-cur">${Number(v.rep_id) === NOBODY ? '<span class="pill">ΟΥΔΕΙΣ</span>' : r ? `<span class="vok">✓ ${esc(repLabel(r))}</span>` : '<span class="vwarn">χωρίς εκπρόσωπο</span>'}</div></div>
+${ds.length ? `<div class="gd-decl">✋ Δήλωσαν: ${ds.map((o) => { const x = dOpts.find((y) => y.o === o); return x ? `<button type="button" class="btn small" data-pick="${esc(x.rep.value)}">${esc(o.officer)}</button>` : `<span class="muted">${esc(o.officer)}</span>`; }).join(' ')}</div>` : ''}
+${decRep && !decRep.error && decRep.value !== String(v.rep_id) ? `<div class="gd-decl">🗳 Απόφαση στη σελίδα Δηλώσεων: <button type="button" class="btn small primary" data-pick="${esc(decRep.value)}">${esc(dec)}</button></div>` : ''}
+<select class="gd-sel" data-v="${v.id}"><option value="">— Επιλογή εκπροσώπου —</option>${dOpts.length ? `<optgroup label="✋ Δήλωσαν διάθεση">${dOpts.map((x) => `<option value="${esc(x.rep.value)}">${esc(x.rep.label)}</option>`).join('')}</optgroup>` : ''}${repOptions(v.rep_id)}</select></div>`;
+        }).join('');
+        box.querySelectorAll('.gd-sel').forEach((s) => { if (!Array.from(s.options).some((o) => o.selected && o.value)) s.value = ''; });
       };
-      el.querySelector('#gmdReload').addEventListener('click', load);
-      load();
+      box.addEventListener('click', (e) => { const b = e.target.closest('[data-pick]'); if (!b) return; const s = b.closest('.gd-card').querySelector('.gd-sel'); s.value = b.dataset.pick; s.classList.add('gd-changed'); });
+      box.addEventListener('change', (e) => { if (e.target.matches('.gd-sel')) e.target.classList.add('gd-changed'); });
+      const load = async () => {
+        try { cfg = cfg || await declarationsConfig(); oldMeetings = cfg.MEETINGS || []; } catch { cfg = null; }
+        const msgs = [];
+        if (cfg && cfg.API_URL) {
+          try { const r = await postApi(cfg.API_URL, { action: 'decisions' }); if (r.ok) { decided = {}; for (const [id, t] of Object.entries(r.decisions || {})) { const v = visitOfMeetingId(id, oldMeetings); if (v && t) decided[v.id] = t; } } }
+          catch { /* οι αποφάσεις παίρνονται εδώ */ }
+          const key = sessKey();
+          if (key) {
+            try {
+              const r = await postApi(cfg.API_URL, { action: 'report', key });
+              if (!r.ok) { setSessKey(''); msgs.push(r.error === 'unauthorized' ? 'Λάθος κωδικός δηλώσεων.' : 'Σφάλμα δηλώσεων: ' + r.error); }
+              else { declared = {}; let n = 0; for (const [id, xs] of Object.entries(r.data || {})) { const v = visitOfMeetingId(id, oldMeetings); if (v) { (declared[v.id] ||= []).push(...xs); n += xs.length; } } msgs.push(`✓ ${n} δηλώσεις διάθεσης`); }
+            } catch (err) { msgs.push(err.message || String(err)); }
+          }
+        }
+        state.textContent = msgs.join(' · ');
+        draw();
+      };
+      el.querySelector('#gdKey').addEventListener('click', () => { const k = prompt('Κωδικός πρόσβασης της σελίδας Δηλώσεων (μένει μόνο σε αυτή την καρτέλα):', ''); if (k) { setSessKey(k.trim()); state.textContent = 'Φόρτωση…'; load(); } });
+      const sv = el.querySelector('#gdSave');
+      if (sv) sv.addEventListener('click', async () => {
+        const ch = [...box.querySelectorAll('.gd-sel.gd-changed')].filter((s) => s.value && s.value !== String(db.get('visits', Number(s.dataset.v)).rep_id));
+        if (!ch.length) { toast('Δεν άλλαξε καμία απόφαση.'); return; }
+        sv.disabled = true;
+        try {
+          const done = {};
+          await db.save(`Αποφάσεις Μ.Δ.: ${ch.length} εκπρόσωποι`, (tx) => { for (const s of ch) { const rid = (done[s.value] ||= repIdIn(tx, s.value, cands)); tx.update('visits', Number(s.dataset.v), { rep_id: rid }); } });
+          flash(`Αποθηκεύτηκαν ${ch.length} αποφάσεις του Μ.Δ. — επόμενο βήμα: ④ Ενημερώσεις.`); go('/visits/decisions', query);
+        } catch (err) { toast(err.message || String(err), 'error'); sv.disabled = false; }
+      });
+      draw(); load();
     },
   };
 }

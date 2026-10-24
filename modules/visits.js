@@ -4,7 +4,7 @@
 import { db } from '../core/store.js';
 import { module, onSubmit, go, flash, bind, confirmDo, table, notice, toast } from '../core/app.js';
 import { crud } from '../core/crud.js';
-import { esc, fold, today, fmtDate, dayStr, parseIso, sortBy, download, EMAIL_RE, splitEmails, grUpper, DAYS, isoDate, parsePasted, readXlsx, outgoingProtocolBtn } from '../core/util.js';
+import { esc, fold, today, fmtDate, dayStr, parseIso, sortBy, download, EMAIL_RE, splitEmails, grUpper, DAYS, isoDate, parsePasted, readXlsx, outgoingProtocolBtn, addDays } from '../core/util.js';
 import { senderBanner, copyText, withLetterCc } from '../core/mail.js';
 import { bccWithout } from '../core/gmail.js';
 import { reportPaper, printPaper, letterhead, letterPaper, IMG, GS_CLOSING, GS_NAME, GS_TITLE, gsSignatureText } from '../core/paper.js';
@@ -101,6 +101,11 @@ db.on((ev) => {
 });
 
 // ---------------------------------------------------------------- δεδομένα
+// Εκπροσωπήσεις του ΜΔ ενός μέλους του Μητρώου (από τις Επισκέψεις — καμία χωριστή καταγραφή)
+export function memberVisits(mid) {
+  const id = canonicalId(mid), rs = new Set(db.all('reps').filter((r) => r.member_id && canonicalId(r.member_id) === id).map((r) => r.id));
+  return rs.size ? visitsAll().filter((v) => rs.has(Number(v.rep_id))) : [];
+}
 export const repsAll = () => sortBy(db.all('reps'), (r) => fold(r.surname), (r) => fold(r.name));
 export const visitsAll = () => sortBy(db.all('visits'), 'visit_date', (v) => Number(v.lodge_number) || 0);
 const repMap = () => Object.fromEntries(db.all('reps').map((r) => [r.id, r]));
@@ -159,7 +164,7 @@ export function repDetails(value) {
 <div class="muted">${[r.year && 'Έτος: ' + esc(r.year), email ? '✉ ' + esc(email) : '<span class="vwarn">χωρίς email</span>', mobile && '☎ ' + esc(mobile), ls.length && 'Στοές: ' + esc(ls.join(', '))].filter(Boolean).join(' · ')}</div></div>`;
 }
 // Επιλογή εκπροσώπου: ομάδες κατά τάξη προβαδίσματος — ΜΔ, εν ενεργεία, Πρώην, λοιποί
-function repOptions(sel, rm = rankmap()) {
+export function repOptions(sel, rm = rankmap()) {
   const items = [...db.all('reps').map((r) => ({ value: String(r.id), r, prec: repPrec(r), past: isPast(r) })),
     ...repCandidates().map((c) => { const r = candRep(c); return { value: 'e:' + c.key, r, prec: repPrec(r), past: isPast(r), ep: true }; })];
   const lab = (it) => repOptionLabel(it.r, rm);
@@ -181,7 +186,7 @@ export function repIdIn(tx, value, cands) {
   return c ? tx.insert('reps', candRep(c)).id : null;
 }
 // «ΟΥΔΕΙΣ»: ο Μέγας Διδάσκαλος δεν έστειλε κανέναν εκπρόσωπο (ειδική τιμή rep_id)
-const NOBODY = -1;
+export const NOBODY = -1;
 const isNobody = (v) => !!v && Number(v.rep_id) === NOBODY;
 const firstOffice = (r) => String((r || {}).office || '').split(' · ')[0].replace(/\s*\(\d{4}\)\s*$/, '');
 const isPast = (r) => String(r.office || '').startsWith('Πρώην');
@@ -590,17 +595,29 @@ export function publicProgramme() {
     letters: Object.fromEntries(gmProgrammeRows(today()).filter((x) => x.letter).map(({ letter }) => [String(seqOf(letter)), { html: publicLetterHtml(letter), pdf: letter.drive_pdf || '' }])),
     rows: gmProgrammeRows(today()).map(({ v, r, prot, letter }) => ({ protocol: prot, letter_url: publicLetterUrl(letter), date: v.visit_date, lodge: v.lodge || '', no: String(v.lodge_number || ''), province: v.province || '', rep: isGM(r) ? 'Ο Μέγας Διδάσκαλος' : repFull(r), gm: isGM(r) ? 1 : 0 })) };
 }
+// ---- Ενιαία δομή Επισκέψεων: οι Εργασίες της σελίδας Δηλώσεων (declarations/) είναι οι ίδιες οι Επισκέψεις της εφαρμογής.
+// Κωδικός Εργασίας (κοινός με τις δηλώσεις και τις αποφάσεις του ΜΔ): «l<αρ. Στοάς>_<ΕΕΕΕΜΜΗΗ>».
+export const meetingIdOf = (v) => `l${String(lodgeNoKey(v.lodge_number) || 'x').toLowerCase().replace(/φ/g, 'f').replace(/[^a-z0-9]/g, '')}_${String(v.visit_date || '').replace(/-/g, '')}`.slice(0, 40);
+export const MEETINGS_AHEAD = 120; // ημέρες: οι Εργασίες που δηλώνονται
+export function publicMeetings(frm = today()) {
+  return visitsAll().filter((v) => v.visit_date >= frm && v.visit_date <= addDays(frm, MEETINGS_AHEAD)).map((v) => {
+    const d = parseIso(v.visit_date);
+    return { id: meetingIdOf(v), date: `${DAYS[d.getDay()]} ${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`, name: v.lodge || '', no: String(v.lodge_number || ''), prov: v.province || '' };
+  });
+}
 let publishing = null;
+// Δημόσια αρχεία (μέσω της δημοσίευσης GitHub Pages): programme.json (πρόγραμμα με εκπροσώπους) και meetings.json (Εργασίες για δηλώσεις)
 export async function publishProgramme(force = false) {
   if (publishing || !db.backend) return publishing;
   publishing = (async () => {
-    const data = publicProgramme(), dec = new TextDecoder();
-    let cur = null;
-    try { const b = await db.file('public/programme.json'); cur = b ? JSON.parse(dec.decode(b)) : null; } catch { cur = null; }
-    const same = cur && JSON.stringify({ ...cur, updated_at: 0 }) === JSON.stringify({ ...data, updated_at: 0 });
-    if (same && !force) return false;
-    const json = JSON.stringify({ ...data, updated_at: new Date().toISOString() }, null, 1);
-    await db.save('Δημόσιο πρόγραμμα επισκέψεων: ενημέρωση', (tx) => tx.putFile('public/programme.json', new TextEncoder().encode(json)));
+    const files = { 'public/programme.json': publicProgramme(), 'public/meetings.json': { meetings: publicMeetings() } }, dec = new TextDecoder(), changed = {};
+    for (const [path, data] of Object.entries(files)) {
+      let cur = null;
+      try { const b = await db.file(path); cur = b ? JSON.parse(dec.decode(b)) : null; } catch { cur = null; }
+      if (force || !cur || JSON.stringify({ ...cur, updated_at: 0 }) !== JSON.stringify({ ...data, updated_at: 0 })) changed[path] = JSON.stringify({ ...data, updated_at: new Date().toISOString() }, null, 1);
+    }
+    if (!Object.keys(changed).length) return false;
+    await db.save('Δημόσιο πρόγραμμα επισκέψεων: ενημέρωση', (tx) => { for (const [path, json] of Object.entries(changed)) tx.putFile(path, new TextEncoder().encode(json)); });
     return true;
   })().finally(() => { publishing = null; });
   return publishing;
