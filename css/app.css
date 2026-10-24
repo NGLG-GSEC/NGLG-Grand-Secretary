@@ -542,3 +542,4 @@ input[type=file]{max-width:100%;min-width:0}
 .paper.report.sgy-att .att-t td.att-vac{background:#f8d7d7;color:#9b1c1c;font-weight:700;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 .paper.report.sgy-att .att-t td.att-miss{color:#8a8f99;font-style:italic;text-align:center}
 .att-row .att-st .muted{color:#b42318;font-weight:700}
+.paper.report h3.dg-prov{color:#0b2f63;border-bottom:2px solid #b18a43;margin:6mm 0 2mm;font-size:11.5pt;break-after:avoid}.paper.report h3.dg-prov small{color:#555;font-weight:normal}

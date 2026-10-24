@@ -4,9 +4,11 @@
 import { db } from '../core/store.js';
 import { module, onSubmit, go, flash, bind, confirmDo, table, notice, pager, toast } from '../core/app.js';
 import { esc, fold, sortBy, readXlsx, XLSX, parsePasted, fmtDate } from '../core/util.js';
-import { lodgeNoKey, lodgesAll } from './lodges.js';
+import { lodgeNoKey, lodgesAll, lodgeByNumber } from './lodges.js';
+import { provincialChoices } from './provinces.js';
 import { noContact, NO_CONTACT } from '../core/pickers.js';
 import { epeteiridaOf, highestOfficeText } from './epeteirida-table.js';
+import { reportPaper, printPaper } from '../core/paper.js';
 import { identify, canonicalId, person, digits10, sameNameGroups, regCode, matchesCode, codeKey } from '../core/people.js';
 import { isSealed } from '../core/connect.js';
 import { smallLodgesPage } from './small-lodges.js';
@@ -182,9 +184,38 @@ ${rs.length > 1 ? `<p class="muted">Και: ${rs.slice(1).map((x) => esc(x.title
 }
 
 // ---------------------------------------------------------------- σελίδες
+// Φίλτρο κατάστασης (δυναμικό, μαζί με την αναζήτηση): Όλα · Ενεργά · ⛔ Διαγραμμένοι (ΔΙΑΓΡΑΦΕΝ σε όλες τις Στοές) · Ανενεργά
+export const MEMBER_STATUS = [['', 'Όλα'], ['active', 'Ενεργά'], ['dereg', '⛔ Διαγραμμένοι'], ['inactive', 'Ανενεργά (όχι διαγραμμένα)']];
+const statusOf = (x) => (noContact(x) ? 'dereg' : x.active !== 0 ? 'active' : 'inactive');
+const memberResults = (query) => {
+  const field = HINTS[query.field] ? query.field : 'surname', q = String(query.q || '').trim(), status = MEMBER_STATUS.some(([k]) => k && k === query.status) ? query.status : '';
+  const all = sortBy(memberSearch(q, field), 'surname', 'first_name', 'id');
+  return { field, q, status, all, xs: status ? all.filter((x) => statusOf(x) === status) : all };
+};
+const lodgesLine = (ls) => (ls || []).map((l) => `${l.lodge_name} ${l.lodge_number}`.trim() + (l.member_status ? ` (${l.member_status})` : '')).join(' · ');
+// 🖨 Λίστα Διαγραμμένων (ή όποιου φίλτρου): εκτύπωση / PDF
+function deregisteredPage({ query }) {
+  const { xs, q } = memberResults({ ...query, status: 'dereg' }), byM = lodgesByMember(), title = 'Κατάλογος Διαγραμμένων Μελών';
+  const sub = `${xs.length} μέλη — ΔΙΑΓΡΑΦΕΝ σε όλες τις Στοές τους · ${fmtDate(new Date().toISOString().slice(0, 10))}${q ? ` · αναζήτηση «${q}»` : ''}`;
+  // ομαδοποίηση ανά Επαρχιακή / Περιφερειακή Μεγάλη Στοά (της πρώτης Στοάς του μέλους), με τη σειρά των ΕπΜΣτ.
+  const NONE = 'Χωρίς Επαρχιακή / Περιφερειακή Μεγάλη Στοά', provOf = (x) => { const l = (byM[x.id] || [])[0]; return (l && (lodgeByNumber(l.lodge_number) || {}).provincial) || NONE; };
+  const groups = new Map(); for (const x of xs) { const k = provOf(x); (groups.get(k) || groups.set(k, []).get(k)).push(x); }
+  const order = provincialChoices(), keys = [...groups.keys()].sort((a, b) => (a === NONE) - (b === NONE) || ((order.indexOf(a) + 1 || 999) - (order.indexOf(b) + 1 || 999)) || a.localeCompare(b, 'el'));
+  const head = '<thead><tr><th>Α/Α</th><th>Αρ. Μητρώου</th><th>Επώνυμο</th><th>Όνομα</th><th>Στοές (κατάσταση)</th><th>Σημείωση</th></tr></thead>';
+  const inner = keys.length ? keys.map((k) => `<h3 class="dg-prov">${esc(k)} <small>(${groups.get(k).length})</small></h3><table>${head}<tbody>${groups.get(k).map((x, i) => `<tr><td>${i + 1}</td><td>${esc(regCode(x) || '')}</td><td><b>${esc(x.surname || '')}</b></td><td>${esc(x.first_name || '')}</td><td>${esc(lodgesLine(byM[x.id]))}</td><td>${esc(x.deregistered_note || '')}</td></tr>`).join('')}</tbody></table>`).join('')
+    : '<p>Δεν υπάρχουν διαγραμμένα μέλη.</p>';
+  return {
+    title,
+    html: `<div class="noprint"><p><a href="#/members?${new URLSearchParams({ ...(q ? { q, field: query.field || 'surname' } : {}), status: 'dereg' })}">← Μητρώο Μελών (⛔ Διαγραμμένοι)</a></p>
+<div class="toolbar"><button type="button" class="btn primary" data-act="print">🖨 Εκτύπωση</button><button type="button" class="btn" data-act="pdf">⬇ PDF</button></div></div>
+<div class="print-area">${reportPaper(title, sub, inner)}</div>`,
+    mount(el) {
+      bind(el, { print: () => printPaper(title), async pdf() { const { paperPdf } = await import('../core/pdf.js'); const { download } = await import('../core/util.js'); download(title + '.pdf', await paperPdf(el.querySelector('.paper'), { title }), 'application/pdf'); } });
+    },
+  };
+}
 function listPage({ query }) {
-  const field = HINTS[query.field] ? query.field : 'surname', q = String(query.q || '').trim(), pg = Math.max(1, Number(query.p) || 1);
-  const xs = sortBy(memberSearch(q, field), 'surname', 'first_name', 'id'), byM = lodgesByMember();
+  const { field, q, status, all, xs } = memberResults(query), pg = Math.max(1, Number(query.p) || 1), byM = lodgesByMember();
   const shown = xs.slice((pg - 1) * PAGE, pg * PAGE);
   const lq = field === 'lodge' ? q.replace(/^\s*(\d+|Φ)\s*·\s*/, '') : q;
   const H = (v, f) => hl(v, q, field === 'all' || field === f);
@@ -199,7 +230,10 @@ function listPage({ query }) {
   const [qlabel, ph, itype] = HINTS[field];
   const flabel = Object.fromEntries(MEMBER_FIELDS)[field];
   const summary = q ? `${xs.length === 1 ? 'Βρέθηκε <b>1</b> μέλος' : `Βρέθηκαν <b>${xs.length}</b> μέλη`} για «<b>${esc(q)}</b>» σε: <b>${esc(flabel)}</b>` : `Σύνολο <b>${xs.length}</b> μελών`;
-  const mk = (p) => '#/members?' + new URLSearchParams({ q, field, p });
+  const mk = (p) => '#/members?' + new URLSearchParams({ q, field, p, ...(status ? { status } : {}) });
+  const cnt = Object.fromEntries(MEMBER_STATUS.map(([k]) => [k, k ? all.filter((x) => statusOf(x) === k).length : all.length]));
+  const stBar = `<div class="toolbar mstatus">${MEMBER_STATUS.map(([k, l]) => `<a class="btn small${k === status ? ' primary' : ''}${k === 'dereg' ? ' danger' : ''}" href="#/members?${new URLSearchParams({ q, field, ...(k ? { status: k } : {}) })}">${l} <b>${cnt[k]}</b></a>`).join('')}
+${status === 'dereg' ? `<a class="btn small primary" href="#/members/deregistered?${new URLSearchParams({ q, field })}">🖨 Λίστα Διαγραμμένων (PDF)</a>` : ''}</div>`;
   return {
     title: 'Μητρώο Μελών',
     html: `<h1>Μητρώο Μελών</h1>${notice(query.msg)}<div class="toolbar"><a class="btn primary" href="#/members/new">+ Προσθήκη Μέλους</a>${(() => { const n = sameNameGroups().length; return n ? `<a class="btn" href="#/members/duplicates">Διπλές εγγραφές (${n})</a>` : ''; })()}<button class="btn" data-act="export">⬇ Excel</button><a class="btn" href="#/members/diplomas">🎓 Διπλώματα Διδασκάλου</a><a class="btn" href="#/members/small-lodges">🏛 Στοές με &lt; 12 κύρια μέλη</a></div>
@@ -209,13 +243,13 @@ ${MEMBER_FIELDS.map(([k, v]) => `<label class="chip"><input type="radio" name="f
 <div><label for="msq" id="msqlabel">2. ${esc(qlabel)}</label><input id="msq" name="q" value="${esc(q)}" autofocus autocomplete="off" type="${itype}" placeholder="${esc(ph)}"${field === 'lodge' ? ' list="lodgelist"' : ''}>
 <datalist id="lodgelist">${lodgesAll().map((l) => `<option value="${esc(l.number)} · ${esc(l.name)}">`).join('')}</datalist></div>
 <div class="msbtns"><button class="btn primary">Αναζήτηση</button>${q ? '<a class="btn" href="#/members">Καθαρισμός</a>' : ''}</div></form><p class="msresult">${summary}</p></div>
-<div class="memtable">${table(['ID', 'Αρ. Μητρώου', 'Επώνυμο', 'Όνομα', 'Email', 'Κινητό', 'Βαθμός', 'Ανώτατο αξίωμα (Επετηρίδα)', 'Στοές', 'Ενεργός', 'Ενέργειες'], rows, q ? `Δεν βρέθηκε μέλος για «${q}» σε: ${flabel}. Δοκιμάστε «Όλα» ή λιγότερες λέξεις.` : 'Δεν υπάρχουν εγγραφές.')}</div>
+${stBar}<div class="memtable">${table(['ID', 'Αρ. Μητρώου', 'Επώνυμο', 'Όνομα', 'Email', 'Κινητό', 'Βαθμός', 'Ανώτατο αξίωμα (Επετηρίδα)', 'Στοές', 'Ενεργός', 'Ενέργειες'], rows, q ? `Δεν βρέθηκε μέλος για «${q}» σε: ${flabel}. Δοκιμάστε «Όλα» ή λιγότερες λέξεις.` : 'Δεν υπάρχουν εγγραφές.')}</div>
 ${pager(xs.length, pg, PAGE, mk)}
 <details class="card fold"><summary><b>Εισαγωγή μελών από Excel (Προσθήκη / Γενική Αντικατάσταση)</b></summary><form id="imp" style="margin-top:10px">
 <p class="muted">Δεκτά: το αρχείο-πηγή του Μητρώου (Member_ID, Surname, First_Name, …, Lodge_1, Number_1, Status_1, …) ή το Excel που κατεβάζει η εφαρμογή.</p>
 <label>Αρχείο (.xlsx, .csv)</label><input type="file" name="file" accept=".xlsx,.xls,.csv">
 <label style="margin-top:10px">ή Επικόλληση από Excel (επιλέξτε όλο το φύλλο μαζί με τις επικεφαλίδες, Ctrl+C, και Ctrl+V εδώ)</label><textarea name="paste" class="short" placeholder="Member_ID	Surname	First_Name	…"></textarea>
-<p class="muted">Μέλη με <b>All_Deregistered (ΔΙΑΓΡΑΦΕΝ) = ΝΑΙ</b> ή <b>Status_1 = 5. ΔΙΑΓΡΑΦΕΝ</b> καταχωρούνται ως <b>διαγραμμένα</b>: απαγορεύεται κάθε επικοινωνία (δεν εμφανίζονται σε παραλήπτες, ευχές, εκπροσώπους).</p>
+<p class="muted">Μέλη με <b>ΔΙΑΓΡΑΦΕΝ σε όλες τις Στοές τους</b> (ή All_Deregistered = ΝΑΙ χωρίς Στοές) καταχωρούνται ως <b>διαγραμμένα</b>: απαγορεύεται κάθε επικοινωνία (δεν εμφανίζονται σε παραλήπτες, ευχές, εκπροσώπους).</p>
 <label style="margin-top:10px">Λειτουργία</label><select name="mode"><option value="merge">Προσθήκη / Ενημέρωση (συνιστάται)</option><option value="replace">Γενική Αντικατάσταση</option></select>
 <div class="toolbar" style="margin-top:10px"><button class="btn primary">Εισαγωγή</button></div></form></details>`,
     mount(el) {
@@ -224,7 +258,7 @@ ${pager(xs.length, pg, PAGE, mk)}
         const h = HINTS[r.value]; lab.textContent = '2. ' + h[0]; qi.placeholder = h[1]; qi.type = h[2];
         if (r.value === 'lodge') qi.setAttribute('list', 'lodgelist'); else qi.removeAttribute('list'); qi.focus();
       }));
-      onSubmit(el.querySelector('#ms'), (d) => go('/members', { q: d.q, field: d.field }));
+      onSubmit(el.querySelector('#ms'), (d) => go('/members', { q: d.q, field: d.field, ...(status ? { status } : {}) }));
       bind(el, { export: exportMembers });
       onSubmit(el.querySelector('#imp'), async (d) => {
         const paste = String(d.paste || '').trim(), hasFile = d.file && d.file.size;
@@ -620,6 +654,7 @@ module({
     '/members/diplomas': diplomasPage,
     '/members/card': memberCardPage,
     '/members/diploma': diplomaIssuePage,
+    '/members/deregistered': deregisteredPage,
     '/members/sgy': (ctx) => sgyRegistryPage(ctx), // κυκλική εισαγωγή: κλήση τη στιγμή της πλοήγησης
     '/members/diplomas/print': memberCardPage, // παλιός σύνδεσμος
     '/members/:id': ({ params }) => { const m = db.get('member_registry', params.id); return m ? formPage(m) : '<h1>Δεν βρέθηκε το μέλος</h1>'; },

@@ -3062,3 +3062,24 @@ def test_sgy_attendance_builder_roster_text_and_docx(app, tmp_path):
     pv = app.text('#attPrev')
     assert 'Τεκτονική Περίοδος 2026-2027' in pv and '2ας Νοεμβρίου 2026' in pv and 'Μέγας Γραμματεύς' in pv and 'Μέγας Καγκελάριος' in pv, pv
     assert app.page.locator('#attRows .att-row').count() == 5
+
+
+def test_members_status_filter_and_deregistered_pdf_list(app):
+    # Μητρώο: δυναμικό φίλτρο κατάστασης (⛔ Διαγραμμένοι) και Λίστα Διαγραμμένων για εκτύπωση / PDF
+    app.connect_local()
+    add_member(app)
+    add_member(app, surname='Διαγραμμένος', first='Πέτρος', email='x@example.com', mobile='6977000999', lodges='ΠΑΡΘΕΝΩΝ | 3 | 5. ΔΙΑΓΡΑΦΕΝ')
+    app.go('/members')
+    app.page.click('.mstatus a:has-text("Διαγραμμένοι")')
+    app.page.wait_for_function("() => !document.querySelector('.memtable').innerText.includes('Παπαδόπουλος')")
+    t = app.text('.memtable')
+    assert 'Διαγραμμένος' in t and 'Παπαδόπουλος' not in t, t
+    assert '⛔ Διαγραμμένοι 1' in app.text('.mstatus')
+    app.page.click('a:has-text("Λίστα Διαγραμμένων (PDF)")')
+    app.page.wait_for_selector('.paper')
+    p = app.text('.paper')
+    assert app.page.locator('.paper h3.dg-prov').count() >= 1  # ανά Επαρχιακή / Περιφερειακή Μεγάλη Στοά
+    assert 'Κατάλογος Διαγραμμένων Μελών' in p and 'Διαγραμμένος' in p and 'ΠΑΡΘΕΝΩΝ 3 (5. ΔΙΑΓΡΑΦΕΝ)' in p and 'Παπαδόπουλος' not in p, p
+    with app.page.expect_download() as dl:
+        app.page.click('button:has-text("⬇ PDF")')
+    assert dl.value.suggested_filename.endswith('.pdf')
