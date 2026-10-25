@@ -14,7 +14,7 @@ import { lodgesAll, lodgeNoKey, lodgeByNumber, cleanLodgeName } from './lodges.j
 import { DEC_MAP, precedenceOf } from './decree-catalog.js';
 import { contactOf, person, canonicalId, identify } from '../core/people.js';
 import { fillContext, fillPlaceholders, lodgeRecipients, repRecipients, gmVisitTemplate, repVisitTemplate, gmName, GM_VISIT, REP_VISIT, setRepInfo } from './letter-fill.js';
-import { epeteiridaOf, honorificLevel } from './epeteirida-table.js';
+import { epeteiridaOf, honorificLevel, epeteiridaAll } from './epeteirida-table.js';
 import { insertMember } from './members.js';
 import { parseRank, matchName, isCurrentRecord, hasActiveList, importEpeteiridaAny, hasEpeteirida } from './epeteirida-import.js';
 
@@ -605,7 +605,7 @@ export function publicProgramme() {
   return { title: 'Πρόγραμμα επισκέψεων του Σεβασμιωτάτου Μεγάλου Διδασκάλου', salute: GMP_SALUTE, text: GMP_TEXT, closing: GS_CLOSING,
     signer: db.setting('grand_secretary_name') || GS_NAME, signer_title: db.setting('grand_secretary_title') || GS_TITLE, organization: db.setting('organization_name') || '',
     letters: Object.fromEntries(gmProgrammeRows(today()).filter((x) => x.letter).map(({ letter }) => [String(seqOf(letter)), { html: publicLetterHtml(letter), pdf: letter.drive_pdf || '' }])),
-    rows: gmProgrammeRows(today()).map(({ v, r, prot, letter }) => ({ protocol: prot, letter_url: publicLetterUrl(letter), date: v.visit_date, lodge: v.lodge || '', no: String(v.lodge_number || ''), province: v.province || '', rep: isGM(r) ? 'Ο Μέγας Διδάσκαλος' : repFull(r), gm: isGM(r) ? 1 : 0 })) };
+    rows: gmProgrammeRows(today()).map(({ v, r, prot, letter }) => ({ protocol: prot, letter_url: publicLetterUrl(letter), date: v.visit_date, lodge: v.lodge || '', no: String(v.lodge_number || ''), province: v.province || '', rep: isGM(r) ? 'Ο Μέγας Διδάσκαλος' : repFull(r), gm: isGM(r) ? 1 : 0, id: meetingIdOf(v), kind: kindOf(v) })) };
 }
 // ---- Ενιαία δομή Επισκέψεων: οι Εργασίες της σελίδας Δηλώσεων (declarations/) είναι οι ίδιες οι Επισκέψεις της εφαρμογής.
 // Κωδικός Εργασίας (κοινός με τις δηλώσεις και τις αποφάσεις του ΜΔ): «l<αρ. Στοάς>_<ΕΕΕΕΜΜΗΗ>».
@@ -614,15 +614,31 @@ export const MEETINGS_AHEAD = 120; // ημέρες: οι Εργασίες που
 export function publicMeetings(frm = today()) {
   return visitsAll().filter((v) => v.visit_date >= frm && v.visit_date <= addDays(frm, MEETINGS_AHEAD)).map((v) => {
     const d = parseIso(v.visit_date);
-    return { ...(kindOf(v) !== VISIT_KINDS[0] ? { note: kindOf(v) } : {}), id: meetingIdOf(v), date: `${DAYS[d.getDay()]} ${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`, name: v.lodge || '', no: String(v.lodge_number || ''), prov: v.province || '' };
+    return { kind: kindOf(v), id: meetingIdOf(v), date: `${DAYS[d.getDay()]} ${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`, name: v.lodge || '', no: String(v.lodge_number || ''), prov: v.province || '' };
   });
+}
+// Κατάλογος Μεγάλων Αξιωματικών για τη σελίδα Δηλώσεων — από την Επετηρίδα της εφαρμογής (όχι χωριστή λίστα):
+// τάξη προβαδίσματος (Σύνταγμα, άρθρο 5), μέσα στο ίδιο αξίωμα ο αρχαιότερος πρώτος· χωρίς όσους «Μετέστη».
+const SAME_TIER = (t) => t.replace(/^(Πρώην )?(Επαρχιακός|Περιφερειακός) Μέγας Διδάσκαλος$/, '$1Επαρχιακός ή Περιφερειακός Μέγας Διδάσκαλος');
+export function publicOfficers() {
+  const fix = (t) => String(t || '').replace(/Αντικαταστάτης Μέγας Διδάσκαλος/g, 'Αναπληρωτής Μέγας Διδάσκαλος').replace(/\s+/g, ' ').trim();
+  const rows = epeteiridaAll().filter((r) => String(r.full_name || '').trim() && String(r.title || '').trim() && !/Μετέστη/i.test(r.current || '')).map((r) => {
+    const title = fix(r.title), y = (String(r.current || '').match(/\/\s*((?:19|20)\d{2})/) || [])[1];
+    return { aa: Number(r.aa) || 0, title, name: String(r.full_name).replace(/\s+/g, ' ').trim(), year: (Number(r.active) && fix(r.rank) !== title && y ? Number(y) : Number(r.decree_year)) || null, province: r.province || '' };
+  });
+  // σειρά αξιωμάτων: όπως στην Επετηρίδα (Α/Α = Τάξις και Προβάδισμα του Συντάγματος) — η πρώτη εμφάνιση κάθε αξιώματος
+  const tier = new Map(); for (const x of sortBy(rows, 'aa')) if (!tier.has(SAME_TIER(x.title))) tier.set(SAME_TIER(x.title), tier.size);
+  const sorted = sortBy(rows, (x) => tier.get(SAME_TIER(x.title)), (x) => (x.year == null ? 1 : 0), (x) => x.year || 0, 'aa');
+  const dup = new Set(sorted.map((x) => fold(x.name)).filter((k, i, a) => a.indexOf(k) !== i));
+  return sorted.map((x, i) => ({ rank: i + 1, name: x.name, title: x.title, year: x.year, group: SAME_TIER(x.title), ...(dup.has(fold(x.name)) && x.province ? { note: x.province } : {}) }));
 }
 let publishing = null;
 // Δημόσια αρχεία (μέσω της δημοσίευσης GitHub Pages): programme.json (πρόγραμμα με εκπροσώπους) και meetings.json (Εργασίες για δηλώσεις)
 export async function publishProgramme(force = false) {
   if (publishing || !db.backend) return publishing;
   publishing = (async () => {
-    const files = { 'public/programme.json': publicProgramme(), 'public/meetings.json': { meetings: publicMeetings() } }, dec = new TextDecoder(), changed = {};
+    const officers = publicOfficers();
+    const files = { 'public/programme.json': publicProgramme(), 'public/meetings.json': { meetings: publicMeetings() }, ...(officers.length >= 20 ? { 'public/officers.json': { officers } } : {}) }, dec = new TextDecoder(), changed = {};
     for (const [path, data] of Object.entries(files)) {
       let cur = null;
       try { const b = await db.file(path); cur = b ? JSON.parse(dec.decode(b)) : null; } catch { cur = null; }
@@ -638,7 +654,7 @@ let firstPublish = true;
 db.on((ev) => {
   // με το άνοιγμα της εφαρμογής: το δημόσιο πρόγραμμα ευθυγραμμίζεται με τα τρέχοντα δεδομένα (μόνο αν άλλαξε κάτι)
   if (ev.type === 'refresh' && firstPublish && db.backend && db.backend.kind === 'github') { firstPublish = false; setTimeout(() => publishProgramme().catch((e) => console.warn('Δημόσιο πρόγραμμα:', e)), 1500); }
-  if (ev.type === 'saved' && !/^Δημόσιο πρόγραμμα/.test(ev.message || '') && (ev.tables || []).some((t) => ['visits', 'reps', 'epeteirida', 'member_registry', 'letters'].includes(t))) {
+  if (ev.type === 'saved' && !/^Δημόσιο πρόγραμμα/.test(ev.message || '') && (ev.tables || []).some((t) => ['visits', 'reps', 'epeteirida', 'member_registry', 'letters', 'member_degrees_offices'].includes(t))) {
     setTimeout(() => publishProgramme().catch((e) => console.warn('Δημόσιο πρόγραμμα:', e)), 400);
   }
 });

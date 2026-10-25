@@ -120,6 +120,10 @@
     .tab-btn.tab-gm.active, .tab-btn.tab-gm:hover { background: #7d0b13; color: #ffe3a0; border-color: #e5c98d; box-shadow: 0 0 0 3px rgba(197,160,89,.35); }
 
     /* Αναφορά (Ενημέρωση ΜΔ): κάρτες ανά Εργασία σε κινητό / tablet / Galaxy Z Fold (ανοιχτό: δύο στήλες) */
+    .kind-badge { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 999px; background: #e8eef8; color: var(--primary); font-size: 11px; font-weight: 700; letter-spacing: .03em; vertical-align: middle; }
+    .kind-badge.other { background: #fff4d6; color: #8a5a00; border: 1px solid #e5c98d; }
+    .report-table td .kind-badge { margin: 4px 0 0; }
+    .registered { margin: 8px 0 0; font-size: 13px; font-weight: 600; color: #187a3d; }
     .rep-stats { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 10px; }
     .rep-stats span { background: #f1f5f9; border: 1px solid var(--border); border-radius: 999px; padding: 4px 12px; font-size: 13px; }
     .rep-stats b { color: var(--primary); }
@@ -760,7 +764,7 @@
     }
 
     // Κατάλογος αξιωματικών (officers.js) — ο Μ.Δ. δεν δηλώνει εκπροσώπηση του εαυτού του
-    const SELECTABLE = OFFICERS.filter(o => o.rank > 1);
+    let SELECTABLE = OFFICERS.filter(o => o.rank > 1);
     // Με διακριτικό για συνώνυμους: «Σκιαδόπουλος Σπυρίδων του Μιχαήλ (Στ. ΘΕΜΙΣΤΟΚΛΗΣ 96) (Πρώην Μέγας Ξιφοφόρος)»
     const officerValue = o => `${o.name}${o.note ? ` (${o.note})` : ""} (${o.title})`;
     const legacyValue = o => `${o.name} (${o.title})`; // παλιές δηλώσεις, πριν από το διακριτικό
@@ -771,7 +775,7 @@
       return String(s).normalize("NFD").replace(/[\u0300-\u036f]/g, "")
         .toLowerCase().replace(/\s+/g, " ").trim();
     }
-    const RANK_BY_VALUE = new Map(OFFICERS.flatMap(o => [[norm(legacyValue(o)), o.rank], [norm(officerValue(o)), o.rank]]));
+    let RANK_BY_VALUE = new Map(OFFICERS.flatMap(o => [[norm(legacyValue(o)), o.rank], [norm(officerValue(o)), o.rank]]));
     // Αξιωματικός μιας δήλωσης: ακριβής τιμή της λίστας, αλλιώς από το ονοματεπώνυμο (παλιές μορφές «… · Πσεβ. · 2026»,
     // χειροκίνητες «Λσεβ. Αδ. Χρήστος Διαβάτης, ΠΜΞ»): επώνυμο και όνομα της λίστας περιέχονται στο κείμενο.
     const nameTokens = n => norm(String(n).replace(/\s+του\s+.*$/i, "")).replace(/[^a-zα-ω0-9 ]/g, " ").split(" ").filter(w => w.length > 1);
@@ -865,7 +869,7 @@
         card.innerHTML = `
           <input type="checkbox" name="meeting_select" value="${m.id}">
           <div class="meeting-info">
-            <span class="fno">2.${i + 1}</span><span class="date-badge">${m.date}</span>
+            <span class="fno">2.${i + 1}</span><span class="date-badge">${m.date}</span><span class="kind-badge${kindOf(m) === "ΕΓΚΑΤΑΣΤΑΣΗ ΣΕΒ" ? "" : " other"}">${kindOf(m)}</span>
             <h4>${m.name} Αρ. ${m.no}</h4>${m.note ? `
             <p class="lodge-note">${m.note}</p>` : ""}
             <p>${m.prov}</p>
@@ -915,11 +919,11 @@
     function renderDecisions() {
       // Η απόφαση φαίνεται στις κάρτες των Στοών της Δήλωσης
       document.querySelectorAll("#meetings-list .meeting-card").forEach(card => {
-        const id = card.querySelector("input").value, rep = decisions[id];
+        const id = card.querySelector("input").value, m = MEETINGS.find(x => x.id === id) || { id }, reg = registeredOf(m), rep = reg || decisionOf(m);
         let d = card.querySelector(".meeting-decision");
         if (!rep) { if (d) d.remove(); return; }
         if (!d) { d = document.createElement("p"); d.className = "meeting-decision"; card.querySelector(".meeting-info").appendChild(d); }
-        d.textContent = "✔ Εκπρόσωπος: " + rep;
+        d.textContent = (reg ? "✔ Εκπρόσωπος: " : "✔ Απόφαση Μ.Δ.: ") + rep;
       });
     }
     async function decide(meetingId, sel, state) {
@@ -1218,12 +1222,12 @@
 
       MEETINGS.forEach(m => {
         const tr = document.createElement("tr");
-        const officers = store[m.id] || [];
+        const officers = declOf(store, m);
 
-        tr.className = (store[m.id] || []).length ? "" : "rep-none";
-        if (decisions[m.id]) tr.className = "rep-done";
+        tr.className = officers.length ? "" : "rep-none";
+        if (registeredOf(m) || decisionOf(m)) tr.className = "rep-done";
         tr.innerHTML = `
-          <td data-label="Ημερομηνία"><strong>${m.date}</strong></td>
+          <td data-label="Ημερομηνία"><strong>${m.date}</strong><br><span class="kind-badge${kindOf(m) === "ΕΓΚΑΤΑΣΤΑΣΗ ΣΕΒ" ? "" : " other"}">${kindOf(m)}</span></td>
           <td data-label="Σ.Σ. & Αριθμός"><div class="lodge-cell">${m.logo ? `<img class="lodge-logo" src="${m.logo}" alt="Θυρεός ${m.name}">` : ""}<div><strong>${m.name}</strong> (Αρ. ${m.no})${m.note ? `<br><span class="lodge-note">${m.note}</span>` : ""}</div></div></td>
           <td data-label="Επαρχιακή Μεγάλη Στοά">${m.prov}</td>
           <td data-label="Δηλώσεις Αξιωματικών"></td>
@@ -1274,12 +1278,14 @@
           });
           cell.appendChild(list);
         }
-        tr.children[4].appendChild(decisionSelect(m, ranked, decisions[m.id] || ""));
+        tr.children[4].appendChild(decisionSelect(m, ranked, decisionOf(m)));
+        if (registeredOf(m)) { const p = document.createElement("p"); p.className = "registered"; p.textContent = "📌 Καταχωρημένος στο πρόγραμμα: " + registeredOf(m); tr.children[4].appendChild(p); }
         tbody.appendChild(tr);
       });
-      const nDecl = MEETINGS.filter(m => (store[m.id] || []).length).length, nDec = MEETINGS.filter(m => decisions[m.id]).length;
+      const nDecl = MEETINGS.filter(m => declOf(store, m).length).length, nDec = MEETINGS.filter(m => registeredOf(m) || decisionOf(m)).length;
       document.getElementById("rep-stats").innerHTML = `<span><b>${MEETINGS.length}</b> Εργασίες</span><span><b>${nDecl}</b> με δηλώσεις</span>`
-        + `<span class="${MEETINGS.length - nDecl ? "warn" : ""}"><b>${MEETINGS.length - nDecl}</b> χωρίς δήλωση</span><span><b>${nDec}</b> με απόφαση Μ.Δ.</span>`;
+        + `<span class="${MEETINGS.length - nDecl ? "warn" : ""}"><b>${MEETINGS.length - nDecl}</b> χωρίς δήλωση</span><span><b>${nDec}</b> με απόφαση Μ.Δ.</span>`
+        + (FROM_APP ? "" : `<span class="warn">⚠ Οι Εργασίες δεν ήρθαν από την εφαρμογή (εφεδρικός κατάλογος)</span>`);
       return true;
     }
 
@@ -1292,20 +1298,44 @@
       document.getElementById("admin-pass").value = "";
     }
 
-    // Οι Εργασίες έρχονται από τις Επισκέψεις της εφαρμογής (meetings.json)· οι παλιές του config.js μένουν μόνο αν δεν αντιστοιχούν σε αυτές
+    // ---- Ενιαία δεδομένα: όλα από την εφαρμογή της Μεγάλης Γραμματείας (δημοσιεύονται αυτόματα κάθε 15 λεπτά) ----
+    //  meetings.json  : οι Εργασίες = οι Επισκέψεις Στοών (ημερομηνία, Στοά, Επαρχία, ΕΙΔΟΣ ΕΡΓΑΣΙΑΣ)
+    //  officers.json  : οι Μεγάλοι Αξιωματικοί = η Επετηρίδα (τάξη προβαδίσματος)
+    //  programme.json : ο εκπρόσωπος που έχει ΚΑΤΑΧΩΡΗΘΕΙ σε κάθε Εργασία (απόφαση Μ.Δ. στην εφαρμογή)
+    // Το config.js / officers.js μένουν μόνο ως εφεδρικά (και για παλιές δηλώσεις με τους παλιούς κωδικούς Εργασιών).
+    const LEGACY = MEETINGS.slice();
+    const dayKey = m => String(m.no).trim() + "|" + (String(m.date).match(/\d{2}\/\d{2}\/\d{4}/) || [""])[0];
+    const legacyIds = m => LEGACY.filter(x => x.id !== m.id && dayKey(x) === dayKey(m)).map(x => x.id);
+    let FROM_APP = false, REGISTERED = {};
+    async function getJson(url) { const r = await fetch(url + "?t=" + Date.now(), { cache: "no-store" }); if (!r.ok) throw new Error(r.status); return r.json(); }
     async function loadMeetings() {
+      // Τα τρία αρχεία φορτώνονται παράλληλα
+      const [mj, oj, pj] = await Promise.all(["meetings.json", "officers.json", "../programme/programme.json"].map(u => getJson(u).catch(() => null)));
       try {
-        const r = await fetch("meetings.json?t=" + Date.now(), { cache: "no-store" });
-        if (!r.ok) return;
-        const pub = ((await r.json()).meetings || []).filter(m => m && m.id && m.date);
-        if (!pub.length) return;
-        const key = m => String(m.no).trim() + "|" + (String(m.date).match(/\d{2}\/\d{2}\/\d{4}/) || [""])[0];
-        const have = new Set(pub.map(key));
-        const iso = m => { const x = String(m.date).match(/(\d{2})\/(\d{2})\/(\d{4})/); return x ? x[3] + "-" + x[2] + "-" + x[1] : ""; };
-        const today = new Date().toISOString().slice(0, 10);
-        MEETINGS = pub.concat(MEETINGS.filter(m => !have.has(key(m)) && iso(m) >= today)).sort((a, b) => iso(a).localeCompare(iso(b)));
-      } catch (e) { /* χωρίς meetings.json: ο κατάλογος του config.js */ }
+        const pub = ((mj || {}).meetings || []).filter(m => m && m.id && m.date);
+        if (pub.length) { MEETINGS = pub; FROM_APP = true; }
+      } catch (e) { /* χωρίς meetings.json: ο εφεδρικός κατάλογος */ }
+      try {
+        const offs = ((oj || {}).officers || []).filter(o => o && o.name && o.title && o.rank);
+        if (offs.length >= 20) {
+          OFFICERS = offs;
+          SELECTABLE = OFFICERS.filter(o => o.rank > 1);
+          RANK_BY_VALUE = new Map(OFFICERS.flatMap(o => [[norm(legacyValue(o)), o.rank], [norm(officerValue(o)), o.rank]]));
+          const gm = OFFICERS.find(o => o.rank === 1), line = document.querySelector(".gm-line");
+          if (gm && line && line.firstChild) line.firstChild.textContent = `Σεβασμιώτατος Αδ. ${gm.name.split(" ").slice(1).join(" ")} ${gm.name.split(" ")[0]} — Μέγας Διδάσκαλος`;
+        }
+      } catch (e) { /* εφεδρικό officers.js */ }
+      try {
+        const rows = (pj || {}).rows || [];
+        REGISTERED = {};
+        rows.forEach(r => { const d = String(r.date || "").split("-"); const k = r.id || ""; const v = r.gm ? "Ο Μέγας Διδάσκαλος (αυτοπροσώπως)" : r.rep;
+          if (k) REGISTERED[k] = v; if (d.length === 3) REGISTERED[String(r.no).trim() + "|" + d[2] + "/" + d[1] + "/" + d[0]] = v; });
+      } catch (e) { REGISTERED = {}; }
     }
+    const kindOf = m => m.kind || "ΕΓΚΑΤΑΣΤΑΣΗ ΣΕΒ";
+    const registeredOf = m => REGISTERED[m.id] || REGISTERED[dayKey(m)] || "";
+    const declOf = (store, m) => [m.id, ...legacyIds(m)].flatMap(id => store[id] || []);
+    const decisionOf = m => [m.id, ...legacyIds(m)].map(id => decisions[id]).find(Boolean) || "";
 
     // Μήνες των Εργασιών (π.χ. «Νοέμβριος – Δεκέμβριος 2026») στους τίτλους
     function monthsLabel(upper) {

@@ -3156,7 +3156,29 @@ def test_visit_kind_field_default_and_inline_change(app):
     sel.select_option('ΑΡΧΑΙΡΕΣΙΕΣ')
     app.page.wait_for_selector('text=ΑΚΡΟΠΟΛΙΣ: ΑΡΧΑΙΡΕΣΙΕΣ')  # αποθηκεύτηκε
     ms = app.page.evaluate("async () => (await import('./modules/visits.js')).publicMeetings('2099-10-30')")
-    assert ms and ms[0].get('note') == 'ΑΡΧΑΙΡΕΣΙΕΣ', (ms, app.page.evaluate("async () => (await import('./core/store.js')).db.all('visits')"))
+    assert ms and ms[0].get('kind') == 'ΑΡΧΑΙΡΕΣΙΕΣ', (ms, app.page.evaluate("async () => (await import('./core/store.js')).db.all('visits')"))
     vid = app.page.evaluate("async () => (await import('./core/store.js')).db.all('visits')[0].id")
     app.go(f'/visits/edit/{vid}')
     assert app.page.input_value('.vkindform') == 'ΑΡΧΑΙΡΕΣΙΕΣ'
+
+
+def test_declarations_unified_from_app_visits(browser, base_url):
+    # Οι Εργασίες της σελίδας Δηλώσεων = οι Επισκέψεις της εφαρμογής (meetings.json), με ΕΙΔΟΣ ΕΡΓΑΣΙΑΣ·
+    # ο καταχωρημένος εκπρόσωπος έρχεται από το programme.json — όχι από ξεχωριστή λίστα
+    page = browser.new_page()
+    page.route('**/declarations/meetings.json*', lambda r: r.fulfill(json={'meetings': [
+        {'id': 'l7_20991102', 'date': 'Δευτέρα 02/11/2099', 'name': 'ΔΟΚΙΜΗ', 'no': '7', 'prov': 'Αττικής', 'kind': 'ΑΡΧΑΙΡΕΣΙΕΣ'},
+        {'id': 'l8_20991103', 'date': 'Τρίτη 03/11/2099', 'name': 'ΔΕΥΤΕΡΗ', 'no': '8', 'prov': 'Αττικής', 'kind': 'ΕΓΚΑΤΑΣΤΑΣΗ ΣΕΒ'}]}))
+    page.route('**/programme/programme.json*', lambda r: r.fulfill(json={'rows': [
+        {'id': 'l7_20991102', 'date': '2099-11-02', 'no': '7', 'rep': 'Δοκιμαστής Εκπρόσωπος (Μέγας Αξιωματικός)'}]}))
+    page.route('https://script.google.com/**', lambda r: r.fulfill(json={'ok': True, 'decisions': {}}))
+    page.goto(base_url + 'declarations/#form')
+    page.wait_for_selector('.meeting-card')
+    cards = page.locator('.meeting-card')
+    assert cards.count() == 2
+    first = cards.nth(0).inner_text()
+    assert 'ΑΡΧΑΙΡΕΣΙΕΣ' in first and 'ΔΟΚΙΜΗ' in first
+    assert 'ΕΓΚΑΤΑΣΤΑΣΗ ΣΕΒ' in cards.nth(1).inner_text()
+    page.wait_for_selector('.meeting-decision')
+    assert 'Δοκιμαστής Εκπρόσωπος' in cards.nth(0).inner_text()
+    page.close()

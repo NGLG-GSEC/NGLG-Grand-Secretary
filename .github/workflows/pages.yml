@@ -48,6 +48,11 @@ jobs:
             "https://api.github.com/repos/$DATA_REPO/contents/files/public/meetings.json" -o declarations/meetings.json \
             && python3 -c "import json; d=json.load(open('declarations/meetings.json')); print('Εργασίες:', len(d.get('meetings', [])))" \
             || { echo "Δεν βρέθηκαν ακόμη Εργασίες στα δεδομένα."; rm -f declarations/meetings.json; }
+          # Κατάλογος Μεγάλων Αξιωματικών (από την Επετηρίδα της εφαρμογής) για τη σελίδα Δηλώσεων
+          curl -fsSL -H "Authorization: Bearer $DATA_TOKEN" -H "Accept: application/vnd.github.raw" \
+            "https://api.github.com/repos/$DATA_REPO/contents/files/public/officers.json" -o declarations/officers.json \
+            && python3 -c "import json; d=json.load(open('declarations/officers.json')); print('Αξιωματικοί:', len(d.get('officers', [])))" \
+            || { echo "Δεν βρέθηκε ακόμη κατάλογος αξιωματικών· μένει το officers.js."; rm -f declarations/officers.json; }
       - name: Upload site
         uses: actions/upload-pages-artifact@v3
         with:
