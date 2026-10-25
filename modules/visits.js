@@ -22,6 +22,11 @@ const MONTHS = ['Ιανουάριος', 'Φεβρουάριος', 'Μάρτιο�
 // Ροή των Επισκέψεων ΜΔ: ① Πρόγραμμα → ② Δηλώσεις → ③ Αποφάσεις Μ.Δ. → ④ Ενημερώσεις → ⑤ Αναφορά (μπάρα στην κορυφή κάθε βήματος)
 export const VISIT_STEPS = [['#/visits', 'Πρόγραμμα Εγκαταστάσεων'], ['#/declarations', 'Δηλώσεις Διάθεσης'], ['#/visits/decisions', 'Αποφάσεις Μ.Δ.'], ['#/visits/publish', 'Ενημερώσεις'], ['#/visits/report', 'Αναφορά']];
 export const visitsFlow = (n) => `<nav class="vflow noprint" aria-label="Ροή Επισκέψεων ΜΔ">${VISIT_STEPS.map(([h, l], i) => `<a href="${h}" class="${i + 1 === n ? 'on' : ''}"${i + 1 === n ? ' aria-current="step"' : ''}><b>${'①②③④⑤'[i]}</b> ${l}</a>`).join('<span class="sep" aria-hidden="true">›</span>')}</nav>`;
+// Είδος Εργασίας κάθε επίσκεψης (προεπιλογή: Εγκατάσταση Σεβασμίου)
+export const VISIT_KINDS = ['ΕΓΚΑΤΑΣΤΑΣΗ ΣΕΒ', 'ΑΡΧΑΙΡΕΣΙΕΣ', 'ΟΜΙΛΙΑ', 'ΑΛΛΟ'];
+export const kindOf = (v) => (VISIT_KINDS.includes(v && v.kind) ? v.kind : VISIT_KINDS[0]);
+const kindSelect = (v, cls = 'vkindsel') => `<select class="${cls}" data-id="${v.id || ''}" name="kind" aria-label="ΕΙΔΟΣ ΕΡΓΑΣΙΑΣ">${VISIT_KINDS.map((k) => `<option${k === kindOf(v) ? ' selected' : ''}>${k}</option>`).join('')}</select>`;
+db.migrate('visits-kind-default-2026-10', (tx) => { for (const v of tx.all('visits')) if (!VISIT_KINDS.includes(v.kind)) tx.update('visits', v.id, { kind: VISIT_KINDS[0] }); });
 export const REP_RANKS = ['Σεβάσμιος Αδ.', 'Λίαν Σεβάσμιος Αδ.', 'Πανσεβάσμιος Αδ.', 'Σεβασμιώτατος Αδ.'];
 const REP_DEFAULT_RANKS = { 'Μέγας Διδάσκαλος': 3, 'Αναπληρωτής Μέγας Διδάσκαλος': 2, 'Βοηθός Μέγας Διδάσκαλος': 2, 'Επαρχιακός Μέγας Διδάσκαλος': 2, 'Περιφερειακός Μέγας Διδάσκαλος': 2,
   'Πρώτος Μέγας Επόπτης': 2, 'Δεύτερος Μέγας Επόπτης': 2, 'Μέγας Καγκελάριος': 1, 'Αναπληρωτής Μέγας Καγκελάριος': 1, 'Μέγας Γραμματέας': 1, 'Αναπληρωτής Μέγας Γραμματέας': 1, 'Μέγας Ευχέτης': 1,
@@ -297,7 +302,8 @@ function visitCard(v, reps, opts = '', letters) {
   return `<div class="vcard${v.visit_date < today() ? ' past' : ''}"><div class="vdate"><b>${d ? d.getDate() : ''}</b><small>${d ? DAYS[d.getDay()].slice(0, 3) : ''}</small></div>
 <div><div class="vlodge"><a href="#/visits/edit/${v.id}">${esc(v.lodge)}</a>${v.lodge_number ? `<span class="no">Αρ. ${esc(v.lodge_number)}</span>` : ''}${lt ? ` <a class="vprot" href="#/letters/${lt.id}" title="Άνοιγμα της επιστολής">Αρ. Πρωτ. ${esc(String(seqOf(lt)))}</a>` : ''}</div><div class="vmeta">${esc(dayStr(v.visit_date))} · ${esc(v.location || 'Τόπος —')}</div>
 ${v.notes ? `<div class="vnote">${esc(v.notes)}</div>` : ''}${v.province ? `<span class="vchip">${esc(v.province)}</span>` : ''}${p && p.email ? ` <span class="vmeta">${esc(p.email)}</span>` : ''}${brief || oks ? `<div>${brief} ${oks}</div>` : ''}</div>
-<div class="vrep">${r ? `<b>${esc(repLabel(r))}</b><div class="vmeta">${esc(r.office || '')}</div>` : isNobody(v) ? '<b>ΟΥΔΕΙΣ</b><div class="vmeta">Ο Μέγας Διδάσκαλος δεν έστειλε κανέναν</div>' : '<span class="vwarn">Χωρίς εκπρόσωπο</span>'}
+<div class="vrep"><label class="vreplabel" for="vkind${v.id}">ΕΙΔΟΣ ΕΡΓΑΣΙΑΣ</label>${kindSelect(v).replace('class="vkindsel"', `class="vkindsel" id="vkind${v.id}"`)}
+${r ? `<b>${esc(repLabel(r))}</b><div class="vmeta">${esc(r.office || '')}</div>` : isNobody(v) ? '<b>ΟΥΔΕΙΣ</b><div class="vmeta">Ο Μέγας Διδάσκαλος δεν έστειλε κανέναν</div>' : '<span class="vwarn">Χωρίς εκπρόσωπο</span>'}
 ${v.visit_date >= today() ? `<label class="vreplabel" for="vrep${v.id}">ΕΚΠΡΟΣΩΠΟΣ</label><select class="vrepsel${isNobody(v) ? ' nobody' : ''}${isGM(r) ? ' gm' : ''}" id="vrep${v.id}" data-id="${v.id}" aria-label="ΕΚΠΡΟΣΩΠΟΣ"><option value="">${r || isNobody(v) ? '— Αφαίρεση εκπροσώπου —' : '+ Ορισμός ΜΔ / εκπροσώπου…'}</option>${opts.replace(`value="${v.rep_id}"`, `value="${v.rep_id}" selected`)}</select>` : ''}</div></div>`;
 }
 
@@ -341,6 +347,11 @@ ${table(['Επαρχία', 'Ενεργές Στοές', 'Δήλωσαν ημερ
       if (ef) ef.addEventListener('change', async () => {
         try { const r = await importEpeteiridaAny({ file: ef.files[0] }); flash(r.message); go('/visits'); } catch (e) { toast(e.message || String(e), 'error'); }
       });
+      el.querySelectorAll('.vkindsel').forEach((s) => s.addEventListener('change', async () => {
+        const id = Number(s.dataset.id), v = db.get('visits', id);
+        try { await db.save(`Επίσκεψη ${v ? v.lodge : id}: είδος εργασίας`, (tx) => tx.update('visits', id, { kind: s.value })); toast(`${v ? v.lodge : ''}: ${s.value}`); }
+        catch (e) { toast(e.message || String(e), 'error'); }
+      }));
       el.querySelectorAll('.vrepsel').forEach((s) => s.addEventListener('change', async () => {
         s.classList.toggle('nobody', s.value === String(NOBODY));
         s.classList.toggle('gm', !!(s.selectedOptions[0] && s.selectedOptions[0].dataset.gm));
@@ -378,6 +389,7 @@ ${v ? `<p>${repNotified(v) ? `<span class="vok">✓ Εκπρόσωπος ενη�
 <div class="full"><label>Τόπος</label><input name="location" id="vLoc" value="${val('location')}" placeholder="${esc(placeSuggestion(x) || 'Τεκτονικόν Μέγαρον …')}"${placeSuggestion(x) ? ` data-suggest="${esc(placeSuggestion(x))}"` : ''}></div>
 <div><label>Επαρχιακή Μεγάλη Στοά</label><select name="province" id="vProv"><option value="">—</option>${[...provs, ...(x.province && !provs.includes(x.province) ? [x.province] : [])].map((p) => `<option${p === x.province ? ' selected' : ''}>${esc(p)}</option>`).join('')}</select></div>
 <div class="full"><label>ΕΚΠΡΟΣΩΠΟΣ <small class="muted">— ο Μέγας Διδάσκαλος ή εκπρόσωπός του· στις Επιστολές: πεδίο {Εκπρόσωπος}</small></label><input id="repQ" type="search" placeholder="🔎 Αναζήτηση ονοματεπωνύμου ή αξιώματος…" autocomplete="off" style="margin-bottom:6px"><select name="rep_id" id="repSel" class="${Number(x.rep_id) === NOBODY ? 'nobody' : isGM(db.get('reps', Number(x.rep_id))) ? 'gm' : ''}"><option value="">— Χωρίς εκπρόσωπο —</option>${repOptions(x.rep_id, rm)}</select><div id="repInfo">${repDetails(x.rep_id)}</div>${hasEpeteirida() ? '' : '<small class="muted">Για να εμφανιστούν όλοι οι Μεγάλοι Αξιωματικοί: <a href="#/epeteirida?imp=1">Επετηρίδα → Εισαγωγή</a> (αρχείο Excel ή κατάλογος εν ενεργεία).</small>'}</div>
+<div><label>ΕΙΔΟΣ ΕΡΓΑΣΙΑΣ</label>${kindSelect(x || {}, 'vkindform')}</div>
 <div class="full"><label>Σημειώσεις</label><input name="notes" value="${val('notes')}"></div></div>
 <div class="toolbar"><button class="btn primary">💾 Αποθήκευση</button><button class="btn" data-next="brief">✉ Ενημέρωση εκπροσώπου</button>
 <button class="btn" data-next="notify">✉ Email προς Στοά</button><button class="btn" data-next="letter">📄 Επιστολή (αρ. πρωτοκόλλου)</button><a class="btn" href="#/visits">Άκυρο</a>${v ? '<button type="button" class="btn danger" data-act="del">Διαγραφή</button>' : ''}</div></form>`,
@@ -398,7 +410,7 @@ ${v ? `<p>${repNotified(v) ? `<span class="vok">✓ Εκπρόσωπος ενη�
       L.addEventListener('change', fill); L.addEventListener('input', fill);
       onSubmit(el.querySelector('#vf'), async (d, sub) => {
         if (!parseIso(d.visit_date)) throw new Error('Συμπληρώστε έγκυρη ημερομηνία.');
-        const row = { visit_date: d.visit_date, lodge: cleanVisit(d.lodge), lodge_number: d.lodge_number.trim(), location: d.location.trim(), province: d.province, rep_id: d.rep_id || null, notes: d.notes.trim() };
+        const row = { visit_date: d.visit_date, lodge: cleanVisit(d.lodge), lodge_number: d.lodge_number.trim(), location: d.location.trim(), province: d.province, rep_id: d.rep_id || null, notes: d.notes.trim(), kind: VISIT_KINDS.includes(d.kind) ? d.kind : VISIT_KINDS[0] };
         if (!row.lodge) throw new Error('Συμπληρώστε τη Στοά.');
         const l = row.lodge_number && lodgeByNumber(row.lodge_number);
         if (l) { row.province ||= l.provincial || ''; row.location ||= l.meeting_place || ''; }
@@ -602,7 +614,7 @@ export const MEETINGS_AHEAD = 120; // ημέρες: οι Εργασίες που
 export function publicMeetings(frm = today()) {
   return visitsAll().filter((v) => v.visit_date >= frm && v.visit_date <= addDays(frm, MEETINGS_AHEAD)).map((v) => {
     const d = parseIso(v.visit_date);
-    return { id: meetingIdOf(v), date: `${DAYS[d.getDay()]} ${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`, name: v.lodge || '', no: String(v.lodge_number || ''), prov: v.province || '' };
+    return { ...(kindOf(v) !== VISIT_KINDS[0] ? { note: kindOf(v) } : {}), id: meetingIdOf(v), date: `${DAYS[d.getDay()]} ${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`, name: v.lodge || '', no: String(v.lodge_number || ''), prov: v.province || '' };
   });
 }
 let publishing = null;

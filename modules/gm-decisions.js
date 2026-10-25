@@ -6,7 +6,7 @@ import { db } from '../core/store.js';
 import { module, go, flash, toast, onSubmit } from '../core/app.js';
 import { esc, fold, dayStr, today, addDays } from '../core/util.js';
 import { lodgeNoKey } from './lodges.js';
-import { repCandidates, candRep, repIdIn, repLabel, isGM, visitsAll, visitsFlow, repOptions, NOBODY, meetingIdOf } from './visits.js';
+import { repCandidates, candRep, repIdIn, repLabel, isGM, visitsAll, visitsFlow, repOptions, NOBODY, meetingIdOf, kindOf } from './visits.js';
 
 export const GM_SELF = 'Ο Μέγας Διδάσκαλος (αυτοπροσώπως)';
 const CONFIG_URL = 'declarations/config.js';
@@ -138,7 +138,7 @@ ${vs.length ? '<div class="toolbar gd-save"><button type="button" class="btn pri
           const dOpts = ds.map((o) => ({ o, rep: repForDecision(o.officer, cands) })).filter((x) => !x.rep.error);
           const decRep = dec ? repForDecision(dec, cands) : null;
           return `<div class="card gd-card${Number(v.rep_id) ? '' : ' gd-open'}" data-v="${v.id}"><div class="gd-head"><div class="gd-date">${esc(dayStr(v.visit_date))}</div>
-<div><b>${esc(v.lodge || '')}</b> Αρ. ${esc(v.lodge_number || '')}<br><small class="muted">${esc(v.province || '')}${v.location ? ' · ' + esc(v.location) : ''}</small></div>
+<div><b>${esc(v.lodge || '')}</b> Αρ. ${esc(v.lodge_number || '')} <span class="pill">${esc(kindOf(v))}</span><br><small class="muted">${esc(v.province || '')}${v.location ? ' · ' + esc(v.location) : ''}</small></div>
 <div class="gd-cur">${Number(v.rep_id) === NOBODY ? '<span class="pill">ΟΥΔΕΙΣ</span>' : r ? `<span class="vok">✓ ${esc(repLabel(r))}</span>` : '<span class="vwarn">χωρίς εκπρόσωπο</span>'}</div></div>
 ${ds.length ? `<div class="gd-decl">✋ Δήλωσαν: ${ds.map((o) => { const x = dOpts.find((y) => y.o === o); return x ? `<button type="button" class="btn small" data-pick="${esc(x.rep.value)}">${esc(o.officer)}</button>` : `<span class="muted">${esc(o.officer)}</span>`; }).join(' ')}</div>` : ''}
 ${decRep && !decRep.error && decRep.value !== String(v.rep_id) ? `<div class="gd-decl">🗳 Απόφαση στη σελίδα Δηλώσεων: <button type="button" class="btn small primary" data-pick="${esc(decRep.value)}">${esc(dec)}</button></div>` : ''}

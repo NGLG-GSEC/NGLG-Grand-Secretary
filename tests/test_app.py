@@ -3142,3 +3142,21 @@ def test_members_page_export_excel_pdf_and_reimport_add_or_replace(app, tmp_path
     m = app.page.evaluate(f"async () => (await import('./core/store.js')).db.get('member_registry', {mid})")
     assert m['mobile'] == '6900000000', m
     assert app.page.evaluate("async () => (await import('./core/store.js')).db.all('member_registry').length") == n  # τα άλλα μέλη μένουν
+
+
+def test_visit_kind_field_default_and_inline_change(app):
+    # Κάθε επίσκεψη: ΕΙΔΟΣ ΕΡΓΑΣΙΑΣ (ΕΓΚΑΤΑΣΤΑΣΗ ΣΕΒ · ΑΡΧΑΙΡΕΣΙΕΣ · ΟΜΙΛΙΑ · ΑΛΛΟ), προεπιλογή ΕΓΚΑΤΑΣΤΑΣΗ ΣΕΒ, αλλαγή από τη γραμμή
+    app.connect_local()
+    app.page.evaluate("""async () => { const {db} = await import('./core/store.js');
+      await db.save('x', (tx) => { tx.replace('visits', []); tx.insert('visits', { visit_date: '2099-11-02', lodge: 'ΑΚΡΟΠΟΛΙΣ', lodge_number: '104', location: '', province: '', rep_id: null, notes: '' }); }); }""")
+    app.go('/visits')
+    sel = app.page.locator('.vkindsel').first
+    assert sel.input_value() == 'ΕΓΚΑΤΑΣΤΑΣΗ ΣΕΒ'
+    assert app.page.eval_on_selector('.vkindsel', 'e => [...e.options].map((o) => o.value)') == ['ΕΓΚΑΤΑΣΤΑΣΗ ΣΕΒ', 'ΑΡΧΑΙΡΕΣΙΕΣ', 'ΟΜΙΛΙΑ', 'ΑΛΛΟ']
+    sel.select_option('ΑΡΧΑΙΡΕΣΙΕΣ')
+    app.page.wait_for_function("async () => (await import('./core/store.js')).db.all('visits')[0].kind === 'ΑΡΧΑΙΡΕΣΙΕΣ'")
+    ms = app.page.evaluate("async () => (await import('./modules/visits.js')).publicMeetings('2099-10-30')")
+    assert ms[0]['note'] == 'ΑΡΧΑΙΡΕΣΙΕΣ', ms
+    vid = app.page.evaluate("async () => (await import('./core/store.js')).db.all('visits')[0].id")
+    app.go(f'/visits/edit/{vid}')
+    assert app.page.input_value('.vkindform') == 'ΑΡΧΑΙΡΕΣΙΕΣ'
