@@ -109,11 +109,13 @@ export function visitOfMeetingId(id, oldMeetings = [], vs = visitsAll()) {
   const m = oldMeetings.find((x) => x.id === id); return m ? visitForMeeting(m, vs) : null;
 }
 function decisionsPage({ query = {} }) {
-  const frm = query.frm || today(), to = query.to || addDays(frm, 60), prov = query.prov || '', open = query.open === '1';
+  // Προεπιλογή: μόνο όσες περιμένουν απόφαση (χωρίς εκπρόσωπο)· με «Και όσες έχουν ήδη εκπρόσωπο» για αλλαγή απόφασης
+  const frm = query.frm || today(), to = query.to || addDays(frm, 60), prov = query.prov || '', all = query.all === '1', open = !all;
   // Όπου πηγαίνει ο ίδιος ο ΜΔ δεν χρειάζεται απόφαση για εκπρόσωπο: δεν εμφανίζεται εδώ (φαίνεται στις Επισκέψεις Στοών)
   const gmSelf = (v) => Number(v.rep_id) > 0 && isGM(db.get('reps', Number(v.rep_id)));
-  const inRange = visitsAll().filter((v) => v.visit_date >= frm && v.visit_date <= to && (!prov || v.province === prov) && (!open || !Number(v.rep_id)));
-  const vs = inRange.filter((v) => !gmSelf(v)), gmN = inRange.length - vs.length;
+  const base = visitsAll().filter((v) => v.visit_date >= frm && v.visit_date <= to && (!prov || v.province === prov));
+  const gmN = base.filter(gmSelf).length, rest = base.filter((v) => !gmSelf(v));
+  const vs = open ? rest.filter((v) => !Number(v.rep_id)) : rest, doneN = rest.length - vs.length;
   const provs = [...new Set(visitsAll().map((v) => v.province).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'el'));
   return {
     title: 'Αποφάσεις Μ.Δ.',
@@ -124,13 +126,13 @@ function decisionsPage({ query = {} }) {
 <li>Μετά: ④ Ενημερώσεις (εκπρόσωπος, Επαρχία) και ⑤ Αναφορά.</li></ol></details>
 <form class="card filters vfilters" id="gdf"><input type="date" name="frm" value="${esc(frm)}"><input type="date" name="to" value="${esc(to)}">
 <select name="prov"><option value="">Όλες οι Επαρχίες</option>${provs.map((p) => `<option${p === prov ? ' selected' : ''}>${esc(p)}</option>`).join('')}</select>
-<label class="chk"><input type="checkbox" name="open" value="1"${open ? ' checked' : ''}> Μόνο χωρίς εκπρόσωπο</label><button>Προβολή</button></form>
+<label class="chk"><input type="checkbox" name="all" value="1"${all ? ' checked' : ''}> Και όσες έχουν ήδη εκπρόσωπο (για αλλαγή)</label><button>Προβολή</button></form>
 <div class="toolbar"><button type="button" class="btn" id="gdKey">🔒 Δηλώσεις διάθεσης</button><span class="muted" id="gdState"></span></div>
-<div class="vstats"><span><b>${vs.length}</b> Εργασίες</span><span class="${vs.filter((v) => !Number(v.rep_id)).length ? 'warn' : ''}"><b>${vs.filter((v) => !Number(v.rep_id)).length}</b> χωρίς εκπρόσωπο</span>${gmN ? `<span>★ <b>${gmN}</b> με τον Μ.Δ. αυτοπροσώπως — δεν εμφανίζονται εδώ, βλ. <a href="#/visits">Επισκέψεις Στοών</a></span>` : ''}</div>
-<div id="gdList" class="gd-list">${vs.length ? '' : '<div class="card">Δεν υπάρχουν Εργασίες στο διάστημα.</div>'}</div>
+<div class="vstats"><span><b>${vs.length}</b> Εργασίες</span><span class="${vs.filter((v) => !Number(v.rep_id)).length ? 'warn' : ''}"><b>${vs.filter((v) => !Number(v.rep_id)).length}</b> χωρίς εκπρόσωπο</span>${doneN ? `<span>✓ <b>${doneN}</b> με εκπρόσωπο ήδη — δεν εμφανίζονται</span>` : ''}${gmN ? `<span>★ <b>${gmN}</b> με τον Μ.Δ. αυτοπροσώπως — δεν εμφανίζονται εδώ, βλ. <a href="#/visits">Επισκέψεις Στοών</a></span>` : ''}</div>
+<div id="gdList" class="gd-list">${vs.length ? '' : `<div class="card">${open ? 'Δεν υπάρχουν Εργασίες που περιμένουν απόφαση στο διάστημα.' : 'Δεν υπάρχουν Εργασίες στο διάστημα.'}</div>`}</div>
 ${vs.length ? '<div class="toolbar gd-save"><button type="button" class="btn primary" id="gdSave">✔ Αποθήκευση αποφάσεων</button></div>' : ''}`,
     mount(el) {
-      onSubmit(el.querySelector('#gdf'), (d) => go('/visits/decisions', { ...d, open: d.open ? '1' : '' }));
+      onSubmit(el.querySelector('#gdf'), (d) => go('/visits/decisions', { ...d, all: d.all ? '1' : '' }));
       const box = el.querySelector('#gdList'), state = el.querySelector('#gdState');
       let declared = {}, decided = {}, oldMeetings = [], cfg = null;
       const cands = repCandidates();

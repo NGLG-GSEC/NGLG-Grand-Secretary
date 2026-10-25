@@ -2476,6 +2476,11 @@ def test_gm_decisions_in_app_with_declarations(app):
     app.page.wait_for_selector('text=Αποθηκεύτηκαν 2 αποφάσεις')
     st = app.page.evaluate("async () => { const {db} = await import('./core/store.js'); return db.all('visits').map((v) => (db.get('reps', v.rep_id) || {}).surname); }")
     assert st == ['Διαβάτης', 'Διαβάτης', 'Μπενετάτος'], st
+    # με εκπρόσωπο πλέον: δεν εμφανίζονται (μόνο όσες περιμένουν απόφαση)· με «all=1» ξαναφαίνονται για αλλαγή
+    app.go('/visits/decisions?frm=2026-10-01&to=2026-12-31')
+    assert app.page.locator('.gd-card').count() == 0 and '2 με εκπρόσωπο ήδη' in app.text() and 'περιμένουν απόφαση' in app.text()
+    app.go('/visits/decisions?frm=2026-10-01&to=2026-12-31&all=1')
+    assert app.page.locator('.gd-card').count() == 2
     app.go('/visits')
     assert 'ΕΝΩΣΙΣ' in app.text()
     # Μητρώο: η καρτέλα του μέλους δείχνει τις εκπροσωπήσεις του ΜΔ
