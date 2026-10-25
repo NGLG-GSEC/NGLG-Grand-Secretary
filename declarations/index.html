@@ -115,6 +115,39 @@
       color: var(--gold-light);
       border-color: var(--primary);
     }
+    /* «Ενημέρωση ΜΔ»: κόκκινο με χρυσά γράμματα */
+    .tab-btn.tab-gm { background: #a3111b; color: #f1d58f; border: 2px solid #c5a059; text-shadow: 0 1px 1px rgba(0,0,0,.35); letter-spacing: .04em; }
+    .tab-btn.tab-gm.active, .tab-btn.tab-gm:hover { background: #7d0b13; color: #ffe3a0; border-color: #e5c98d; box-shadow: 0 0 0 3px rgba(197,160,89,.35); }
+
+    /* Αναφορά (Ενημέρωση ΜΔ): κάρτες ανά Εργασία σε κινητό / tablet / Galaxy Z Fold (ανοιχτό: δύο στήλες) */
+    .rep-stats { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 10px; }
+    .rep-stats span { background: #f1f5f9; border: 1px solid var(--border); border-radius: 999px; padding: 4px 12px; font-size: 13px; }
+    .rep-stats b { color: var(--primary); }
+    .rep-stats .warn { background: #fde8e8; border-color: #f5c2c2; }
+    @media screen and (max-width: 1100px) {
+      .table-wrap { overflow: visible; }
+      .report-table { min-width: 0 !important; width: 100% !important; border: 0; }
+      .report-table thead { display: none; }
+      .report-table, .report-table tbody { display: block; }
+      .report-table tbody { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; width: 100%; }
+      .report-table tr { display: block; min-width: 0; max-width: 100%; overflow-wrap: anywhere; background: #fff !important; border: 1px solid var(--border); border-left: 6px solid var(--gold); border-radius: 12px; padding: 12px 14px; box-shadow: 0 2px 10px rgba(11,31,58,.07); }
+      .report-table tr.rep-none { border-left-color: #c62828; }
+      .report-table tr.rep-done { border-left-color: #187a3d; }
+      .report-table td { display: block; border: 0 !important; padding: 6px 0 !important; font-size: 15px; background: transparent !important; }
+      .report-table td + td { border-top: 1px solid #eef1f6 !important; }
+      .report-table td::before { content: attr(data-label); display: block; font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 2px; }
+      .report-table td:first-child { font-size: 16px; color: var(--primary); }
+      .report-table td:first-child::before { display: none; }
+      .report-table .decide-select { width: 100%; max-width: 100%; min-height: 46px; font-size: 16px; }
+      .report-actions { position: sticky; bottom: 0; background: rgba(255,255,255,.96); padding: 10px 0; display: flex; gap: 10px; z-index: 5; }
+      .report-actions button { flex: 1; min-height: 46px; }
+      #printable-report { padding: 16px; }
+    }
+    @media screen and (min-width: 600px) and (max-width: 1100px) { .report-table tbody { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+    /* Διπλή οθόνη (Foldables με Viewport Segments API): οι στήλες δεν πέφτουν πάνω στον μεντεσέ */
+    @media screen and (horizontal-viewport-segments: 2) {
+      .report-table tbody { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: calc(env(viewport-segment-left 1 0, 0px) - env(viewport-segment-right 0 0, 0px) + 24px); }
+    }
 
     /* Cards & Forms */
     .card {
@@ -544,7 +577,7 @@
     <div class="nav-tabs">
       <button class="tab-btn active" data-view="form" onclick="switchView('form')">Δήλωση Ενδιαφέροντος</button>
       <button class="tab-btn" data-view="programme" onclick="switchView('programme')">Πρόγραμμα Επισκέψεων Μ.Δ.</button>
-      <button class="tab-btn" data-view="report" onclick="switchView('report')">🔒 Διαχειριστική Αναφορά & PDF</button>
+      <button class="tab-btn tab-gm" data-view="report" onclick="switchView('report')">🔒 Ενημέρωση ΜΔ</button>
     </div>
 
     <!-- VIEW 1: Φόρμα Δήλωσης Ενδιαφέροντος -->
@@ -578,7 +611,7 @@
       </div>
 
       <div class="card">
-        <h2 class="card-title">2. Επιλογή Εργασιών Νοεμβρίου 2026 για Εκπροσώπηση</h2>
+        <h2 class="card-title">2. Επιλογή Εργασιών για Εκπροσώπηση <span class="months-sub"></span></h2>
         <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 15px;">
           <span class="fno">2.x</span>Επιλέξτε μία ή περισσότερες Στοές στις οποίες έχετε τη δυνατότητα και επιθυμείτε να εκπροσωπήσετε τον Μέγα Διδάσκαλο:
         </p>
@@ -631,14 +664,15 @@
           <div class="print-header">
             <h1>ΕΘΝΙΚΗ ΜΕΓΑΛΗ ΣΤΟΑ ΤΗΣ ΕΛΛΑΔΟΣ</h1>
             <h2>ΜΕΓΑΛΗ ΓΡΑΜΜΑΤΕΙΑ</h2>
-            <h3>ΚΑΤΑΣΤΑΣΗ ΕΚΠΡΟΣΩΠΗΣΕΩΝ ΜΕΓΑΛΟΥ ΔΙΔΑΣΚΑΛΟΥ — ΝΟΕΜΒΡΙΟΣ 2026</h3>
+            <h3>ΚΑΤΑΣΤΑΣΗ ΕΚΠΡΟΣΩΠΗΣΕΩΝ ΜΕΓΑΛΟΥ ΔΙΔΑΣΚΑΛΟΥ — <span class="months-up"></span></h3>
             <p style="font-size: 11px; margin-top: 5px;">Ημερομηνία εξαγωγής: <span id="print-date"></span></p>
           </div>
 
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
             <h2 class="card-title" style="margin-bottom: 0;">Συγκεντρωτική Αναφορά Δηλώσεων Εκπροσώπησης Μ.Δ.</h2>
-            <span style="font-size: 12px; color: var(--text-muted);">Μήνας: <strong>Νοέμβριος 2026</strong></span>
+            <span style="font-size: 12px; color: var(--text-muted);">Περίοδος: <strong class="months"></strong></span>
           </div>
+          <div class="rep-stats" id="rep-stats"></div>
 
           <p class="field-hint" style="margin-bottom: 12px;">Στη στήλη «Απόφαση Μ.Δ.» ο Μέγας Διδάσκαλος επιλέγει επί τόπου εκπρόσωπο ανάμεσα σε όσους δήλωσαν, «αυτοπροσώπως», ή άλλον Μεγάλο Αξιωματικό. Η επιλογή αποθηκεύεται αμέσως και εμφανίζεται στις κάρτες των Στοών της Δήλωσης («✔ Εκπρόσωπος»).</p>
           <div class="table-wrap">
@@ -846,7 +880,7 @@
     const VIEWS = {
       form: "Πίνακας Δήλωσης Διάθεσης για Εκπροσώπηση Μ.Δ. σε Εγκαταστάσεις Σεβ. Διδ.",
       programme: "Πρόγραμμα Επισκέψεων του Σεβασμιωτάτου Μεγάλου Διδασκάλου",
-      report: "Διαχειριστική Αναφορά Εκπροσωπήσεων Μ.Δ."
+      report: "Ενημέρωση ΜΔ — Δηλώσεις και Αποφάσεις Εκπροσωπήσεων"
     };
     function switchView(view) {
       if (!VIEWS[view]) view = "form";
@@ -1186,12 +1220,14 @@
         const tr = document.createElement("tr");
         const officers = store[m.id] || [];
 
+        tr.className = (store[m.id] || []).length ? "" : "rep-none";
+        if (decisions[m.id]) tr.className = "rep-done";
         tr.innerHTML = `
-          <td><strong>${m.date}</strong></td>
-          <td><div class="lodge-cell">${m.logo ? `<img class="lodge-logo" src="${m.logo}" alt="Θυρεός ${m.name}">` : ""}<div><strong>${m.name}</strong> (Αρ. ${m.no})${m.note ? `<br><span class="lodge-note">${m.note}</span>` : ""}</div></div></td>
-          <td>${m.prov}</td>
-          <td></td>
-          <td></td>
+          <td data-label="Ημερομηνία"><strong>${m.date}</strong></td>
+          <td data-label="Σ.Σ. & Αριθμός"><div class="lodge-cell">${m.logo ? `<img class="lodge-logo" src="${m.logo}" alt="Θυρεός ${m.name}">` : ""}<div><strong>${m.name}</strong> (Αρ. ${m.no})${m.note ? `<br><span class="lodge-note">${m.note}</span>` : ""}</div></div></td>
+          <td data-label="Επαρχιακή Μεγάλη Στοά">${m.prov}</td>
+          <td data-label="Δηλώσεις Αξιωματικών"></td>
+          <td data-label="Απόφαση Μ.Δ. — Εκπρόσωπος"></td>
         `;
 
         // Τα ονόματα προέρχονται από τους χρήστες: textContent, όχι innerHTML
@@ -1241,6 +1277,9 @@
         tr.children[4].appendChild(decisionSelect(m, ranked, decisions[m.id] || ""));
         tbody.appendChild(tr);
       });
+      const nDecl = MEETINGS.filter(m => (store[m.id] || []).length).length, nDec = MEETINGS.filter(m => decisions[m.id]).length;
+      document.getElementById("rep-stats").innerHTML = `<span><b>${MEETINGS.length}</b> Εργασίες</span><span><b>${nDecl}</b> με δηλώσεις</span>`
+        + `<span class="${MEETINGS.length - nDecl ? "warn" : ""}"><b>${MEETINGS.length - nDecl}</b> χωρίς δήλωση</span><span><b>${nDec}</b> με απόφαση Μ.Δ.</span>`;
       return true;
     }
 
@@ -1268,8 +1307,25 @@
       } catch (e) { /* χωρίς meetings.json: ο κατάλογος του config.js */ }
     }
 
+    // Μήνες των Εργασιών (π.χ. «Νοέμβριος – Δεκέμβριος 2026») στους τίτλους
+    function monthsLabel(upper) {
+      const N = ["Ιανουάριος", "Φεβρουάριος", "Μάρτιος", "Απρίλιος", "Μάιος", "Ιούνιος", "Ιούλιος", "Αύγουστος", "Σεπτέμβριος", "Οκτώβριος", "Νοέμβριος", "Δεκέμβριος"];
+      const ks = [...new Set(MEETINGS.map(m => (String(m.date).match(/(\d{2})\/(\d{4})/) || []).slice(1).join("/")).filter(Boolean))]
+        .sort((a, b) => a.split("/").reverse().join("").localeCompare(b.split("/").reverse().join("")));
+      if (!ks.length) return "";
+      const f = k => { const [mm, yy] = k.split("/"); return N[+mm - 1] + " " + yy; };
+      const t = ks.length === 1 ? f(ks[0]) : f(ks[0]).replace(/ \d{4}$/, ks[0].slice(3) === ks[ks.length - 1].slice(3) ? "" : " " + ks[0].slice(3)) + " – " + f(ks[ks.length - 1]);
+      return upper ? t.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") : t;
+    }
+    function setMonths() {
+      document.querySelectorAll(".months").forEach(e => { e.textContent = monthsLabel(); });
+      document.querySelectorAll(".months-up").forEach(e => { e.textContent = monthsLabel(true); });
+      document.querySelectorAll(".months-sub").forEach(e => { const t = monthsLabel(); e.textContent = t ? "— " + t : ""; });
+    }
+
     window.onload = async function() {
       await loadMeetings();
+      setMonths();
       initMeetingsGrid();
       loadDecisions();
       resetFormFields();

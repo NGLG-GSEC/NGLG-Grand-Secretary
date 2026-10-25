@@ -12,7 +12,7 @@ export const DECLARATIONS_URL = 'declarations/';
 // Ο παλιός «Κωδικός αναφοράς» (άνοιγμα της αναφοράς χωρίς κωδικό) καταργήθηκε· σβήνεται και από τα δεδομένα
 db.migrate('declarations-key-removed-2026-10', (tx) => { if (tx.setting('declarations_report_key')) tx.setting('declarations_report_key', ''); });
 
-const VIEWS = [['form', 'Δήλωση Ενδιαφέροντος'], ['programme', 'Πρόγραμμα Επισκέψεων Μ.Δ.'], ['report', '🔒 Διαχειριστική Αναφορά & PDF']];
+const VIEWS = [['form', 'Δήλωση Ενδιαφέροντος'], ['programme', 'Πρόγραμμα Επισκέψεων Μ.Δ.'], ['report', '🔒 Ενημέρωση ΜΔ']];
 const srcOf = (v) => `${DECLARATIONS_URL}?embed=1#${v}`;
 const frameHtml = (id, title, src) => `<iframe id="${id}" class="embed-frame" title="${title}" src="${src}"></iframe>`;
 
@@ -21,8 +21,8 @@ function declarationsPage({ query }) {
     title: 'Δηλώσεις Διάθεσης Μ. Αξιωματικών',
     html: `${visitsFlow(2)}<h1>Δηλώσεις Διάθεσης Μεγάλων Αξιωματικών</h1>
 <p class="muted">Εκπροσώπηση του Μεγάλου Διδασκάλου σε Εγκαταστάσεις Σεβ. Διδασκάλων: οι αξιωματικοί δηλώνουν και η Γραμματεία ορίζει εκπροσώπους στις <a href="#/visits">Επισκέψεις Στοών</a>.
-Η Διαχειριστική Αναφορά ανοίγει με τον κωδικό πρόσβασης. <a href="${DECLARATIONS_URL}" target="_blank" rel="noopener">Δημόσια σελίδα ↗</a></p>
-<nav class="decltabs">${VIEWS.map(([v, l]) => `<button type="button" class="btn${v === 'form' ? ' primary' : ''}" data-view="${v}">${l}</button>`).join('')}</nav>
+Η «Ενημέρωση ΜΔ» (δηλώσεις και αποφάσεις) ανοίγει με τον κωδικό πρόσβασης. <a href="${DECLARATIONS_URL}" target="_blank" rel="noopener">Δημόσια σελίδα ↗</a></p>
+<nav class="decltabs">${VIEWS.map(([v, l]) => `<button type="button" class="btn${v === 'form' ? ' primary' : ''}${v === 'report' ? ' gm-red' : ''}" data-view="${v}">${l}</button>`).join('')}</nav>
 ${frameHtml('declFrame', 'Δηλώσεις Διάθεσης Μεγάλων Αξιωματικών', srcOf('form'))}
 `,
     mount(el) {
