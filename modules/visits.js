@@ -299,8 +299,8 @@ function visitCard(v, reps, opts = '', letters) {
 <a class="btn small" href="#/letters/new?${new URLSearchParams(provinceLetter(v))}">📄 Επιστολή</a>` : r ? `<a class="btn small${repNotified(v) && provNotified(v) ? '' : ' primary'}" href="#/visits/notify?ids=${v.id}&back=list">✉ Email προς Στοά (Εκπροσώπηση)</a>
 <a class="btn small" href="#/letters/new?${new URLSearchParams(provinceLetter(v))}">📄 Επιστολή</a>
 <a class="btn small" href="#/visits/brief?ids=${v.id}" title="Μόνο στον εκπρόσωπο, με πρόσκληση ημερολογίου">✉ Μόνο εκπρόσωπος</a>` : '';
-  return `<div class="vcard${v.visit_date < today() ? ' past' : ''}"><div class="vdate"><b>${d ? d.getDate() : ''}</b><small>${d ? DAYS[d.getDay()].slice(0, 3) : ''}</small></div>
-<div><div class="vlodge"><a href="#/visits/edit/${v.id}">${esc(v.lodge)}</a>${v.lodge_number ? `<span class="no">Αρ. ${esc(v.lodge_number)}</span>` : ''}${lt ? ` <a class="vprot" href="#/letters/${lt.id}" title="Άνοιγμα της επιστολής">Αρ. Πρωτ. ${esc(String(seqOf(lt)))}</a>` : ''}</div><div class="vmeta">${esc(dayStr(v.visit_date))} · ${esc(v.location || 'Τόπος —')}</div>
+  return `<div class="vcard${v.visit_date < today() ? ' past' : ''}${r || isNobody(v) ? '' : ' vopen'}"><div class="vdate"><b>${d ? d.getDate() : ''}</b><small>${d ? DAYS[d.getDay()].slice(0, 3) : ''}</small></div>
+<div><div class="vlodge"><a href="#/visits/edit/${v.id}">${esc(v.lodge)}</a>${v.lodge_number ? `<span class="no">Αρ. ${esc(v.lodge_number)}</span>` : ''}${lt ? ` <a class="vprot" href="#/letters/${lt.id}" title="Άνοιγμα της επιστολής">Αρ. Πρωτ. ${esc(String(seqOf(lt)))}</a>` : ''}</div><div class="vmeta"><span class="vdfull">${esc(dayStr(v.visit_date))} · </span>${esc(v.location || 'Τόπος —')}</div>
 ${v.notes ? `<div class="vnote">${esc(v.notes)}</div>` : ''}${v.province ? `<span class="vchip">${esc(v.province)}</span>` : ''}${p && p.email ? ` <span class="vmeta">${esc(p.email)}</span>` : ''}${brief || oks ? `<div>${brief} ${oks}</div>` : ''}</div>
 <div class="vrep"><label class="vreplabel vkindlabel" for="vkind${v.id}">ΕΙΔΟΣ ΕΡΓΑΣΙΑΣ</label>${kindSelect(v).replace('class="vkindsel"', `class="vkindsel" id="vkind${v.id}"`)}
 ${r ? `<b>${esc(repLabel(r))}</b><div class="vmeta">${esc(r.office || '')}</div>` : isNobody(v) ? '<b>ΟΥΔΕΙΣ</b><div class="vmeta">Ο Μέγας Διδάσκαλος δεν έστειλε κανέναν</div>' : '<span class="vwarn">Χωρίς εκπρόσωπο</span>'}
@@ -322,7 +322,7 @@ function visitsPage({ query }) {
   const groups = {}, opts = repOptions(null, rm), letters = db.all('letters');
   for (const v of lst) (groups[v.visit_date.slice(0, 7)] ||= []).push(v);
   const body = !vs.length ? '<div class="card">Δεν υπάρχουν ακόμη επισκέψεις. Πατήστε «Νέα επίσκεψη» ή «Επικόλληση λίστας».</div>' : !lst.length ? '<div class="card">Καμία επίσκεψη δεν ταιριάζει με τα φίλτρα.</div>'
-    : Object.entries(groups).map(([k, items]) => `<section class="vmonth"><h2>${monthTitle(k)} <small>${items.length} ${items.length === 1 ? 'επίσκεψη' : 'επισκέψεις'}</small></h2>${items.map((v) => visitCard(v, reps, opts, letters)).join('')}</section>`).join('');
+    : Object.entries(groups).map(([k, items]) => `<section class="vmonth"><h2>${monthTitle(k)} <small>${items.length} ${items.length === 1 ? 'επίσκεψη' : 'επισκέψεις'}</small></h2><div class="vtiles">${items.map((v) => visitCard(v, reps, opts, letters)).join('')}</div></section>`).join('');
   const sel = (n, v) => (String(query[n] || '') === String(v) ? ' selected' : '');
   const yr = masonicYear(), summary = provinceSummary(yr), sumAll = summary.reduce((a, o) => ({ total: a.total + o.total, declared: a.declared + o.declared }), { total: 0, declared: 0 });
   return {
