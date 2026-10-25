@@ -3194,6 +3194,9 @@ def test_project_report_asks_language_and_lodges_column(app):
     app.page.wait_for_url('**/#/projects/1')
     app.pick('#mPick', 'Παπαδ')
     app.page.wait_for_selector('[data-act=rmMember]')
+    app.page.fill('#logf [name=text]', 'Συνάντηση ιδρυτικών μελών')
+    app.page.locator('#logf button').click()
+    app.page.wait_for_selector('text=Συνάντηση ιδρυτικών μελών')
     app.page.evaluate('window.print = () => {}')
     app.click('⬇ Αναφορά (PDF)')
     dlg = app.page.locator('dialog.rptask')
@@ -3203,12 +3206,14 @@ def test_project_report_asks_language_and_lodges_column(app):
     app.page.wait_for_function("document.querySelector('#pa').innerText.includes('Members')")
     pa = app.page.inner_text('#pa')
     assert 'National Grand Lodge of Greece' in pa and 'Papadopoulos Georgios' in pa and 'Full name' in pa
+    assert 'Files & links (0)' in pa and 'No files or links.' in pa and 'Information & work log (1)' in pa and 'Entry' in pa
     assert 'Idrysi S.S. «Dokimi»' in pa and 'Παπαδόπουλος' not in pa and 'Lodges\tMobile' not in pa and 'Μέλη' not in pa
     # Ελληνικά, με τη στήλη Στοές
     app.click('⬇ Αναφορά (PDF)')
     app.page.locator('dialog.rptask button[value=ok]').click()
     app.page.wait_for_function("document.querySelector('#pa').innerText.includes('Μέλη')")
     pa = app.page.inner_text('#pa')
+    assert 'Αρχεία & σύνδεσμοι (0)' in pa and 'Πληροφορίες & ημερολόγιο εργασιών (1)' in pa and 'Συνάντηση ιδρυτικών μελών' in pa
     assert 'Παπαδόπουλος Γεώργιος' in pa and 'Στοές' in pa and 'ΠΑΡΘΕΝΩΝ' in pa
     # Άκυρο: καμία αναφορά
     app.page.evaluate("document.querySelector('#pa').innerHTML = ''")

@@ -560,3 +560,8 @@ dialog.rptask fieldset { border: 1px solid #e3e7ee; border-radius: 8px; margin: 
 dialog.rptask legend { font-weight: 700; padding: 0 4px; }
 dialog.rptask label { display: flex; gap: 8px; align-items: flex-start; margin: 6px 0; font-weight: 400; }
 dialog.rptask input[type=radio] { width: auto; margin-top: 3px; }
+/* Αναφορά πρότζεκτ: φωτογραφίες του κεφαλαίου «Αρχεία & σύνδεσμοι» */
+.rpt-photos { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4mm; margin: 3mm 0 5mm; }
+.rpt-photos figure { margin: 0; break-inside: avoid; text-align: center; }
+.rpt-photos img { max-width: 100%; max-height: 55mm; object-fit: contain; border: 1px solid #ddd; }
+.rpt-photos figcaption { font-size: 9pt; color: #555; margin-top: 1mm; }

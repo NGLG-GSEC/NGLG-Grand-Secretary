@@ -249,8 +249,17 @@ ${logs.length ? table(['Ημερομηνία', 'Καταχώριση', 'Ενέρ
             inner += t(`${L('Μέλη', 'Members')} (${members.length})`, [cut(head), ...rows.map(cut)]);
           }
           if (contacts.length) inner += t(L('Επαφές & συνεργάτες', 'Contacts & associates'), [L(['Ονοματεπώνυμο', 'Ιδιότητα', 'Τηλέφωνο', 'Email', 'Σημειώσεις'], ['Full name', 'Role', 'Phone', 'Email', 'Notes']), ...contacts.map((x) => [N(x.name), x.role, x.phone, x.email, x.notes])]);
-          if (files.length) inner += t(L('Αρχεία & σύνδεσμοι', 'Files & links'), [L(['Τίτλος', 'Είδος', 'Ημερομηνία'], ['Title', 'Type', 'Date']), ...files.map((f) => [f.name, kind(f), fmtDate(f.added_on)])]);
-          if (logs.length) inner += t(L('Ημερολόγιο εργασιών', 'Work log'), [L(['Ημερομηνία', 'Καταχώριση'], ['Date', 'Entry']), ...logs.map((x) => [fmtDate(x.log_date), x.text])]);
+          // Κεφάλαιο «Αρχεία & σύνδεσμοι» (πάντα): πίνακας + οι φωτογραφίες· οι σύνδεσμοι με πλήρη διεύθυνση
+          const imgs = files.filter((f) => f.kind === 'image');
+          inner += `<h3>${L('Αρχεία & σύνδεσμοι', 'Files & links')} (${files.length})</h3>`;
+          inner += files.length ? t('', [L(['Τίτλος', 'Είδος', 'Σύνδεσμος', 'Ημερομηνία'], ['Title', 'Type', 'Link', 'Date']), ...files.map((f) => [f.name, f.kind === 'link' ? L('Σύνδεσμος', 'Link') : f.kind === 'pdf' ? 'PDF' : L('Φωτογραφία', 'Photo'), f.kind === 'link' ? f.url : '', fmtDate(f.added_on)])]).replace('<h3></h3>', '')
+            : `<p class="muted">${L('Δεν υπάρχουν αρχεία ή σύνδεσμοι.', 'No files or links.')}</p>`;
+          if (imgs.length) inner += `<div class="rpt-photos">${imgs.map((f) => `<figure><img data-file="${f.id}" alt=""><figcaption>${esc(f.name)}</figcaption></figure>`).join('')}</div>`;
+          // Κεφάλαιο «Πληροφορίες & ημερολόγιο εργασιών» (πάντα): σημειώσεις του πρότζεκτ + καταχωρίσεις
+          inner += `<h3>${L('Πληροφορίες & ημερολόγιο εργασιών', 'Information & work log')} (${logs.length})</h3>`;
+          if (p.notes) inner += `<p style="white-space:pre-wrap"><b>${L('Σημειώσεις', 'Notes')}:</b> ${esc(p.notes)}</p>`;
+          inner += logs.length ? t('', [L(['Ημερομηνία', 'Καταχώριση'], ['Date', 'Entry']), ...logs.map((x) => [fmtDate(x.log_date), x.text])]).replace('<h3></h3>', '')
+            : `<p class="muted">${L('Δεν υπάρχουν καταχωρίσεις.', 'No entries.')}</p>`;
           pa.innerHTML = en ? reportPaperEn(p.title, 'Grand Master\'s Project', inner, { grandMaster: gmEn() }) : reportPaper(p.title, 'Πρότζεκτ Μεγάλου Διδασκάλου', inner);
           await loadImages(pa); pa.hidden = false; printPaper(`projekt-${p.title}${opt.en ? '-EN' : ''}`);
           window.addEventListener('afterprint', () => (pa.hidden = true), { once: true });
