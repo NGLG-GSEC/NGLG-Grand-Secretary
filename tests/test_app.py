@@ -519,6 +519,7 @@ def test_official_lodges_applied_to_existing_database(app):
     assert a['full_title'] == 'ΣΣτ. 2 Ακρόπολις υπό την Σκ. της ΕπΜΣτ. Αθηνών'
     assert lodges['52']['status'] == 'Ανενεργή' and lodges['117']['kind'] == 'Ειδική' and lodges['Φ']['orient'] == 'Κερκύρας'
     assert 'lodges-official-2026-10' in gh.read_json('data/settings.json')['_migrations']
+    app.page.wait_for_timeout(3000)  # η πρώτη δημοσίευση των δημόσιων αρχείων (1,5″ μετά το άνοιγμα) να έχει τελειώσει
     n = len(gh.commits)
     app.page.reload()
     app.page.wait_for_selector('.dash')
@@ -3213,4 +3214,5 @@ def test_project_report_asks_language_and_lodges_column(app):
     app.page.evaluate("document.querySelector('#pa').innerHTML = ''")
     app.click('⬇ Αναφορά (PDF)')
     app.page.locator('dialog.rptask button[value=cancel]').click()
-    assert app.page.inner_text('#pa') == '' and app.page.locator('dialog.rptask').count() == 0
+    app.page.wait_for_selector('dialog.rptask', state='detached')
+    assert app.page.inner_text('#pa') == ''
