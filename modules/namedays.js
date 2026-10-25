@@ -396,18 +396,42 @@ ${table(['✓', 'Εορτάζων', 'Email', 'Προσφώνηση', 'Ενέργ
   };
 }
 
+// Ερώτηση πριν από το PDF της Αναφοράς ευχών: με ή χωρίς τη στήλη «Ώρα» → true (απόκρυψη) / false / null (άκυρο)
+function askHideTime() {
+  return new Promise((resolve) => {
+    const dlg = document.createElement('dialog');
+    dlg.className = 'card rptask';
+    dlg.innerHTML = `<form method="dialog"><h3 style="margin-top:0">Αναφορά σε ΜΔ — PDF</h3><p>Να εμφανίζεται η στήλη <b>«Ώρα»</b> (ώρα αποστολής κάθε email);</p>
+<div class="toolbar"><button class="btn primary" value="hide">Χωρίς τη στήλη «Ώρα»</button><button class="btn" value="show">Με τη στήλη «Ώρα»</button><button class="btn" value="cancel">Άκυρο</button></div></form>`;
+    document.body.appendChild(dlg);
+    dlg.addEventListener('close', () => { resolve(dlg.returnValue === 'hide' ? true : dlg.returnValue === 'show' ? false : null); dlg.remove(); });
+    dlg.showModal();
+  });
+}
+
 function reportPage({ query }) {
   const d = query.d && parseIso(query.d) ? query.d : today(), rows = sortBy(db.all('greetings_log').filter((g) => g.sent_on === d), 'sent_at', 'name');
   const nat = provincesAll().find((p) => p.kind === 'Εθνική'), gm = nat ? provinceRoles(nat)[0].email : '';
   const body = `Σεβασμιώτατε Μεγάλε Διδάσκαλε,\n\nσας υποβάλλω συνημμένα την αναφορά αποστολής ευχών ονομαστικής εορτής εκ μέρους σας για ${d === today() ? 'σήμερα, ' : ''}${dayStr(d)}.\n\nΑπεστάλησαν ${rows.length} email ευχών:\n` + rows.map((r, i) => `${i + 1}. ${r.name}`).join('\n') + `\n\n${gsSignatureText()}`;
-  const tbl = `<table><thead><tr><th>Α/Α</th><th>Ονοματεπώνυμο</th><th>Email</th><th>Θέμα</th><th>Ώρα</th></tr></thead><tbody>${rows.map((r, i) => `<tr><td>${i + 1}</td><td><b>${esc(r.name)}</b></td><td>${esc(r.email)}</td><td>${esc(r.subject)}</td><td>${esc(String(r.sent_at || '').slice(11, 16))}</td></tr>`).join('') || '<tr><td colspan="5">Δεν έχουν καταχωριστεί ευχές.</td></tr>'}</tbody></table>`;
+  const tbl = `<table><thead><tr><th>Α/Α</th><th>Ονοματεπώνυμο</th><th>Email</th><th>Θέμα</th><th class="c-time">Ώρα</th></tr></thead><tbody>${rows.map((r, i) => `<tr><td>${i + 1}</td><td><b>${esc(r.name)}</b></td><td>${esc(r.email)}</td><td>${esc(r.subject)}</td><td class="c-time">${esc(String(r.sent_at || '').slice(11, 16))}</td></tr>`).join('') || '<tr><td colspan="5">Δεν έχουν καταχωριστεί ευχές.</td></tr>'}</tbody></table>`;
+  // Τίτλος: η εορτή (ημερομηνία και ονόματα) για την οποία στάλθηκαν οι ευχές, και πόσα μέλη
+  const feasts = {};
+  for (const r of rows) if (r.feast_date) (feasts[r.feast_date] ||= new Set()).add(String(r.feast || '').trim());
+  const fk = Object.keys(feasts).sort(), n = rows.length;
+  const title = rows.length && fk.length
+    ? `Αναφορά αποστολής ευχών από ΜΔ · για ${fk.length > 1 ? 'τις Ονομαστικές εορτές' : 'την Ονομαστική εορτή'} ${fk.map((x) => `${dayStr(x)} [${[...feasts[x]].filter(Boolean).join(', ')}]`).join(' · ')} - ${n} ${n === 1 ? 'μέλος' : 'μέλη'}`
+    : `Αναφορά αποστολής ευχών από ΜΔ · ${dayStr(d)}`;
   return {
     title: 'Αναφορά ευχών',
     html: `<div class="noprint"><h1>Αναφορά ευχών</h1><form class="toolbar" id="df"><input type="date" name="d" value="${esc(d)}" style="width:auto"><button class="btn">Προβολή</button><button type="button" class="btn primary" data-act="print">⬇ PDF / Εκτύπωση</button><a class="btn" href="#/namedays">Εορτολόγιο</a></form>
 ${rows.length ? `<div class="card">${senderBanner('general')}<p>Αποστολή στον Μεγάλο Διδάσκαλο (${esc(gm || 'ορίστε email ΜΔ στην εγγραφή «ΕΜΣτΕ» των Επαρχιών')}): πατήστε «PDF», αποθηκεύστε το και επισυνάψτε το.</p>
-<div class="toolbar">${mailButtons({ to: gm, subject: `Αναφορά αποστολής ευχών ονομαστικής εορτής — ${dayStr(d)}`, body, kind: 'general' })}</div></div>` : ''}</div>
-<div class="print-area">${reportPaper(`Αναφορά αποστολής ευχών από ΜΔ · ${dayStr(d)}`, `Απεστάλησαν ${rows.length} email.`, tbl)}</div>`,
-    mount(el) { onSubmit(el.querySelector('#df'), (x) => go('/namedays/report', x)); bind(el, { print: () => printPaper(`anafora-eyxon-${d}`) }); },
+<div class="toolbar">${mailButtons({ to: gm, subject: title, body, kind: 'general' })}</div></div>` : ''}</div>
+<div class="print-area">${reportPaper(title, `Απεστάλησαν ${rows.length} email στις ${dayStr(d)}.`, tbl)}</div>`,
+    mount(el) { onSubmit(el.querySelector('#df'), (x) => go('/namedays/report', x)); bind(el, { async print() {
+      const hide = await askHideTime(); if (hide === null) return;
+      el.querySelector('.print-area').classList.toggle('no-time', hide);
+      printPaper(`anafora-eyxon-${d}`);
+    } }); },
   };
 }
 

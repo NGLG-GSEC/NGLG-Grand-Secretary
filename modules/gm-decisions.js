@@ -110,7 +110,10 @@ export function visitOfMeetingId(id, oldMeetings = [], vs = visitsAll()) {
 }
 function decisionsPage({ query = {} }) {
   const frm = query.frm || today(), to = query.to || addDays(frm, 60), prov = query.prov || '', open = query.open === '1';
-  const vs = visitsAll().filter((v) => v.visit_date >= frm && v.visit_date <= to && (!prov || v.province === prov) && (!open || !Number(v.rep_id)));
+  // Όπου πηγαίνει ο ίδιος ο ΜΔ δεν χρειάζεται απόφαση για εκπρόσωπο: δεν εμφανίζεται εδώ (φαίνεται στις Επισκέψεις Στοών)
+  const gmSelf = (v) => Number(v.rep_id) > 0 && isGM(db.get('reps', Number(v.rep_id)));
+  const inRange = visitsAll().filter((v) => v.visit_date >= frm && v.visit_date <= to && (!prov || v.province === prov) && (!open || !Number(v.rep_id)));
+  const vs = inRange.filter((v) => !gmSelf(v)), gmN = inRange.length - vs.length;
   const provs = [...new Set(visitsAll().map((v) => v.province).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'el'));
   return {
     title: 'Αποφάσεις Μ.Δ.',
@@ -123,7 +126,7 @@ function decisionsPage({ query = {} }) {
 <select name="prov"><option value="">Όλες οι Επαρχίες</option>${provs.map((p) => `<option${p === prov ? ' selected' : ''}>${esc(p)}</option>`).join('')}</select>
 <label class="chk"><input type="checkbox" name="open" value="1"${open ? ' checked' : ''}> Μόνο χωρίς εκπρόσωπο</label><button>Προβολή</button></form>
 <div class="toolbar"><button type="button" class="btn" id="gdKey">🔒 Δηλώσεις διάθεσης</button><span class="muted" id="gdState"></span></div>
-<div class="vstats"><span><b>${vs.length}</b> Εργασίες</span><span class="${vs.filter((v) => !Number(v.rep_id)).length ? 'warn' : ''}"><b>${vs.filter((v) => !Number(v.rep_id)).length}</b> χωρίς εκπρόσωπο</span></div>
+<div class="vstats"><span><b>${vs.length}</b> Εργασίες</span><span class="${vs.filter((v) => !Number(v.rep_id)).length ? 'warn' : ''}"><b>${vs.filter((v) => !Number(v.rep_id)).length}</b> χωρίς εκπρόσωπο</span>${gmN ? `<span>★ <b>${gmN}</b> με τον Μ.Δ. αυτοπροσώπως — δεν εμφανίζονται εδώ, βλ. <a href="#/visits">Επισκέψεις Στοών</a></span>` : ''}</div>
 <div id="gdList" class="gd-list">${vs.length ? '' : '<div class="card">Δεν υπάρχουν Εργασίες στο διάστημα.</div>'}</div>
 ${vs.length ? '<div class="toolbar gd-save"><button type="button" class="btn primary" id="gdSave">✔ Αποθήκευση αποφάσεων</button></div>' : ''}`,
     mount(el) {

@@ -124,6 +124,8 @@
     .kind-badge.other { background: #fff4d6; color: #8a5a00; border: 1px solid #e5c98d; }
     .report-table td .kind-badge { margin: 4px 0 0; }
     .registered { margin: 8px 0 0; font-size: 13px; font-weight: 600; color: #187a3d; }
+    .meeting-card[hidden] { display: none !important; }
+    .gm-self-note { margin: 10px 0 0; font-size: 13px; color: var(--text-muted); font-style: italic; }
     .rep-stats { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 10px; }
     .rep-stats span { background: #f1f5f9; border: 1px solid var(--border); border-radius: 999px; padding: 4px 12px; font-size: 13px; }
     .rep-stats b { color: var(--primary); }
@@ -878,6 +880,7 @@
         `;
         grid.appendChild(card);
       });
+      renderDecisions();
     }
 
     // Διαχείριση Tabs (και άμεσοι σύνδεσμοι: #form, #programme, #report)
@@ -916,15 +919,27 @@
       renderDecisions();
       return decisions;
     }
+    // Εργασίες όπου πηγαίνει ο ίδιος ο Μέγας Διδάσκαλος (Επίσκεψη της εφαρμογής ή απόφαση): δεν ζητείται εκπρόσωπος,
+    // άρα δεν εμφανίζονται για δήλωση ούτε στην Ενημέρωση ΜΔ (φαίνονται στο Πρόγραμμα / στις Επισκέψεις Στοών)
+    const gmGoes = m => { const reg = registeredOf(m); return reg ? reg === GM_SELF : decisionOf(m) === GM_SELF; };
     function renderDecisions() {
       // Η απόφαση φαίνεται στις κάρτες των Στοών της Δήλωσης
+      let n = 0, hidden = 0;
       document.querySelectorAll("#meetings-list .meeting-card").forEach(card => {
-        const id = card.querySelector("input").value, m = MEETINGS.find(x => x.id === id) || { id }, reg = registeredOf(m), rep = reg || decisionOf(m);
+        const input = card.querySelector("input"), id = input.value, m = MEETINGS.find(x => x.id === id) || { id };
+        card.hidden = gmGoes(m);
+        if (card.hidden) { input.checked = false; hidden++; return; }
+        card.querySelector(".fno").textContent = "2." + (++n);
+        const reg = registeredOf(m), rep = reg || decisionOf(m);
         let d = card.querySelector(".meeting-decision");
         if (!rep) { if (d) d.remove(); return; }
         if (!d) { d = document.createElement("p"); d.className = "meeting-decision"; card.querySelector(".meeting-info").appendChild(d); }
         d.textContent = (reg ? "✔ Εκπρόσωπος: " : "✔ Απόφαση Μ.Δ.: ") + rep;
       });
+      const grid = document.getElementById("meetings-list");
+      let note = document.getElementById("gm-self-note");
+      if (!note && grid) { note = document.createElement("p"); note.id = "gm-self-note"; note.className = "gm-self-note"; grid.after(note); }
+      if (note) { note.hidden = !hidden; note.textContent = `Δεν εμφανίζ${hidden === 1 ? "εται 1 Εργασία" : "ονται " + hidden + " Εργασίες"} όπου θα παραστεί αυτοπροσώπως ο Μέγας Διδάσκαλος (βλ. «Πρόγραμμα Επισκέψεων Μ.Δ.»).`; }
     }
     async function decide(meetingId, sel, state) {
       state.className = "decide-state"; state.textContent = "Αποθήκευση…";
@@ -1223,7 +1238,8 @@
       tbody.innerHTML = "";
       document.getElementById("print-date").innerText = new Date().toLocaleDateString('el-GR');
 
-      MEETINGS.forEach(m => {
+      const gmCount = MEETINGS.filter(gmGoes).length;
+      MEETINGS.filter(m => !gmGoes(m)).forEach(m => {
         const tr = document.createElement("tr");
         const officers = declOf(store, m);
 
@@ -1285,9 +1301,11 @@
         if (registeredOf(m)) { const p = document.createElement("p"); p.className = "registered"; p.textContent = "📌 Καταχωρημένος στο πρόγραμμα: " + registeredOf(m); tr.children[4].appendChild(p); }
         tbody.appendChild(tr);
       });
-      const nDecl = MEETINGS.filter(m => declOf(store, m).length).length, nDec = MEETINGS.filter(m => registeredOf(m) || decisionOf(m)).length;
-      document.getElementById("rep-stats").innerHTML = `<span><b>${MEETINGS.length}</b> Εργασίες</span><span><b>${nDecl}</b> με δηλώσεις</span>`
-        + `<span class="${MEETINGS.length - nDecl ? "warn" : ""}"><b>${MEETINGS.length - nDecl}</b> χωρίς δήλωση</span><span><b>${nDec}</b> με απόφαση Μ.Δ.</span>`
+      const LIST = MEETINGS.filter(m => !gmGoes(m));
+      const nDecl = LIST.filter(m => declOf(store, m).length).length, nDec = LIST.filter(m => registeredOf(m) || decisionOf(m)).length;
+      document.getElementById("rep-stats").innerHTML = `<span><b>${LIST.length}</b> Εργασίες</span><span><b>${nDecl}</b> με δηλώσεις</span>`
+        + `<span class="${LIST.length - nDecl ? "warn" : ""}"><b>${LIST.length - nDecl}</b> χωρίς δήλωση</span><span><b>${nDec}</b> με απόφαση Μ.Δ.</span>`
+        + (gmCount ? `<span>★ <b>${gmCount}</b> με τον Μ.Δ. αυτοπροσώπως (δεν εμφανίζονται)</span>` : "")
         + (FROM_APP ? "" : `<span class="warn">⚠ Οι Εργασίες δεν ήρθαν από την εφαρμογή (εφεδρικός κατάλογος)</span>`);
       return true;
     }

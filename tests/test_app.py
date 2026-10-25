@@ -2460,9 +2460,13 @@ def test_gm_decisions_in_app_with_declarations(app):
       await db.save('x', (tx) => { tx.replace('visits', []);
         tx.insert('reps', { name: 'Χρήστος', surname: 'Διαβάτης', office: 'Βοηθός Μέγας Γραμματεύς', email: '', mobile: '', member_id: m.id });
         tx.insert('visits', { visit_date: '2026-11-02', lodge: 'ΑΤΛΑΣ', lodge_number: '118', location: '', province: 'ΕπΜΣτ. Πειραιώς', rep_id: null, notes: '' });
-        tx.insert('visits', { visit_date: '2026-11-02', lodge: 'ΑΚΡΟΠΟΛΙΣ', lodge_number: '104', location: '', province: 'ΕπΜΣτ. Αθηνών', rep_id: null, notes: '' }); });
+        tx.insert('visits', { visit_date: '2026-11-02', lodge: 'ΑΚΡΟΠΟΛΙΣ', lodge_number: '104', location: '', province: 'ΕπΜΣτ. Αθηνών', rep_id: null, notes: '' });
+        const gm = tx.insert('reps', { name: 'Ιωάννης', surname: 'Μπενετάτος', office: 'Μέγας Διδάσκαλος', email: '', mobile: '' });
+        tx.insert('visits', { visit_date: '2026-11-11', lodge: 'ΕΝΩΣΙΣ', lodge_number: '16', location: '', province: 'ΕπΜΣτ. Ιονίων Νήσων', rep_id: gm.id, notes: '' }); });
       sessionStorage.setItem('nglg-decl-key', 'kleidi'); }""")
-    app.go('/visits/decisions')
+    app.go('/visits/decisions?frm=2026-10-01&to=2026-12-31')
+    # όπου πηγαίνει ο ίδιος ο ΜΔ δεν χρειάζεται απόφαση: δεν εμφανίζεται (μόνο στις Επισκέψεις Στοών)
+    assert app.page.locator('.gd-card', has_text='ΕΝΩΣΙΣ').count() == 0 and 'με τον Μ.Δ. αυτοπροσώπως' in app.text()
     app.page.wait_for_selector('text=1 δηλώσεις διάθεσης')
     atlas = app.page.locator('.gd-card', has_text='ΑΤΛΑΣ'); akro = app.page.locator('.gd-card', has_text='ΑΚΡΟΠΟΛΙΣ')
     assert 'Απόφαση στη σελίδα Δηλώσεων' in atlas.inner_text() and '✋ Δήλωσαν' in akro.inner_text()
@@ -2471,7 +2475,9 @@ def test_gm_decisions_in_app_with_declarations(app):
     app.page.click('#gdSave')
     app.page.wait_for_selector('text=Αποθηκεύτηκαν 2 αποφάσεις')
     st = app.page.evaluate("async () => { const {db} = await import('./core/store.js'); return db.all('visits').map((v) => (db.get('reps', v.rep_id) || {}).surname); }")
-    assert st == ['Διαβάτης', 'Διαβάτης'], st
+    assert st == ['Διαβάτης', 'Διαβάτης', 'Μπενετάτος'], st
+    app.go('/visits')
+    assert 'ΕΝΩΣΙΣ' in app.text()
     # Μητρώο: η καρτέλα του μέλους δείχνει τις εκπροσωπήσεις του ΜΔ
     mid = app.page.evaluate("async () => (await import('./core/store.js')).db.all('member_registry').find((x) => x.surname === 'Διαβάτης').id")
     app.go(f'/members/{mid}')
@@ -3169,14 +3175,17 @@ def test_declarations_unified_from_app_visits(browser, base_url):
     page = browser.new_page()
     page.route('**/declarations/meetings.json*', lambda r: r.fulfill(json={'meetings': [
         {'id': 'l7_20991102', 'date': 'Δευτέρα 02/11/2099', 'name': 'ΔΟΚΙΜΗ', 'no': '7', 'prov': 'Αττικής', 'kind': 'ΑΡΧΑΙΡΕΣΙΕΣ'},
-        {'id': 'l8_20991103', 'date': 'Τρίτη 03/11/2099', 'name': 'ΔΕΥΤΕΡΗ', 'no': '8', 'prov': 'Αττικής', 'kind': 'ΕΓΚΑΤΑΣΤΑΣΗ ΣΕΒ'}]}))
+        {'id': 'l8_20991103', 'date': 'Τρίτη 03/11/2099', 'name': 'ΔΕΥΤΕΡΗ', 'no': '8', 'prov': 'Αττικής', 'kind': 'ΕΓΚΑΤΑΣΤΑΣΗ ΣΕΒ'},
+        {'id': 'l9_20991104', 'date': 'Τετάρτη 04/11/2099', 'name': 'ΕΝΩΣΙΣ', 'no': '9', 'prov': 'Ιονίων', 'kind': 'ΕΓΚΑΤΑΣΤΑΣΗ ΣΕΒ'}]}))
     page.route('**/programme/programme.json*', lambda r: r.fulfill(json={'rows': [
-        {'id': 'l7_20991102', 'date': '2099-11-02', 'no': '7', 'rep': 'Δοκιμαστής Εκπρόσωπος (Μέγας Αξιωματικός)'}]}))
+        {'id': 'l7_20991102', 'date': '2099-11-02', 'no': '7', 'rep': 'Δοκιμαστής Εκπρόσωπος (Μέγας Αξιωματικός)'},
+        {'id': 'l9_20991104', 'date': '2099-11-04', 'no': '9', 'rep': 'Ο Μέγας Διδάσκαλος', 'gm': 1}]}))
     page.route('https://script.google.com/**', lambda r: r.fulfill(json={'ok': True, 'decisions': {}}))
     page.goto(base_url + 'declarations/#form')
     page.wait_for_selector('.meeting-card')
-    cards = page.locator('.meeting-card')
-    assert cards.count() == 2
+    cards = page.locator('.meeting-card:not([hidden])')
+    assert cards.count() == 2  # η ΕΝΩΣΙΣ (με τον ΜΔ αυτοπροσώπως) δεν εμφανίζεται για δήλωση
+    assert 'ΕΝΩΣΙΣ' not in page.locator('#meetings-list').inner_text() and 'αυτοπροσώπως ο Μέγας Διδάσκαλος' in page.inner_text('#gm-self-note')
     first = cards.nth(0).inner_text()
     assert 'ΑΡΧΑΙΡΕΣΙΕΣ' in first and 'ΔΟΚΙΜΗ' in first
     assert 'ΕΓΚΑΤΑΣΤΑΣΗ ΣΕΒ' in cards.nth(1).inner_text()
@@ -3263,3 +3272,15 @@ def test_namedays_bulk_send_selected(app):
     assert app.page.inner_text('#gN') == '0'
     app.wait_saved()
     assert app.page.evaluate("async () => (await import('./core/store.js')).db.all('greetings_log').length") == 2
+    # Αναφορά σε ΜΔ: τίτλος με την εορτή και τα μέλη· ερώτηση για τη στήλη «Ώρα»
+    app.go('/namedays/report')
+    t = app.text('.print-area')
+    assert 'Αναφορά αποστολής ευχών από ΜΔ · για την Ονομαστική εορτή ' in t and '[Νικόλαος' in t and '- 2 μέλη' in t, t[:400]
+    app.page.evaluate('window.print = () => {}')
+    app.page.click('[data-act=print]')
+    app.page.locator('dialog.rptask button[value=hide]').click()
+    app.page.wait_for_selector('.print-area.no-time')
+    assert not app.page.locator('.print-area th.c-time').is_visible()
+    app.page.click('[data-act=print]')
+    app.page.locator('dialog.rptask button[value=show]').click()
+    app.page.wait_for_selector('.print-area:not(.no-time)')
