@@ -949,6 +949,9 @@
       const wrap = document.createElement("div");
       const sel = document.createElement("select");
       sel.className = "decide-select" + (current ? " done" : "");
+      // Δικός του τίτλος (Στοά + ημερομηνία): αλλιώς το κινητό (Samsung/Android) δείχνει στο παράθυρο επιλογής
+      // την επικεφαλίδα της στήλης «Απόφαση Μ.Δ. — Εκπρόσωπος» σαν μήνυμα
+      sel.setAttribute("aria-label", `Εκπρόσωπος — ${m.name || ""} Αρ. ${m.no || ""} · ${m.date || ""}`);
       const add = (parent, value, text) => { const o = document.createElement("option"); o.value = value; o.textContent = text; parent.appendChild(o); return o; };
       add(sel, "", "— Χωρίς απόφαση —");
       add(sel, GM_SELF, "★ " + GM_SELF);
