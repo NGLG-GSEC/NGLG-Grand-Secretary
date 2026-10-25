@@ -1761,7 +1761,7 @@ def test_rep_title_from_epeteirida_and_rep_label(app):
         const r = tx.insert('reps', { surname: 'Χατζηδοκιμίου', name: 'Νικόλαος', office: 'Αναπληρωτής Μέγας Γραμματεύς', rep_rank: 'Σεβάσμιος Αδ.', member_id: m.id });
         tx.insert('visits', { visit_date: '2099-10-09', lodge: 'ΔΙΩΝΗ', lodge_number: '32', location: '', province: 'ΕπΜΣτ. Πελοποννήσου & Δυτικής Ελλάδας', rep_id: r.id, notes: '' }); }); }""")
     app.go('/visits')
-    assert app.page.locator('.vcard label.vreplabel').first.inner_text().strip() == 'ΕΚΠΡΟΣΩΠΟΣ'
+    assert app.page.locator('.vcard label.vreplabel:not(.vkindlabel)').first.inner_text().strip() == 'ΕΚΠΡΟΣΩΠΟΣ'
     app.page.locator('.vcard a:has-text("📄 Επιστολή")').first.click()
     app.page.wait_for_selector('#lf')
     assert 'Λίαν Σεβάσμιος Αδ. Νικόλαος Χατζηδοκιμίου, Αναπληρωτής Μέγας Γραμματεύς' in app.page.input_value('[name=body]')
@@ -3154,9 +3154,9 @@ def test_visit_kind_field_default_and_inline_change(app):
     assert sel.input_value() == 'ΕΓΚΑΤΑΣΤΑΣΗ ΣΕΒ'
     assert app.page.eval_on_selector('.vkindsel', 'e => [...e.options].map((o) => o.value)') == ['ΕΓΚΑΤΑΣΤΑΣΗ ΣΕΒ', 'ΑΡΧΑΙΡΕΣΙΕΣ', 'ΟΜΙΛΙΑ', 'ΑΛΛΟ']
     sel.select_option('ΑΡΧΑΙΡΕΣΙΕΣ')
-    app.page.wait_for_function("async () => (await import('./core/store.js')).db.all('visits')[0].kind === 'ΑΡΧΑΙΡΕΣΙΕΣ'")
+    app.page.wait_for_selector('text=ΑΚΡΟΠΟΛΙΣ: ΑΡΧΑΙΡΕΣΙΕΣ')  # αποθηκεύτηκε
     ms = app.page.evaluate("async () => (await import('./modules/visits.js')).publicMeetings('2099-10-30')")
-    assert ms[0]['note'] == 'ΑΡΧΑΙΡΕΣΙΕΣ', ms
+    assert ms and ms[0].get('note') == 'ΑΡΧΑΙΡΕΣΙΕΣ', (ms, app.page.evaluate("async () => (await import('./core/store.js')).db.all('visits')"))
     vid = app.page.evaluate("async () => (await import('./core/store.js')).db.all('visits')[0].id")
     app.go(f'/visits/edit/{vid}')
     assert app.page.input_value('.vkindform') == 'ΑΡΧΑΙΡΕΣΙΕΣ'
