@@ -288,7 +288,7 @@ function greetPage() {
   if (!items.length) return '<h1>Δεν επιλέχθηκαν εορτάζοντες</h1><p><a href="#/namedays">← Εορτολόγιο</a></p>';
   items.forEach((it) => (it.rk = rankIdx(it.m)));
   const selfBcc = splitEmails(db.setting('greet_bcc_self')), gmCc = splitEmails(db.setting('gm_email')).filter((e) => EMAIL_RE.test(e));
-  const rows = items.map((it, i) => [`<b>${esc(epName(it.m).last)} ${esc(epName(it.m).first)}</b><br><small class="muted">${esc(it.label)} · ${esc(dayStr(it.date))}</small>${sent[`${it.m.id}|${it.date}`] ? `<br><span class="vwarn">έλαβε ήδη ευχές ${esc(fmtDate(sent[`${it.m.id}|${it.date}`]))}</span>` : ''}`,
+  const rows = items.map((it, i) => [`<input type="checkbox" class="gsel" data-i="${i}" style="width:auto"${it.email ? (sent[`${it.m.id}|${it.date}`] ? '' : ' checked') : ' disabled'} aria-label="Επιλογή για μαζική αποστολή">`, `<b>${esc(epName(it.m).last)} ${esc(epName(it.m).first)}</b><br><small class="muted">${esc(it.label)} · ${esc(dayStr(it.date))}</small>${sent[`${it.m.id}|${it.date}`] ? `<br><span class="vwarn">έλαβε ήδη ευχές ${esc(fmtDate(sent[`${it.m.id}|${it.date}`]))}</span>` : ''}`,
     `${esc(it.email)}<br><small class="muted">Κρυφή κοιν. Επαρχίας: ${esc(bccProvince(it.m, it.email).join(', ') || '—')}</small>`,
     `<select data-rk="${i}" style="width:auto">${RK.map((x, j) => `<option value="${j - 1}"${it.rk === j - 1 ? ' selected' : ''}>${x}</option>`).join('')}</select>`,
     `<div class="toolbar"><button type="button" class="btn small" data-act="preview" data-i="${i}">👁 Προεπισκόπηση</button><button type="button" class="btn small primary" data-act="send" data-i="${i}"${it.email ? '' : ' disabled title="Χωρίς email"'}>📤 Αποστολή τώρα από ${esc(senderFor('general'))}</button>
@@ -303,7 +303,12 @@ function greetPage() {
 <label class="chk"><input type="checkbox" id="gProv" checked> Κρυφή κοινοποίηση στη Γραμματεία και στον ΕπΜΔ της Επαρχίας</label>
 <label class="chk"><input type="checkbox" id="gSelf"${selfBcc.length ? ' checked' : ' disabled'}> Κρυφή κοινοποίηση και σε: ${esc(selfBcc.join(', ') || '— (ορίζεται στις Ρυθμίσεις)')}</label></div>
 <div class="toolbar"><button type="button" class="btn" data-act="saveTpl">Αποθήκευση κειμένου ως προτύπου</button><button type="button" class="btn" data-act="resetTpl">Επαναφορά αρχικού κειμένου</button></div></div>
-<h3>Παραλήπτες (${items.length})</h3>${table(['Εορτάζων', 'Email', 'Προσφώνηση', 'Ενέργειες'], rows)}<h3 id="sampleTitle">Προεπισκόπηση: όπως θα φτάσει${items.length ? ` στον ${esc(epName(items[0].m).first)} ${esc(epName(items[0].m).last)}` : ''}</h3><div class="card" id="sample"></div>`,
+<h3>Παραλήπτες (${items.length})</h3>
+<div class="card bulk-send"><div class="toolbar"><label class="chk"><input type="checkbox" id="gAll" style="width:auto"> Επιλογή όλων</label>
+<button type="button" class="btn primary big" data-act="sendAll">📤 Αποστολή στους επιλεγμένους (<span id="gN">0</span>)</button></div>
+<small class="muted">Κάθε εορτάζων παίρνει το <b>δικό του προσωπικό</b> email (με τις κοινοποιήσεις του), ένα-ένα αυτόματα από ${esc(senderFor('general'))}, με μία μόνο επιβεβαίωση. Όσοι έλαβαν ήδη ευχές για την ίδια εορτή δεν επιλέγονται αρχικά.</small>
+<div id="gProg" class="muted" style="margin-top:6px"></div></div>
+${table(['✓', 'Εορτάζων', 'Email', 'Προσφώνηση', 'Ενέργειες'], rows)}<h3 id="sampleTitle">Προεπισκόπηση: όπως θα φτάσει${items.length ? ` στον ${esc(epName(items[0].m).first)} ${esc(epName(items[0].m).last)}` : ''}</h3><div class="card" id="sample"></div>`,
     mount(el) {
       const S = el.querySelector('#gSubj'), B = el.querySelector('#gBody');
       const rk = (i) => Number(el.querySelector(`[data-rk="${i}"]`).value);
@@ -323,6 +328,13 @@ function greetPage() {
       const logSent = async (i) => { const it = items[i], m = msg(i), nm = epName(it.m);
         await db.save(`Ευχές: ${nm.last} ${nm.first}`, (tx) => tx.insert('greetings_log', { member_id: it.m.id, registry_no: it.m.registry_no ?? null, feast_date: it.date, feast: it.label, name: `${nm.last} ${nm.first}`, email: it.email, subject: m.subject, bcc: [...m.cc, ...m.bcc].join(', '), sent_on: today(), sent_at: new Date().toISOString().slice(0, 19), source: 'app' }));
         el.querySelector(`[data-res="${i}"]`).innerHTML = '<span class="vok">✓ Στάλθηκε και καταχωρίστηκε</span>'; };
+      const outOf = (m) => ({ to: m.to, cc: m.cc.join(', '), bcc: m.bcc.join(', '), subject: m.subject, body: m.text, htmlBody: `<!doctype html><html><body style="margin:0;padding:16px 8px;background:#fff">${m.html}</body></html>` });
+      const boxes = () => [...el.querySelectorAll('.gsel:not(:disabled)')];
+      const picked = () => boxes().filter((c) => c.checked).map((c) => Number(c.dataset.i));
+      const count = () => { const n = picked().length; el.querySelector('#gN').textContent = n; el.querySelector('#gAll').checked = n > 0 && n === boxes().length; };
+      el.querySelectorAll('.gsel').forEach((c) => c.addEventListener('change', count));
+      el.querySelector('#gAll').addEventListener('change', (e) => { boxes().forEach((c) => (c.checked = e.target.checked)); count(); });
+      count();
       sample(); B.addEventListener('input', sample); el.querySelectorAll('[data-rk], #gGm, #gProv, #gSelf').forEach((s) => s.addEventListener('change', sample));
       bind(el, {
         preview(d) { // παράθυρο πάνω από τη σελίδα με το email ακριβώς όπως θα φτάσει
@@ -340,13 +352,40 @@ function greetPage() {
           const { driveReady } = await import('../core/drive.js');
           if (!driveReady()) { res.innerHTML = '<span class="warn">Για άμεση αποστολή χρειάζεται το Google Client ID (Ρυθμίσεις → Google). Μέχρι τότε: «ή χειροκίνητα στο Gmail».</span>'; return; }
           const { sendNow, confirmSend } = await import('../core/gmail.js');
-          const out = { to: m.to, cc: m.cc.join(', '), bcc: m.bcc.join(', '), subject: m.subject, body: m.text, htmlBody: `<!doctype html><html><body style="margin:0;padding:16px 8px;background:#fff">${m.html}</body></html>` };
+          const out = outOf(m);
           if (!await confirmSend({ from: senderFor('general'), msg: out })) return;
           res.innerHTML = '⏳ Αποστολή…';
           try {
             await sendNow(out, [], 'general');
             await logSent(i);
           } catch (e) { res.innerHTML = `<span class="warn">${esc(e.message || e)}</span>`; }
+        },
+        // Μαζική αποστολή: ένα προσωπικό email ανά επιλεγμένο εορτάζοντα, διαδοχικά, με μία επιβεβαίωση
+        async sendAll(d, b) {
+          const sel = picked();
+          if (!sel.length) { toast('Επιλέξτε τουλάχιστον έναν εορτάζοντα.', 'error'); return; }
+          const { driveReady } = await import('../core/drive.js');
+          const prog = el.querySelector('#gProg');
+          if (!driveReady()) { prog.innerHTML = '<span class="warn">Για αυτόματη αποστολή χρειάζεται το Google Client ID (Ρυθμίσεις → Google).</span>'; return; }
+          const { sendNow, confirmSend } = await import('../core/gmail.js');
+          cur = sel[0]; sample();
+          if (!await confirmSend({ from: senderFor('general'), msg: outOf(msg(sel[0])), note: `Θα σταλούν αυτόματα ${sel.length} email, ένα σε κάθε επιλεγμένο εορτάζοντα με το δικό του όνομα και προσφώνηση: ${sel.map((i) => `${epName(items[i].m).last} ${epName(items[i].m).first}`).join(', ')}. Παραπάνω το πρώτο από αυτά.` })) return;
+          b.disabled = true; let ok = 0; const bad = [];
+          for (const [n, i] of sel.entries()) {
+            const res = el.querySelector(`[data-res="${i}"]`), nm = epName(items[i].m);
+            prog.textContent = `⏳ Αποστολή ${n + 1} από ${sel.length}: ${nm.last} ${nm.first}…`; res.innerHTML = '⏳ Αποστολή…';
+            try {
+              await sendNow(outOf(msg(i)), [], 'general'); await logSent(i); ok++;
+              const c = el.querySelector(`.gsel[data-i="${i}"]`); if (c) c.checked = false;
+            } catch (e) {
+              res.innerHTML = `<span class="warn">${esc(e.message || e)}</span>`; bad.push(`${nm.last} ${nm.first}`);
+              if (/λογαριασμός Google|401|403/.test(String(e.message || e))) break; // λάθος λογαριασμός/δικαιώματα: σταματά αμέσως
+            }
+            await new Promise((r) => setTimeout(r, 400));
+          }
+          b.disabled = false; count();
+          prog.innerHTML = `<span class="${bad.length ? 'warn' : 'vok'}">✓ Στάλθηκαν ${ok} από ${sel.length}${bad.length ? ` · δεν στάλθηκαν: ${esc(bad.join(', '))}` : ''}</span>`;
+          toast(`Στάλθηκαν ${ok} ευχές.`);
         },
         async open(d) { const m = msg(Number(d.i)); await copyHtml(m.html, 'Εθνική Μεγάλη Στοά της Ελλάδος\n\n' + m.text); window.open(gmailUrl({ to: m.to, cc: m.cc, bcc: m.bcc, subject: m.subject, body: '', kind: 'general' }), '_blank', 'noopener'); toast('Αντιγράφηκε — επικολλήστε το στο Gmail.'); },
         async done(d) { await logSent(Number(d.i)); },

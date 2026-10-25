@@ -3229,3 +3229,37 @@ def test_project_report_asks_language_and_lodges_column(app):
     app.page.locator('dialog.rptask button[value=cancel]').click()
     app.page.wait_for_selector('dialog.rptask', state='detached')
     assert app.page.inner_text('#pa') == ''
+
+
+def test_namedays_bulk_send_selected(app):
+    # Ευχές: επιλογή εορταζόντων και αυτόματη αποστολή σε όλους με μία επιβεβαίωση (ένα προσωπικό email ο καθένας)
+    app.connect_local()
+    add_member(app, surname='Πρώτος', first='Νικόλαος', email='a@example.com')
+    add_member(app, surname='Δεύτερος', first='Νικόλαος', email='b@example.com', mobile='6944000002')
+    y = date.today().year
+    app.go(f'/namedays?frm={y}-01-01&to={y}-12-31')
+    for c in app.page.locator('input[name=k]').all():
+        c.check()
+    app.click('✉ Ευχές στους επιλεγμένους')
+    app.page.wait_for_selector('#gBody')
+    assert app.page.inner_text('#gN') == '2'
+    sent = []
+
+    def gmail(route, request):
+        if request.url.endswith('/profile'):
+            return route.fulfill(json={'emailAddress': 'info@nglgreece.gr'})
+        sent.append(json.loads(request.post_data or '{}'))
+        return route.fulfill(json={'id': f'm-{len(sent)}'})
+    app.page.route('https://accounts.google.com/gsi/client', lambda r: r.fulfill(body=GSI_FAKE, content_type='text/javascript'))
+    app.page.route('https://gmail.googleapis.com/**', gmail)
+    app.page.evaluate("async () => { const {db} = await import('./core/store.js'); await db.save('x', (tx) => tx.setting('google_client_id', 'test.apps.googleusercontent.com')); }")
+    app.page.click('[data-act=sendAll]')
+    app.page.wait_for_selector('.send-preview')
+    assert 'Θα σταλούν αυτόματα 2 email' in app.page.inner_text('.send-preview')
+    app.page.click('.send-preview [data-yes]')
+    app.page.wait_for_selector('text=Στάλθηκαν 2 από 2', timeout=30000)
+    tos = sorted(base64.urlsafe_b64decode(s['raw'] + '=' * (-len(s['raw']) % 4)).decode().split('To: ')[1].split('\r\n')[0] for s in sent)
+    assert tos == ['a@example.com', 'b@example.com']
+    assert app.page.inner_text('#gN') == '0'
+    app.wait_saved()
+    assert app.page.evaluate("async () => (await import('./core/store.js')).db.all('greetings_log').length") == 2
