@@ -553,3 +553,10 @@ input[type=file]{max-width:100%;min-width:0}
 @media screen and (max-width:600px){.gd-list{grid-template-columns:1fr}}
 .decltabs .btn.gm-red{background:#a3111b;color:#f1d58f;border:2px solid #c5a059;font-weight:700}.decltabs .btn.gm-red.primary,.decltabs .btn.gm-red:hover{background:#7d0b13;color:#ffe3a0}
 .vkindsel{width:100%;margin:0 0 6px;font-size:.88rem;padding:3px 6px;min-height:32px;font-weight:600;color:#0b2f63}
+/* Ερώτηση πριν από την Αναφορά PDF πρότζεκτ (γλώσσα / στήλη Στοές) */
+dialog.rptask { max-width: min(520px, calc(100vw - 32px)); border: 1px solid var(--line, #d6dbe4); border-radius: 12px; padding: 18px; }
+dialog.rptask::backdrop { background: rgba(11, 31, 58, .45); }
+dialog.rptask fieldset { border: 1px solid #e3e7ee; border-radius: 8px; margin: 0 0 12px; padding: 8px 12px; }
+dialog.rptask legend { font-weight: 700; padding: 0 4px; }
+dialog.rptask label { display: flex; gap: 8px; align-items: flex-start; margin: 6px 0; font-weight: 400; }
+dialog.rptask input[type=radio] { width: auto; margin-top: 3px; }

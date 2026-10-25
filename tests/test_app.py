@@ -3182,3 +3182,35 @@ def test_declarations_unified_from_app_visits(browser, base_url):
     page.wait_for_selector('.meeting-decision')
     assert 'Δοκιμαστής Εκπρόσωπος' in cards.nth(0).inner_text()
     page.close()
+
+
+def test_project_report_asks_language_and_lodges_column(app):
+    # «Αναφορά (PDF)»: ερώτηση για Αγγλικά (κείμενα + ονόματα με λατινικούς) και για τη στήλη «Στοές»
+    app.connect_local()
+    add_member(app, surname='Παπαδόπουλος', first='Γεώργιος')
+    app.go('/projects/new').fill(title='Ίδρυση Σ.Σ. «Δοκιμή»')
+    app.click('Δημιουργία')
+    app.page.wait_for_url('**/#/projects/1')
+    app.pick('#mPick', 'Παπαδ')
+    app.page.wait_for_selector('[data-act=rmMember]')
+    app.page.evaluate('window.print = () => {}')
+    app.click('⬇ Αναφορά (PDF)')
+    dlg = app.page.locator('dialog.rptask')
+    dlg.locator('input[value=en]').check()
+    dlg.locator('input[value=hide]').check()
+    dlg.locator('button[value=ok]').click()
+    app.page.wait_for_function("document.querySelector('#pa').innerText.includes('Members')")
+    pa = app.page.inner_text('#pa')
+    assert 'National Grand Lodge of Greece' in pa and 'Papadopoulos Georgios' in pa and 'Full name' in pa
+    assert 'Idrysi S.S. «Dokimi»' in pa and 'Παπαδόπουλος' not in pa and 'Lodges\tMobile' not in pa and 'Μέλη' not in pa
+    # Ελληνικά, με τη στήλη Στοές
+    app.click('⬇ Αναφορά (PDF)')
+    app.page.locator('dialog.rptask button[value=ok]').click()
+    app.page.wait_for_function("document.querySelector('#pa').innerText.includes('Μέλη')")
+    pa = app.page.inner_text('#pa')
+    assert 'Παπαδόπουλος Γεώργιος' in pa and 'Στοές' in pa and 'ΠΑΡΘΕΝΩΝ' in pa
+    # Άκυρο: καμία αναφορά
+    app.page.evaluate("document.querySelector('#pa').innerHTML = ''")
+    app.click('⬇ Αναφορά (PDF)')
+    app.page.locator('dialog.rptask button[value=cancel]').click()
+    assert app.page.inner_text('#pa') == '' and app.page.locator('dialog.rptask').count() == 0

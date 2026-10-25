@@ -154,6 +154,13 @@ export function printPaper(fileName) {
 }
 
 // Αναφορά/τεύχος πολλών σελίδων (π.χ. Επετηρίδα, αναφορές) με επίσημη κεφαλίδα.
+// Η ίδια αναφορά στα Αγγλικά (κεφαλίδα στα Αγγλικά· τα ελληνικά ονόματα με λατινικούς χαρακτήρες από τον καλούντα)
+export function reportPaperEn(title, subtitle, inner, { grandMaster = '' } = {}) {
+  const head = `<div class="head"><img src="${IMG.emblem}" alt=""><h1>National Grand Lodge of Greece</h1><div class="gold">Founded ${esc(db.setting('founded_year'))}</div>
+<div>Grand Master</div><div>${esc(grandMaster)}</div><div class="rule"></div></div>`;
+  return `<article class="paper report" lang="en">${head}<div class="dec-title">${esc(title)}</div>${subtitle ? `<div class="dec-date">${esc(subtitle)}</div>` : ''}${inner}</article>`;
+}
+
 export function reportPaper(title, subtitle, inner, { signatures = false } = {}) {
   const sig = signatures ? `<div class="decsig"><div><div class="t">ΜΕΓΑΣ ΓΡΑΜΜΑΤΕΑΣ</div><img class="signature-img" src="${IMG.signature}" alt=""><div class="signature-line"></div><b>Δημήτριος Σκιαδόπουλος</b></div>
 <div><img class="seal-img" src="${IMG.seal}" alt=""></div><div><div class="t">Ο ΜΕΓΑΣ ΔΙΔΑΣΚΑΛΟΣ</div><img class="signature-img" src="${IMG.grandMaster}" alt=""><div class="signature-line"></div><b>Ιωάννης Μπενετάτος</b></div></div>` : '';

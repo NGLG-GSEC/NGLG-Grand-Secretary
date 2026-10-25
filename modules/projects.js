@@ -3,9 +3,10 @@
 import { db } from '../core/store.js';
 import { module, onSubmit, go, flash, bind, confirmDo, table, toast } from '../core/app.js';
 import { esc, fold, today, fmtDate, parseIso, sortBy } from '../core/util.js';
-import { reportPaper, printPaper } from '../core/paper.js';
+import { reportPaper, reportPaperEn, printPaper } from '../core/paper.js';
 import { attachPicker, memberItems, noContact, NO_CONTACT } from '../core/pickers.js';
 import { lodgesByMember, memberLodgesLine } from './members.js';
+import { greeklish } from './diploma.js';
 
 export const TYPES = { lodge: 'Ίδρυση νέας Στοάς', body: 'Ίδρυση νέου Σώματος', other: 'Άλλο έργο' };
 export const STATUSES = { plan: 'Σχεδιασμός', active: 'Σε εξέλιξη', hold: 'Σε αναμονή', done: 'Ολοκληρώθηκε' };
@@ -21,6 +22,41 @@ function due(p) {
   if (d < 0) return `Εκπρόθεσμο κατά ${-d} ${d === -1 ? 'ημέρα' : 'ημέρες'}`;
   return d === 0 ? 'Ο στόχος είναι σήμερα' : `${d} ${d === 1 ? 'ημέρα' : 'ημέρες'} έως τον στόχο`;
 }
+// Αναφορά στα Αγγλικά: σταθερά κείμενα στα Αγγλικά, ονόματα (μέλη, υπεύθυνοι, επαφές, Στοές) με λατινικούς χαρακτήρες
+const TYPES_EN = { lodge: 'Founding of a new Lodge', body: 'Founding of a new Body', other: 'Other project' };
+const STATUSES_EN = { plan: 'Planning', active: 'In progress', hold: 'On hold', done: 'Completed' };
+const titleCase = (s) => String(s || '').toLowerCase().replace(/(^|[^\p{L}])(\p{L})/gu, (m, a, b) => a + b.toUpperCase());
+export const latinName = (s) => (/[\u0370-\u03ff\u1f00-\u1fff]/.test(s || '') ? titleCase(greeklish(s)) : String(s || ''));
+// «Σεβτ. Αδ. Ιωάννης Μπενετάτος» → «M.W. Bro. Ioannis Benetatos»
+const gmEn = () => { const n = String(db.setting('grand_master_name') || '').replace(/^.*?Αδ(ελφός|\.)\s*/, ''); return n ? `M.W. Bro. ${latinName(n)}` : ''; };
+function dueEn(p) {
+  if (p.status === 'done') return 'Completed';
+  const d = daysTo(p);
+  if (d === null) return 'No target date';
+  if (d < 0) return `Overdue by ${-d} day${d === -1 ? '' : 's'}`;
+  return d === 0 ? 'Target date is today' : `${d} day${d === 1 ? '' : 's'} to target`;
+}
+// Ερώτηση πριν από την Αναφορά PDF: γλώσσα και στήλη «Στοές»
+function askReport() {
+  return new Promise((resolve) => {
+    const dlg = document.createElement('dialog');
+    dlg.className = 'card rptask';
+    dlg.innerHTML = `<form method="dialog"><h3 style="margin-top:0">Αναφορά PDF</h3>
+<fieldset><legend>Γλώσσα εγγράφου</legend><label><input type="radio" name="lang" value="el" checked> Ελληνικά</label>
+<label><input type="radio" name="lang" value="en"> English — όλα τα κείμενα στα Αγγλικά και τα ελληνικά ονόματα με λατινικούς χαρακτήρες</label></fieldset>
+<fieldset><legend>Στήλη «Στοές» στη λίστα Μελών</legend><label><input type="radio" name="lodges" value="show" checked> Εμφάνιση</label>
+<label><input type="radio" name="lodges" value="hide"> Απόκρυψη</label></fieldset>
+<div class="toolbar"><button class="btn primary" value="ok">⬇ Δημιουργία PDF</button><button class="btn" value="cancel">Άκυρο</button></div></form>`;
+    document.body.appendChild(dlg);
+    dlg.addEventListener('close', () => {
+      const f = dlg.querySelector('form');
+      resolve(dlg.returnValue === 'ok' ? { en: f.lang.value === 'en', lodges: f.lodges.value === 'show' } : null);
+      dlg.remove();
+    });
+    dlg.showModal();
+  });
+}
+
 const unitLabel = (p) => (p.ptype === 'other' ? 'Ομάδες εργασίας' : 'Στοές');
 const initials = (t) => String(t || '').split(/\s+/).filter((w) => /\p{L}/u.test(w[0] || '')).map((w) => w[0].toUpperCase()).join('').slice(0, 3) || '?';
 const of = (t, pid) => db.all(t).filter((x) => x.project_id === pid);
@@ -195,18 +231,28 @@ ${logs.length ? table(['Ημερομηνία', 'Καταχώριση', 'Ενέρ
           }); flash('Το πρότζεκτ διαγράφηκε.'); go('/projects');
         },
         async report() {
-          const pa = el.querySelector('#pa'), lead = (id) => { const m = db.get('member_registry', id); return m ? [`${m.surname} ${m.first_name}`, noContact(m) ? NO_CONTACT : [m.mobile, m.email].filter(Boolean).join(' · ')] : ['—', '']; };
+          const opt = await askReport(); if (!opt) return;
+          const en = opt.en, N = en ? latinName : (x) => x, L = (gr, eng) => (en ? eng : gr);
+          const pa = el.querySelector('#pa'), lead = (id) => { const m = db.get('member_registry', id); return m ? [N(`${m.surname} ${m.first_name}`), noContact(m) ? L(NO_CONTACT, 'No contact') : [m.mobile, m.email].filter(Boolean).join(' · ')] : ['—', '']; };
           const t = (h, rows) => `<h3>${h}</h3><table><thead><tr>${rows[0].map((x) => `<th>${esc(x)}</th>`).join('')}</tr></thead><tbody>${rows.slice(1).map((r) => `<tr>${r.map((c) => `<td style="white-space:pre-wrap">${esc(c ?? '')}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
-          let inner = `<p style="text-align:center">${esc(`${TYPES[p.ptype] || ''} · ${STATUSES[p.status] || ''} · Έναρξη ${fmtDate(p.start_date) || '—'} · Στόχος ${fmtDate(p.target_date) || '—'} · ${due(p)}`)}</p>`;
+          const kind = (f) => (f.kind === 'link' ? f.url : f.kind === 'pdf' ? 'PDF' : L('Φωτογραφία', 'Photo'));
+          let inner = `<p style="text-align:center">${esc(en
+            ? `${TYPES_EN[p.ptype] || ''} · ${STATUSES_EN[p.status] || ''} · Start ${fmtDate(p.start_date) || '—'} · Target ${fmtDate(p.target_date) || '—'} · ${dueEn(p)}`
+            : `${TYPES[p.ptype] || ''} · ${STATUSES[p.status] || ''} · Έναρξη ${fmtDate(p.start_date) || '—'} · Στόχος ${fmtDate(p.target_date) || '—'} · ${due(p)}`)}</p>`;
           if (p.cover_file) inner += `<p style="text-align:center"><img data-file="${p.cover_file}" style="max-width:70mm;max-height:50mm" alt=""></p>`;
-          if (p.description) inner += `<h3>Περιγραφή</h3><p style="white-space:pre-wrap">${esc(p.description)}</p>`;
-          if (units.length) inner += t(unitLabel(p), [['Όνομα', 'Υπεύθυνος', 'Επικοινωνία', 'Σημειώσεις'], ...units.map((x) => [x.name, ...lead(x.leader_member_id), x.notes])]);
-          if (members.length) inner += t(`Μέλη (${members.length})`, [['Ονοματεπώνυμο', 'Στοές', 'Κινητό', 'Email'], ...members.map((m) => [`${m.surname} ${m.first_name}`, memberLodgesLine(byM[m.id]), m.mobile, m.email])]);
-          if (contacts.length) inner += t('Επαφές & συνεργάτες', [['Ονοματεπώνυμο', 'Ιδιότητα', 'Τηλέφωνο', 'Email', 'Σημειώσεις'], ...contacts.map((x) => [x.name, x.role, x.phone, x.email, x.notes])]);
-          if (files.length) inner += t('Αρχεία & σύνδεσμοι', [['Τίτλος', 'Είδος', 'Ημερομηνία'], ...files.map((f) => [f.name, f.kind === 'link' ? f.url : f.kind === 'pdf' ? 'PDF' : 'Φωτογραφία', fmtDate(f.added_on)])]);
-          if (logs.length) inner += t('Ημερολόγιο εργασιών', [['Ημερομηνία', 'Καταχώριση'], ...logs.map((x) => [fmtDate(x.log_date), x.text])]);
-          pa.innerHTML = reportPaper(p.title, 'Πρότζεκτ Μεγάλου Διδασκάλου', inner);
-          await loadImages(pa); pa.hidden = false; printPaper(`projekt-${p.title}`);
+          if (p.description) inner += `<h3>${L('Περιγραφή', 'Description')}</h3><p style="white-space:pre-wrap">${esc(p.description)}</p>`;
+          if (units.length) inner += t(L(unitLabel(p), p.ptype === 'other' ? 'Working groups' : 'Lodges'), [L(['Όνομα', 'Υπεύθυνος', 'Επικοινωνία', 'Σημειώσεις'], ['Name', 'Responsible', 'Contact', 'Notes']), ...units.map((x) => [N(x.name), ...lead(x.leader_member_id), x.notes])]);
+          if (members.length) {
+            const head = L(['Ονοματεπώνυμο', 'Στοές', 'Κινητό', 'Email'], ['Full name', 'Lodges', 'Mobile', 'Email']);
+            const rows = members.map((m) => [N(`${m.surname} ${m.first_name}`), en ? (byM[m.id] || []).filter((l) => l.lodge_name || l.lodge_number).map((l) => `${latinName(l.lodge_name)} ${l.lodge_number ?? ''}`.trim()).join(', ') : memberLodgesLine(byM[m.id]), m.mobile, m.email]);
+            const cut = (r) => (opt.lodges ? r : r.filter((_, i) => i !== 1));
+            inner += t(`${L('Μέλη', 'Members')} (${members.length})`, [cut(head), ...rows.map(cut)]);
+          }
+          if (contacts.length) inner += t(L('Επαφές & συνεργάτες', 'Contacts & associates'), [L(['Ονοματεπώνυμο', 'Ιδιότητα', 'Τηλέφωνο', 'Email', 'Σημειώσεις'], ['Full name', 'Role', 'Phone', 'Email', 'Notes']), ...contacts.map((x) => [N(x.name), x.role, x.phone, x.email, x.notes])]);
+          if (files.length) inner += t(L('Αρχεία & σύνδεσμοι', 'Files & links'), [L(['Τίτλος', 'Είδος', 'Ημερομηνία'], ['Title', 'Type', 'Date']), ...files.map((f) => [f.name, kind(f), fmtDate(f.added_on)])]);
+          if (logs.length) inner += t(L('Ημερολόγιο εργασιών', 'Work log'), [L(['Ημερομηνία', 'Καταχώριση'], ['Date', 'Entry']), ...logs.map((x) => [fmtDate(x.log_date), x.text])]);
+          pa.innerHTML = en ? reportPaperEn(p.title, 'Grand Master\'s Project', inner, { grandMaster: gmEn() }) : reportPaper(p.title, 'Πρότζεκτ Μεγάλου Διδασκάλου', inner);
+          await loadImages(pa); pa.hidden = false; printPaper(`projekt-${p.title}${opt.en ? '-EN' : ''}`);
           window.addEventListener('afterprint', () => (pa.hidden = true), { once: true });
         },
       });
