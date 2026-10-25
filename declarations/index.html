@@ -446,7 +446,8 @@
       border-color: var(--gold-dark);
       color: #fff;
     }
-    .officer-name.first { font-weight: 700; }
+    /* Δηλώσεις Μεγάλων Αξιωματικών: έντονα κόκκινα 16px (οθόνη και εκτύπωση) */
+    .officer-name, .officer-name.first { font-weight: 700; color: #c62828; font-size: 16px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .typed-note { color: #64748b; font-size: 11px; font-style: italic; }
     /* Απόφαση του Μεγάλου Διδασκάλου */
     .decide-select { width: 100%; min-width: 180px; padding: 8px; font-size: 13px; border: 2px solid #c9a64a; border-radius: 6px; background: #fffaf0; }

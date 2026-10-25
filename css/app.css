@@ -321,6 +321,7 @@ input[type=file]{max-width:100%;min-width:0}
 .archdrop-menu a{display:block;padding:11px 16px;color:#0b2f63;font-weight:700;text-decoration:none;white-space:nowrap}
 .archdrop-menu a:hover{background:#eef3fa}
 /* Αναφορά εκπροσώπησης ΜΔ (επίσημη επιστολή με πίνακα) */
+.top nav>a[href="#/declarations?view=report"]{background:#a3111b;color:#f1d58f;border:2px solid #c5a059;border-radius:8px;padding:8px 12px;font-weight:700}.top nav>a[href="#/declarations?view=report"]:hover{background:#7d0b13;color:#ffe3a0}
 .top nav>a[href="#/visits/gm-programme"]{background:#b18a43;color:#fff;border-radius:8px;padding:8px 12px;font-weight:700}
 .paper.gmprog .gmp-office{text-align:center;margin:-4mm 0 4mm;color:#1d2f5e;font-weight:700;letter-spacing:.18em;font-size:10.5pt}
 .paper.gmprog .gmp-meta{text-align:right;font-size:10.5pt;color:#4a5670}

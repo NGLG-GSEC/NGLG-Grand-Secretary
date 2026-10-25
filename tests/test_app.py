@@ -2338,6 +2338,11 @@ def test_declarations_single_page_report_needs_code(app):
     assert src().endswith('?embed=1#form') and app.page.locator('.decltabs button').count() == 3
     app.page.click('.decltabs [data-view=report]')
     assert src().endswith('?embed=1#report')
+    # κουμπί «🔒 Ενημέρωση ΜΔ» στο πάνω μενού → κατευθείαν η καρτέλα της Ενημέρωσης ΜΔ
+    app.go('/')
+    app.page.locator('.top nav a[href="#/declarations?view=report"]').click()
+    app.page.wait_for_selector('#declFrame')
+    assert src().endswith('?embed=1#report') and 'primary' in app.page.get_attribute('.decltabs [data-view=report]', 'class')
     app.go('/settings')
     assert 'Κωδικός αναφοράς' not in app.text()
 def test_declarations_constitution_helper_and_decree_signature(app):

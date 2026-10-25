@@ -17,13 +17,15 @@ const srcOf = (v) => `${DECLARATIONS_URL}?embed=1#${v}`;
 const frameHtml = (id, title, src) => `<iframe id="${id}" class="embed-frame" title="${title}" src="${src}"></iframe>`;
 
 function declarationsPage({ query }) {
+  // «?view=report» (π.χ. κουμπί «🔒 Ενημέρωση ΜΔ» του πάνω μενού) ανοίγει κατευθείαν την καρτέλα
+  const start = VIEWS.some(([v]) => v === query.view) ? query.view : 'form';
   return {
     title: 'Δηλώσεις Διάθεσης Μ. Αξιωματικών',
     html: `${visitsFlow(2)}<h1>Δηλώσεις Διάθεσης Μεγάλων Αξιωματικών</h1>
 <p class="muted">Εκπροσώπηση του Μεγάλου Διδασκάλου σε Εγκαταστάσεις Σεβ. Διδασκάλων: οι αξιωματικοί δηλώνουν και η Γραμματεία ορίζει εκπροσώπους στις <a href="#/visits">Επισκέψεις Στοών</a>.
 Η «Ενημέρωση ΜΔ» (δηλώσεις και αποφάσεις) ανοίγει με τον κωδικό πρόσβασης. <a href="${DECLARATIONS_URL}" target="_blank" rel="noopener">Δημόσια σελίδα ↗</a></p>
-<nav class="decltabs">${VIEWS.map(([v, l]) => `<button type="button" class="btn${v === 'form' ? ' primary' : ''}${v === 'report' ? ' gm-red' : ''}" data-view="${v}">${l}</button>`).join('')}</nav>
-${frameHtml('declFrame', 'Δηλώσεις Διάθεσης Μεγάλων Αξιωματικών', srcOf('form'))}
+<nav class="decltabs">${VIEWS.map(([v, l]) => `<button type="button" class="btn${v === start ? ' primary' : ''}${v === 'report' ? ' gm-red' : ''}" data-view="${v}">${l}</button>`).join('')}</nav>
+${frameHtml('declFrame', 'Δηλώσεις Διάθεσης Μεγάλων Αξιωματικών', srcOf(start))}
 `,
     mount(el) {
       // παλιοί σύνδεσμοι «?view=…» → η μία σελίδα
