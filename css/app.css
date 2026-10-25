@@ -228,7 +228,7 @@ textarea.short{min-height:90px}
 .fitem{border:1px solid #d8deea;border-radius:8px;overflow:hidden;background:#fff}.fthumb{aspect-ratio:4/3;display:flex;align-items:center;justify-content:center;background:#f6efdc;color:#9c7a22;font-weight:bold;font-size:1.3rem;overflow:hidden}
 .fthumb img{width:100%;height:100%;object-fit:cover}.fmeta{padding:6px 8px;font-size:.85rem;overflow-wrap:anywhere}
 .prow{display:grid;grid-template-columns:repeat(5,minmax(0,1fr)) auto;gap:8px;align-items:end;border-bottom:1px solid #eef2f7;padding:6px 0}
-.pmain{display:grid;grid-template-columns:minmax(0,280px) minmax(0,1fr);gap:18px}.pf{display:grid;gap:8px;align-items:center}.pf3{grid-template-columns:1fr 2fr auto}.pfl{grid-template-columns:170px 1fr auto}.pfs{grid-template-columns:2fr 1fr auto}
+.pmain{display:grid;grid-template-columns:minmax(0,280px) minmax(0,1fr);gap:18px}.pf{display:grid;gap:8px;align-items:center}.pf3{grid-template-columns:1fr 2fr auto}.pfl{grid-template-columns:170px 1fr 1fr auto}.pfs{grid-template-columns:2fr 1fr auto}
 input[type=file]{max-width:100%;min-width:0}
 @media screen and (max-width:800px){.prow,.pmain,.pf3,.pfl,.pfs{grid-template-columns:1fr}}
 .toolbar .pill{flex:0 0 auto;align-self:center}
@@ -565,3 +565,4 @@ dialog.rptask input[type=radio] { width: auto; margin-top: 3px; }
 .rpt-photos figure { margin: 0; break-inside: avoid; text-align: center; }
 .rpt-photos img { max-width: 100%; max-height: 55mm; object-fit: contain; border: 1px solid #ddd; }
 .rpt-photos figcaption { font-size: 9pt; color: #555; margin-top: 1mm; }
+.logen{width:100%;min-height:2.4em;font-size:.95em}

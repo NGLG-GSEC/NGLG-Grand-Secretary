@@ -158,8 +158,8 @@ ${sec('Αρχεία &amp; σύνδεσμοι', `<small class="muted">${files.len
 <form id="lf" class="pf pf3" style="margin:8px 0"><input name="name" placeholder="Τίτλος συνδέσμου"><input name="url" placeholder="https://…" required><button class="btn">+ Σύνδεσμος</button></form>
 <div class="files">${files.map((f) => `<div class="fitem"><a class="fthumb" ${f.kind === 'link' ? `href="${esc(f.url)}"` : `href="#" data-open="${f.id}"`} target="_blank" rel="noopener">${f.kind === 'image' ? `<img data-file="${f.id}" alt="">` : f.kind === 'pdf' ? 'PDF' : '🔗'}</a>
 <div class="fmeta"><b>${esc(f.name)}</b><br><span class="muted">${f.kind === 'link' ? esc(String(f.url).replace(/^https?:\/\//, '').slice(0, 40)) : (f.kind === 'pdf' ? 'PDF' : 'Φωτογραφία') + ' · ' + esc(fmtDate(f.added_on))}</span><br><button class="btn small" data-act="rmFile" data-id="${f.id}" style="margin-top:4px">✕ Αφαίρεση</button></div></div>`).join('') || '<p class="muted">Δεν υπάρχουν ακόμη αρχεία ή σύνδεσμοι.</p>'}</div><small class="muted">Εικόνες (JPG, PNG, WEBP, GIF) και PDF έως 20 MB.</small></div>
-${sec('Πληροφορίες &amp; ημερολόγιο εργασιών')}<div class="card"><form id="logf" class="pf pfl"><input type="date" name="log_date" value="${today()}"><input name="text" placeholder="π.χ. Συνάντηση με τα ιδρυτικά μέλη" required><button class="btn primary">Προσθήκη</button></form>
-${logs.length ? table(['Ημερομηνία', 'Καταχώριση', 'Ενέργειες'], logs.map((x) => [`<b>${esc(fmtDate(x.log_date) || '—')}</b>`, `<span style="white-space:pre-wrap">${esc(x.text)}</span>`, `<button class="btn small" data-act="rmLog" data-id="${x.id}">✕</button>`])) : '<p class="muted">Δεν υπάρχουν ακόμη καταχωρίσεις.</p>'}</div></div>
+${sec('Πληροφορίες &amp; ημερολόγιο εργασιών')}<div class="card"><form id="logf" class="pf pfl"><input type="date" name="log_date" value="${today()}"><input name="text" placeholder="π.χ. Συνάντηση με τα ιδρυτικά μέλη" required><input name="text_en" lang="en" placeholder="English (προαιρετικό) — e.g. Meeting with the founding members"><button class="btn primary">Προσθήκη</button></form>
+${logs.length ? table(['Ημερομηνία', 'Καταχώριση', 'English (για την αγγλική Αναφορά)', 'Ενέργειες'], logs.map((x) => [`<b>${esc(fmtDate(x.log_date) || '—')}</b>`, `<span style="white-space:pre-wrap">${esc(x.text)}</span>`, `<textarea class="logen short" data-id="${x.id}" lang="en" rows="2" placeholder="English…">${esc(x.text_en || '')}</textarea>`, `<button class="btn small" data-act="rmLog" data-id="${x.id}">✕</button>`])) : '<p class="muted">Δεν υπάρχουν ακόμη καταχωρίσεις.</p>'}</div></div>
 <div class="print-area" id="pa" hidden></div>`,
     async mount(el) {
       const reload = (msg) => { if (msg) flash(msg); go(`/projects/${pid}`); };
@@ -188,7 +188,13 @@ ${logs.length ? table(['Ημερομηνία', 'Καταχώριση', 'Ενέρ
         let url = d.url.trim(); if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
         await db.save(`Πρότζεκτ «${p.title}»: σύνδεσμος`, (tx) => { tx.insert('project_files', { project_id: pid, kind: 'link', name: d.name.trim() || url.replace(/^https?:\/\//i, ''), url, stored_name: '', content_type: '', size: 0, added_on: today() }); touch(tx); }); reload();
       });
-      onSubmit(el.querySelector('#logf'), async (d) => { await db.save(`Πρότζεκτ «${p.title}»: ημερολόγιο`, (tx) => { tx.insert('project_log', { project_id: pid, log_date: parseIso(d.log_date) ? d.log_date : today(), text: d.text.trim() }); touch(tx); }); reload(); });
+      // Αγγλικό κείμενο υπάρχουσας καταχώρισης: αποθηκεύεται μόλις αλλάξει
+      el.querySelectorAll('.logen').forEach((ta) => ta.addEventListener('change', async () => {
+        const id = +ta.dataset.id, v = ta.value.trim();
+        await db.save(`Πρότζεκτ «${p.title}»: ημερολόγιο (English)`, (tx) => { tx.update('project_log', id, { text_en: v }); touch(tx); });
+        toast('✓ Αποθηκεύτηκε το English');
+      }));
+      onSubmit(el.querySelector('#logf'), async (d) => { await db.save(`Πρότζεκτ «${p.title}»: ημερολόγιο`, (tx) => { tx.insert('project_log', { project_id: pid, log_date: parseIso(d.log_date) ? d.log_date : today(), text: d.text.trim(), text_en: (d.text_en || '').trim() }); touch(tx); }); reload(); });
       const dropFile = (tx, f) => { if (f && f.stored_name) tx.deleteFile('projects/' + f.stored_name); if (f) tx.remove('project_files', f.id); };
       bind(el, {
         async addUnit() { await db.save(`Πρότζεκτ «${p.title}»: νέα ${word}`, (tx) => tx.insert('project_units', { project_id: pid, name: `${word} ${units.length + 1}`, leader_member_id: null, notes: '', sort: units.length })); reload(); },
@@ -232,6 +238,7 @@ ${logs.length ? table(['Ημερομηνία', 'Καταχώριση', 'Ενέρ
         },
         async report() {
           const opt = await askReport(); if (!opt) return;
+          const logs = sortBy(of('project_log', pid), (x) => x.log_date || '', 'id').reverse(); // φρέσκα (το English αλλάζει επί τόπου)
           const en = opt.en, N = en ? latinName : (x) => x, L = (gr, eng) => (en ? eng : gr);
           const pa = el.querySelector('#pa'), lead = (id) => { const m = db.get('member_registry', id); return m ? [N(`${m.surname} ${m.first_name}`), noContact(m) ? L(NO_CONTACT, 'No contact') : [m.mobile, m.email].filter(Boolean).join(' · ')] : ['—', '']; };
           const t = (h, rows) => `<h3>${h}</h3><table><thead><tr>${rows[0].map((x) => `<th>${esc(x)}</th>`).join('')}</tr></thead><tbody>${rows.slice(1).map((r) => `<tr>${r.map((c) => `<td style="white-space:pre-wrap">${esc(c ?? '')}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
@@ -258,7 +265,7 @@ ${logs.length ? table(['Ημερομηνία', 'Καταχώριση', 'Ενέρ
           // Κεφάλαιο «Πληροφορίες & ημερολόγιο εργασιών» (πάντα): σημειώσεις του πρότζεκτ + καταχωρίσεις
           inner += `<h3>${L('Πληροφορίες & ημερολόγιο εργασιών', 'Information & work log')} (${logs.length})</h3>`;
           if (p.notes) inner += `<p style="white-space:pre-wrap"><b>${L('Σημειώσεις', 'Notes')}:</b> ${esc(p.notes)}</p>`;
-          inner += logs.length ? t('', [L(['Ημερομηνία', 'Καταχώριση'], ['Date', 'Entry']), ...logs.map((x) => [fmtDate(x.log_date), x.text])]).replace('<h3></h3>', '')
+          inner += logs.length ? t('', [L(['Ημερομηνία', 'Καταχώριση'], ['Date', 'Entry']), ...logs.map((x) => [fmtDate(x.log_date), en ? x.text_en || x.text : x.text])]).replace('<h3></h3>', '')
             : `<p class="muted">${L('Δεν υπάρχουν καταχωρίσεις.', 'No entries.')}</p>`;
           pa.innerHTML = en ? reportPaperEn(p.title, 'Grand Master\'s Project', inner, { grandMaster: gmEn() }) : reportPaper(p.title, 'Πρότζεκτ Μεγάλου Διδασκάλου', inner);
           await loadImages(pa); pa.hidden = false; printPaper(`projekt-${p.title}${opt.en ? '-EN' : ''}`);
