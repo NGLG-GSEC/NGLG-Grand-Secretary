@@ -320,8 +320,8 @@ function visitsPage({ query }) {
   const sel = (n, v) => (String(query[n] || '') === String(v) ? ' selected' : '');
   const yr = masonicYear(), summary = provinceSummary(yr), sumAll = summary.reduce((a, o) => ({ total: a.total + o.total, declared: a.declared + o.declared }), { total: 0, declared: 0 });
   return {
-    title: 'Επισκέψεις Στοών',
-    html: `${visitsFlow(1)}<div class="hero"><h1>Επισκέψεις Στοών</h1>${outgoingProtocolBtn()}</div>${notice(query.msg)}${hasEpeteirida() ? '' : `<div class="card nocontact noprint"><b>Οι υποψήφιοι εκπρόσωποι προέρχονται από την Επετηρίδα, που δεν έχει περαστεί ακόμη σε αυτή τη βάση.</b>
+    title: 'Καταχώρηση Εργασιών Στοών για Επισκέψεις ΜΔ',
+    html: `${visitsFlow(1)}<div class="hero"><h1>ΚΑΤΑΧΩΡΗΣΗ ΕΡΓΑΣΙΩΝ ΣΤΟΩΝ ΓΙΑ ΕΠΙΣΚΕΨΕΙΣ ΜΔ</h1>${outgoingProtocolBtn()}</div>${notice(query.msg)}${hasEpeteirida() ? '' : `<div class="card nocontact noprint"><b>Οι υποψήφιοι εκπρόσωποι προέρχονται από την Επετηρίδα, που δεν έχει περαστεί ακόμη σε αυτή τη βάση.</b>
 <p style="margin:6px 0">Ανεβάστε το αρχείο Excel της Επετηρίδας (π.χ. «Επετηρίδα 2026») — μετά επικολλήστε και τον κατάλογο εν ενεργεία στην <a href="#/epeteirida?imp=1">Επετηρίδα → Εισαγωγή</a>.</p>
 <label class="btn primary" style="cursor:pointer">⬆ Αρχείο Επετηρίδας (.xlsx)<input type="file" id="epFile" accept=".xlsx,.xls" hidden></label></div>`}<div class="toolbar"><a class="btn primary" href="#/visits/new">+ Νέα επίσκεψη</a><a class="btn" href="#/visits/import">Επικόλληση λίστας</a>
 <a class="btn" href="#/visits/publish${query.prov ? '?prov=' + encodeURIComponent(query.prov) : ''}">Ενημέρωση Επαρχίας</a><a class="btn" href="#/visits/report">Αναφορά</a><a class="btn" href="#/reps">Εκπρόσωποι</a><a class="btn" href="#/declarations">🗳 Δηλώσεις διάθεσης</a><a class="btn" href="#/visits/decisions">🗳 Αποφάσεις Μ.Δ.</a><a class="btn${sumAll.total - sumAll.declared ? ' warnbtn' : ''}" href="#/visits/missing${query.prov ? '?prov=' + encodeURIComponent(query.prov) : ''}">⚠ Στοές χωρίς ημερομηνία (${sumAll.total - sumAll.declared})</a></div>
