@@ -3294,3 +3294,23 @@ def test_namedays_bulk_send_selected(app):
     app.page.click('[data-act=print]')
     app.page.locator('dialog.rptask button[value=show]').click()
     app.page.wait_for_selector('.print-area:not(.no-time)')
+
+
+def test_members_export_active_lodge_province(app, tmp_path):
+    # Excel όλων των ενεργών: Όνομα · Επώνυμο · 1η Στοά · Αριθμός · Επαρχία· όχι διαγραμμένοι/ανενεργοί
+    import openpyxl
+    app.connect_local()
+    add_member(app, surname='Ενεργός', first='Γεώργιος', lodges='ΑΚΡΟΠΟΛΙΣ | 2 | 1. ΤΑΚΤΙΚΟ')
+    add_member(app, surname='Ανενεργός', first='Πέτρος', email='p@example.com', mobile='6944000009')
+    app.page.evaluate("async () => { const {db} = await import('./core/store.js'); const m = db.all('member_registry').find((x) => x.surname === 'Ανενεργός'); await db.save('x', (tx) => tx.update('member_registry', m.id, { active: 0 })); }")
+    app.go('/members')
+    with app.page.expect_download() as dl:
+        app.page.click('[data-act=activeXlsx]')
+    f = tmp_path / 'a.xlsx'
+    dl.value.save_as(f)
+    rows = list(openpyxl.load_workbook(f).active.iter_rows(values_only=True))
+    assert rows[0] == ('Όνομα', 'Επώνυμο', '1η Στοά', 'Αριθμός Στοάς', 'Επαρχία')
+    names = [r[1] for r in rows[1:]]
+    assert 'Ενεργός' in names and 'Ανενεργός' not in names
+    r = [x for x in rows[1:] if x[1] == 'Ενεργός'][0]
+    assert r[0] == 'Γεώργιος' and 'ΑΚΡΟΠΟΛΙΣ' in r[2] and str(r[3]) == '2' and r[4] == 'ΕπΜΣτ. Αθηνών', r

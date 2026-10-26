@@ -279,7 +279,7 @@ ${MEMBER_FIELDS.map(([k, v]) => `<label class="chip"><input type="radio" name="f
 <div><label for="msq" id="msqlabel">2. ${esc(qlabel)}</label><input id="msq" name="q" value="${esc(q)}" autofocus autocomplete="off" type="${itype}" placeholder="${esc(ph)}"${field === 'lodge' ? ' list="lodgelist"' : ''}>
 <datalist id="lodgelist">${lodgesAll().map((l) => `<option value="${esc(l.number)} · ${esc(l.name)}">`).join('')}</datalist></div>
 <div class="msbtns"><button class="btn primary">Αναζήτηση</button>${q ? '<a class="btn" href="#/members">Καθαρισμός</a>' : ''}</div></form><p class="msresult">${summary}</p></div>
-${stBar}<div class="toolbar"><small class="muted">Αποτελέσματα σελίδας (${xs.length}):</small>${exportBar()}</div><div class="memtable">${table(['ID', 'Αρ. Μητρώου', 'Επώνυμο', 'Όνομα', 'Email', 'Κινητό', 'Βαθμός', 'Ανώτατο αξίωμα (Επετηρίδα)', 'Στοές', 'Ενεργός', 'Ενέργειες'], rows, q ? `Δεν βρέθηκε μέλος για «${q}» σε: ${flabel}. Δοκιμάστε «Όλα» ή λιγότερες λέξεις.` : 'Δεν υπάρχουν εγγραφές.')}</div>
+${stBar}<div class="toolbar"><small class="muted">Αποτελέσματα σελίδας (${xs.length}):</small>${exportBar()}<button type="button" class="btn" data-act="activeXlsx" title="Όλα τα ενεργά μέλη: Όνομα, Επώνυμο, 1η Στοά, Αριθμός, Επαρχία">⬇ Excel όλων των ενεργών (Στοά · Επαρχία)</button></div><div class="memtable">${table(['ID', 'Αρ. Μητρώου', 'Επώνυμο', 'Όνομα', 'Email', 'Κινητό', 'Βαθμός', 'Ανώτατο αξίωμα (Επετηρίδα)', 'Στοές', 'Ενεργός', 'Ενέργειες'], rows, q ? `Δεν βρέθηκε μέλος για «${q}» σε: ${flabel}. Δοκιμάστε «Όλα» ή λιγότερες λέξεις.` : 'Δεν υπάρχουν εγγραφές.')}</div>
 ${pager(xs.length, pg, PAGE, mk)}
 ${importBox()}`,
     mount(el) {
@@ -291,6 +291,7 @@ ${importBox()}`,
       onSubmit(el.querySelector('#ms'), (d) => go('/members', { q: d.q, field: d.field, ...(status ? { status } : {}) }));
       bind(el, { export: () => exportMembers() });
       bindExport(el, () => xs, [flabel && q ? `${flabel} ${q}` : '', (MEMBER_STATUS.find(([k]) => k === status) || [])[1] && status ? MEMBER_STATUS.find(([k]) => k === status)[1].replace(/[^\p{L}\s]/gu, '').trim() : ''].filter(Boolean).join(' · ') || 'Μητρώο Μελών');
+      bind(el, { async activeXlsx() { const n = await exportActiveMembers(); toast(`Excel: ${n} ενεργά μέλη.`); } });
       mountImport(el);
     },
   };
@@ -442,6 +443,21 @@ export async function exportMembers(list = null, label = '') {
     ['Ο Αρ. Μητρώου και το Δίπλωμα δεν αλλάζουν από εισαγωγή (μόνο από την καρτέλα, από διαχειριστή).']]);
   const d = new Date(), tag = label ? '_' + String(label).replace(/[^\p{L}\p{N}]+/gu, '_').replace(/^_|_$/g, '').slice(0, 40) : '';
   X.writeFile(wb, `EMSTE_MEMBER_REGISTRY${tag}_${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}.xlsx`);
+}
+// Απλό Excel όλων των ενεργών μελών: Όνομα · Επώνυμο · 1η Στοά (κατά Α/Α) · Αριθμός · Επαρχία (από τον κατάλογο Στοών)
+export async function exportActiveMembers() {
+  const X = await XLSX(), byM = lodgesByMember();
+  const ms = sortBy(membersAll().filter((m) => statusOf(m) === 'active'), 'surname', 'first_name', 'id');
+  const rows = ms.map((m) => {
+    const l = (byM[m.id] || []).find((x) => x.lodge_name || x.lodge_number) || {}, reg = l.lodge_number ? lodgeByNumber(l.lodge_number) : null;
+    return [m.first_name || '', m.surname || '', l.lodge_name || '', l.lodge_number ?? '', (reg && reg.provincial) || ''];
+  });
+  const ws = X.utils.aoa_to_sheet([['Όνομα', 'Επώνυμο', '1η Στοά', 'Αριθμός Στοάς', 'Επαρχία'], ...rows]);
+  ws['!cols'] = [{ wch: 18 }, { wch: 22 }, { wch: 28 }, { wch: 12 }, { wch: 36 }];
+  ws['!autofilter'] = { ref: `A1:E${rows.length + 1}` };
+  const wb = X.utils.book_new(); X.utils.book_append_sheet(wb, ws, 'ΕΝΕΡΓΑ ΜΕΛΗ');
+  X.writeFile(wb, `EMSTE_ENERGA_MELH_${today().replace(/-/g, '')}.xlsx`);
+  return rows.length;
 }
 // Λίστα PDF των μελών της σελίδας
 export async function exportMembersPdf(ms, title = 'Μητρώο Μελών') {
