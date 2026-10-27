@@ -3814,19 +3814,19 @@ def test_approval_stamp_draws_lodge_logo(app, tmp_path):
       const u = await dfileUrl(db.all('lodges').find((x) => x.number === '118').logo_file);
       const logo = await new Promise((ok) => { const i = new Image(); i.onload = () => ok(i); i.src = u; });
       const px = (logoImg) => { const c = drawApproval(document.createElement('canvas'), { protocol: '1', date: '2026-11-02', lodge: approvalLodge('118') }, { logo: logoImg });
-        return Array.from(c.getContext('2d').getImageData(265, 524, 1, 1).data).slice(0, 3); };
+        return Array.from(c.getContext('2d').getImageData(265, 458, 1, 1).data).slice(0, 3); };
       const c = drawApproval(document.createElement('canvas'), { protocol: '1', date: '2026-11-02', lodge: approvalLodge('118') }, { logo });
       const at = (x, y) => Array.from(c.getContext('2d').getImageData(x, y, 1, 1).data).slice(0, 3);
-      return { without: px(null), with: px(logo), corner: at(108, 391), outside: at(100, 524) }; }""")
+      return { without: px(null), with: px(logo), corner: at(108, 325), outside: at(100, 458), below: at(265, 640) }; }""")
     assert r['without'] == [255, 255, 255] and r['with'] != [255, 255, 255], r
     # διπλάσιο με περικοπή: το σχέδιο γεμίζει και τις γωνίες του πλαισίου, αλλά δεν βγαίνει έξω από αυτό
-    assert r['corner'] != [255, 255, 255] and r['outside'] == [255, 255, 255], r
+    assert r['corner'] != [255, 255, 255] and r['outside'] == [255, 255, 255] and r['below'] == [255, 255, 255], r
     # το παράθυρο του σήματος φορτώνει τον θυρεό της επιλεγμένης Στοάς
     app.go('/letters/new')
     app.page.wait_for_selector('#tplSel')
     app.page.evaluate("async () => { const {openApprovalStamp} = await import('./modules/approval-stamp.js'); openApprovalStamp({ protocol: '5', date: '2026-11-02', lodge: '118' }); }")
     app.page.wait_for_selector('.approval-app canvas')
-    app.page.wait_for_function("() => { const c = document.querySelector('.approval-app canvas'); const d = c.getContext('2d').getImageData(265, 524, 1, 1).data; return d[0] !== 255 || d[1] !== 255 || d[2] !== 255; }")
+    app.page.wait_for_function("() => { const c = document.querySelector('.approval-app canvas'); const d = c.getContext('2d').getImageData(265, 458, 1, 1).data; return d[0] !== 255 || d[1] !== 255 || d[2] !== 255; }")
 
 
 def test_declarations_hide_completed_visits(browser, base_url):

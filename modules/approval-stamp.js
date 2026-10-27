@@ -72,15 +72,15 @@ export function drawApproval(canvas, { protocol = '', date = '', lodge = null },
     }
     lines = best ? [best.a, best.b] : wrappedWords(ctx, description, maxWidth, descriptionFont);
   }
-  const ys = lines.length === 1 ? [223] : [211, 246];
+  const ys = lines.length === 1 ? [214] : [198, 232]; // λίγο ψηλότερα: χώρος για το «Αθήνα, …» πάνω από τη γραμμή
   lines.forEach((t, i) => { ctx.font = descriptionFont; ctx.fillText(t, 700, ys[i] ?? (246 + 35 * (i - 1)), maxWidth); });
   ctx.strokeStyle = BLUE; ctx.lineWidth = 2.4; ctx.beginPath(); ctx.moveTo(105, 295); ctx.lineTo(1295, 295); ctx.stroke();
-  ctx.fillStyle = BLUE; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.font = '700 30px Arial, sans-serif';
-  ctx.fillText(`Αθήνα, ${prettyDate(date)}`, 122, 359);
-  // Θυρεός της Στοάς: όλο το κενό αριστερά από τον Μεγάλο Γραμματέα και κάτω από το «Αθήνα, …»
+  ctx.fillStyle = BLUE; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.font = '700 28px Arial, sans-serif';
+  ctx.fillText(`Αθήνα, ${prettyDate(date)}`, 122, 274); // ~1 εκ. ψηλότερα, πάνω από τη μπλε γραμμή
+  // Θυρεός της Στοάς: όλο το κενό αριστερά από τον Μεγάλο Γραμματέα, κάτω από τη μπλε γραμμή (≈5 χλστ. από τις κάτω γραμμές)
   if (logo && logo.naturalWidth) {
     // διπλάσιο μέγεθος με περικοπή (crop) στο πλαίσιο: φαίνεται μεγαλύτερο το κεντρικό σχέδιο του θυρεού
-    const bx = 105, by = 388, bw = 320, bh = 272, k = 2 * Math.min(bw / logo.naturalWidth, bh / logo.naturalHeight), w = logo.naturalWidth * k, h = logo.naturalHeight * k;
+    const bx = 105, by = 322, bw = 320, bh = 272, k = 2 * Math.min(bw / logo.naturalWidth, bh / logo.naturalHeight), w = logo.naturalWidth * k, h = logo.naturalHeight * k;
     ctx.save(); ctx.beginPath(); ctx.rect(bx, by, bw, bh); ctx.clip();
     ctx.drawImage(logo, bx + (bw - w) / 2, by + (bh - h) / 2, w, h);
     ctx.restore();
