@@ -115,7 +115,9 @@ db.migrate('diploma-template-2026-10', (tx) => {
 export function diplomaValues(m) {
   const ls = lodgesByMember()[m.id] || [], l0 = ls[0] || {};
   const lodge = String(m.mm_lodge_name || l0.lodge_name || '').trim(), name = `${m.first_name || ''} ${m.surname || ''}`.replace(/\s+/g, ' ').trim();
-  return { name, name_en: greeklish(name), dno: String(m.diploma_no ?? '').trim(), ea: isoOf(m.date_ea) || '', mm: isoOf(m.date_mm) || '',
+  // Ημ. Εισδοχής: από την καρτέλα· αλλιώς η ημερομηνία μύησης στη Στοά (ιδιότητα «Τακτικό»), η παλαιότερη
+  const eaLodge = ls.filter((l) => /τακτικ/i.test(String(l.capacity || l.member_status || '')) && isoOf(l.capacity_date)).map((l) => isoOf(l.capacity_date)).sort()[0] || '';
+  return { name, name_en: greeklish(name), dno: String(m.diploma_no ?? '').trim(), ea: isoOf(m.date_ea) || eaLodge, mm: isoOf(m.date_mm) || '',
     issue: new Date().toISOString().slice(0, 10), lodge, lodge_en: greeklish(lodge), lodge_no: String(m.mm_lodge_name ? m.mm_lodge_number ?? '' : l0.lodge_number ?? '').trim() };
 }
 export function placeholderMap(v) {
@@ -172,8 +174,9 @@ function issuePage({ query = {} }) {
 <div class="card mc-find"><label>🔎 Μέλος του Μητρώου</label><input id="dipFind" placeholder="Επώνυμο, όνομα, MM/M αριθμός, email ή κινητό" autocomplete="off"></div>
 ${m ? `<div class="card"><h3 style="margin-top:0">Στοιχεία του Διπλώματος <small class="muted">από την καρτέλα του μέλους — διορθώστε αν χρειάζεται (δεν αλλάζει το Μητρώο)</small></h3>
 <div class="grid dip-fields">${FIELDS.map(([k, label, type]) => `<label>${esc(label)}<input name="${k}" type="${type || 'text'}" value="${esc(v[k] || '')}"></label>`).join('')}</div>
-${!v.dno ? '<p class="vwarn">⚠ Το μέλος δεν έχει αριθμό Διπλώματος στο Μητρώο.</p>' : ''}${!v.ea ? '<p class="vwarn">⚠ Λείπει η ημερομηνία Εισδοχής.</p>' : ''}
-<div class="toolbar"><button type="button" class="btn primary" data-act="print">🖨 Εκτύπωση Διπλώματος (A3)</button>${t ? `<a class="btn" href="#/templates/${t.id}/diploma">🎨 Σχεδίαση / στοίχιση</a>` : ''}<a class="btn" href="#/members/${m.id}">Καρτέλα μέλους</a></div>
+${!v.dno ? '<p class="vwarn">⚠ Το μέλος δεν έχει αριθμό Διπλώματος στο Μητρώο.</p>' : ''}${!v.ea || !v.mm ? `<p class="vwarn">⚠ Λείπει στο Μητρώο η ${[!v.ea && 'Ημ. Εισδοχής (μύησης)', !v.mm && 'Ημ. Εγέρσεως (Διδάσκαλος)'].filter(Boolean).join(' και η ')} — <a href="#/members/${m.id}">συμπληρώστε την στην καρτέλα του μέλους</a> ώστε να έρχεται αυτόματα.</p>` : ''}
+${String(m.date_ea || '').trim() && !/^\d{4}-\d{2}-\d{2}$/.test(isoOf(m.date_ea)) ? `<p class="vwarn">⚠ Η Ημ. Εισδοχής στο Μητρώο («${esc(m.date_ea)}») δεν είναι σε αναγνωρίσιμη μορφή.</p>` : ''}${String(m.date_mm || '').trim() && !/^\d{4}-\d{2}-\d{2}$/.test(isoOf(m.date_mm)) ? `<p class="vwarn">⚠ Η Ημ. Εγέρσεως στο Μητρώο («${esc(m.date_mm)}») δεν είναι σε αναγνωρίσιμη μορφή.</p>` : ''}
+<div class="toolbar"><button type="button" class="btn primary" data-act="print">🖨 Εκτύπωση Διπλώματος (A3)</button>${t ? `<a class="btn" href="#/templates/${t.id}/diploma">🎨 Σχεδίαση / στοίχιση</a>` : ''}<a class="btn" href="#/members/${m.id}">Καρτέλα μέλους</a><a class="btn" href="#/members/diplomas?tab=protocol">📖 Πρωτόκολλο Διπλωμάτων</a></div>
 <p class="muted">Εκτύπωση σε χαρτί A3 κατακόρυφα, κλίμακα 100%, χωρίς περιθώρια. Οι ημερομηνίες γράφονται σε ελληνικά και αγγλικά αυτόματα.</p></div>` : '<p class="muted">Αναζητήστε ένα μέλος για να εκδώσετε το Δίπλωμά του.</p>'}</div>
 ${m ? `<div class="print-area dip-view">${diplomaSheet(v)}</div>` : ''}`,
     mount(el) {

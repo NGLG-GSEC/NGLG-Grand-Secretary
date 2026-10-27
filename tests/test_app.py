@@ -3472,3 +3472,29 @@ def test_diploma_reachable_from_menu_and_home(app):
     app.page.click('.home-hero a[href="#/members/diploma"]')
     app.page.wait_for_url('**/#/members/diploma')
     assert 'Δίπλωμα Διδασκάλου' in app.text()
+
+
+def test_diploma_dates_from_registry_and_protocol(app):
+    # Ημ. Εισδοχής / Εγέρσεως από το Μητρώο σε κάθε μορφή (και αριθμός Excel)· Πρωτόκολλο Διπλωμάτων Διδασκάλων Τεκτόνων
+    app.connect_local()
+    iso = app.page.evaluate("async () => { const {isoOf} = await import('./modules/members.js'); return ['12/3/1998', '12.03.98', '5/6/05', '35866', '35866.0', '1998-03-12T00:00:00', 'άγνωστο'].map(isoOf); }")
+    assert iso == ['1998-03-12', '1998-03-12', '2005-06-05', '1998-03-12', '1998-03-12', '1998-03-12', 'άγνωστο'], iso
+    add_member(app, surname='Διπλωματούχος', first='Αντώνιος', email='d@example.com', mobile='6944000071', lodges='ΑΚΡΟΠΟΛΙΣ | 2 | 1. ΤΑΚΤΙΚΟ')
+    add_member(app, surname='Πρώτος', first='Βασίλειος', email='b@example.com', mobile='6944000072')
+    mid = app.page.evaluate("""async () => { const {db} = await import('./core/store.js'); const ms = db.all('member_registry'), a = ms.find((x) => x.surname === 'Διπλωματούχος'), b = ms.find((x) => x.surname === 'Πρώτος');
+      const l = db.all('member_lodges').find((x) => x.member_id === a.id);
+      await db.save('x', (tx) => { tx.update('member_registry', a.id, { diploma_no: '12500', date_ea: '', date_mm: '35866', mm_lodge_name: 'ΑΚΡΟΠΟΛΙΣ', mm_lodge_number: '2' });
+        tx.update('member_lodges', l.id, { capacity: 'Τακτικό', capacity_date: '15/01/1997' });
+        tx.update('member_registry', b.id, { diploma_no: '9001', date_ea: '1990-02-01', date_mm: '01/02/1991', mm_lodge_name: 'ΠΑΡΘΕΝΩΝ', mm_lodge_number: '3' }); });
+      return a.id; }""")
+    app.go(f'/members/diploma?id={mid}')
+    assert app.page.input_value('.dip-fields [name=ea]') == '1997-01-15'  # από τη μύηση στη Στοά
+    assert app.page.input_value('.dip-fields [name=mm]') == '1998-03-12'  # αριθμός ημέρας Excel
+    assert 'Λείπει στο Μητρώο' not in app.text()
+    app.go('/members/diplomas?tab=protocol')
+    rows = [r for r in app.page.eval_on_selector_all('.memtable tr', "rs => rs.map((r) => [...r.cells].slice(0, 7).map((c) => c.innerText.trim()))") if r and r[0] != 'Α/Α']
+    assert rows[0][1] == 'MM9001' and rows[0][3] == 'Πρώτος Βασίλειος' and rows[0][4] == '01/02/1991' and rows[0][5] == 'ΠΑΡΘΕΝΩΝ' and rows[0][6] == '3', rows
+    assert rows[1][1] == 'MM12500' and rows[1][2].startswith('M') and rows[1][4] == '12/03/1998' and rows[1][5] == 'ΑΚΡΟΠΟΛΙΣ', rows
+    app.page.evaluate('window.print = () => {}')
+    app.page.click('[data-act=protoPdf]')
+    assert 'ΠΡΩΤΟΚΟΛΛΟ ΔΙΠΛΩΜΑΤΩΝ ΔΙΔΑΣΚΑΛΩΝ ΤΕΚΤΟΝΩΝ' in app.page.inner_text('#dpPaper') and 'Σύνολο: 2 Διπλώματα' in app.page.inner_text('#dpPaper')

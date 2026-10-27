@@ -70,10 +70,14 @@ const CAP_DATE = { Τακτικό: 'Ημ. μύησης στη Στοά', Υιο�
   Μέτοικο: 'Ημ. μετάταξης σε Μέτοικο', Αριστίνδην: 'Ημ. μετάταξης σε Αριστίνδην', Ισόβιο: 'Ημ. μετάταξης σε Ισόβιο', Θεράπων: 'Ημ. μύησης ως Θεράποντος' };
 export const capacityDateLabel = (c) => CAP_DATE[c] || 'Ημ. απόκτησης ιδιότητας';
 // ημερομηνία από Excel/επικόλληση: 2010-03-15, 15/3/2010, 15.03.2010 → 2010-03-15
+// Ημερομηνία σε ΕΕΕΕ-ΜΜ-ΗΗ από κάθε μορφή του Μητρώου: ISO, 12/3/1998, 12.03.98, αριθμός ημέρας του Excel (π.χ. 35866)
 export const isoOf = (v) => {
   v = String(v ?? '').trim(); if (!v) return '';
   let m = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(v); if (m) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
-  m = /^(\d{1,2})[/.\-](\d{1,2})[/.\-](\d{4})$/.exec(v); return m ? `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}` : v;
+  m = /^(\d{1,2})[/.\-](\d{1,2})[/.\-](\d{2}|\d{4})(?:\s.*)?$/.exec(v);
+  if (m) { const y = m[3].length === 2 ? (Number(m[3]) <= 30 ? '20' : '19') + m[3] : m[3]; return `${y}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`; }
+  if (/^\d{4,5}(\.0+)?$/.test(v) && Number(v) > 3000 && Number(v) < 80000) { const d = new Date(Date.UTC(1899, 11, 30) + Math.round(Number(v)) * 864e5); return d.toISOString().slice(0, 10); }
+  return v;
 };
 
 export const membersAll = () => db.all('member_registry');
