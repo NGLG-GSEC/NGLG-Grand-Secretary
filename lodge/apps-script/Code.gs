@@ -7,12 +7,17 @@
  * Η εφαρμογή της Μεγάλης Γραμματείας (ADMIN_KEY) στέλνει τα μητρώα και τους κωδικούς, παίρνει τις αλλαγές και τις περνά στο Μητρώο.
  *
  * Script Properties (Ρυθμίσεις έργου → Ιδιότητες σεναρίου):
- *   ADMIN_KEY   — μυστικό κλειδί που γράφεται και στην εφαρμογή (Πύλη Γραμματέων → Ρύθμιση). Υποχρεωτικό.
- *   BCC_EMAILS  — (προαιρετικό) κρυφή κοινοποίηση κάθε email αλλαγής, χωρισμένα με κόμμα.
+ *   ADMIN_KEY        — (προαιρετικό) μυστικό κλειδί διαχείρισης· αν οριστεί και στην εφαρμογή, συνδέεται χωρίς άλλο βήμα.
+ *   SUPER_ADMINS     — email super admin (χωρισμένα με κόμμα): σύνδεση ΑΠΕΥΘΕΙΑΣ με «Σύνδεση με Google» (ή και με κωδικό email).
+ *   ADMIN_EMAILS     — email διαχειριστών (χωρισμένα με κόμμα): σύνδεση με κωδικό μιας χρήσης (OTP) που στέλνεται στο email τους.
+ *   GOOGLE_CLIENT_ID — το Google Client ID της εφαρμογής (Ρυθμίσεις → Google)· χρειάζεται για τη «Σύνδεση με Google».
+ *   BCC_EMAILS       — (προαιρετικό) κρυφή κοινοποίηση κάθε email αλλαγής, χωρισμένα με κόμμα.
  * Ο κώδικας είναι δημόσιος: δεν περιέχει κωδικούς, email ή δεδομένα μελών. Οδηγίες: lodge/README.md
  */
 
-const VERSION = 1;
+const VERSION = 2;
+const SESSION_SECONDS = 21600; // σύνδεση διαχειριστή: 6 ώρες
+const OTP_SECONDS = 600, OTP_MAX_SENDS = 5, OTP_MAX_TRIES = 5;
 const ROOT_NAME = 'Μητρώα Στοών — Πύλη Γραμματέων';
 const MONTHS = ['Ιαν', 'Φεβ', 'Μαρ', 'Απρ', 'Μαΐ', 'Ιουν', 'Ιουλ', 'Αυγ', 'Σεπ', 'Οκτ', 'Νοε', 'Δεκ'];
 const MAX_TRIES = 8; // λάθος κωδικοί ανά Στοά ανά 15 λεπτά
@@ -30,7 +35,9 @@ const NOTE_TYPES = ['Αναγγελία Διδασκάλου Τέκτονος', 
   'Αναγγελία Διαγραφής', 'Αναγγελία Υιοθεσίας / Επανόδου', 'Διόρθωση στοιχείων', 'Άλλο'];
 
 function doGet() {
-  return json_({ ok: true, service: 'lodge-portal', version: VERSION, adminKey: prop_('ADMIN_KEY') ? 'ρυθμίστηκε' : 'ΛΕΙΠΕΙ', lodges: Object.keys(codes_()).length });
+  return json_({ ok: true, service: 'lodge-portal', version: VERSION, adminKey: prop_('ADMIN_KEY') ? 'ρυθμίστηκε' : '—',
+    superAdmins: emails_('SUPER_ADMINS').length, adminEmails: emails_('ADMIN_EMAILS').length, googleClientId: prop_('GOOGLE_CLIENT_ID') ? 'ρυθμίστηκε' : '—',
+    lodges: Object.keys(codes_()).length });
 }
 
 function doPost(e) {
@@ -40,7 +47,10 @@ function doPost(e) {
     switch (b.action) {
       case 'login': return json_(login_(b));
       case 'save': return json_(withLock_(() => save_(b)));
-      case 'admin_status': admin_(b); return json_({ ok: true, version: VERSION, lodges: Object.keys(codes_()).length });
+      case 'admin_otp_send': return json_(otpSend_(b));
+      case 'admin_otp_verify': return json_(otpVerify_(b));
+      case 'admin_google': return json_(googleLogin_(b));
+      case 'admin_status': { const who = admin_(b); return json_({ ok: true, version: VERSION, lodges: Object.keys(codes_()).length, who: who.email, role: who.role }); }
       case 'admin_push': admin_(b); return json_(withLock_(() => push_(b)));
       case 'admin_pull': admin_(b); return json_(pull_());
       case 'admin_ack': admin_(b); return json_(withLock_(() => ack_(b)));
@@ -124,9 +134,65 @@ function checkCode_(no, code) {
 }
 
 // ---------------------------------------------------------------- Μεγάλη Γραμματεία (εφαρμογή)
+// Διαχειριστής: κλειδί ADMIN_KEY ή σύνδεση (session) από κωδικό email (OTP) / «Σύνδεση με Google» → { email, role }
 function admin_(b) {
   const k = prop_('ADMIN_KEY');
-  if (!k || String(b.key || '') !== k) throw new Error('admin_unauthorized');
+  if (k && b.key && String(b.key) === k) return { email: '', role: 'key' };
+  const sid = String(b.session || '');
+  if (/^[\w-]{20,80}$/.test(sid)) {
+    const email = CacheService.getScriptCache().get('sess_' + sid), role = email ? roleOf_(email) : '';
+    if (role) return { email: email, role: role };
+  }
+  throw new Error('admin_unauthorized');
+}
+function emails_(prop) { return String(prop_(prop) || '').split(/[,;\s]+/).map(function (e) { return e.trim().toLowerCase(); }).filter(Boolean); }
+function roleOf_(email) { const e = String(email || '').trim().toLowerCase(); return !e ? '' : emails_('SUPER_ADMINS').indexOf(e) !== -1 ? 'super' : emails_('ADMIN_EMAILS').indexOf(e) !== -1 ? 'admin' : ''; }
+function newSession_(email) {
+  const sid = Utilities.getUuid().replace(/-/g, '') + Utilities.getUuid().replace(/-/g, '');
+  CacheService.getScriptCache().put('sess_' + sid, email, SESSION_SECONDS);
+  return { ok: true, session: sid, email: email, role: roleOf_(email), expires_in: SESSION_SECONDS };
+}
+function otpHash_(email, code) {
+  const bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, 'nglg-otp|' + email + '|' + code, Utilities.Charset.UTF_8);
+  return bytes.map(function (x) { return ((x + 256) % 256).toString(16).padStart(2, '0'); }).join('');
+}
+// Κωδικός μιας χρήσης (6 ψηφία, 10 λεπτά) στο email διαχειριστή. Η απάντηση είναι ίδια και για άγνωστο email (δεν αποκαλύπτεται ποιοι είναι διαχειριστές).
+function otpSend_(b) {
+  const email = String(b.email || '').trim().toLowerCase();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new Error('bad_email');
+  if (!roleOf_(email)) { Utilities.sleep(800); return { ok: true, sent: true }; }
+  const cache = CacheService.getScriptCache(), nKey = 'otpn_' + email, n = Number(cache.get(nKey) || 0);
+  if (n >= OTP_MAX_SENDS) throw new Error('too_many_tries');
+  const code = String(parseInt(Utilities.getUuid().replace(/-/g, '').slice(0, 12), 16) % 1000000).padStart(6, '0'); // τυχαίο UUID v4
+  cache.put('otp_' + email, otpHash_(email, code), OTP_SECONDS);
+  cache.put('otpt_' + email, '0', OTP_SECONDS);
+  cache.put(nKey, String(n + 1), 900);
+  MailApp.sendEmail(email, 'Κωδικός σύνδεσης Πύλης Γραμματέων: ' + code,
+    'Κωδικός μιας χρήσης για τη διαχείριση της Πύλης Γραμματέων Στοών: ' + code + '\n\nΙσχύει 10 λεπτά. Αν δεν τον ζητήσατε εσείς, αγνοήστε αυτό το μήνυμα.',
+    { name: 'Μεγάλη Γραμματεία ΕΜΣτΕ' });
+  return { ok: true, sent: true };
+}
+function otpVerify_(b) {
+  const email = String(b.email || '').trim().toLowerCase(), code = String(b.code || '').replace(/\D/g, '');
+  const cache = CacheService.getScriptCache(), want = cache.get('otp_' + email), tries = Number(cache.get('otpt_' + email) || 0);
+  if (!want || tries >= OTP_MAX_TRIES) throw new Error('otp_expired');
+  if (code.length !== 6 || otpHash_(email, code) !== want) { cache.put('otpt_' + email, String(tries + 1), OTP_SECONDS); throw new Error('otp_wrong'); }
+  cache.put('otp_' + email, '', 1);
+  if (!roleOf_(email)) throw new Error('admin_unauthorized');
+  return newSession_(email);
+}
+// «Σύνδεση με Google»: access token της εφαρμογής (scope openid email) → επαλήθευση στην Google· απευθείας μόνο για SUPER_ADMINS
+function googleLogin_(b) {
+  const clientId = String(prop_('GOOGLE_CLIENT_ID') || '').trim(), tok = String(b.access_token || '');
+  if (!clientId) throw new Error('no_google_client_id');
+  if (!tok || tok.length > 4096) throw new Error('admin_unauthorized');
+  const res = UrlFetchApp.fetch('https://oauth2.googleapis.com/tokeninfo?access_token=' + encodeURIComponent(tok), { muteHttpExceptions: true });
+  if (res.getResponseCode() !== 200) throw new Error('admin_unauthorized');
+  let t; try { t = JSON.parse(res.getContentText()); } catch (e) { throw new Error('admin_unauthorized'); }
+  const email = String(t.email || '').toLowerCase(), verified = t.email_verified === true || t.email_verified === 'true';
+  if ((t.aud !== clientId && t.azp !== clientId) || !verified || Number(t.expires_in || 0) <= 0) throw new Error('admin_unauthorized');
+  if (roleOf_(email) !== 'super') throw new Error('not_super_admin');
+  return newSession_(email);
 }
 
 // { lodges: [{ meta, members }], codes: { no: hash | '' } } — μόνο όσες Στοές άλλαξαν γίνονται νέα έκδοση

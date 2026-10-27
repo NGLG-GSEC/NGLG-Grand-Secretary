@@ -1,7 +1,7 @@
 // Τοπική δοκιμή του lodge/apps-script/Code.gs: ψεύτικα DriveApp, PropertiesService, CacheService, MailApp κ.λπ. στη μνήμη.
 const fs = require('fs'), vm = require('vm'), crypto = require('crypto');
 function makeEnv() {
-  const props = {}, cache = {}, mails = [];
+  const props = {}, cache = {}, mails = [], tokens = {};
   let fid = 0;
   const mkFile = (name, text, parent) => { const f = { id: 'f' + (++fid), name, text, parent, created: new Date(Date.now() + fid),
     getName: () => f.name, getBlob: () => ({ getDataAsString: () => f.text }), setContent: (t) => { f.text = t; },
@@ -20,9 +20,11 @@ function makeEnv() {
     LockService: { getScriptLock: () => ({ waitLock() {}, releaseLock() {} }) },
     DriveApp: { createFolder: (n) => mkFolder(n), getFolderById: (id) => { if (!folders[id]) throw new Error('nf'); return folders[id]; } },
     MailApp: { sendEmail: (to, subject, body, opt) => mails.push({ to, subject, body, opt }) },
+    UrlFetchApp: { fetch: (url) => { const t = decodeURIComponent(String(url).split('access_token=')[1] || ''), info = tokens[t];
+      return { getResponseCode: () => (info ? 200 : 400), getContentText: () => JSON.stringify(info || { error: 'invalid_token' }) }; } },
     Session: { getScriptTimeZone: () => 'Europe/Athens' },
     Utilities: {
-      DigestAlgorithm: { SHA_256: 'sha256' }, Charset: { UTF_8: 'utf8' },
+      DigestAlgorithm: { SHA_256: 'sha256' }, Charset: { UTF_8: 'utf8' }, getUuid: () => crypto.randomUUID(), sleep: () => {},
       computeDigest: (alg, s) => Array.from(crypto.createHash('sha256').update(s, 'utf8').digest()).map((b) => (b > 127 ? b - 256 : b)),
       formatDate: (d, tz, f) => { const p = new Intl.DateTimeFormat('en-GB', { timeZone: tz, day: 'numeric', month: 'numeric', year: '2-digit' }).formatToParts(d); const g = (t) => p.find((x) => x.type === t).value; return f === 'd' ? g('day') : f === 'M' ? g('month') : g('year'); },
     },
@@ -31,6 +33,6 @@ function makeEnv() {
   vm.createContext(ctx);
   vm.runInContext(fs.readFileSync(__dirname + '/../../lodge/apps-script/Code.gs', 'utf8'), ctx);
   const call = (body) => JSON.parse(ctx.doPost({ postData: { contents: JSON.stringify(body) } }).text);
-  return { ctx, props, mails, call, root: () => folders[props.FOLDER_ID] };
+  return { ctx, props, mails, tokens, call, root: () => folders[props.FOLDER_ID] };
 }
 module.exports = { makeEnv, hash: (no, code) => crypto.createHash('sha256').update('nglg-lodge|' + no + '|' + String(code).trim().toUpperCase(), 'utf8').digest('hex') };

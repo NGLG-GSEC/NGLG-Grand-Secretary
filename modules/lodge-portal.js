@@ -23,16 +23,38 @@ db.seed('lodge_portal_log', () => []);
 
 const S = (v) => String(v ?? '').replace(/\s+/g, ' ').trim();
 const cfg = () => ({ url: S(db.setting('lodge_portal_url')), key: S(db.setting('lodge_portal_key')) });
-export const portalReady = () => !!(cfg().url && cfg().key);
+// Σύνδεση διαχειριστή (κωδικός email / Google): μόνο σε αυτή την καρτέλα του browser, όχι στα δεδομένα
+const SESS = 'nglg-portal-session';
+export const portalSession = () => { try { return JSON.parse(sessionStorage.getItem(SESS) || 'null'); } catch { return null; } };
+const setSession = (v) => { try { if (v) sessionStorage.setItem(SESS, JSON.stringify(v)); else sessionStorage.removeItem(SESS); } catch { /* */ } };
+export const portalReady = () => !!(cfg().url && (cfg().key || portalSession()));
+const ERR = { admin_unauthorized: 'Δεν έχετε συνδεθεί ως διαχειριστής της Πύλης (κωδικός email ή κλειδί).', unknown_action: 'Το Apps Script της Πύλης είναι παλιά έκδοση — αντικαταστήστε το Code.gs και κάντε νέα έκδοση (Deploy → Manage deployments).',
+  otp_wrong: 'Λάθος κωδικός.', otp_expired: 'Ο κωδικός έληξε ή χρησιμοποιήθηκε — ζητήστε νέο.', too_many_tries: 'Πολλές προσπάθειες — δοκιμάστε σε 15 λεπτά.', bad_email: 'Μη έγκυρο email.',
+  not_super_admin: 'Η «Σύνδεση με Google» είναι μόνο για τον super admin (SUPER_ADMINS)· οι άλλοι διαχειριστές μπαίνουν με κωδικό email.', no_google_client_id: 'Λείπει το GOOGLE_CLIENT_ID στις Script Properties της Πύλης.' };
 async function api(body) {
-  const { url, key } = cfg();
+  const { url, key } = cfg(), sess = portalSession();
   if (!url) throw new Error('Ορίστε πρώτα τη διεύθυνση (URL /exec) του Apps Script της Πύλης.');
-  const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ key, ...body }) });
+  const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ key, ...(sess ? { session: sess.session } : {}), ...body }) });
   if (!r.ok) throw new Error('Το Apps Script της Πύλης δεν απάντησε (' + r.status + ').');
   const j = await r.json();
-  if (!j.ok) throw new Error(j.error === 'admin_unauthorized' ? 'Λάθος κλειδί διαχείρισης (ADMIN_KEY) της Πύλης.' : j.error === 'unknown_action' ? 'Το Apps Script της Πύλης είναι παλιά ή άλλη έκδοση.' : 'Πύλη: ' + j.error);
+  if (!j.ok) { if (j.error === 'admin_unauthorized' && sess && !body.code) setSession(null); throw new Error(ERR[j.error] || 'Πύλη: ' + j.error); }
   return j;
 }
+// Σύνδεση διαχειριστή: super admin απευθείας με Google· διαχειριστές με κωδικό μιας χρήσης στο email τους
+export async function portalGoogleLogin() {
+  const { googleToken } = await import('../core/drive.js');
+  const access_token = await googleToken('openid email');
+  const r = await api({ action: 'admin_google', access_token });
+  setSession({ session: r.session, email: r.email, role: r.role, until: Date.now() + r.expires_in * 1000 });
+  return r;
+}
+export const portalOtpSend = (email) => api({ action: 'admin_otp_send', email: S(email) });
+export async function portalOtpVerify(email, code) {
+  const r = await api({ action: 'admin_otp_verify', email: S(email), code: S(code) });
+  setSession({ session: r.session, email: r.email, role: r.role, until: Date.now() + r.expires_in * 1000 });
+  return r;
+}
+export const portalLogout = () => setSession(null);
 
 // ---------------------------------------------------------------- κωδικοί Στοών (μόνο εδώ, στα ιδιωτικά δεδομένα· ο server κρατά μόνο το hash)
 const ALPHA = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -151,7 +173,7 @@ export function publishPublic(tx) {
 
 // ---------------------------------------------------------------- σελίδα
 function portalPage({ query = {} }) {
-  const { url, key } = cfg(), ls = lodgesAll(true).filter((l) => l.status !== 'Ανενεργή').sort((a, b) => (Number(a.number) || 1e9) - (Number(b.number) || 1e9));
+  const { url, key } = cfg(), sess = portalSession(), ls = lodgesAll(true).filter((l) => l.status !== 'Ανενεργή').sort((a, b) => (Number(a.number) || 1e9) - (Number(b.number) || 1e9));
   const withCode = ls.filter((l) => codeOf(l.number)), log = sortBy(db.all('lodge_portal_log'), (x) => x.at || '').reverse().slice(0, 60);
   const rows = ls.map((l) => { const c = codeOf(l.number), em = lodgeEmails(l);
     return [`<b>${esc(l.number)}</b>`, `${esc(l.name)}<br><small class="muted">${esc(l.provincial || '')}</small>`, em.length ? esc(em.join(', ')) : '<span class="vwarn">χωρίς email</span>',
@@ -163,11 +185,18 @@ function portalPage({ query = {} }) {
     html: `<div class="hero"><h1>🔐 Πύλη Γραμματέων Στοών</h1></div>
 <p class="muted">Οι Γραμματείς βλέπουν και ενημερώνουν μόνο το Μητρώο της Στοάς τους στη σελίδα <a href="${PORTAL_PAGE}" target="_blank" rel="noopener">${PORTAL_PAGE} ↗</a>, με τον κωδικό της Στοάς.
 Κάθε αποθήκευση γίνεται έκδοση «ΑλλαγήΣτοά<αρ>έκδοση<Ν>-<ημ/νία>», στέλνεται email στη Στοά (από τον λογαριασμό του Apps Script — info@) και περνά εδώ στο Μητρώο αυτόματα με το άνοιγμα της εφαρμογής ή με «⬇ Λήψη αλλαγών».</p>
-<details class="card fold"${url && key ? '' : ' open'}><summary><b>⚙ Ρύθμιση</b> — ${url && key ? '<span class="vok">ρυθμισμένη</span>' : '<span class="vwarn">χρειάζεται ρύθμιση</span>'}</summary>
-<form id="pcfg" class="grid" style="margin-top:10px"><div class="full"><label>Διεύθυνση Apps Script της Πύλης (URL /exec)</label><input name="url" value="${esc(url)}" placeholder="https://script.google.com/macros/s/…/exec"></div>
-<div class="full"><label>Κλειδί διαχείρισης (ίδιο με το ADMIN_KEY στις Script Properties)</label><input name="key" type="password" value="${esc(key)}" autocomplete="off"></div>
+<details class="card fold"${url ? '' : ' open'}><summary><b>⚙ Ρύθμιση</b> — ${url ? '<span class="vok">ρυθμισμένη</span>' : '<span class="vwarn">χρειάζεται ρύθμιση</span>'}</summary>
+<form id="pcfg" class="grid" style="margin-top:10px"><div class="full"><label>Διεύθυνση Apps Script της Πύλης (URL /exec)</label><input name="url" value="${esc(url)}" placeholder="https://script.google.com/macros/s/…/exec">
+<small class="muted">Όχι το όνομα του αποθετηρίου: script.google.com → έργο «Πύλη Γραμματέων Στοών» → <b>Deploy → Manage deployments</b> → αντιγραφή του <b>Web app URL</b> (τελειώνει σε <code>/exec</code>).</small></div>
+<div class="full"><label>Κλειδί διαχείρισης (προαιρετικό — ίδιο με το ADMIN_KEY στις Script Properties)</label><input name="key" type="password" value="${esc(key)}" autocomplete="off"></div>
 <div class="full"><small class="muted">Οδηγίες εγκατάστασης: lodge/README.md. Το κλειδί φυλάσσεται μόνο στα ιδιωτικά δεδομένα. Η διεύθυνση δημοσιεύεται για τη σελίδα των Γραμματέων.</small></div>
 <div class="full toolbar"><button class="btn primary">💾 Αποθήκευση ρύθμισης</button><button type="button" class="btn" data-act="test">🩺 Έλεγχος σύνδεσης</button></div></form></details>
+${url ? `<div class="card" id="padm"><b>🔐 Σύνδεση διαχειριστή</b> — ${sess ? `<span class="vok">✓ ${esc(sess.email)} (${sess.role === 'super' ? 'super admin' : 'διαχειριστής'})</span> <button type="button" class="btn small" data-act="logout">Αποσύνδεση</button>`
+  : key ? '<span class="vok">με το κλειδί διαχείρισης</span>' : '<span class="vwarn">δεν έχετε συνδεθεί</span>'}
+${sess ? '' : `<div class="toolbar" style="margin-top:8px"><button type="button" class="btn primary" data-act="glogin">Σύνδεση με Google (super admin — απευθείας)</button></div>
+<div class="toolbar"><input id="otpEmail" type="email" placeholder="email διαχειριστή" autocomplete="email" style="max-width:260px"><button type="button" class="btn" data-act="otpSend">✉ Αποστολή κωδικού</button>
+<input id="otpCode" inputmode="numeric" maxlength="6" placeholder="κωδικός 6 ψηφίων" style="max-width:150px"><button type="button" class="btn" data-act="otpVerify">✓ Επιβεβαίωση</button></div>
+<small class="muted">Ο super admin μπαίνει απευθείας με τον λογαριασμό Google του· οι διαχειριστές με κωδικό μιας χρήσης (10΄) που φτάνει στο email τους. Οι λίστες (SUPER_ADMINS, ADMIN_EMAILS) ορίζονται μόνο στις Script Properties.</small>`}</div>` : ''}
 <div class="toolbar"><button type="button" class="btn primary" data-act="pull">⬇ Λήψη αλλαγών Γραμματέων</button><button type="button" class="btn" data-act="push">⬆ Δημοσίευση μητρώων (${withCode.length} Στοές)</button>
 <button type="button" class="btn" data-act="genAll">+ Κωδικοί για όσες δεν έχουν</button><button type="button" class="btn" data-act="sendAll">✉ Αποστολή κωδικών σε όλες</button><span class="muted" id="pst"></span></div>
 ${vLodge ? `<div class="card" id="vers"><h2 style="margin-top:0">Εκδόσεις Μητρώου · Στοά ${esc(vLodge.name)} ${esc(vLodge.number)}</h2><div id="vlist" class="muted">Φόρτωση…</div><p><a href="#/lodge-portal">← Όλες οι Στοές</a></p></div>` : ''}
@@ -179,7 +208,7 @@ ${vLodge ? `<div class="card" id="vers"><h2 style="margin-top:0">Εκδόσει�
       el.querySelector('#pcfg').addEventListener('submit', async (e) => {
         e.preventDefault();
         const f = new FormData(e.target), u = S(f.get('url')), k = S(f.get('key'));
-        if (u && !/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(u)) { toast('Η διεύθυνση πρέπει να είναι το URL /exec του Apps Script.', 'error'); return; }
+        if (u && !/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(u)) { toast('Η διεύθυνση πρέπει να είναι το Web app URL του Apps Script (https://script.google.com/macros/s/…/exec) — όχι όνομα αποθετηρίου. Δείτε την οδηγία κάτω από το πεδίο.', 'error'); return; }
         await db.save('Πύλη Γραμματέων: ρύθμιση', (tx) => { tx.setting('lodge_portal_url', u); tx.setting('lodge_portal_key', k); publishPublic(tx); });
         flash('Η ρύθμιση της Πύλης αποθηκεύτηκε.'); go('/lodge-portal');
       });
@@ -205,7 +234,11 @@ ${vLodge ? `<div class="card" id="vers"><h2 style="margin-top:0">Εκδόσει�
         st.textContent = ''; flash(`Στάλθηκαν ${ok} από ${list.length} κωδικούς.`); go('/lodge-portal', query);
       };
       bind(el, {
-        async test() { const r = await busy('Έλεγχος…', () => api({ action: 'admin_status' })); if (r) toast(`✓ Η Πύλη απαντά (έκδοση ${r.version}, ${r.lodges} Στοές με κωδικό).`); },
+        async test() { const r = await busy('Έλεγχος…', () => api({ action: 'admin_status' })); if (r) toast(`✓ Η Πύλη απαντά (έκδοση ${r.version}, ${r.lodges} Στοές με κωδικό)${r.who ? ' · ' + r.who : ''}.`); },
+        async glogin() { const r = await busy('Σύνδεση με Google…', portalGoogleLogin); if (r) { flash(`✓ Συνδεθήκατε ως ${r.email} (super admin).`); go('/lodge-portal', query); } },
+        async otpSend() { const em = el.querySelector('#otpEmail').value; const r = await busy('Αποστολή κωδικού…', () => portalOtpSend(em)); if (r) { toast('Αν το email είναι διαχειριστή της Πύλης, στάλθηκε κωδικός (ισχύει 10 λεπτά).'); el.querySelector('#otpCode').focus(); } },
+        async otpVerify() { const r = await busy('Επιβεβαίωση…', () => portalOtpVerify(el.querySelector('#otpEmail').value, el.querySelector('#otpCode').value)); if (r) { flash(`✓ Συνδεθήκατε ως ${r.email}.`); go('/lodge-portal', query); } },
+        logout() { portalLogout(); flash('Αποσυνδεθήκατε από την Πύλη.'); go('/lodge-portal', query); },
         async pull() { const n = await busy('Λήψη αλλαγών…', syncPortal); if (n !== null) { flash(n ? `Πέρασαν στο Μητρώο ${n} ${n === 1 ? 'αλλαγή' : 'αλλαγές'} Γραμματέων.` : 'Δεν υπάρχουν νέες αλλαγές.'); go('/lodge-portal', query); } },
         async push() { const r = await busy('Δημοσίευση…', () => pushPortal()); if (r) toast(`✓ Δημοσιεύθηκαν ${r.written} μητρώα (τα υπόλοιπα χωρίς αλλαγή)${r.skipped && r.skipped.length ? ` · ${r.skipped.length} περιμένουν «Λήψη αλλαγών»` : ''}.`); },
         async gen(d) { if (codeOf(d.n) && !confirm('Νέος κωδικός: ο παλιός παύει να ισχύει. Συνέχεια;')) return; await genFor([d.n]); go('/lodge-portal', query); },

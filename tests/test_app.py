@@ -3350,8 +3350,9 @@ def test_members_export_active_lodge_province(app, tmp_path):
 def test_lodge_portal_apps_script_logic():
     # Ο server της Πύλης (lodge/apps-script/Code.gs) με ψεύτικο Drive/Mail: δημοσίευση → σύνδεση → αλλαγή (έκδοση + email) → λήψη → επαναφορά
     import subprocess
-    r = subprocess.run(['node', str(ROOT / 'tests' / 'gas' / 'lodge_portal.test.js')], capture_output=True, text=True)
-    assert r.returncode == 0, r.stdout + r.stderr
+    for t in ('lodge_portal.test.js', 'lodge_portal_admin.test.js'):  # και σύνδεση διαχειριστή: OTP email / Google (super admin)
+        r = subprocess.run(['node', str(ROOT / 'tests' / 'gas' / t)], capture_output=True, text=True)
+        assert r.returncode == 0, t + ': ' + r.stdout + r.stderr
 
 
 def test_lodge_secretary_page(browser, base_url):
@@ -3885,3 +3886,60 @@ def test_programme_marks_completed_visits(app):
     app.page.wait_for_selector('text=Στάλθηκε με email')
     r = app.page.evaluate("async () => { const {publicProgramme} = await import('./modules/visits.js'); const {db} = await import('./core/store.js'); return [publicProgramme().rows.map((x) => !!x.done), !!db.all('visits')[1].prov_notified_at]; }")
     assert r == [[True, True], True], r
+
+
+def test_lodge_portal_admin_login_otp_and_google(app):
+    # Πύλη: σύνδεση διαχειριστή χωρίς κλειδί — κωδικός μιας χρήσης στο email· ο super admin απευθείας με Google
+    import json as _j
+    app.connect_local()
+    API = 'https://script.google.com/macros/s/TESTOTP/exec'
+    calls = []
+
+    def api(route):
+        b = _j.loads(route.request.post_data or '{}')
+        calls.append(b)
+        a = b.get('action')
+        if a == 'admin_otp_send': return route.fulfill(json={'ok': True, 'sent': True})
+        if a == 'admin_otp_verify':
+            ok = b.get('code') == '123456'
+            return route.fulfill(json={'ok': True, 'session': 's' * 40, 'email': b['email'], 'role': 'admin', 'expires_in': 21600} if ok else {'ok': False, 'error': 'otp_wrong'})
+        if a == 'admin_google':
+            return route.fulfill(json={'ok': True, 'session': 'g' * 40, 'email': 'super@example.com', 'role': 'super', 'expires_in': 21600} if b.get('access_token') == 'g-token' else {'ok': False, 'error': 'admin_unauthorized'})
+        if a == 'admin_status':
+            ok = b.get('session') in ('s' * 40, 'g' * 40)
+            return route.fulfill(json={'ok': True, 'version': 2, 'lodges': 0, 'who': 'x'} if ok else {'ok': False, 'error': 'admin_unauthorized'})
+        return route.fulfill(json={'ok': True, 'changes': [], 'written': 0, 'skipped': []})
+    app.page.route(API, api)
+    app.page.route('https://accounts.google.com/gsi/client', lambda r: r.fulfill(body=GSI_FAKE, content_type='text/javascript'))
+    app.page.evaluate("async () => { const {db} = await import('./core/store.js'); await db.save('x', (tx) => tx.setting('google_client_id', 'test.apps.googleusercontent.com')); }")
+    app.go('/lodge-portal')
+    # λάθος τιμή (όνομα αποθετηρίου) → σαφές μήνυμα
+    app.page.fill('#pcfg [name=url]', 'NGLG-GSEC/nglg-grammateia-data')
+    app.page.click('#pcfg button.primary')
+    app.page.wait_for_selector('text=όχι όνομα αποθετηρίου')
+    app.page.fill('#pcfg [name=url]', API)
+    app.page.click('#pcfg button.primary')
+    app.page.wait_for_selector('#padm')
+    assert 'δεν έχετε συνδεθεί' in app.text('#padm')
+    app.page.fill('#otpEmail', 'gs@example.com')
+    app.page.click('[data-act=otpSend]')
+    app.page.wait_for_selector('text=στάλθηκε κωδικός')
+    app.page.fill('#otpCode', '000000')
+    app.page.click('[data-act=otpVerify]')
+    app.page.wait_for_selector('text=Λάθος κωδικός')
+    app.page.fill('#otpCode', '123456')
+    app.page.click('[data-act=otpVerify]')
+    app.page.wait_for_selector('text=Συνδεθήκατε ως gs@example.com')
+    assert '✓ gs@example.com (διαχειριστής)' in app.text('#padm')
+    app.page.evaluate("document.querySelector('#pcfg').closest('details').open = true")
+    app.page.click('[data-act=test]')
+    app.page.wait_for_selector('text=Η Πύλη απαντά')
+    assert calls[-1]['action'] == 'admin_status' and calls[-1]['session'] == 's' * 40
+    # το session δεν γράφεται στα δεδομένα
+    st = app.page.evaluate("async () => JSON.stringify((await import('./core/store.js')).db.settings)")
+    assert 's' * 40 not in st
+    app.page.click('[data-act=logout]')
+    app.page.wait_for_selector('[data-act=glogin]')
+    app.page.click('[data-act=glogin]')
+    app.page.wait_for_selector('text=Συνδεθήκατε ως super@example.com')
+    assert 'super admin' in app.text('#padm')
