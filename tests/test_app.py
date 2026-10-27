@@ -2484,7 +2484,9 @@ def test_gm_decisions_in_app_with_declarations(app):
         tx.insert('visits', { visit_date: '2026-11-02', lodge: 'ΑΚΡΟΠΟΛΙΣ', lodge_number: '104', location: '', province: 'ΕπΜΣτ. Αθηνών', rep_id: null, notes: '' });
         const gm = tx.insert('reps', { name: 'Ιωάννης', surname: 'Μπενετάτος', office: 'Μέγας Διδάσκαλος', email: '', mobile: '' });
         tx.insert('visits', { visit_date: '2026-11-11', lodge: 'ΕΝΩΣΙΣ', lodge_number: '16', location: '', province: 'ΕπΜΣτ. Ιονίων Νήσων', rep_id: gm.id, notes: '' }); });
-      sessionStorage.setItem('nglg-decl-key', 'kleidi'); }""")
+      sessionStorage.setItem('nglg-decl-key', 'kleidi');
+      // η αυτόματη δημοσίευση του προγράμματος (400 ms μετά την αποθήκευση) να τελειώσει πριν ανοίξει η σελίδα
+      await new Promise((r) => setTimeout(r, 600)); await (await import('./modules/visits.js')).publishProgramme(); }""")
     app.go('/visits/decisions?frm=2026-10-01&to=2026-12-31')
     # όπου πηγαίνει ο ίδιος ο ΜΔ δεν χρειάζεται απόφαση: δεν εμφανίζεται (μόνο στις Επισκέψεις Στοών)
     assert app.page.locator('.gd-card', has_text='ΕΝΩΣΙΣ').count() == 0 and 'με τον Μ.Δ. αυτοπροσώπως' in app.text()
@@ -3551,3 +3553,27 @@ def test_old_diploma_register_import(app):
     app.page.click('#dpRead')
     app.page.wait_for_selector('#dpApply')
     assert app.page.is_disabled('#dpApply')
+
+
+def test_diploma_lodge_number_from_catalog(app):
+    # Αρ. Στοάς στο Δίπλωμα από τον κατάλογο Στοών όταν η καρτέλα έχει μόνο το όνομα (Garibaldi → 13)· συμπλήρωση στο Μητρώο μόνο με επιβεβαίωση
+    app.connect_local()
+    app.page.evaluate("""async () => { const {db} = await import('./core/store.js'); const {insertMember} = await import('./modules/members.js');
+      await db.save('x', (tx) => insertMember(tx, { surname: 'Στοαφίλος', first_name: 'Φίλιππος', diploma_no: '980', date_ea: '2024-06-03', date_mm: '2026-02-02', mm_lodge_name: 'Garibaldi', lodges: [] })); }""")
+    mid = app.page.evaluate("async () => (await import('./core/store.js')).db.all('member_registry').find((m) => m.surname === 'Στοαφίλος').id")
+    app.go(f'/members/diploma?id={mid}')
+    assert app.page.input_value('.dip-fields [name=lodge_no]') == '13'
+    assert 'Garibaldi ὑπ’ ἀριθ. 13' in app.text('.dip-view') and 'Lodge No. 13' in app.text('.dip-view')
+    app.page.fill('.dip-fields [name=lodge]', 'LA FRANCE')
+    app.page.dispatch_event('.dip-fields [name=lodge]', 'input')
+    assert app.page.input_value('.dip-fields [name=lodge_no]') == '58'
+    # η διάταξη: κείμενο ανάμεσα στους κίονες, αριθμός Διπλώματος πιο δεξιά και έντονος
+    b = app.page.evaluate("async () => { const d = await import('./modules/diploma.js'); const B = d.diplomaBoxes(); return [B.gr.x, B.gr.y, B.en.x, B.dno.x, B.dno.heavy]; }")
+    assert b == [63, 178.6, 165, 90.3, True], b
+    app.go('/members/diplomas?tab=protocol')
+    row = [r for r in app.page.eval_on_selector_all('.memtable tr', "rs => rs.map((r) => [...r.cells].map((c) => c.innerText.trim()))") if r and 'Στοαφίλος' in ' '.join(r)][0]
+    assert row[5] == 'Garibaldi' and row[6] == '13', row
+    app.page.on('dialog', lambda d: d.accept())
+    app.page.click('[data-act=lodgeFix]')
+    app.page.wait_for_selector('text=Συμπληρώθηκε ο αριθμός Στοάς Εγέρσεως σε 1 μέλη')
+    assert app.page.evaluate(f"async () => (await import('./core/store.js')).db.get('member_registry', {mid}).mm_lodge_number") == '13'

@@ -5,11 +5,12 @@
 // Έκδοση: Μητρώο → μέλος → τα πεδία {…} συμπληρώνονται από την καρτέλα του (Δίπλωμα, Εισδοχή, Έγερση, Στοά) και διορθώνονται πριν την εκτύπωση.
 import { db } from '../core/store.js';
 import { module, go, bind, flash, toast, confirmDo } from '../core/app.js';
-import { esc } from '../core/util.js';
+import { esc, fold } from '../core/util.js';
 import { regCode } from '../core/people.js';
 import { attachPicker, memberItems } from '../core/pickers.js';
 import { IMG, printPaper, GS_NAME } from '../core/paper.js';
-import { isoOf, lodgesByMember } from './members.js';
+import { isoOf, lodgesByMember, lodgeNumberFor } from './members.js';
+import { lodgesAll, lodgeNoKey } from './lodges.js';
 
 export const DIPLOMA_KEY = 'diploma-mm';
 export const PAGE = { w: 297, h: 420 }; // A3 κατακόρυφο (mm)
@@ -35,13 +36,13 @@ const EN_TEXT = 'Whose signature appears in the margin hereof was regularly init
 export const BOXES = {
   header: { label: 'Κεφαλίδα (θυρεός, τίτλοι)', type: 'img', src: 'img/diploma/header.jpg', x: 27, y: 7.2, w: 244.7, h: 149 },
   pillars: { label: 'Εικόνα κιόνων', type: 'img', src: 'img/diploma/pillars.jpg', x: 9.8, y: 157.3, w: 281.9, h: 206 },
-  gr: { label: 'Ελληνικό κείμενο', type: 'text', text: GR_TEXT, x: 56.7, y: 164.6, w: 85.5, h: 145.8, size: 17, font: SCRIPT, align: 'center', fit: true },
-  en_head: { label: 'Αγγλικά — εισαγωγή και όνομα', type: 'text', text: EN_HEAD, x: 159.2, y: 164.3, w: 81.3, h: 27.8, size: 17, font: SCRIPT, align: 'center', fit: true },
-  en: { label: 'Αγγλικό κείμενο', type: 'text', text: EN_TEXT, x: 158, y: 189.1, w: 82.5, h: 137.2, size: 17, font: SCRIPT, align: 'center', fit: true },
+  gr: { label: 'Ελληνικό κείμενο', type: 'text', text: GR_TEXT, x: 63, y: 178.6, w: 73, h: 125, size: 17, font: SCRIPT, align: 'center', fit: true },
+  en_head: { label: 'Αγγλικά — εισαγωγή και όνομα', type: 'text', text: EN_HEAD, x: 165, y: 178.3, w: 71, h: 34, size: 17, font: SCRIPT, align: 'center', fit: true },
+  en: { label: 'Αγγλικό κείμενο', type: 'text', text: EN_TEXT, x: 165, y: 212.5, w: 71, h: 92, size: 17, font: SCRIPT, align: 'center', fit: true },
   margin: { label: 'Περιθώριο υπογραφής μέλους', type: 'shape', shape: 'margin', x: 15.2, y: 224.5, w: 18, h: 61 },
   date_top: { label: 'Περιθώριο — ημερομηνία (πάνω)', type: 'text', text: '{Ημ. Έκδοσης}', x: 16.3, y: 234.7, w: 29.7, h: 10.3, rot: -90, size: 18, bold: true, font: SCRIPT, align: 'right' },
   date_bottom: { label: 'Περιθώριο — ημερομηνία (κάτω)', type: 'text', text: '{Ημ. Εγέρσεως}', x: 16, y: 264.6, w: 29.7, h: 10.3, rot: -90, size: 18, bold: true, font: SCRIPT, align: 'left' },
-  dno: { label: 'Αριθμός Διπλώματος', type: 'text', text: '{Αρ. Διπλώματος}', x: 85.3, y: 343.4, w: 28.4, h: 9, rot: 8.2, size: 18, bold: true, font: "Calibri,'Noto Serif',sans-serif", align: 'left', style: 'stamp' },
+  dno: { label: 'Αριθμός Διπλώματος', type: 'text', text: '{Αρ. Διπλώματος}', x: 90.3, y: 343.4, w: 28.4, h: 9, rot: 8.2, size: 20, bold: true, heavy: true, font: "Calibri,'Noto Serif',sans-serif", align: 'left', style: 'stamp' },
   seal: { label: 'Θέση σφραγίδας', type: 'shape', shape: 'seal', x: 124.3, y: 363.7, w: 50, h: 50 },
   gs_frame: { label: 'Πλαίσιο υπογραφής Μ. Γραμματέως', type: 'img', src: 'img/diploma/frame.png', x: 11.4, y: 365.1, w: 84.4, h: 24.6 },
   gs_sig: { label: 'Υπογραφή Μ. Γραμματέως', type: 'img', src: IMG.signature, x: 29.3, y: 369.1, w: 41.9, h: 16.8, contain: true },
@@ -106,19 +107,54 @@ export function diplomaBoxes(t = diplomaTemplate()) {
   return Object.fromEntries(Object.entries(BOXES).map(([k, b]) => [k, { ...b, ...(over[k] || {}) }]));
 }
 
+// Διάταξη: το κείμενο δύο γραμμές χαμηλότερα και μέσα στο κενό ανάμεσα στους κίονες· ο αριθμός Διπλώματος 5 mm δεξιά.
+// Όσα πλαίσια είχαν ήδη μετακινηθεί στη «Σχεδίαση Διπλώματος» μετακινούνται κατά το ίδιο (όχι επαναφορά).
+db.migrate('diploma-layout-text-lower-2026-10', (tx) => {
+  const t = tx.all('letter_templates').find((x) => x.key === DIPLOMA_KEY);
+  if (!t) return;
+  const L = layoutRaw(t), bx = { ...(L.boxes || {}) };
+  if (!Object.keys(bx).length) return;
+  const move = (k, f) => { if (bx[k]) bx[k] = f({ ...bx[k] }); };
+  move('gr', (b) => ({ ...b, ...(b.y != null ? { y: +b.y + 14 } : {}), ...(b.x != null ? { x: Math.max(+b.x, 63), w: Math.min(+(b.w ?? 73), 136 - Math.max(+b.x, 63)) } : {}) }));
+  move('en_head', (b) => ({ ...b, ...(b.y != null ? { y: +b.y + 14 } : {}), ...(b.x != null ? { x: Math.max(+b.x, 165), w: Math.min(+(b.w ?? 71), 236 - Math.max(+b.x, 165)) } : {}) }));
+  move('en', (b) => ({ ...b, ...(b.y != null ? { y: +b.y + 23.4 } : {}), ...(b.x != null ? { x: Math.max(+b.x, 165), w: Math.min(+(b.w ?? 71), 236 - Math.max(+b.x, 165)) } : {}) }));
+  move('dno', (b) => ({ ...b, ...(b.x != null ? { x: +b.x + 5 } : {}), heavy: true }));
+  tx.update('letter_templates', t.id, { layout: { ...L, boxes: bx } });
+});
+
 db.migrate('diploma-template-2026-10', (tx) => {
   if (tx.all('letter_templates').some((t) => t.key === DIPLOMA_KEY)) return;
   tx.insert('letter_templates', { key: DIPLOMA_KEY, kind: 'diploma', name: 'ΔΙΠΛΩΜΑ ΔΙΔΑΣΚΑΛΟΥ ΤΕΚΤΟΝΟΣ', body: '', active: 1, layout: {} });
 });
 
+// Στοά από το όνομά της στον κατάλογο Συμβολικών Στοών (π.χ. «Garibaldi» → 13): ακριβές όνομα, μετά μοναδική αρχή ονόματος, μετά γνωστά παρωνύμια
+export function lodgeFromName(name) {
+  const n = fold(String(name || '').replace(/\s+/g, ' ').trim());
+  if (!n) return null;
+  const all = lodgesAll(), same = all.filter((l) => fold(l.name) === n);
+  if (same.length === 1) return same[0];
+  const pre = all.filter((l) => fold(l.name).startsWith(n + ' ') || n.startsWith(fold(l.name) + ' '));
+  if (pre.length === 1) return pre[0];
+  const no = lodgeNumberFor(name, '');
+  return no ? all.find((l) => lodgeNoKey(l.number) === lodgeNoKey(no)) || null : null;
+}
+// Στοά Εγέρσεως του μέλους με αριθμό: από την καρτέλα· χωρίς αριθμό, από τον κατάλογο Στοών (ίδια πηγή παντού: Δίπλωμα, Πρωτόκολλο)
+export function mmLodgeOf(m) {
+  const ls = lodgesByMember()[m.id] || [], l0 = ls[0] || {};
+  const name = String(m.mm_lodge_name || l0.lodge_name || '').trim();
+  let number = String(m.mm_lodge_name ? m.mm_lodge_number ?? '' : l0.lodge_number ?? '').trim();
+  if (!number && name) { const l = lodgeFromName(name); if (l) number = String(l.number); }
+  return { name, number };
+}
+
 // Τιμές πεδίων από την καρτέλα του μέλους
 export function diplomaValues(m) {
-  const ls = lodgesByMember()[m.id] || [], l0 = ls[0] || {};
+  const ls = lodgesByMember()[m.id] || [], l0 = ls[0] || {}, ml = mmLodgeOf(m);
   const lodge = String(m.mm_lodge_name || l0.lodge_name || '').trim(), name = `${m.first_name || ''} ${m.surname || ''}`.replace(/\s+/g, ' ').trim();
   // Ημ. Εισδοχής: από την καρτέλα· αλλιώς η ημερομηνία μύησης στη Στοά (ιδιότητα «Τακτικό»), η παλαιότερη
   const eaLodge = ls.filter((l) => /τακτικ/i.test(String(l.capacity || l.member_status || '')) && isoOf(l.capacity_date)).map((l) => isoOf(l.capacity_date)).sort()[0] || '';
   return { name, name_en: greeklish(name), dno: String(m.diploma_no ?? '').trim(), ea: isoOf(m.date_ea) || eaLodge, mm: isoOf(m.date_mm) || '',
-    issue: new Date().toISOString().slice(0, 10), lodge, lodge_en: greeklish(lodge), lodge_no: String(m.mm_lodge_name ? m.mm_lodge_number ?? '' : l0.lodge_number ?? '').trim() };
+    issue: new Date().toISOString().slice(0, 10), lodge, lodge_en: greeklish(lodge), lodge_no: ml.number };
 }
 export function placeholderMap(v) {
   const ea = parts(v.ea), is = parts(v.issue), map = {
@@ -139,7 +175,7 @@ export function diplomaSheet(v, boxes = diplomaBoxes(), { edit = false } = {}) {
     if (b.hidden && !edit) return '';
     const st = `left:${b.x}mm;top:${b.y}mm;width:${b.w}mm;height:${b.h}mm;${b.rot ? `transform:rotate(${b.rot}deg);` : ''}`;
     const inner = b.type === 'img' ? `<img src="${esc(b.src)}" alt="" style="object-fit:${b.contain ? 'contain' : 'fill'}">`
-      : b.type === 'shape' ? '' : `<div class="dip-txt" style="font-family:${esc(b.font || SCRIPT)};font-size:${b.size}pt;text-align:${b.align || 'center'};${b.bold ? 'font-weight:700;' : ''}${b.color ? `color:${esc(b.color)};` : ''}">${textHtml(b.text, map)}</div>`;
+      : b.type === 'shape' ? '' : `<div class="dip-txt" style="font-family:${esc(b.font || SCRIPT)};font-size:${b.size}pt;text-align:${b.align || 'center'};${b.heavy ? 'font-weight:900;' : b.bold ? 'font-weight:700;' : ''}${b.color ? `color:${esc(b.color)};` : ''}">${textHtml(b.text, map)}</div>`;
     return `<div class="dip-box dip-${b.type}${b.shape ? ` dip-${b.shape}` : ''}${b.style ? ` dip-${b.style}` : ''}${b.fit ? ' dip-fit' : ''}${b.hidden ? ' dip-hidden' : ''}" data-box="${k}" style="${st}">${inner}${edit ? `<span class="dip-tag">${esc(b.label)}</span><span class="dip-rs" data-rs="${k}">◢</span>` : ''}</div>`;
   };
   return `<div class="dip-sheet${edit ? ' dip-edit' : ''}">${Object.entries(boxes).map(([k, b]) => box(k, b)).join('')}</div>`;
@@ -186,6 +222,7 @@ ${m ? `<div class="print-area dip-view">${diplomaSheet(v)}</div>` : ''}`,
       const redraw = (e) => {
         const auto = { name: 'name_en', lodge: 'lodge_en' }[e.target.name]; // τα λατινικά ακολουθούν τα ελληνικά
         if (auto) el.querySelector(`[name=${auto}]`).value = greeklish(e.target.value);
+        if (e.target.name === 'lodge') { const l = lodgeFromName(e.target.value); if (l) el.querySelector('[name=lodge_no]').value = String(l.number); } // Αρ. Στοάς από τον κατάλογο
         for (const i of el.querySelectorAll('.dip-fields input')) v[i.name] = i.value;
         view.innerHTML = diplomaSheet(v); zoomDiploma(view); fitDiploma(view);
       };

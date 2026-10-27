@@ -489,7 +489,7 @@ input[type=file]{max-width:100%;min-width:0}
 .dip-fit{overflow:hidden}
 .dip-margin{border:1px solid #000;background:#fff radial-gradient(#9dc3e6 .5px,transparent .6px) 0 0/1.2mm 1.2mm}
 .dip-seal{border:.3mm dotted #c9c5c5;border-radius:50%}
-.dip-stamp .dip-txt{color:#e2efda;-webkit-text-stroke:.25mm #2e75b6;text-shadow:.4mm .4mm .6mm #0006;white-space:nowrap}
+.dip-stamp .dip-txt{color:#e2efda;-webkit-text-stroke:.45mm #1f5f9e;text-shadow:.4mm .4mm .6mm #0006;white-space:nowrap}
 .dip-edit .dip-box{outline:1px dashed #5b8bd5;cursor:move}
 .dip-edit .dip-box.dip-on{outline:2px solid #e2711d;z-index:5}
 .dip-edit .dip-hidden{opacity:.25}

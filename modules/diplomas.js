@@ -9,7 +9,7 @@ import { esc, fold, sortBy, readXlsx, parsePasted, exportXlsx, fmtDate } from '.
 import { identify, regCode, matchesCode, nameCandidates } from '../core/people.js';
 import { attachPicker, memberItems, noContact } from '../core/pickers.js';
 import { regBadge, isAdmin, isoOf, lodgesByMember, exportBar, bindExport, lodgeNumberFor } from './members.js';
-import { greeklish } from './diploma.js';
+import { greeklish, mmLodgeOf } from './diploma.js';
 import { lodgeNoKey, lodgesAll } from './lodges.js';
 import { reportPaper, printPaper } from '../core/paper.js';
 
@@ -225,7 +225,7 @@ export function diplomasPage({ query = {} } = {}) {
   const ms = db.all('member_registry'), withD = ms.filter(hasDip), byM = lodgesByMember();
   const nav = `<nav class="decltabs">${TABS.map(([k, l]) => `<a class="btn${k === tab ? ' primary' : ''}" href="#/members/diplomas?tab=${k}">${l}</a>`).join('')}
 <button type="button" class="btn" data-act="template">⬇ Πρότυπο Excel</button></nav>`;
-  let body = '', pageMembers = null, protocolRows = null;
+  let body = '', pageMembers = null, protocolRows = null, lodgeFix = [];
   if (tab === 'protocol') {
     // 📖 Πρωτόκολλο Διπλωμάτων Διδασκάλων Τεκτόνων: κάθε έκδοση (από το παλιό Μητρώο Διπλωμάτων, δεμένη στο μέλος) και κάθε μέλος με αριθμό
     // Διπλώματος χωρίς καταχωρισμένη έκδοση — ονόματα, ημερομηνίες και Στοά από την καρτέλα του μέλους (καμία ξεχωριστή λίστα ονομάτων)
@@ -241,12 +241,14 @@ export function diplomasPage({ query = {} } = {}) {
     const years = [...new Set(withD.map((m) => String(isoOf(m.date_mm)).slice(0, 4)).filter((y) => /^\d{4}$/.test(y)))].sort().reverse();
     const row = (e, i) => { const m = e.m || {}, x = e.x || {};
       return [String(i + 1), `MM${e.no}`, m.registry_no != null && m.registry_no !== '' ? `M${m.registry_no}` : '', e.m ? `${m.surname || ''} ${m.first_name || ''}`.trim() : `${x.register_name || ''} (δεν βρέθηκε στο Μητρώο)`,
-        fmtDate(isoOf(m.date_mm)) || String(m.date_mm || ''), m.mm_lodge_name || x.lodge_name || '', String(m.mm_lodge_number ?? x.lodge_number ?? ''), fmtDate(x.issued_on || '')]; };
+        fmtDate(isoOf(m.date_mm)) || String(m.date_mm || ''), e.m ? mmLodgeOf(m).name : x.lodge_name || '', e.m ? mmLodgeOf(m).number : String(x.lodge_number ?? ''), fmtDate(x.issued_on || '')]; };
+    // Μέλη με Στοά Εγέρσεως χωρίς αριθμό, που ο κατάλογος Στοών τον δίνει (π.χ. Garibaldi → 13) — καταχώριση μόνο με επιβεβαίωση
+    lodgeFix = withD.filter((m) => String(m.mm_lodge_name || '').trim() && !String(m.mm_lodge_number ?? '').trim()).map((m) => ({ m, no: mmLodgeOf(m).number })).filter((x) => x.no);
     const head = ['Α/Α', 'Αρ. Διπλώματος', 'Αρ. Μητρώου', 'Ονοματεπώνυμο', 'Ημ. Εγέρσεως (Διδάσκαλος)', 'Στοά Εγέρσεως', 'Αρ. Στοάς', 'Ημ. Έκδοσης'];
     protocolRows = { head, rows: xs.map(row), title: `ΠΡΩΤΟΚΟΛΛΟ ΔΙΠΛΩΜΑΤΩΝ ΔΙΔΑΣΚΑΛΩΝ ΤΕΚΤΟΝΩΝ${yr ? ' — ' + yr : ''}` };
     body = `<form class="card filters vfilters f3" id="dpp"><input name="q" value="${esc(q)}" placeholder="🔎 Αδελφός, MM αριθμός, Στοά…">
 <select name="year"><option value="">Κάθε έτος Εγέρσεως</option>${years.map((y) => `<option${y === yr ? ' selected' : ''}>${y}</option>`).join('')}</select><button>Αναζήτηση</button></form>
-<div class="toolbar"><span class="muted">${xs.length} Διπλώματα</span><button type="button" class="btn primary" data-act="protoPdf">🖨 PDF Πρωτοκόλλου</button><button type="button" class="btn" data-act="protoXlsx">⬇ Excel</button></div>
+<div class="toolbar"><span class="muted">${xs.length} Διπλώματα</span><button type="button" class="btn primary" data-act="protoPdf">🖨 PDF Πρωτοκόλλου</button><button type="button" class="btn" data-act="protoXlsx">⬇ Excel</button>${lodgeFix.length ? `<button type="button" class="btn" data-act="lodgeFix">🔗 Αρ. Στοάς Εγέρσεως από τον κατάλογο (${lodgeFix.length})</button>` : ''}</div>
 <div class="memtable">${table(head.concat(['']), xs.map((e, i) => { const r = row(e, i); return [r[0], `<b class="official-number">${esc(r[1])}</b>`, esc(r[2]), e.m ? `<a href="#/members/${e.m.id}">${esc(r[3])}</a>` : `<span class="vwarn">${esc(r[3])}</span>`,
   r[4] ? esc(r[4]) : '<span class="vwarn">λείπει</span>', esc(r[5]) || '<span class="muted">—</span>', esc(r[6]), esc(r[7]), e.m ? `<a class="btn small" href="#/members/diploma?id=${e.m.id}">🎓 Δίπλωμα</a>` : '']; }), 'Δεν υπάρχουν Διπλώματα στο Μητρώο.')}</div>
 <div class="print-area" id="dpPaper" hidden></div>`;
@@ -304,6 +306,12 @@ ${table(['Αρ.', 'Στοά', 'Ενεργά μέλη', 'Με Δίπλωμα', '�
           pa.innerHTML = reportPaper(P.title, `Σύνολο: ${P.rows.length} Διπλώματα · ${new Date().toLocaleDateString('el-GR')}`,
             `<table><thead><tr>${P.head.map((h) => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${P.rows.map((r) => `<tr>${r.map((c) => `<td>${esc(c)}</td>`).join('')}</tr>`).join('')}</tbody></table>`);
           pa.hidden = false; printPaper('Protokollo_Diplomaton'); addEventListener('afterprint', () => { pa.hidden = true; }, { once: true });
+        },
+        async lodgeFix() {
+          const list = lodgeFix.map((x) => `${x.m.surname} ${x.m.first_name}: ${x.m.mm_lodge_name} → Αρ. ${x.no}`).join('\n');
+          if (!confirm(`Συμπλήρωση του αριθμού της Στοάς Εγέρσεως στην καρτέλα ${lodgeFix.length} μελών (από τον κατάλογο Στοών):\n\n${list.slice(0, 1500)}${list.length > 1500 ? '\n…' : ''}`)) return;
+          await db.save(`Διπλώματα: Αρ. Στοάς Εγέρσεως από τον κατάλογο (${lodgeFix.length} μέλη)`, (tx) => { for (const x of lodgeFix) tx.update('member_registry', x.m.id, { mm_lodge_number: x.no }); });
+          flash(`Συμπληρώθηκε ο αριθμός Στοάς Εγέρσεως σε ${lodgeFix.length} μέλη.`); go('/members/diplomas', { tab: 'protocol' });
         },
         protoXlsx: () => exportXlsx('Πρωτόκολλο Διπλωμάτων Διδασκάλων.xlsx', 'ΠΡΩΤΟΚΟΛΛΟ ΔΙΠΛΩΜΑΤΩΝ', protocolRows.head, protocolRows.rows, [6, 16, 12, 30, 22, 26, 10]),
         template: () => exportXlsx('Πρότυπο Διπλωμάτων Διδασκάλου.xlsx', 'ΔΙΠΛΩΜΑΤΑ', DIPLOMA_COLS.map(([, l]) => l),
