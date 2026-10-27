@@ -3837,7 +3837,7 @@ def test_declarations_hide_completed_visits(browser, base_url):
     page.route('https://accounts.google.com/**', lambda r: r.abort())
     page.route('**/programme/programme.json*', lambda r: r.fulfill(json={'rows': [
         {'date': '2026-11-02', 'no': '118', 'lodge': 'ΑΤΛΑΣ', 'rep': 'Λίαν Σεβάσμιος Αδ. Χρήστος Διαβάτης, Βοηθός Μέγας Γραμματεύς', 'protocol': '20600', 'done': 1},
-        {'date': '2026-11-02', 'no': '104', 'lodge': 'ΑΚΡΟΠΟΛΙΣ', 'rep': 'Λίαν Σεβάσμιος Αδ. Χρήστος Διαβάτης, Βοηθός Μέγας Γραμματεύς', 'protocol': ''}]}))
+        {'date': '2026-11-02', 'no': '104', 'lodge': 'ΑΚΡΟΠΟΛΙΣ', 'rep': 'Λίαν Σεβάσμιος Αδ. Χρήστος Διαβάτης, Βοηθός Μέγας Γραμματεύς', 'protocol': '', 'need': ['email', 'protocol']}]}))
     page.goto(base_url + 'declarations/#report')
     page.evaluate("document.getElementById('auth-alt').open = true")
     page.fill('#admin-pass', 'test-key')
@@ -3845,6 +3845,7 @@ def test_declarations_hide_completed_visits(browser, base_url):
     page.locator('#report-table-body tr', has_text='ΑΚΡΟΠΟΛΙΣ').wait_for()
     assert page.locator('#report-table-body tr', has_text='ΑΤΛΑΣ').count() == 0
     assert '1 ολοκληρωμένες' in page.inner_text('#rep-stats')
+    assert 'Εκκρεμεί: email ενημέρωσης · αριθμός πρωτοκόλλου' in page.locator('#report-table-body tr', has_text='ΑΚΡΟΠΟΛΙΣ').inner_text()
     page.close()
 
 
@@ -3858,6 +3859,13 @@ def test_programme_marks_completed_visits(app):
         tx.insert('visits', { visit_date: '2099-10-31', lodge: 'ΑΤΛΑΣ', lodge_number: '118', province: '', rep_id: a.id }); });
       const before = publicProgramme().rows.map((x) => [x.no, !!x.done]);
       await db.save('y', (tx) => { for (const v of tx.all('visits')) tx.insert('letters', { subject: 'Επίσκεψη', body: '', status: 'ready', protocol_seq: 20600 + v.id, protocol_no: String(20600 + v.id), visit_id: v.id }); });
-      return [before, publicProgramme().rows.map((x) => [x.no, !!x.done, !!x.protocol])]; }""")
+      return [before, publicProgramme().rows.map((x) => [x.no, !!x.done, !!x.protocol]), publicProgramme().rows[1].need]; }""")
     assert r[0] == [['31', False], ['118', False]], r
-    assert r[1] == [['31', True, True], ['118', False, True]], r  # η 118 έχει πρωτόκολλο αλλά όχι email ενημέρωσης
+    assert r[1] == [['31', True, True], ['118', False, True]] and r[2] == ['email'], r  # η 118 έχει πρωτόκολλο αλλά όχι email ενημέρωσης
+    # η επιστολή της 118 σημειώνεται «σταλμένη» από τη σελίδα της → ολοκληρωμένη και η Επίσκεψη «ενημερώθηκε»
+    lid = app.page.evaluate("async () => { const {db} = await import('./core/store.js'); const v = db.all('visits')[1]; return db.all('letters').find((l) => l.visit_id === v.id).id; }")
+    app.go(f'/letters/{lid}')
+    app.page.click('[data-act=markSent]')
+    app.page.wait_for_selector('text=Στάλθηκε με email')
+    r = app.page.evaluate("async () => { const {publicProgramme} = await import('./modules/visits.js'); const {db} = await import('./core/store.js'); return [publicProgramme().rows.map((x) => !!x.done), !!db.all('visits')[1].prov_notified_at]; }")
+    assert r == [[True, True], True], r

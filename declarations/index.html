@@ -450,6 +450,7 @@
     .officer-name, .officer-name.first { font-weight: 700; color: #c62828; font-size: 16px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .typed-note { color: #64748b; font-size: 11px; font-style: italic; }
     .highest-note { color: #475569; font-size: 11px; }
+    .need-note { color: #b45309; font-size: 11px; font-weight: 600; margin: 2px 0 0; }
     .decl-pick { margin-left: 6px; border: 1px solid #86efac; background: #fff; color: #15803d; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 700; line-height: 1; padding: 2px 6px; }
     .decl-pick:hover { background: #dcfce7; }
     .decl-pick.on { background: #16a34a; border-color: #16a34a; color: #fff; }
@@ -1409,7 +1410,9 @@
         }
         cell.appendChild(addDeclarationBox(m, ranked));
         tr.children[4].appendChild(decisionSelect(m, ranked, currentRepOf(m)));
-        if (registeredOf(m)) { const p = document.createElement("p"); p.className = "registered"; p.textContent = "📌 Καταχωρημένος στο πρόγραμμα: " + registeredOf(m); tr.children[4].appendChild(p); }
+        if (registeredOf(m)) { const p = document.createElement("p"); p.className = "registered"; p.textContent = "📌 Καταχωρημένος στο πρόγραμμα: " + registeredOf(m); tr.children[4].appendChild(p);
+          const need = NEED[m.id] || NEED[dayKey(m)] || [];
+          if (need.length) { const q = document.createElement("p"); q.className = "need-note"; q.textContent = "⏳ Εκκρεμεί: " + need.map(n => n === "email" ? "email ενημέρωσης" : "αριθμός πρωτοκόλλου").join(" · "); tr.children[4].appendChild(q); } }
         tbody.appendChild(tr);
       });
       const LIST = MEETINGS.filter(m => !gmGoes(m) && !doneOf(m));
@@ -1439,7 +1442,7 @@
     const LEGACY = MEETINGS.slice();
     const dayKey = m => String(m.no).trim() + "|" + (String(m.date).match(/\d{2}\/\d{2}\/\d{4}/) || [""])[0];
     const legacyIds = m => LEGACY.filter(x => x.id !== m.id && dayKey(x) === dayKey(m)).map(x => x.id);
-    let FROM_APP = false, REGISTERED = {}, DONE = {};
+    let FROM_APP = false, REGISTERED = {}, DONE = {}, NEED = {};
     async function getJson(url) { const r = await fetch(url + "?t=" + Date.now(), { cache: "no-store" }); if (!r.ok) throw new Error(r.status); return r.json(); }
     async function loadMeetings() {
       // Τα τρία αρχεία φορτώνονται παράλληλα
@@ -1460,11 +1463,12 @@
       } catch (e) { /* εφεδρικό officers.js */ }
       try {
         const rows = (pj || {}).rows || [];
-        REGISTERED = {}; DONE = {};
+        REGISTERED = {}; DONE = {}; NEED = {};
         rows.forEach(r => { const d = String(r.date || "").split("-"); const k = r.id || ""; const v = r.gm ? "Ο Μέγας Διδάσκαλος (αυτοπροσώπως)" : r.rep;
           const dk = d.length === 3 ? String(r.no).trim() + "|" + d[2] + "/" + d[1] + "/" + d[0] : "";
           if (k) REGISTERED[k] = v; if (dk) REGISTERED[dk] = v;
-          if (r.done) { if (k) DONE[k] = 1; if (dk) DONE[dk] = 1; } });
+          if (r.done) { if (k) DONE[k] = 1; if (dk) DONE[dk] = 1; }
+          else if (r.need) { if (k) NEED[k] = r.need; if (dk) NEED[dk] = r.need; } });
       } catch (e) { REGISTERED = {}; }
     }
     const kindOf = m => m.kind || "ΕΓΚΑΤΑΣΤΑΣΗ ΣΕΒ";

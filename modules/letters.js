@@ -117,6 +117,14 @@ function protoImageBox(x) {
 <div class="toolbar"><label class="btn">📤 Επιλογή PDF Κανονισμού<input type="file" id="regFile" accept="application/pdf,.pdf" hidden></label><button type="button" class="btn danger" data-act="regDel">Αφαίρεση PDF</button></div></div></div>`;
 }
 const regLabel = (x, pending) => (pending ? `📄 <b>${esc(pending)}</b> <small class="muted">(θα αποθηκευτεί με την επιστολή)</small>` : x.reg_file ? `📄 <b>${esc(x.reg_name || 'Εσωτερικός Κανονισμός.pdf')}</b>` : '<span class="muted">Δεν έχει επισυναφθεί PDF.</span>');
+// Η επιστολή στάλθηκε με email: σημείωση στην επιστολή και, αν ανήκει σε Επίσκεψη, «ενημερώθηκε» στην Επίσκεψη (ενιαία κατάσταση)
+async function markLetterSent(x) {
+  await db.save(`Επιστολή ${x.protocol_no || x.id}: στάλθηκε με email`, (tx) => {
+    tx.update('letters', x.id, { sent_at: today() });
+    const v = x.visit_id ? tx.get('visits', x.visit_id) : null;
+    if (v) tx.update('visits', v.id, { prov_notified_at: today(), prov_notified_date: v.visit_date, prov_notified_rep: v.rep_id ?? null });
+  });
+}
 // Πρότυπο «Έγκριση Εσωτερικού Κανονισμού» (ενεργό, όχι αντίγραφο· αλλιώς το πρώτο που ταιριάζει)
 const isKanonismos = (t) => !!t && !t.kind && foldName(t.name).includes('εγκρισ') && foldName(t.name).includes('εσωτερικου κανονισμου');
 export function kanonismosTemplate() {
@@ -326,13 +334,15 @@ function viewLetter({ params }) {
 <div class="toolbar"><button class="btn primary" data-act="pdf">⬇ PDF / Εκτύπωση</button>${mailButtons(withLetterCc({ to: x.recipient_email, bcc: mailBcc(x, x.recipient_email), subject: letterFields(x.subject, x), body: mailBody(x), kind: mailKind(x) }), '✉ Αποστολή με Email')}
 ${x.reg_file ? '<button class="btn" data-act="regpdf">📎 Εσωτ. Κανονισμός (PDF)</button>' : ''}<button class="btn" data-act="word">⬇ Word (επεξεργασία)</button><button class="btn" data-act="form">🖋 Ψηφιακό Έντυπο</button>
 <button class="btn" data-act="wapdf">🟢 WhatsApp / Business με PDF</button><a class="btn" target="_blank" rel="noopener" href="${wa}">WhatsApp μήνυμα</a>${x.status === 'ready' ? '' : '<button class="btn primary" data-act="ready">✅ Έτοιμη: απόδοση αρ. πρωτοκόλλου</button>'}</div>
-${x.status === 'ready' ? '<div class="mailsheet"></div>' : '<p class="send-help">Για αποστολή με συνημμένο PDF ορίστε πρώτα την επιστολή «✅ Έτοιμη» (αριθμός πρωτοκόλλου).</p>'}${driveBox(x, fileName(x))}</section>
+${x.status === 'ready' ? `<p class="noprint">${x.sent_at ? `<span class="vok">✓ Στάλθηκε με email ${esc(fmtDate(x.sent_at))}</span>` : '<button class="btn small" data-act="markSent" title="Για email που στάλθηκε εκτός εφαρμογής (π.χ. «Άνοιγμα στο Gmail»)">✓ Σημείωση ως σταλμένη</button>'}</p><div class="mailsheet"></div>` : '<p class="send-help">Για αποστολή με συνημμένο PDF ορίστε πρώτα την επιστολή «✅ Έτοιμη» (αριθμός πρωτοκόλλου).</p>'}${driveBox(x, fileName(x))}</section>
 <div class="toolbar noprint"><a class="btn" href="#/letters/${x.id}/edit">Επεξεργασία</a><a class="btn" href="#/letters/new?copy_from=${x.id}">Νέα πάνω σε αυτή</a><a class="btn" href="#/letters">Αρχείο Επιστολών</a>
 ${x.protocol_seq ? '<button class="btn" data-act="protocol">✏ Αλλαγή αρ. πρωτοκόλλου</button>' : ''}<button class="btn danger" data-act="del">Διαγραφή</button> ${statusPill(x.status)}</div>
 <div class="print-area">${letterPaper(x)}</div>`,
     mount(el) {
       if (x.status === 'ready') mailSheet(el, { kind: mailKind(x), pdfName: fileName(x),
         extras: x.reg_file ? [{ label: `Εσωτερικός Κανονισμός: ${x.reg_name || 'PDF'}`, name: x.reg_name || 'Εσωτερικός Κανονισμός.pdf', load: () => regPdf(x) }] : [],
+        // μετά την αποστολή: η επιστολή σημειώνεται «στάλθηκε» και, αν ανήκει σε Επίσκεψη, η Επίσκεψη «ενημερώθηκε» (ενιαία κατάσταση)
+        onSent: () => markLetterSent(x),
         onKind: async (k) => { await db.save(`Επιστολή ${x.protocol_no || x.id}: λογαριασμός αποστολής`, (tx) => { tx.update('letters', x.id, { mail_kind: k }); }); toast(`Η επιστολή θα στέλνεται από ${senderFor(k)}.`); go(`/letters/${x.id}`); }, getMsg: () => withLetterCc({ to: x.recipient_email, cc: '', bcc: mailBcc(x, x.recipient_email), subject: letterFields(x.subject, x), body: mailBody(x) }),
         getPdf: async () => ({ blob: await (await import('../core/pdf.js')).paperPdf(el.querySelector('.print-area .paper'), { title: fileName(x) }), name: fileName(x) + '.pdf' }) });
       bind(el, {
@@ -340,6 +350,7 @@ ${x.protocol_seq ? '<button class="btn" data-act="protocol">✏ Αλλαγή α�
         word: () => letterDocx(x),
         wapdf: (_, b) => waSendPdf(x, b),
         regpdf: (_, b) => downloadReg(x, b),
+        async markSent() { await markLetterSent(x); flash('Η επιστολή σημειώθηκε ως σταλμένη.'); go(`/letters/${x.id}`); },
         async drive(_, b) {
           b.disabled = true; b.textContent = '☁ Αποθήκευση…';
           try { await saveDocToDrive('letters', x.id, fileName(x), null, el.querySelector('.print-area .paper')); flash('Αποθηκεύτηκε στο Drive (Word + PDF).'); go(`/letters/${x.id}`); }
