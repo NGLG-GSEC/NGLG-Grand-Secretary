@@ -968,11 +968,13 @@
     const gmGoes = m => { const reg = registeredOf(m); return reg ? reg === GM_SELF : decisionOf(m) === GM_SELF; };
     function renderDecisions() {
       // Η απόφαση φαίνεται στις κάρτες των Στοών της Δήλωσης
-      let n = 0, hidden = 0;
+      let n = 0, hidden = 0, assigned = 0;
       document.querySelectorAll("#meetings-list .meeting-card").forEach(card => {
         const input = card.querySelector("input"), id = input.value, m = MEETINGS.find(x => x.id === id) || { id };
-        card.hidden = gmGoes(m);
-        if (card.hidden) { input.checked = false; hidden++; return; }
+        // δεν δηλώνονται: όπου πηγαίνει ο ίδιος ο Μ.Δ. και όπου το Πρόγραμμα έχει ήδη καταχωρημένο εκπρόσωπο
+        const gm = gmGoes(m), taken = !gm && !!registeredOf(m);
+        card.hidden = gm || taken;
+        if (card.hidden) { input.checked = false; if (gm) hidden++; else assigned++; return; }
         card.querySelector(".fno").textContent = "2." + (++n);
         const reg = registeredOf(m), rep = reg || decisionOf(m);
         let d = card.querySelector(".meeting-decision");
@@ -981,6 +983,9 @@
         d.textContent = (reg ? "✔ Εκπρόσωπος: " : "✔ Απόφαση Μ.Δ.: ") + rep;
       });
       const grid = document.getElementById("meetings-list");
+      let an = document.getElementById("assigned-note");
+      if (!an && grid) { an = document.createElement("p"); an.id = "assigned-note"; an.className = "gm-self-note"; grid.after(an); }
+      if (an) { an.hidden = !assigned; an.textContent = `Δεν εμφανίζ${assigned === 1 ? "εται 1 Εργασία" : "ονται " + assigned + " Εργασίες"} που έχουν ήδη ορισμένο εκπρόσωπο στο Πρόγραμμα Επισκέψεων.`; }
       let note = document.getElementById("gm-self-note");
       if (!note && grid) { note = document.createElement("p"); note.id = "gm-self-note"; note.className = "gm-self-note"; grid.after(note); }
       if (note) { note.hidden = !hidden; note.textContent = `Δεν εμφανίζ${hidden === 1 ? "εται 1 Εργασία" : "ονται " + hidden + " Εργασίες"} όπου θα παραστεί αυτοπροσώπως ο Μέγας Διδάσκαλος (βλ. «Πρόγραμμα Επισκέψεων Μ.Δ.»).`; }
@@ -1412,7 +1417,7 @@
         tr.children[4].appendChild(decisionSelect(m, ranked, currentRepOf(m)));
         if (registeredOf(m)) { const p = document.createElement("p"); p.className = "registered"; p.textContent = "📌 Καταχωρημένος στο πρόγραμμα: " + registeredOf(m); tr.children[4].appendChild(p);
           const need = NEED[m.id] || NEED[dayKey(m)] || [];
-          if (need.length) { const q = document.createElement("p"); q.className = "need-note"; q.textContent = "⏳ Εκκρεμεί: " + need.map(n => n === "notify" ? "email ενημέρωσης" : "αριθμός πρωτοκόλλου").join(" · "); tr.children[4].appendChild(q); } }
+          if (need.length) { const q = document.createElement("p"); q.className = "need-note"; q.textContent = "⏳ Εκκρεμεί: " + need.map(n => n === "notify" ? "email ενημέρωσης" : "επιστολή με αριθμό πρωτοκόλλου").join(" · "); tr.children[4].appendChild(q); } }
         tbody.appendChild(tr);
       });
       const LIST = MEETINGS.filter(m => !gmGoes(m) && !doneOf(m));
@@ -1420,7 +1425,7 @@
       document.getElementById("rep-stats").innerHTML = `<span><b>${LIST.length}</b> Εργασίες</span><span><b>${nDecl}</b> με δηλώσεις</span>`
         + `<span class="${LIST.length - nDecl ? "warn" : ""}"><b>${LIST.length - nDecl}</b> χωρίς δήλωση</span><span><b>${nDec}</b> με απόφαση Μ.Δ.</span>`
         + (gmCount ? `<span>★ <b>${gmCount}</b> με τον Μ.Δ. αυτοπροσώπως (δεν εμφανίζονται)</span>` : "")
-        + (doneCount ? `<span>✓ <b>${doneCount}</b> ολοκληρωμένες — εκπρόσωπος, email και πρωτόκολλο (δεν εμφανίζονται)</span>` : "")
+        + (doneCount ? `<span>✓ <b>${doneCount}</b> ολοκληρωμένες — εκπρόσωπος και επιστολή με πρωτόκολλο (δεν εμφανίζονται)</span>` : "")
         + (FROM_APP ? "" : `<span class="warn">⚠ Οι Εργασίες δεν ήρθαν από την εφαρμογή (εφεδρικός κατάλογος)</span>`);
       return true;
     }
@@ -1473,7 +1478,7 @@
     }
     const kindOf = m => m.kind || "ΕΓΚΑΤΑΣΤΑΣΗ ΣΕΒ";
     const registeredOf = m => REGISTERED[m.id] || REGISTERED[dayKey(m)] || "";
-    // Ολοκληρωμένη στις Επισκέψεις (εκπρόσωπος + email + πρωτόκολλο): δεν εκκρεμεί, δεν εμφανίζεται στην Αναφορά
+    // Ολοκληρωμένη στις Επισκέψεις (εκπρόσωπος + επιστολή με πρωτόκολλο): δεν εκκρεμεί, δεν εμφανίζεται στην Αναφορά
     const doneOf = m => !!(DONE[m.id] || DONE[dayKey(m)]);
     const declOf = (store, m) => [m.id, ...legacyIds(m)].flatMap(id => store[id] || []);
     const decisionOf = m => [m.id, ...legacyIds(m)].map(id => decisions[id]).find(Boolean) || "";

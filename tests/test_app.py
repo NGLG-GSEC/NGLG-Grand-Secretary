@@ -3224,15 +3224,14 @@ def test_declarations_unified_from_app_visits(browser, base_url):
         {'id': 'l9_20991104', 'date': '2099-11-04', 'no': '9', 'rep': 'Ο Μέγας Διδάσκαλος', 'gm': 1}]}))
     page.route('https://script.google.com/**', lambda r: r.fulfill(json={'ok': True, 'decisions': {}}))
     page.goto(base_url + 'declarations/#form')
-    page.wait_for_selector('.meeting-card')
+    page.wait_for_selector('#assigned-note:not([hidden])')
     cards = page.locator('.meeting-card:not([hidden])')
-    assert cards.count() == 2  # η ΕΝΩΣΙΣ (με τον ΜΔ αυτοπροσώπως) δεν εμφανίζεται για δήλωση
-    assert 'ΕΝΩΣΙΣ' not in page.locator('#meetings-list').inner_text() and 'αυτοπροσώπως ο Μέγας Διδάσκαλος' in page.inner_text('#gm-self-note')
-    first = cards.nth(0).inner_text()
-    assert 'ΑΡΧΑΙΡΕΣΙΕΣ' in first and 'ΔΟΚΙΜΗ' in first
-    assert 'ΕΓΚΑΤΑΣΤΑΣΗ ΣΕΒ' in cards.nth(1).inner_text()
-    page.wait_for_selector('.meeting-decision')
-    assert 'Δοκιμαστής Εκπρόσωπος' in cards.nth(0).inner_text()
+    # η ΕΝΩΣΙΣ (με τον ΜΔ αυτοπροσώπως) και η ΔΟΚΙΜΗ (ήδη καταχωρημένος εκπρόσωπος στο Πρόγραμμα) δεν εμφανίζονται για δήλωση
+    assert cards.count() == 1 and 'ΔΕΥΤΕΡΗ' in cards.nth(0).inner_text() and 'ΕΓΚΑΤΑΣΤΑΣΗ ΣΕΒ' in cards.nth(0).inner_text()
+    assert 'αυτοπροσώπως ο Μέγας Διδάσκαλος' in page.inner_text('#gm-self-note') and 'ήδη ορισμένο εκπρόσωπο' in page.inner_text('#assigned-note')
+    # το ΕΙΔΟΣ ΕΡΓΑΣΙΑΣ και ο εκπρόσωπος έρχονται από τα αρχεία της εφαρμογής
+    dok = page.locator('.meeting-card', has_text='ΔΟΚΙΜΗ')
+    assert 'ΑΡΧΑΙΡΕΣΙΕΣ' in dok.inner_text()
     page.close()
 
 
@@ -3857,7 +3856,12 @@ def test_declarations_hide_completed_visits(browser, base_url):
     page.locator('#report-table-body tr', has_text='ΑΚΡΟΠΟΛΙΣ').wait_for()
     assert page.locator('#report-table-body tr', has_text='ΑΤΛΑΣ').count() == 0
     assert '1 ολοκληρωμένες' in page.inner_text('#rep-stats')
-    assert 'Εκκρεμεί: email ενημέρωσης · αριθμός πρωτοκόλλου' in page.locator('#report-table-body tr', has_text='ΑΚΡΟΠΟΛΙΣ').inner_text()
+    assert 'Εκκρεμεί: email ενημέρωσης · επιστολή με αριθμό πρωτοκόλλου' in page.locator('#report-table-body tr', has_text='ΑΚΡΟΠΟΛΙΣ').inner_text()
+    # η φόρμα των αξιωματικών δεν δείχνει Εργασίες με ήδη καταχωρημένο εκπρόσωπο στο Πρόγραμμα
+    page.goto(base_url + 'declarations/#form')
+    page.wait_for_selector('#assigned-note:not([hidden])')
+    assert not page.locator('.meeting-card', has_text='ΑΤΛΑΣ').is_visible() and not page.locator('.meeting-card', has_text='ΑΚΡΟΠΟΛΙΣ').is_visible()
+    assert page.locator('.meeting-card', has_text='ΤΡΙΠΤΟΛΕΜΟΣ').is_visible() and '2 Εργασίες' in page.inner_text('#assigned-note')
     page.close()
 
 
@@ -3873,7 +3877,7 @@ def test_programme_marks_completed_visits(app):
       await db.save('y', (tx) => { for (const v of tx.all('visits')) tx.insert('letters', { subject: 'Επίσκεψη', body: '', status: 'ready', protocol_seq: 20600 + v.id, protocol_no: String(20600 + v.id), visit_id: v.id }); });
       return [before, publicProgramme().rows.map((x) => [x.no, !!x.done, !!x.protocol]), publicProgramme().rows[1].need]; }""")
     assert r[0] == [['31', False], ['118', False]], r
-    assert r[1] == [['31', True, True], ['118', False, True]] and r[2] == ['notify'], r  # η 118 έχει πρωτόκολλο αλλά όχι email ενημέρωσης
+    assert r[1] == [['31', True, True], ['118', True, True]] and r[2] is None, r  # εκπρόσωπος + επιστολή με πρωτόκολλο = ολοκληρωμένη
     # η επιστολή της 118 σημειώνεται «σταλμένη» από τη σελίδα της → ολοκληρωμένη και η Επίσκεψη «ενημερώθηκε»
     lid = app.page.evaluate("async () => { const {db} = await import('./core/store.js'); const v = db.all('visits')[1]; return db.all('letters').find((l) => l.visit_id === v.id).id; }")
     app.go(f'/letters/{lid}')

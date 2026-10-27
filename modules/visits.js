@@ -604,12 +604,12 @@ ${rows.length ? `<table class="gmp-table"><thead><tr><th class="n">Α/Α</th><th
 // ---- Δημόσια σελίδα του προγράμματος (programme/): η εφαρμογή γράφει το πρόγραμμα στα δεδομένα (files/public/programme.json)
 // μετά από κάθε αλλαγή Επισκέψεων/Εκπροσώπων· η δημοσίευση (GitHub Pages) το παίρνει από εκεί. Μόνο όσα δείχνει η αναφορά.
 export const PUBLIC_PROGRAMME_URL = 'https://nglg-gsec.github.io/NGLG-Grand-Secretary/programme/';
-// «done»: η Επίσκεψη έχει ολοκληρωθεί — εκπρόσωπος, email ενημέρωσης και αριθμός πρωτοκόλλου· δεν εκκρεμεί στη σελίδα Δηλώσεων
+// «done»: η Επίσκεψη έχει ολοκληρωθεί — εκπρόσωπος και επιστολή με αριθμό πρωτοκόλλου· δεν εκκρεμεί στη σελίδα Δηλώσεων
 export function publicProgramme() {
   return { title: 'Πρόγραμμα επισκέψεων του Σεβασμιωτάτου Μεγάλου Διδασκάλου', salute: GMP_SALUTE, text: GMP_TEXT, closing: GS_CLOSING,
     signer: db.setting('grand_secretary_name') || GS_NAME, signer_title: db.setting('grand_secretary_title') || GS_TITLE, organization: db.setting('organization_name') || '',
     letters: Object.fromEntries(gmProgrammeRows(today()).filter((x) => x.letter).map(({ letter }) => [String(seqOf(letter)), { html: publicLetterHtml(letter), pdf: letter.drive_pdf || '' }])),
-    rows: gmProgrammeRows(today()).map(({ v, r, prot, letter }) => ({ protocol: prot, letter_url: publicLetterUrl(letter), date: v.visit_date, lodge: v.lodge || '', no: String(v.lodge_number || ''), province: v.province || '', rep: isGM(r) ? 'Ο Μέγας Διδάσκαλος' : repFull(r), gm: isGM(r) ? 1 : 0, id: meetingIdOf(v), kind: kindOf(v), ...((m) => (m.length ? { need: m } : { done: 1 }))([...((repNotified(v) || provNotified(v) || (letter && letter.sent_at)) ? [] : ['notify']), ...(prot ? [] : ['protocol'])]) })) };
+    rows: gmProgrammeRows(today()).map(({ v, r, prot, letter }) => ({ protocol: prot, letter_url: publicLetterUrl(letter), date: v.visit_date, lodge: v.lodge || '', no: String(v.lodge_number || ''), province: v.province || '', rep: isGM(r) ? 'Ο Μέγας Διδάσκαλος' : repFull(r), gm: isGM(r) ? 1 : 0, id: meetingIdOf(v), kind: kindOf(v), ...(prot ? { done: 1 } : { need: ['protocol'] }) })) };
 }
 // ---- Ενιαία δομή Επισκέψεων: οι Εργασίες της σελίδας Δηλώσεων (declarations/) είναι οι ίδιες οι Επισκέψεις της εφαρμογής.
 // Κωδικός Εργασίας (κοινός με τις δηλώσεις και τις αποφάσεις του ΜΔ): «l<αρ. Στοάς>_<ΕΕΕΕΜΜΗΗ>».
