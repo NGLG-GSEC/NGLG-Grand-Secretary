@@ -620,17 +620,45 @@ export function publicMeetings(frm = today()) {
 // Κατάλογος Μεγάλων Αξιωματικών για τη σελίδα Δηλώσεων — από την Επετηρίδα της εφαρμογής (όχι χωριστή λίστα):
 // τάξη προβαδίσματος (Σύνταγμα, άρθρο 5), μέσα στο ίδιο αξίωμα ο αρχαιότερος πρώτος· χωρίς όσους «Μετέστη».
 const SAME_TIER = (t) => t.replace(/^(Πρώην )?(Επαρχιακός|Περιφερειακός) Μέγας Διδάσκαλος$/, '$1Επαρχιακός ή Περιφερειακός Μέγας Διδάσκαλος');
+// Θέση προβαδίσματος ενός αξιώματος σε οποιαδήποτε γραφή («Ο Αναπληρωτής Μέγας Διδάσκαλος», «ΠρΑ'ΜΕπ», «Πρώην Επαρχιακός ΜΔ Αθηνών»)
+const precOf = (t) => { const p = parseRank(String(t || '').replace(/Επαρχιακός ή Περιφερειακός/, 'Επαρχιακός')); return p ? precedenceOf(p.office) : null; };
+const officeName = (t) => { const p = parseRank(t); return p ? p.office : String(t || '').trim(); };
+// Ανώτατο αξίωμα μιας γραμμής της Επετηρίδας: τίτλος, «Ανώτατο αξίωμα / βαθμός», οι άλλες γραμμές του ίδιου αδελφού
+// και τα αξιώματα του Μητρώου (Διατάγματα/εισαγωγές· όσα δεν είναι εν ενεργεία μετρούν ως «Πρώην»)
+function highestOf(x, titlePrec) {
+  const r = x.r, mid = r.member_id || (r.member_id == null && r.full_name ? matchName(String(r.full_name).replace(/\(.*?\)/g, ' ').replace(/\s+του\s+\S+\s*$/i, ' ')) : null);
+  let best = { prec: titlePrec ?? precOf(x.title) ?? 9999, highest: x.title };
+  const consider = (text, former) => {
+    const p = parseRank(text); if (!p) return;
+    const office = former && !p.former ? 'Πρώην ' + p.office : p.office, n = precedenceOf(office);
+    if (n != null && n < best.prec) best = { prec: n, highest: office };
+  };
+  const same = (e) => officeName(e.rank) === officeName(e.title); // «Ανώτατο αξίωμα» ίδιο με τον τίτλο = εν ενεργεία· αλλιώς «Πρώην»
+  consider(r.rank, !same(r));
+  if (mid) {
+    const k = canonicalId(mid), act = hasActiveList();
+    for (const e of epeteiridaOf(mid)) if (e !== r) { consider(e.title, false); consider(e.rank, !same(e)); }
+    for (const o of db.all('member_degrees_offices')) if (o.member_id && canonicalId(o.member_id) === k && o.office) consider(o.office, !isCurrentRecord(o, act));
+  }
+  if (best.highest !== x.title) best.highest = officeName(best.highest);
+  return best;
+}
 export function publicOfficers() {
   const fix = (t) => String(t || '').replace(/Αντικαταστάτης Μέγας Διδάσκαλος/g, 'Αναπληρωτής Μέγας Διδάσκαλος').replace(/\s+/g, ' ').trim();
   const rows = epeteiridaAll().filter((r) => String(r.full_name || '').trim() && String(r.title || '').trim() && !/Μετέστη/i.test(r.current || '')).map((r) => {
     const title = fix(r.title), y = (String(r.current || '').match(/\/\s*((?:19|20)\d{2})/) || [])[1];
-    return { aa: Number(r.aa) || 0, title, name: String(r.full_name).replace(/\s+/g, ' ').trim(), year: (Number(r.active) && fix(r.rank) !== title && y ? Number(y) : Number(r.decree_year)) || null, province: r.province || '' };
+    return { r, aa: Number(r.aa) || 0, title, name: String(r.full_name).replace(/\s+/g, ' ').trim(), year: (Number(r.active) && fix(r.rank) !== title && y ? Number(y) : Number(r.decree_year)) || null, province: r.province || '' };
   });
   // σειρά αξιωμάτων: όπως στην Επετηρίδα (Α/Α = Τάξις και Προβάδισμα του Συντάγματος) — η πρώτη εμφάνιση κάθε αξιώματος
   const tier = new Map(); for (const x of sortBy(rows, 'aa')) if (!tier.has(SAME_TIER(x.title))) tier.set(SAME_TIER(x.title), tier.size);
-  const sorted = sortBy(rows, (x) => tier.get(SAME_TIER(x.title)), (x) => (x.year == null ? 1 : 0), (x) => x.year || 0, 'aa');
+  // κάθε τίτλος → θέση προβαδίσματος του Συντάγματος (αξιώματα εκτός τάξης: αμέσως μετά το προηγούμενο της Επετηρίδας)
+  const tierPrec = new Map(); let last = 0;
+  for (const [t, i] of [...tier.entries()].sort((a, b) => a[1] - b[1])) { const p = precOf(t); last = p != null ? p : last + 0.001; tierPrec.set(t, last); }
+  for (const x of rows) Object.assign(x, highestOf(x, tierPrec.get(SAME_TIER(x.title))));
+  // Προβάδισμα: το ΑΝΩΤΑΤΟ αξίωμα κάθε αδελφού (Επετηρίδα + Μητρώο/Διατάγματα), όχι μόνο το τρέχον
+  const sorted = sortBy(rows, (x) => x.prec, (x) => tier.get(SAME_TIER(x.title)), (x) => (x.year == null ? 1 : 0), (x) => x.year || 0, 'aa');
   const dup = new Set(sorted.map((x) => fold(x.name)).filter((k, i, a) => a.indexOf(k) !== i));
-  return sorted.map((x, i) => ({ rank: i + 1, name: x.name, title: x.title, year: x.year, group: SAME_TIER(x.title), ...(dup.has(fold(x.name)) && x.province ? { note: x.province } : {}) }));
+  return sorted.map((x, i) => ({ rank: i + 1, name: x.name, title: x.title, year: x.year, group: SAME_TIER(x.title), ...(x.highest && x.highest !== x.title ? { highest: x.highest } : {}), ...(dup.has(fold(x.name)) && x.province ? { note: x.province } : {}) }));
 }
 let publishing = null;
 // Δημόσια αρχεία (μέσω της δημοσίευσης GitHub Pages): programme.json (πρόγραμμα με εκπροσώπους) και meetings.json (Εργασίες για δηλώσεις)

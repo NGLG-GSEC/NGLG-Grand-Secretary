@@ -3630,3 +3630,77 @@ def test_menu_new_internal_regulation_approval(app):
     app.page.wait_for_selector('#tplSel')
     assert app.page.input_value('#tplSel') == str(tid)
     assert 'κανόνας 136' in app.page.input_value('[name="body"]')
+
+
+def test_declarations_report_delete_and_add(browser, base_url):
+    # Αναφορά: «✕» διαγράφει μια δήλωση (ακύρωση στο Sheet) και «+ Προσθήκη δήλωσης…» καταχωρεί νέα για αξιωματικό του καταλόγου
+    import json
+    store = {'atlas_118': [{'officer': 'Διαβάτης Χρήστος (Βοηθός Μέγας Γραμματεύς)', 'rank': 283}]}
+    calls = []
+
+    def api(route):
+        b = json.loads(route.request.post_data or '{}')
+        a = b.get('action')
+        calls.append(b)
+        if a == 'report':
+            out = {'ok': b.get('key') == 'test-key', 'decisions': {}, 'data': store}
+        elif a == 'cancel':
+            n = len([o for i in b['meetings'] for o in store.get(i, []) if o['officer'] == b['officer']])
+            for i in b['meetings']:
+                store[i] = [o for o in store.get(i, []) if o['officer'] != b['officer']]
+            out = {'ok': True, 'cancelled': n}
+        elif a == 'submit':
+            for i in b['meetings']:
+                store.setdefault(i, []).append({'officer': b['officer'], 'rank': b.get('rank')})
+            out = {'ok': True, 'added': 1, 'duplicates': 0}
+        else:
+            out = {'ok': True, 'decisions': {}}
+        route.fulfill(json=out)
+
+    page = browser.new_page()
+    page.route('https://script.google.com/**', api)
+    page.route('https://accounts.google.com/**', lambda r: r.abort())
+    page.goto(base_url + 'declarations/#report')
+    page.evaluate("document.getElementById('auth-alt').open = true")
+    page.fill('#admin-pass', 'test-key')
+    page.click('#auth-btn')
+    row = page.locator('#report-table-body tr', has_text='ΑΤΛΑΣ')
+    row.locator('.decl-del').wait_for()
+    page.once('dialog', lambda d: d.accept())
+    row.locator('.decl-del').click()
+    page.wait_for_function("() => [...document.querySelectorAll('#report-table-body tr')].some((tr) => tr.textContent.includes('ΑΤΛΑΣ') && tr.textContent.includes('Δεν έχει δηλωθεί'))")
+    assert store['atlas_118'] == [] and calls[-2]['action'] == 'cancel' and 'atlas_118' in calls[-2]['meetings']
+    sel = page.locator('#report-table-body tr', has_text='ΑΤΛΑΣ').locator('.decl-add select')
+    val = sel.locator('option').nth(1).get_attribute('value')
+    sel.select_option(val)
+    page.wait_for_function("() => [...document.querySelectorAll('#report-table-body tr')].some((tr) => tr.textContent.includes('ΑΤΛΑΣ') && tr.querySelector('.officer-list'))")
+    assert [o['officer'] for o in store['atlas_118']] == [val] and [c for c in calls if c['action'] == 'submit'][0]['rank']
+    page.emulate_media(media='print')
+    assert not page.locator('.decl-del').first.is_visible() and not page.locator('.decl-add').first.is_visible()
+    page.close()
+
+
+def test_precedence_by_highest_office(app):
+    # Προβάδισμα στις δηλώσεις: το ανώτατο αξίωμα κάθε αδελφού (Επετηρίδα + Μητρώο), όχι μόνο το τρέχον
+    app.connect_local()
+    r = app.page.evaluate("""async () => { const {db} = await import('./core/store.js'); const {publicOfficers} = await import('./modules/visits.js');
+      await db.save('x', (tx) => {
+        tx.insert('epeteirida', { aa: 10, active: 1, title: 'Μέγας Γραμματεύς', full_name: 'Πρώτογραφος Αλέξανδρος', rank: 'Πρώην Πρώτος Μέγας Επόπτης', decree_year: 2022, current: '' });
+        tx.insert('epeteirida', { aa: 12, active: 1, title: 'Μέγας Γραμματεύς Εκπαιδεύσεως', full_name: 'Δευτερογράφος Βασίλειος', rank: 'Πρώην Επαρχιακός Μέγας Διδάσκαλος', decree_year: 2020, current: '' });
+        tx.insert('epeteirida', { aa: 11, active: 1, title: 'Μέγας Καγκελάριος', full_name: 'Τριτογράφος Γεώργιος', rank: 'Μέγας Καγκελάριος', decree_year: 2025, current: '' });
+      });
+      const os = publicOfficers(), at = (n) => os.find((o) => o.name.startsWith(n));
+      return { a: at('Πρώτογραφος'), b: at('Δευτερογράφος'), c: at('Τριτογράφος') }; }""")
+    assert r['b']['rank'] < r['a']['rank'] < r['c']['rank'], r
+    assert r['b']['highest'] == 'Πρώην Επαρχιακός Μέγας Διδάσκαλος' and r['a']['highest'] == 'Πρώην Πρώτος Μέγας Επόπτης' and 'highest' not in r['c']
+    assert r['a']['title'] == 'Μέγας Γραμματεύς'
+
+
+def test_approval_stamp_lodges_from_unified_catalog(app):
+    # Ειδικό Σήμα Έγκρισης: οι Στοές από τον ενιαίο κατάλογο (και η νέα 118 ΑΤΛΑΣ)· οι 52, 62, 88, 109 εξαιρούνται
+    app.connect_local()
+    r = app.page.evaluate("""async () => { const {approvalLodges, approvalLodge} = await import('./modules/approval-stamp.js');
+      const xs = approvalLodges(); return { n118: approvalLodge('118'), excl: xs.filter((l) => ['52', '62', '88', '109'].includes(l.number)).length, dup: xs.length - new Set(xs.map((l) => l.number)).size }; }""")
+    assert r['excl'] == 0 and r['dup'] == 0, r
+    l = r['n118']
+    assert l['name'] == 'ΑΤΛΑΣ' and l['administration'] == 'ΕπΜΣτ.' and l['province'] == 'ΠΕΙΡΑΙΩΣ & ΑΡΧΙΠΕΛΑΓΟΥΣ ΑΙΓΑΙΟΥ' and l['seat'] == 'Πειραιάς' and l['kind'] == 'ΚΑΝΟΝΙΚΗ', l

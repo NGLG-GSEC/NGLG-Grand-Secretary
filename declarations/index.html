@@ -449,6 +449,11 @@
     /* Δηλώσεις Μεγάλων Αξιωματικών: έντονα κόκκινα 16px (οθόνη και εκτύπωση) */
     .officer-name, .officer-name.first { font-weight: 700; color: #c62828; font-size: 16px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .typed-note { color: #64748b; font-size: 11px; font-style: italic; }
+    .highest-note { color: #475569; font-size: 11px; }
+    .decl-del { margin-left: 6px; border: 1px solid #fca5a5; background: #fff; color: #b91c1c; border-radius: 4px; cursor: pointer; font-size: 11px; line-height: 1; padding: 2px 5px; }
+    .decl-del:hover { background: #fee2e2; }
+    .decl-add { margin-top: 6px; }
+    .decl-add select { font-size: 12px; max-width: 100%; }
     /* Απόφαση του Μεγάλου Διδασκάλου */
     .decide-select { width: 100%; min-width: 180px; padding: 8px; font-size: 13px; border: 2px solid #c9a64a; border-radius: 6px; background: #fffaf0; }
     .decide-select.done { border-color: #15803d; background: #f0fdf4; font-weight: 700; }
@@ -552,6 +557,8 @@
       .rank-badge { font-size: 8px; padding: 0 3px; min-width: 0; }
       .order-tag { font-size: 8px; padding: 0 4px; min-width: 0; margin-right: 3px; }
       .typed-note { font-size: 8px; }
+      .decl-del, .decl-add { display: none !important; }
+      .highest-note { font-size: 8px; }
       .empty-note { font-size: 9px; }
     }
     .print-header { display: none; }
@@ -992,6 +999,32 @@
       }
       sel.disabled = false;
     }
+    // Επεξεργασία δηλώσεων από την Αναφορά: «✕» διαγράφει (ακύρωση στο Sheet), «+ Προσθήκη» καταχωρεί δήλωση για αξιωματικό του καταλόγου
+    async function editDeclaration(action, m, officer, rank, btn) {
+      if (action === "cancel" && !confirm(`Διαγραφή της δήλωσης «${fixTitle(officer)}» για ${m.name || ""} (Αρ. ${m.no || ""}) · ${m.date || ""};`)) return;
+      if (btn) btn.disabled = true;
+      try {
+        const r = await callApi(action === "cancel"
+          ? { action: "cancel", officer: officer, meetings: [m.id, ...legacyIds(m)] }
+          : { action: "submit", officer: officer, rank: rank, meetings: [m.id] });
+        if (!r.ok) throw new Error(r.error || "error");
+        await renderReportTable();
+      } catch (e) {
+        alert(apiErrorText(e));
+        if (btn) btn.disabled = false;
+      }
+    }
+    function addDeclarationBox(m, ranked) {
+      const box = document.createElement("div"); box.className = "decl-add no-print";
+      const sel = document.createElement("select");
+      sel.setAttribute("aria-label", `Προσθήκη δήλωσης — ${m.name || ""} Αρ. ${m.no || ""} · ${m.date || ""}`);
+      const first = document.createElement("option"); first.value = ""; first.textContent = "+ Προσθήκη δήλωσης…"; sel.appendChild(first);
+      const have = ranked.map(o => norm(o.officer));
+      SELECTABLE.forEach(o => { const v = officerValue(o); if (have.indexOf(norm(v)) !== -1) return; const op = document.createElement("option"); op.value = v; op.dataset.rank = o.rank; op.textContent = `${o.rank}. ${v}`; sel.appendChild(op); });
+      sel.addEventListener("change", () => { const op = sel.selectedOptions[0]; if (op && op.value) editDeclaration("submit", m, op.value, Number(op.dataset.rank) || null, sel); });
+      box.appendChild(sel);
+      return box;
+    }
     // Επιλογές απόφασης: όσοι δήλωσαν (με σειρά προβαδίσματος), αυτοπροσώπως, ή άλλος από τον κατάλογο
     function decisionSelect(m, ranked, current) {
       const wrap = document.createElement("div");
@@ -1299,7 +1332,7 @@
           ranked = officers.map(o => {
             const off = officerOf(o.officer);
             // Όταν αναγνωρίζεται από τη λίστα: «Ονοματεπώνυμο (Αξίωμα)» — φαίνεται πάντα το αξίωμα
-            return { officer: off ? officerValue(off) : fixTitle(o.officer), rank: (off && off.rank) || o.rank || null, typed: !off || norm(officerValue(off)) !== norm(fixTitle(o.officer)) ? fixTitle(o.officer) : "" };
+            return { raw: o.officer, highest: off && off.highest && norm(off.highest) !== norm(off.title) ? off.highest : "", officer: off ? officerValue(off) : fixTitle(o.officer), rank: (off && off.rank) || o.rank || null, typed: !off || norm(officerValue(off)) !== norm(fixTitle(o.officer)) ? fixTitle(o.officer) : "" };
           }).sort((x, y) => (x.rank || Infinity) - (y.rank || Infinity));
 
           const list = document.createElement("ol");
@@ -1320,16 +1353,29 @@
             nm.className = "officer-name" + (i === 0 && ranked.length > 1 ? " first" : "");
             nm.textContent = o.officer;
             li.appendChild(nm);
+            if (o.highest) {
+              const h = document.createElement("span");
+              h.className = "highest-note";
+              h.textContent = ` · ανώτατο: ${o.highest}`;
+              li.appendChild(h);
+            }
             if (o.typed) {
               const t = document.createElement("span");
               t.className = "typed-note";
               t.textContent = ` — όπως δηλώθηκε: «${o.typed}»`;
               li.appendChild(t);
             }
+            // Διαγραφή της δήλωσης (η γραμμή στο Sheet σημειώνεται «Ακυρώθηκε», δεν σβήνεται)
+            const del = document.createElement("button");
+            del.type = "button"; del.className = "decl-del"; del.textContent = "✕";
+            del.title = "Διαγραφή της δήλωσης"; del.setAttribute("aria-label", `Διαγραφή δήλωσης — ${o.officer} · ${m.name || ""} ${m.date || ""}`);
+            del.addEventListener("click", () => editDeclaration("cancel", m, o.raw, null, del));
+            li.appendChild(del);
             list.appendChild(li);
           });
           cell.appendChild(list);
         }
+        cell.appendChild(addDeclarationBox(m, ranked));
         tr.children[4].appendChild(decisionSelect(m, ranked, decisionOf(m)));
         if (registeredOf(m)) { const p = document.createElement("p"); p.className = "registered"; p.textContent = "📌 Καταχωρημένος στο πρόγραμμα: " + registeredOf(m); tr.children[4].appendChild(p); }
         tbody.appendChild(tr);
