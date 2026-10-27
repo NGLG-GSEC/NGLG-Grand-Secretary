@@ -3822,3 +3822,42 @@ def test_approval_stamp_draws_lodge_logo(app, tmp_path):
     app.page.evaluate("async () => { const {openApprovalStamp} = await import('./modules/approval-stamp.js'); openApprovalStamp({ protocol: '5', date: '2026-11-02', lodge: '118' }); }")
     app.page.wait_for_selector('.approval-app canvas')
     app.page.wait_for_function("() => { const c = document.querySelector('.approval-app canvas'); const d = c.getContext('2d').getImageData(265, 524, 1, 1).data; return d[0] !== 255 || d[1] !== 255 || d[2] !== 255; }")
+
+
+def test_declarations_hide_completed_visits(browser, base_url):
+    # Αναφορά Δηλώσεων = εκκρεμότητες: η Επίσκεψη με εκπρόσωπο, email ενημέρωσης και πρωτόκολλο («done» στο Πρόγραμμα) δεν εμφανίζεται
+    import json
+    def api(route):
+        b = json.loads(route.request.post_data or '{}')
+        if b.get('action') == 'report':
+            return route.fulfill(json={'ok': b.get('key') == 'test-key', 'decisions': {}, 'data': {}})
+        return route.fulfill(json={'ok': True, 'decisions': {}})
+    page = browser.new_page()
+    page.route('https://script.google.com/**', api)
+    page.route('https://accounts.google.com/**', lambda r: r.abort())
+    page.route('**/programme/programme.json*', lambda r: r.fulfill(json={'rows': [
+        {'date': '2026-11-02', 'no': '118', 'lodge': 'ΑΤΛΑΣ', 'rep': 'Λίαν Σεβάσμιος Αδ. Χρήστος Διαβάτης, Βοηθός Μέγας Γραμματεύς', 'protocol': '20600', 'done': 1},
+        {'date': '2026-11-02', 'no': '104', 'lodge': 'ΑΚΡΟΠΟΛΙΣ', 'rep': 'Λίαν Σεβάσμιος Αδ. Χρήστος Διαβάτης, Βοηθός Μέγας Γραμματεύς', 'protocol': ''}]}))
+    page.goto(base_url + 'declarations/#report')
+    page.evaluate("document.getElementById('auth-alt').open = true")
+    page.fill('#admin-pass', 'test-key')
+    page.click('#auth-btn')
+    page.locator('#report-table-body tr', has_text='ΑΚΡΟΠΟΛΙΣ').wait_for()
+    assert page.locator('#report-table-body tr', has_text='ΑΤΛΑΣ').count() == 0
+    assert '1 ολοκληρωμένες' in page.inner_text('#rep-stats')
+    page.close()
+
+
+def test_programme_marks_completed_visits(app):
+    # programme.json: «done» μόνο με εκπρόσωπο + email ενημέρωσης + πρωτόκολλο
+    app.connect_local()
+    r = app.page.evaluate("""async () => { const {db} = await import('./core/store.js'); const {publicProgramme} = await import('./modules/visits.js');
+      await db.save('x', (tx) => { tx.replace('visits', []);
+        const a = tx.insert('reps', { name: 'Χρήστος', surname: 'Διαβάτης', office: 'Βοηθός Μέγας Γραμματεύς', email: '', mobile: '' });
+        tx.insert('visits', { visit_date: '2099-10-30', lodge: 'ΣΩΚΡΑΤΗΣ', lodge_number: '31', province: '', rep_id: a.id, rep_notified_at: '2099-10-01', rep_notified_date: '2099-10-30', rep_notified_rep: a.id });
+        tx.insert('visits', { visit_date: '2099-10-31', lodge: 'ΑΤΛΑΣ', lodge_number: '118', province: '', rep_id: a.id }); });
+      const before = publicProgramme().rows.map((x) => [x.no, !!x.done]);
+      await db.save('y', (tx) => { for (const v of tx.all('visits')) tx.insert('letters', { subject: 'Επίσκεψη', body: '', status: 'ready', protocol_seq: 20600 + v.id, protocol_no: String(20600 + v.id), visit_id: v.id }); });
+      return [before, publicProgramme().rows.map((x) => [x.no, !!x.done, !!x.protocol])]; }""")
+    assert r[0] == [['31', False], ['118', False]], r
+    assert r[1] == [['31', True, True], ['118', False, True]], r  # η 118 έχει πρωτόκολλο αλλά όχι email ενημέρωσης

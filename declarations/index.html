@@ -1324,8 +1324,8 @@
       tbody.innerHTML = "";
       document.getElementById("print-date").innerText = new Date().toLocaleDateString('el-GR');
 
-      const gmCount = MEETINGS.filter(gmGoes).length;
-      MEETINGS.filter(m => !gmGoes(m)).forEach(m => {
+      const gmCount = MEETINGS.filter(gmGoes).length, doneCount = MEETINGS.filter(m => !gmGoes(m) && doneOf(m)).length;
+      MEETINGS.filter(m => !gmGoes(m) && !doneOf(m)).forEach(m => {
         const tr = document.createElement("tr");
         const officers = declOf(store, m);
 
@@ -1412,11 +1412,12 @@
         if (registeredOf(m)) { const p = document.createElement("p"); p.className = "registered"; p.textContent = "📌 Καταχωρημένος στο πρόγραμμα: " + registeredOf(m); tr.children[4].appendChild(p); }
         tbody.appendChild(tr);
       });
-      const LIST = MEETINGS.filter(m => !gmGoes(m));
+      const LIST = MEETINGS.filter(m => !gmGoes(m) && !doneOf(m));
       const nDecl = LIST.filter(m => declOf(store, m).length).length, nDec = LIST.filter(m => registeredOf(m) || decisionOf(m)).length;
       document.getElementById("rep-stats").innerHTML = `<span><b>${LIST.length}</b> Εργασίες</span><span><b>${nDecl}</b> με δηλώσεις</span>`
         + `<span class="${LIST.length - nDecl ? "warn" : ""}"><b>${LIST.length - nDecl}</b> χωρίς δήλωση</span><span><b>${nDec}</b> με απόφαση Μ.Δ.</span>`
         + (gmCount ? `<span>★ <b>${gmCount}</b> με τον Μ.Δ. αυτοπροσώπως (δεν εμφανίζονται)</span>` : "")
+        + (doneCount ? `<span>✓ <b>${doneCount}</b> ολοκληρωμένες — εκπρόσωπος, email και πρωτόκολλο (δεν εμφανίζονται)</span>` : "")
         + (FROM_APP ? "" : `<span class="warn">⚠ Οι Εργασίες δεν ήρθαν από την εφαρμογή (εφεδρικός κατάλογος)</span>`);
       return true;
     }
@@ -1438,7 +1439,7 @@
     const LEGACY = MEETINGS.slice();
     const dayKey = m => String(m.no).trim() + "|" + (String(m.date).match(/\d{2}\/\d{2}\/\d{4}/) || [""])[0];
     const legacyIds = m => LEGACY.filter(x => x.id !== m.id && dayKey(x) === dayKey(m)).map(x => x.id);
-    let FROM_APP = false, REGISTERED = {};
+    let FROM_APP = false, REGISTERED = {}, DONE = {};
     async function getJson(url) { const r = await fetch(url + "?t=" + Date.now(), { cache: "no-store" }); if (!r.ok) throw new Error(r.status); return r.json(); }
     async function loadMeetings() {
       // Τα τρία αρχεία φορτώνονται παράλληλα
@@ -1459,13 +1460,17 @@
       } catch (e) { /* εφεδρικό officers.js */ }
       try {
         const rows = (pj || {}).rows || [];
-        REGISTERED = {};
+        REGISTERED = {}; DONE = {};
         rows.forEach(r => { const d = String(r.date || "").split("-"); const k = r.id || ""; const v = r.gm ? "Ο Μέγας Διδάσκαλος (αυτοπροσώπως)" : r.rep;
-          if (k) REGISTERED[k] = v; if (d.length === 3) REGISTERED[String(r.no).trim() + "|" + d[2] + "/" + d[1] + "/" + d[0]] = v; });
+          const dk = d.length === 3 ? String(r.no).trim() + "|" + d[2] + "/" + d[1] + "/" + d[0] : "";
+          if (k) REGISTERED[k] = v; if (dk) REGISTERED[dk] = v;
+          if (r.done) { if (k) DONE[k] = 1; if (dk) DONE[dk] = 1; } });
       } catch (e) { REGISTERED = {}; }
     }
     const kindOf = m => m.kind || "ΕΓΚΑΤΑΣΤΑΣΗ ΣΕΒ";
     const registeredOf = m => REGISTERED[m.id] || REGISTERED[dayKey(m)] || "";
+    // Ολοκληρωμένη στις Επισκέψεις (εκπρόσωπος + email + πρωτόκολλο): δεν εκκρεμεί, δεν εμφανίζεται στην Αναφορά
+    const doneOf = m => !!(DONE[m.id] || DONE[dayKey(m)]);
     const declOf = (store, m) => [m.id, ...legacyIds(m)].flatMap(id => store[id] || []);
     const decisionOf = m => [m.id, ...legacyIds(m)].map(id => decisions[id]).find(Boolean) || "";
 
