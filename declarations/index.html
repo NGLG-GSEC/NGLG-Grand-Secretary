@@ -1412,7 +1412,7 @@
         tr.children[4].appendChild(decisionSelect(m, ranked, currentRepOf(m)));
         if (registeredOf(m)) { const p = document.createElement("p"); p.className = "registered"; p.textContent = "📌 Καταχωρημένος στο πρόγραμμα: " + registeredOf(m); tr.children[4].appendChild(p);
           const need = NEED[m.id] || NEED[dayKey(m)] || [];
-          if (need.length) { const q = document.createElement("p"); q.className = "need-note"; q.textContent = "⏳ Εκκρεμεί: " + need.map(n => n === "email" ? "email ενημέρωσης" : "αριθμός πρωτοκόλλου").join(" · "); tr.children[4].appendChild(q); } }
+          if (need.length) { const q = document.createElement("p"); q.className = "need-note"; q.textContent = "⏳ Εκκρεμεί: " + need.map(n => n === "notify" ? "email ενημέρωσης" : "αριθμός πρωτοκόλλου").join(" · "); tr.children[4].appendChild(q); } }
         tbody.appendChild(tr);
       });
       const LIST = MEETINGS.filter(m => !gmGoes(m) && !doneOf(m));
