@@ -2514,7 +2514,14 @@ def test_gm_decisions_in_app_with_declarations(app):
     app.go('/visits')
     assert 'ΕΝΩΣΙΣ' in app.text()
     # Μητρώο: η καρτέλα του μέλους δείχνει τις εκπροσωπήσεις του ΜΔ
-    mid = app.page.evaluate("async () => (await import('./core/store.js')).db.all('member_registry').find((x) => x.surname === 'Διαβάτης').id")
+    app.page.wait_for_load_state()
+    mid = None
+    for _ in range(50):  # η σελίδα μπορεί ακόμη να ανανεώνει τα δεδομένα (αυτόματος συγχρονισμός/δημοσίευση)
+        mid = app.page.evaluate("async () => { const m = (await import('./core/store.js')).db.all('member_registry').find((x) => x.surname === 'Διαβάτης'); return m ? m.id : null; }")
+        if mid:
+            break
+        app.page.wait_for_timeout(200)
+    assert mid
     app.go(f'/members/{mid}')
     t = app.text('.mv-card')
     assert 'Εκπροσωπήσεις του Μεγάλου Διδασκάλου' in t and 'ΑΤΛΑΣ' in t and 'ΑΚΡΟΠΟΛΙΣ' in t, t
