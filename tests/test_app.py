@@ -879,7 +879,7 @@ def test_province_summary_and_lodges_without_installation_date(app):
     assert 'Σύνοψη Επαρχιών' in t and 'Στοές χωρίς ημερομηνία (' in t
     s = app.page.evaluate("async () => { const m = await import('./modules/visits.js'); return m.provinceSummary(m.masonicYear('2026-10-07')); }")
     tot = sum(o['total'] for o in s); dec = sum(o['declared'] for o in s)
-    assert tot == 82 and dec == 73  # 86 Στοές − 4 ανενεργές
+    assert tot == 83 and dec == 73  # 87 Στοές − 4 ανενεργές
     ath = [o for o in s if o['prov'] == 'ΕπΜΣτ. Αθηνών'][0]
     assert {l['number'] for l in ath['missing']} >= {'17', '108', '105'}
     app.click('⚠ Στοές χωρίς ημερομηνία')
