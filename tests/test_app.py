@@ -2482,6 +2482,7 @@ def test_gm_decisions_in_app_with_declarations(app):
         return route.fulfill(json={'ok': False, 'error': 'unknown_action'})
     app.page.route('https://script.google.com/**', api)
     add_member(app, surname='Διαβάτης', first='Χρήστος', email='d@example.com', mobile='6977000123')
+    dmid = app.page.evaluate("async () => (await import('./core/store.js')).db.all('member_registry').find((x) => x.surname === 'Διαβάτης').id")
     app.page.evaluate("""async () => { const {db} = await import('./core/store.js'); const m = db.all('member_registry').find((x) => x.surname === 'Διαβάτης');
       await db.save('x', (tx) => { tx.replace('visits', []);
         tx.insert('reps', { name: 'Χρήστος', surname: 'Διαβάτης', office: 'Βοηθός Μέγας Γραμματεύς', email: '', mobile: '', member_id: m.id });
@@ -2514,15 +2515,9 @@ def test_gm_decisions_in_app_with_declarations(app):
     app.go('/visits')
     assert 'ΕΝΩΣΙΣ' in app.text()
     # Μητρώο: η καρτέλα του μέλους δείχνει τις εκπροσωπήσεις του ΜΔ
-    app.page.wait_for_load_state()
-    mid = None
-    for _ in range(50):  # η σελίδα μπορεί ακόμη να ανανεώνει τα δεδομένα (αυτόματος συγχρονισμός/δημοσίευση)
-        mid = app.page.evaluate("async () => { const m = (await import('./core/store.js')).db.all('member_registry').find((x) => x.surname === 'Διαβάτης'); return m ? m.id : null; }")
-        if mid:
-            break
-        app.page.wait_for_timeout(200)
-    assert mid
-    app.go(f'/members/{mid}')
+    dump = app.page.evaluate("async () => { const {db} = await import('./core/store.js'); return [db.head, db.all('member_registry').map((m) => m.id + ':' + m.surname)]; }")
+    assert any(x.endswith(':Διαβάτης') for x in dump[1]), dump
+    app.go(f'/members/{dmid}')
     t = app.text('.mv-card')
     assert 'Εκπροσωπήσεις του Μεγάλου Διδασκάλου' in t and 'ΑΤΛΑΣ' in t and 'ΑΚΡΟΠΟΛΙΣ' in t, t
     # η σελίδα Δηλώσεων παίρνει τις Εργασίες από τις Επισκέψεις (κοινός κωδικός)
