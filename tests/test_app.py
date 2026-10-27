@@ -3498,3 +3498,56 @@ def test_diploma_dates_from_registry_and_protocol(app):
     app.page.evaluate('window.print = () => {}')
     app.page.click('[data-act=protoPdf]')
     assert 'ΠΡΩΤΟΚΟΛΛΟ ΔΙΠΛΩΜΑΤΩΝ ΔΙΔΑΣΚΑΛΩΝ ΤΕΚΤΟΝΩΝ' in app.page.inner_text('#dpPaper') and 'Σύνολο: 2 Διπλώματα' in app.page.inner_text('#dpPaper')
+
+
+def test_old_diploma_register_import(app):
+    # Παλιό «Μητρώο Διπλωμάτων» (επικόλληση): ημερομηνία σε ημέρα/μήνα/έτος, αριθμός «Ν/ΕΕΕΕ» ή «Ν», επανεκδόσεις, συνωνυμίες,
+    # ταύτιση μόνο με υπάρχοντα μέλη (καμία διπλοεγγραφή), όλες οι εκδόσεις στο Πρωτόκολλο
+    app.connect_local()
+    add_member(app, surname='Δοκιμαστής', first='Αλέξιος', email='a1@example.com', mobile='6944000101', lodges='ΑΡΓΩ | 54 | 1. ΤΑΚΤΙΚΟ')
+    add_member(app, surname='Παλαιός', first='Πέτρος', email='a2@example.com', mobile='6944000102', lodges='ΑΚΡΟΠΟΛΙΣ | 2 | 1. ΤΑΚΤΙΚΟ')
+    add_member(app, surname='Ομώνυμος', first='Νικόλαος', email='a3@example.com', mobile='6944000103', lodges='ΠΑΡΘΕΝΩΝ | 3 | 1. ΤΑΚΤΙΚΟ')
+    add_member(app, surname='Ομώνυμος', first='Νικόλαος', email='a4@example.com', mobile='6944000104', lodges='ΟΜΗΡΟΣ | 59 | 1. ΤΑΚΤΙΚΟ')
+    n0 = app.page.evaluate("async () => (await import('./core/store.js')).db.all('member_registry').length")
+    H = ['ONOMA', 'ΗΜΕΡΑ', 'ΜΗΝΑΣ', 'ετος-εκ', 'Στοα', '', 'αριθ', 'ημερα2', 'μηνας2', 'ετος-εκ2', 'ετος-εφ2', 'αρδιπ', 'name', 'mth', 'lodge', 'mth2', 'ΠΑΡΑΛΑΒΗ', '', 'ΜΑΘΗΤΗς', 'εταιρος', 'διδασκαλος']
+
+    def row(name, d='', m='', y='', lodge='', lno='', d2='', m2='', y2='', no='', mth='', ea='', fc='', mm=''):
+        return [name, d, m, y, str(int(y) + 4000) if y else '', lodge, lno, d2, m2, y2, '', no, '', mth, '', '', '', '', ea, fc, mm]
+    rows = [H,
+            row('Αλέξιος Δοκιμαστής', '5', 'Μαΐου', '2015', 'Αργώ', '54', '6', 'Φεβρουαρίου', '2017', '400/2017'),
+            row('ΔΟΚΙΜΑΣΤΗΣ ΑΛΕΞΙΟΣ', '5', 'Μαΐου', '2015', 'ΑΡΓΩ', '54', '8', 'Μαρτίου', '26', '905', ea='5/5/2015', fc='24/2/2016', mm='10/11/2016'),
+            row('ΠΑΛΑΙΟΣ ΠΕΤΡΟΣ', y='2006', lodge='ΑΚΡΟΠΟΛΙΣ', y2='2006', no='1/2006', mth='19/6/2006', ea='15/5/2002'),
+            row('Νικόλαος Ομώνυμος', '18', 'Οκτωβρίου', '2019', 'Όμηρος', '59', '13', 'Νοεμβρίου', '2025', '871'),
+            row('Άγνωστος Κάποιος', '1', 'Απριλίου', '2020', 'Αργώ', '54', '13', 'Νοεμβρίου', '2025', '872'),
+            row('Σπυρίδων Δεναρχής', '20', 'Οκτωβρίου', '1975', 'ΑΡΗΤΗ', '48', '0', 'Ιανουαρίου', '1900', 'ΔΕΝ ΕΚΘΟΘΗΚΕ???'),
+            [''] * 11 + ['418'] + [''] * 9]
+    paste = '\n'.join('\t'.join(r) for r in rows)
+    app.go('/members/diplomas?tab=import')
+    app.page.fill('#dpPaste', paste)
+    app.page.click('#dpRead')
+    app.page.wait_for_selector('#dpApply')
+    plan = app.text('#dpPlan')
+    assert '5 γραμμές' in plan and 'Παλαιότερη έκδοση' in plan and 'Δεν βρέθηκε' in plan, plan[:600]
+    app.page.check('#dpOrphans')
+    app.page.click('#dpApply')
+    app.page.wait_for_url('**/members/diplomas?tab=protocol*')
+    st = app.page.evaluate("""async () => { const {db} = await import('./core/store.js'); const ms = db.all('member_registry');
+      const f = (sn, mob) => ms.find((x) => x.surname === sn && (!mob || x.mobile === mob));
+      return { n: ms.length, d: f('Δοκιμαστής'), p: f('Παλαιός'), o3: f('Ομώνυμος', '6944000103'), o59: f('Ομώνυμος', '6944000104'),
+        iss: db.all('diploma_issues').map((x) => [x.diploma_no, x.member_id ? ms.find((m) => m.id === x.member_id).surname : null, x.issued_on]) }; }""")
+    assert st['n'] == n0  # καμία νέα εγγραφή μέλους
+    d, p = st['d'], st['p']
+    assert d['diploma_no'] == '905' and d['date_ea'] == '2015-05-05' and d['date_fc'] == '2016-02-24' and d['date_mm'] == '2016-11-10', d
+    assert p['diploma_no'] == '1/2006' and p['date_ea'] == '2002-05-15', p
+    assert st['o59']['diploma_no'] == '871' and not st['o3'].get('diploma_no'), (st['o3'], st['o59'])
+    iss = sorted(st['iss'])
+    assert iss == sorted([['400', 'Δοκιμαστής', '2017-02-06'], ['905', 'Δοκιμαστής', '2026-03-08'], ['1/2006', 'Παλαιός', '2006-06-19'], ['871', 'Ομώνυμος', '2025-11-13'], ['872', None, '2025-11-13']]), iss
+    rows_p = [r for r in app.page.eval_on_selector_all('.memtable tr', "rs => rs.map((r) => [...r.cells].slice(0, 8).map((c) => c.innerText.trim()))") if r and r[0] != 'Α/Α']
+    assert [r[1] for r in rows_p] == ['MM1/2006', 'MM400', 'MM871', 'MM872', 'MM905'], rows_p
+    assert 'δεν βρέθηκε στο Μητρώο' in rows_p[3][3] and rows_p[1][3] == 'Δοκιμαστής Αλέξιος' and rows_p[1][7] == '06/02/2017'
+    # δεύτερη εισαγωγή του ίδιου αρχείου: τίποτα νέο
+    app.go('/members/diplomas?tab=import')
+    app.page.fill('#dpPaste', paste)
+    app.page.click('#dpRead')
+    app.page.wait_for_selector('#dpApply')
+    assert app.page.is_disabled('#dpApply')

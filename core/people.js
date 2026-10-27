@@ -94,6 +94,15 @@ export function identify(p, src = db) {
   return byName.length === 1 ? byName[0] : null;
 }
 
+// Όλα τα μέλη που ταιριάζουν σε ένα ονοματεπώνυμο (με οποιαδήποτε σειρά επωνύμου/ονόματος) — για ξεχώρισμα συνωνυμιών
+export function nameCandidates(full, src = db) {
+  const idx = peopleIndex(src), t = nk(String(full || '').replace(/\(.*?\)/g, ' ').replace(/\s*-\s*/g, '-')).split(' ').filter(Boolean), out = new Set();
+  for (let k = 1; k < t.length; k++) for (const key of [`${t.slice(0, k).join(' ')}|${firstKey(t.slice(k).join(' '))}`, `${t.slice(k).join(' ')}|${firstKey(t.slice(0, k).join(' '))}`]) {
+    for (const id of reduce(idx.byName.get(key) || [], idx)) out.add(id);
+  }
+  return [...out];
+}
+
 // Το πρόσωπο με όλα τα στοιχεία του (από όλες τις εγγραφές του): email, κινητά, Στοές, αριθμοί μητρώου
 export function person(id, src = db) {
   if (!id) return null;
