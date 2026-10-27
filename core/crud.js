@@ -49,7 +49,7 @@ export function crud(spec) {
     let xs = sortRows([...db.all(tbl)]);
     if (spec.filter) xs = spec.filter(xs, query);
     if (query.q) xs = xs.filter((x) => matches(query.q, ...searchKeys.map((k) => val(x, k))));
-    const rows = xs.map((x) => [...spec.columns.map((c) => c.v(x)), `<a class="btn small" href="#${base}/edit/${x.id}">Επεξεργασία</a>`]);
+    const rows = xs.map((x) => [...spec.columns.map((c) => c.v(x)), `<a class="btn small" href="#${base}/edit/${x.id}">Επεξεργασία</a>${spec.copy ? ` <button type="button" class="btn small" data-act="copy" data-id="${x.id}">📄 Νέο αντίγραφο</button>` : ''}`]);
     return {
       title,
       html: `<h1>${esc(title)}</h1>${notice(query.msg)}${spec.intro ? spec.intro() : ''}
@@ -62,7 +62,7 @@ ${spec.excel ? `<details class="card fold"><summary><b>Εισαγωγή / ενη
 <input type="file" name="file" accept=".xlsx,.xls,.csv"><label style="margin-top:10px">ή Επικόλληση από Excel (μαζί με τη γραμμή επικεφαλίδων)</label><textarea name="paste" class="short"></textarea><div class="toolbar" style="margin-top:10px"><button class="btn primary">Εισαγωγή</button></div></form></details>` : ''}`,
       mount(el) {
         onSubmit(el.querySelector('#flt'), (d) => go(base, { ...query, ...d, msg: '' }));
-        bind(el, { export: () => exportXlsx(spec.excel.file, spec.excel.sheet, spec.excel.cols.map((c) => c.label), sortRows([...db.all(tbl)]).map((x) => spec.excel.cols.map((c) => (c.out ? c.out(x) : val(x, c.k)))), spec.excel.cols.map((c) => c.w || 18)) });
+        bind(el, { copy: (d) => copyRow(d.id), export: () => exportXlsx(spec.excel.file, spec.excel.sheet, spec.excel.cols.map((c) => c.label), sortRows([...db.all(tbl)]).map((x) => spec.excel.cols.map((c) => (c.out ? c.out(x) : val(x, c.k)))), spec.excel.cols.map((c) => c.w || 18)) });
         if (spec.excel) onSubmit(el.querySelector('#imp'), async (d) => {
           const paste = String(d.paste || '').trim();
           if (!paste && !(d.file && d.file.size)) throw new Error('Επιλέξτε αρχείο ή επικολλήστε τις γραμμές από το Excel.');
@@ -74,11 +74,25 @@ ${spec.excel ? `<details class="card fold"><summary><b>Εισαγωγή / ενη
     };
   };
 
+  // «📄 Νέο αντίγραφο»: νέα εγγραφή με όλα τα πεδία της αρχικής (εκτός από όσα ορίζει το spec.copy.omit) και άνοιγμα για επεξεργασία
+  const copyRow = async (id) => {
+    const src = db.get(tbl, id); if (!src) throw new Error('Η εγγραφή δεν βρέθηκε.');
+    const c = typeof spec.copy === 'object' ? spec.copy : {};
+    let r;
+    await db.save(`${title}: νέο αντίγραφο του «${spec.name ? spec.name(src) : id}»`, (tx) => {
+      const row = JSON.parse(JSON.stringify(src));
+      for (const k of ['id', 'created_at', 'updated_at', ...(c.omit || [])]) delete row[k];
+      r = tx.insert(tbl, c.prepare ? c.prepare(row, src) || row : row);
+    });
+    flash('Δημιουργήθηκε νέο αντίγραφο — αλλάξτε το όνομα και τα στοιχεία του.'); go(`${base}/edit/${r.id}`);
+  };
+
   const formPage = (x) => ({
     title: x ? `${one}: ${spec.name ? spec.name(x) : ''}` : `Νέα εγγραφή · ${one}`,
     html: `<p><a href="#${base}">← ${esc(title)}</a></p><h1>${x ? esc(spec.name ? spec.name(x) : one) : '+ ' + esc(one)}</h1>
 <form id="f"><div class="grid card">${fields.map((f) => fieldHtml(f, x || spec.defaults || {})).join('')}</div>
 <div class="toolbar"><button class="btn primary">💾 Αποθήκευση</button><a class="btn" href="#${base}">Ακύρωση</a>
+${x && spec.copy ? '<button type="button" class="btn" data-act="copy">📄 Νέο αντίγραφο</button>' : ''}
 ${x && spec.deletable !== false ? '<button type="button" class="btn danger" data-act="del">Διαγραφή</button>' : ''}</div></form>${x && spec.extra ? spec.extra(x) : ''}`,
     mount(el) {
       onSubmit(el.querySelector('#f'), async (d) => {
@@ -91,7 +105,7 @@ ${x && spec.deletable !== false ? '<button type="button" class="btn danger" data
         });
         flash('Αποθηκεύτηκε.'); go(base);
       });
-      bind(el, { async del() {
+      bind(el, { copy: () => copyRow(x.id), async del() {
         if (!confirmDo(`Οριστική διαγραφή: ${spec.name ? spec.name(x) : one};`)) return;
         await db.save(`${title}: διαγραφή`, (tx) => { tx.remove(tbl, x.id); if (spec.afterDelete) spec.afterDelete(tx, x); });
         flash('Διαγράφηκε.'); go(base);

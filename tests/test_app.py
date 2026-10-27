@@ -3577,3 +3577,22 @@ def test_diploma_lodge_number_from_catalog(app):
     app.page.click('[data-act=lodgeFix]')
     app.page.wait_for_selector('text=Συμπληρώθηκε ο αριθμός Στοάς Εγέρσεως σε 1 μέλη')
     assert app.page.evaluate(f"async () => (await import('./core/store.js')).db.get('member_registry', {mid}).mm_lodge_number") == '13'
+
+
+def test_templates_new_copy_button(app):
+    # Κάθε πρότυπο έχει «📄 Νέο αντίγραφο»: νέο πρότυπο με όλα τα στοιχεία, χωρίς key (τα Διατάγματα κρατούν το αρχικό)
+    app.connect_local()
+    app.go('/templates')
+    app.page.wait_for_selector('button[data-act="copy"]')
+    n = app.page.locator('button[data-act="copy"]').count()
+    assert n == app.page.evaluate("async () => { const {db} = await import('./core/store.js'); return db.all('letter_templates').filter((t) => t.name !== 'ΔΙΑΤΑΓΜΑΤΑ').length; }")
+    src = app.page.evaluate("async () => { const {db} = await import('./core/store.js'); const t = db.all('letter_templates').find((x) => x.key === 'decree-appoint'); return {id: t.id, name: t.name, total: db.all('letter_templates').length}; }")
+    app.page.click(f'button[data-act="copy"][data-id="{src["id"]}"]')
+    app.page.wait_for_url('**/#/templates/edit/*')
+    assert app.page.input_value('[name="name"]') == src['name'] + ' (αντίγραφο)'
+    r = app.page.evaluate("""async () => { const {db} = await import('./core/store.js'); const ts = db.all('letter_templates'), c = ts[ts.length - 1];
+      return {total: ts.length, key: c.key || '', kind: c.kind, keyed: ts.filter((t) => t.key === 'decree-appoint').length}; }""")
+    assert r == {'total': src['total'] + 1, 'key': '', 'kind': 'decree', 'keyed': 1}, r
+    # και από τη σελίδα επεξεργασίας
+    app.page.click('#f button[data-act="copy"]')
+    app.page.wait_for_function("() => document.querySelector('[name=\"name\"]') && document.querySelector('[name=\"name\"]').value.endsWith('(αντίγραφο) (αντίγραφο)')")
