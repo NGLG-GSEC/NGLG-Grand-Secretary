@@ -1442,6 +1442,9 @@ def test_regulation_approval_stamp_and_pdf(app, tmp_path):
     app.go('/letters/new')
     assert app.page.locator('#protoBox').is_hidden()
     app.page.select_option('#tplSel', str(tid))
+    # η επιλογή του προτύπου ανοίγει αμέσως το ΕΙΔΙΚΟ ΣΗΜΑ ΕΓΚΡΙΣΗΣ
+    app.page.wait_for_selector('.approval-app canvas')
+    app.page.click('.approval-app .gprev-bar [data-no]')
     assert app.page.locator('[data-act=approvalStamp]').is_visible() and 'ΕΙΔΙΚΟ ΣΗΜΑ ΕΓΚΡΙΣΗΣ ΕΣΩΤ. ΚΑΝΟΝΙΣΜΟΥ' in app.page.inner_text('#protoBox')
     app.fill(recipient_name='Γραμματέα της Στοάς «ΟΜΗΡΟΣ» υπ’ αριθ. 59', recipient_email='omiros59@example.com')
     app.page.click('[data-act=approvalStamp]')
@@ -3629,7 +3632,8 @@ def test_menu_new_internal_regulation_approval(app):
       return id; }""")
     assert app.page.locator('.navdrop.letters .navdrop-menu a[href="#/letters/new?template=kanonismos"]').count() == 1
     app.go('/letters/new?template=kanonismos')
-    app.page.wait_for_selector('#tplSel')
+    app.page.wait_for_selector('.approval-app canvas')  # ανοίγει αμέσως το ΕΙΔΙΚΟ ΣΗΜΑ
+    app.page.click('.approval-app .gprev-bar [data-no]')
     assert app.page.input_value('#tplSel') == str(tid)
     assert 'κανόνας 136' in app.page.input_value('[name="body"]')
 
@@ -3792,3 +3796,29 @@ def test_declarations_tick_picks_representative(browser, base_url):
     assert row.locator('.decide-select').input_value() == 'Διαβάτης Χρήστος (Βοηθός Μέγας Γραμματεύς)'
     assert row.locator('.decl-pick.on').inner_text() == '✓ Εκπρόσωπος'
     page.close()
+
+
+def test_approval_stamp_draws_lodge_logo(app, tmp_path):
+    # Ειδικό Σήμα Έγκρισης: ο θυρεός της Στοάς (κατάλογος Στοών) γεμίζει το κενό αριστερά από τον Μεγάλο Γραμματέα, κάτω από το «Αθήνα»
+    app.connect_local()
+    l = app.page.evaluate("async () => (await import('./core/store.js')).db.all('lodges').find((x) => x.number === '118')")
+    app.go('/lodges/edit/' + str(l['id']))
+    app.page.wait_for_selector('#logo-up')
+    img = tmp_path / 'atlas.png'
+    img.write_bytes(PNG)
+    app.page.set_input_files('#logo-up', str(img))
+    app.page.wait_for_selector('img.lodge-logo-big[src^="blob:"]')
+    r = app.page.evaluate("""async () => { const {drawApproval, approvalLodge} = await import('./modules/approval-stamp.js');
+      const {dfileUrl} = await import('./core/paper.js'); const {db} = await import('./core/store.js');
+      const u = await dfileUrl(db.all('lodges').find((x) => x.number === '118').logo_file);
+      const logo = await new Promise((ok) => { const i = new Image(); i.onload = () => ok(i); i.src = u; });
+      const px = (logoImg) => { const c = drawApproval(document.createElement('canvas'), { protocol: '1', date: '2026-11-02', lodge: approvalLodge('118') }, { logo: logoImg });
+        return Array.from(c.getContext('2d').getImageData(265, 524, 1, 1).data).slice(0, 3); };
+      return { without: px(null), with: px(logo) }; }""")
+    assert r['without'] == [255, 255, 255] and r['with'] != [255, 255, 255], r
+    # το παράθυρο του σήματος φορτώνει τον θυρεό της επιλεγμένης Στοάς
+    app.go('/letters/new')
+    app.page.wait_for_selector('#tplSel')
+    app.page.evaluate("async () => { const {openApprovalStamp} = await import('./modules/approval-stamp.js'); openApprovalStamp({ protocol: '5', date: '2026-11-02', lodge: '118' }); }")
+    app.page.wait_for_selector('.approval-app canvas')
+    app.page.wait_for_function("() => { const c = document.querySelector('.approval-app canvas'); const d = c.getContext('2d').getImageData(265, 524, 1, 1).data; return d[0] !== 255 || d[1] !== 255 || d[2] !== 255; }")

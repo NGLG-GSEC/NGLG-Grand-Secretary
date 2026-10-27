@@ -118,8 +118,9 @@ function protoImageBox(x) {
 }
 const regLabel = (x, pending) => (pending ? `📄 <b>${esc(pending)}</b> <small class="muted">(θα αποθηκευτεί με την επιστολή)</small>` : x.reg_file ? `📄 <b>${esc(x.reg_name || 'Εσωτερικός Κανονισμός.pdf')}</b>` : '<span class="muted">Δεν έχει επισυναφθεί PDF.</span>');
 // Πρότυπο «Έγκριση Εσωτερικού Κανονισμού» (ενεργό, όχι αντίγραφο· αλλιώς το πρώτο που ταιριάζει)
+const isKanonismos = (t) => !!t && !t.kind && foldName(t.name).includes('εγκρισ') && foldName(t.name).includes('εσωτερικου κανονισμου');
 export function kanonismosTemplate() {
-  const ts = sortBy(db.all('letter_templates').filter((t) => !t.kind && foldName(t.name).includes('εγκρισ') && foldName(t.name).includes('εσωτερικου κανονισμου')), 'id');
+  const ts = sortBy(db.all('letter_templates').filter(isKanonismos), 'id');
   return ts.find((t) => t.active && !/αντιγραφο/.test(foldName(t.name))) || ts.find((t) => t.active) || ts[0] || null;
 }
 // Ο εγκεκριμένος Εσωτερικός Κανονισμός (PDF) μιας επιστολής → { blob, name }
@@ -220,10 +221,13 @@ function mountLetterForm(el, x, isNew) {
     pbox.hidden = !(f.protocol_image.value || x.reg_file || asksProtoImage(tpl));
     box.hidden = !(tpl && hasPlaceholders([tpl.body, tpl.subject].join(' ')));
     if (tpl) apply(false);
+    // «Έγκριση Εσωτερικού Κανονισμού»: ανοίγει αμέσως το ΕΙΔΙΚΟ ΣΗΜΑ ΕΓΚΡΙΣΗΣ (αν δεν έχει ήδη εικόνα)
+    if (isKanonismos(tpl) && !f.protocol_image.value) el.querySelector('[data-act=approvalStamp]').click();
   });
   fv.addEventListener('change', () => { if (fv.value) { fl.value = ''; fd.value = ''; } apply(true); });
   for (const i of [fl, fd]) i.addEventListener('change', () => { fv.value = ''; apply(true); });
   if (tpl && !box.hidden && (fv.value || !f.body.value.trim() || hasPlaceholders(f.body.value))) apply(true);
+  if (!x.id && isKanonismos(tpl) && !f.protocol_image.value) setTimeout(() => { const b = el.querySelector('[data-act=approvalStamp]'); if (b && b.isConnected) b.click(); }, 0); // νέα επιστολή από το μενού «+ Έγκριση Εσωτ. Κανονισμού»
   const cur = () => ({ ...x, ...Object.fromEntries(new FormData(f)), letter_date: x.letter_date || today() });
   bind(el, { protoImgDel: () => setProto(''),
     regDel() { regPending = null; f.reg_remove.value = '1'; pbox.querySelector('.reg-name').innerHTML = '<span class="muted">Δεν έχει επισυναφθεί PDF.</span>'; },
