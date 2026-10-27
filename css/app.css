@@ -637,3 +637,7 @@ dialog.rptask input[type=radio] { width: auto; margin-top: 3px; }
   .btn,button{transition:none!important}
   .btn:hover,button:hover,.btn:active,button:active{transform:none!important}
 }
+
+/* Λογότυπο / Θυρεός Στοάς */
+img.lodge-logo{width:44px;height:44px;object-fit:contain;display:block}
+img.lodge-logo-big{max-width:220px;max-height:220px;object-fit:contain;display:block;margin:8px 0}

@@ -367,7 +367,7 @@ def test_github_storage_and_concurrent_edits(app):
     connect_github(app, gh)
     app.page.wait_for_selector('.dash')
     assert gh.files()['README.md'].startswith('# Δεδομένα'.encode())
-    assert len(gh.read_json('data/lodges.json')) == 86 and 'data/settings.json' in gh.files()
+    assert len(gh.read_json('data/lodges.json')) == 87 and 'data/settings.json' in gh.files()
     app.go('/letters/new').fill(subject='Από τον Δημήτρη', body='x')
     app.click('Αποθήκευση & απόδοση')
     app.page.wait_for_url('**/#/letters/1')
@@ -511,13 +511,14 @@ def test_official_lodges_applied_to_existing_database(app):
     connect_github(app, gh)
     app.page.wait_for_selector('.dash')
     lodges = {l['number']: l for l in gh.read_json('data/lodges.json')}
-    assert len(lodges) == 87  # 86 επίσημες + η 73 που υπήρχε ήδη
+    assert len(lodges) == 88  # 87 επίσημες (μαζί η 118 ΑΤΛΑΣ) + η 73 που υπήρχε ήδη
     assert lodges['31']['ritual'] == 'Emulation'
     a = lodges['2']
     assert a['provincial'] == 'ΕπΜΣτ. Αθηνών' and a['orient'] == 'Αθηνών' and a['kind'] == 'Κανονική' and a['ritual'] == 'Emulation'
     assert a['email'] == 'akropolis@example.com' and a['master'] == 'Σεβάσμιος Α'
     assert a['full_title'] == 'ΣΣτ. 2 Ακρόπολις υπό την Σκ. της ΕπΜΣτ. Αθηνών'
     assert lodges['52']['status'] == 'Ανενεργή' and lodges['117']['kind'] == 'Ειδική' and lodges['Φ']['orient'] == 'Κερκύρας'
+    assert lodges['118']['name'] == 'ΑΤΛΑΣ' and lodges['118']['orient'] == 'Πειραιώς' and lodges['118']['founded_on'] == '2026-11-02' and lodges['118']['provincial'] == 'ΕπΜΣτ. Πειραιώς & Νήσων Αρχ. Αιγαίου'
     assert 'lodges-official-2026-10' in gh.read_json('data/settings.json')['_migrations']
     app.page.wait_for_timeout(3000)  # η πρώτη δημοσίευση των δημόσιων αρχείων (1,5″ μετά το άνοιγμα) να έχει τελειώσει
     n = len(gh.commits)
@@ -3596,3 +3597,22 @@ def test_templates_new_copy_button(app):
     # και από τη σελίδα επεξεργασίας
     app.page.click('#f button[data-act="copy"]')
     app.page.wait_for_function("() => document.querySelector('[name=\"name\"]') && document.querySelector('[name=\"name\"]').value.endsWith('(αντίγραφο) (αντίγραφο)')")
+
+
+def test_lodge_118_atlas_founding_date_and_logo(app, tmp_path):
+    # Στοά 118 ΑΤΛΑΣ (Πειραιώς, ΕπΜΣτ. Πειραιώς & Νήσων Αρχ. Αιγαίου, ίδρυση 2/11/2026)· κάθε Στοά: ημερομηνία ίδρυσης και λογότυπο/θυρεός
+    app.connect_local()
+    l = app.page.evaluate("async () => { const {db} = await import('./core/store.js'); return db.all('lodges').find((x) => x.number === '118'); }")
+    assert l['name'] == 'ΑΤΛΑΣ' and l['orient'] == 'Πειραιώς' and l['founded_on'] == '2026-11-02' and l['provincial'] == 'ΕπΜΣτ. Πειραιώς & Νήσων Αρχ. Αιγαίου', l
+    app.go('/lodges/edit/' + str(l['id']))
+    app.page.wait_for_selector('#logo-up')
+    assert app.page.input_value('[name="founded_on"]') == '2026-11-02'
+    img = tmp_path / 'atlas.png'
+    img.write_bytes(PNG)
+    app.page.set_input_files('#logo-up', str(img))
+    app.page.wait_for_selector('img.lodge-logo-big[src^="blob:"]')
+    f = app.page.evaluate("async () => { const {db} = await import('./core/store.js'); const x = db.all('lodges').find((y) => y.number === '118'); return [x.logo_file, x.logo_name, db.hasFile(x.logo_file)]; }")
+    assert f[0].startswith('lodges/logo-118-') and f[0].endswith('.png') and f[1] == 'atlas.png' and f[2], f
+    app.go('/lodges?q=ΑΤΛΑΣ')
+    app.page.wait_for_selector('img.lodge-logo[src^="blob:"]')
+    assert 'Ίδρυση 02/11/2026' in app.text()

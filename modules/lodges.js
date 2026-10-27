@@ -1,10 +1,11 @@
 // Συμβολικές Στοές — η κεντρική βάση Στοών (αριθμός, όνομα, Ανατολή, ΕπΜΣτ., email, Σεβάσμιος, Γραμματέας, Τυπικό, τόπος).
 import { db } from '../core/store.js';
-import { module } from '../core/app.js';
+import { module, flash, go, toast, bind, confirmDo } from '../core/app.js';
 import { crud } from '../core/crud.js';
 import { esc, sortBy, fold } from '../core/util.js';
 import { addContactSource } from '../core/pickers.js';
 import { provincialChoices } from './provinces.js';
+import { resolveFileImages } from '../core/paper.js';
 
 export const LODGE_STATUSES = ['Ενεργή', 'Σε αργία', 'Ανενεργή'];
 export const LODGE_KINDS = ['Κανονική', 'Ειδική', 'Ερευνητική', 'Αγγλόφωνη', 'Γαλλόφωνη', 'Γερμανόφωνη', 'Ιταλόφωνη'];
@@ -20,6 +21,14 @@ db.migrate('lodges-official-2026-10', async (tx) => {
     if (ex) tx.update('lodges', ex.id, Object.fromEntries(OFFICIAL_KEYS.map((k) => [k, x[k]])));
     else tx.insert('lodges', { ...x, email: '', master: '', secretary: '', secretary_email: '', meeting_place: '', notes: '', source: 'Επίσημος κατάλογος' });
   }
+});
+
+// Νέα Στοά 118 «ΑΤΛΑΣ» (Ανατολή Πειραιώς, ΕπΜΣτ. Πειραιώς & Νήσων Αρχ. Αιγαίου, ίδρυση 2/11/2026)· τα στοιχεία από τον επίσημο κατάλογο.
+db.migrate('lodges-118-atlas-2026-10', async (tx) => {
+  const x = (await official()).find((l) => l.number === '118'); if (!x) return;
+  const ex = tx.find('lodges', (l) => lodgeNoKey(l.number) === '118');
+  if (ex) tx.update('lodges', ex.id, { ...Object.fromEntries(OFFICIAL_KEYS.map((k) => [k, x[k]])), founded_on: ex.founded_on || x.founded_on });
+  else tx.insert('lodges', { ...x, email: '', master: '', secretary: '', secretary_email: '', meeting_place: '', notes: '', source: 'Επίσημος κατάλογος' });
 });
 
 // Τυπικό: 19 Στοές εργάζονται σε Σκωτικό (η Φοίνιξ Κερκύρας σε Σκωτικό 1700)· οι υπόλοιπες σε Emulation.
@@ -73,6 +82,7 @@ const fields = [
   { k: 'name', label: 'Όνομα Στοάς', required: true },
   { k: 'orient', label: 'Ανατολή (πόλη)', placeholder: 'π.χ. Αθηνών' },
   { k: 'provincial', label: 'Επαρχιακή / Περιφερειακή Μεγάλη Στοά', type: 'select', empty: '— Χωρίς ορισμό —', options: () => provincialChoices() },
+  { k: 'founded_on', label: 'Ημερομηνία ίδρυσης', type: 'date' },
   { k: 'email', label: 'Email Στοάς', type: 'email' },
   { k: 'status', label: 'Κατάσταση', type: 'select', options: LODGE_STATUSES },
   { k: 'kind', label: 'Είδος', type: 'select', empty: '—', options: LODGE_KINDS },
@@ -85,6 +95,20 @@ const fields = [
   { k: 'meeting_place', label: 'Τόπος συνεδριάσεων', full: true, placeholder: 'π.χ. Τεκτονικόν Μέγαρον, Ερεσού 38, Αθήνα' },
   { k: 'notes', label: 'Σημειώσεις', type: 'textarea', full: true },
 ];
+
+// Λογότυπο / Θυρεός κάθε Στοάς: αρχείο εικόνας στα δεδομένα (files/lodges/…), πεδίο logo_file
+const LOGO_TYPES = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/svg+xml': 'svg' };
+export const lodgeLogoImg = (x, cls = 'lodge-logo') => (x && x.logo_file ? `<img class="${cls}" data-dfile="${esc(x.logo_file)}" alt="Λογότυπο Στοάς ${esc(x.number)}">` : '');
+const logoCard = (x) => `<div class="card lodge-logo-card"><h2>🛡 Λογότυπο / Θυρεός Στοάς</h2>
+${x.logo_file ? lodgeLogoImg(x, 'lodge-logo-big') : '<p class="muted">Δεν έχει ανέβει λογότυπο.</p>'}
+<div class="toolbar"><label class="dz-file btn">🖼 ${x.logo_file ? 'Αλλαγή' : 'Ανέβασμα'} λογοτύπου (PNG, JPG, WEBP, SVG)<input type="file" id="logo-up" accept="image/png,image/jpeg,image/webp,image/svg+xml"></label>
+${x.logo_file ? '<button type="button" class="btn danger" data-act="logoDel">Αφαίρεση λογοτύπου</button>' : ''}</div></div>`;
+async function saveLogo(x, f) {
+  const ext = LOGO_TYPES[f.type]; if (!ext) throw new Error('Επιλέξτε εικόνα PNG, JPG, WEBP ή SVG.');
+  if (f.size > 4 * 1024 * 1024) throw new Error('Η εικόνα είναι πάνω από 4 MB.');
+  const bytes = new Uint8Array(await f.arrayBuffer()), path = `lodges/logo-${lodgeNoKey(x.number)}-${Date.now()}.${ext}`;
+  await db.save(`Στοά ${x.number} · ${x.name}: λογότυπο`, (tx) => { tx.putFile(path, bytes); tx.update('lodges', x.id, { logo_file: path, logo_name: f.name }); });
+}
 
 module({
   id: 'lodges',
@@ -102,7 +126,8 @@ module({
     },
     columns: [
       { label: 'Αρ.', v: (x) => `<b>${esc(x.number)}</b>` },
-      { label: 'Όνομα', v: (x) => esc(x.name) + (x.status && x.status !== 'Ενεργή' ? ` <span class="pill warn">${esc(x.status)}</span>` : '') },
+      { label: 'Λογότυπο', v: (x) => lodgeLogoImg(x) || '<span class="muted">—</span>' },
+      { label: 'Όνομα', v: (x) => esc(x.name) + (x.status && x.status !== 'Ενεργή' ? ` <span class="pill warn">${esc(x.status)}</span>` : '') + (x.founded_on ? `<br><small class="muted">Ίδρυση ${esc(x.founded_on.split('-').reverse().join('/'))}</small>` : '') },
       { label: 'Ανατολή', v: (x) => esc(x.orient) },
       { label: 'Είδος', v: (x) => esc(x.kind || '') },
       { label: 'Τυπικό', v: (x) => esc(x.ritual || '') },
@@ -111,6 +136,22 @@ module({
       { label: 'Σεβάσμιος', v: (x) => esc(x.master) + (x.master_mobile ? `<br><small><a href="tel:${esc(String(x.master_mobile).replace(/[^\d+]/g, ''))}">${esc(x.master_mobile)}</a></small>` : '') },
       { label: 'Ενεργά μέλη', v: (x) => { const n = lodgeMemberCounts()[lodgeNoKey(x.number)] || 0; return `<a href="#/members?field=lodge&q=${encodeURIComponent(x.number)}">${n}</a>`; } },
     ],
+    mountList: (el) => resolveFileImages(el),
+    extra: (x) => logoCard(x),
+    mountForm(el, x) {
+      if (!x) return;
+      resolveFileImages(el);
+      const up = el.querySelector('#logo-up');
+      up.addEventListener('change', async () => {
+        const f = up.files[0]; if (!f) return;
+        try { await saveLogo(x, f); flash('Το λογότυπο αποθηκεύτηκε.'); go(`/lodges/edit/${x.id}`); } catch (e) { toast(e.message || String(e), 'error'); }
+      });
+      bind(el.querySelector('.lodge-logo-card'), { async logoDel() {
+        if (!confirmDo('Αφαίρεση του λογοτύπου της Στοάς;')) return;
+        await db.save(`Στοά ${x.number} · ${x.name}: αφαίρεση λογοτύπου`, (tx) => tx.update('lodges', x.id, { logo_file: '', logo_name: '' }));
+        flash('Το λογότυπο αφαιρέθηκε.'); go(`/lodges/edit/${x.id}`);
+      } });
+    },
     validate(d, tx, id) {
       d.name = cleanLodgeName(d.name); d.number = lodgeNoKey(d.number);
       if (!LODGE_STATUSES.includes(d.status)) d.status = 'Ενεργή';
@@ -122,6 +163,7 @@ module({
       cols: [{ k: 'number', label: 'Αριθμός', aliases: ['Αρ.', 'Αρ', 'Number', 'No', 'ΝΟ'], w: 9 }, { k: 'name', label: 'Όνομα', aliases: ['Στοά', 'Name', 'Lodge'], w: 32 }, { k: 'orient', label: 'Ανατολή', aliases: ['Πόλη', 'Orient', 'City'], w: 16 },
         { k: 'provincial', label: 'Επαρχιακή Μεγάλη Στοά', aliases: ['ΕπΜΣτ.', 'ΕπΜΣτ', 'Provincial'], w: 34 }, { k: 'email', label: 'Email Στοάς', aliases: ['Email', 'Email address', 'E-mail', 'Επίσημο email'], w: 32 }, { k: 'master', label: 'Σεβάσμιος', aliases: ['Master'], w: 26 }, { k: 'master_mobile', label: 'Κινητό Σεβασμίου', aliases: ['Κιν', 'Κινητό'], w: 16 },
         { k: 'secretary', label: 'Γραμματέας', aliases: ['Secretary'], w: 26 }, { k: 'secretary_email', label: 'Email Γραμματέα', aliases: ['Secretary Email'], w: 32 }, { k: 'status', label: 'Κατάσταση', aliases: ['Status'], w: 12 },
+        { k: 'founded_on', label: 'Ημ. ίδρυσης', aliases: ['Ίδρυση', 'Ημερομηνία ίδρυσης', 'Founded'], w: 12 },
         { k: 'ritual', label: 'Τυπικό', aliases: ['Ritual'], w: 18 }, { k: 'meeting_place', label: 'Τόπος συνεδριάσεων', aliases: ['Τόπος', 'Venue'], w: 40 }, { k: 'notes', label: 'Σημειώσεις', aliases: ['Notes'], w: 30 },
         { k: 'kind', label: 'Είδος', aliases: ['ΕΙΔΟΣ'], w: 14 }, { k: 'full_title', label: 'Πλήρης τίτλος', aliases: ['Πληρης', 'Πλήρης'], w: 70 }],
       // Πίνακας «ΝΟ, ΣΤΟΑ, ΕΔΡΑ, ΕΙΔΟΣ, ΤΥΠΙΚΟ, Ονομα, Επώνυμο, Κιν»: Όνομα + Επώνυμο = Σεβάσμιος

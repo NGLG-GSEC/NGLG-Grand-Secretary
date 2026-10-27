@@ -62,6 +62,7 @@ ${spec.excel ? `<details class="card fold"><summary><b>Εισαγωγή / ενη
 <input type="file" name="file" accept=".xlsx,.xls,.csv"><label style="margin-top:10px">ή Επικόλληση από Excel (μαζί με τη γραμμή επικεφαλίδων)</label><textarea name="paste" class="short"></textarea><div class="toolbar" style="margin-top:10px"><button class="btn primary">Εισαγωγή</button></div></form></details>` : ''}`,
       mount(el) {
         onSubmit(el.querySelector('#flt'), (d) => go(base, { ...query, ...d, msg: '' }));
+        if (spec.mountList) spec.mountList(el);
         bind(el, { copy: (d) => copyRow(d.id), export: () => exportXlsx(spec.excel.file, spec.excel.sheet, spec.excel.cols.map((c) => c.label), sortRows([...db.all(tbl)]).map((x) => spec.excel.cols.map((c) => (c.out ? c.out(x) : val(x, c.k)))), spec.excel.cols.map((c) => c.w || 18)) });
         if (spec.excel) onSubmit(el.querySelector('#imp'), async (d) => {
           const paste = String(d.paste || '').trim();
