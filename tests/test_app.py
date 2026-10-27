@@ -1445,6 +1445,7 @@ def test_regulation_approval_stamp_and_pdf(app, tmp_path):
     # η επιλογή του προτύπου ανοίγει αμέσως το ΕΙΔΙΚΟ ΣΗΜΑ ΕΓΚΡΙΣΗΣ
     app.page.wait_for_selector('.approval-app canvas')
     app.page.click('.approval-app .gprev-bar [data-no]')
+    app.page.wait_for_selector('.approval-app', state='detached')
     assert app.page.locator('[data-act=approvalStamp]').is_visible() and 'ΕΙΔΙΚΟ ΣΗΜΑ ΕΓΚΡΙΣΗΣ ΕΣΩΤ. ΚΑΝΟΝΙΣΜΟΥ' in app.page.inner_text('#protoBox')
     app.fill(recipient_name='Γραμματέα της Στοάς «ΟΜΗΡΟΣ» υπ’ αριθ. 59', recipient_email='omiros59@example.com')
     app.page.click('[data-act=approvalStamp]')
@@ -3814,8 +3815,12 @@ def test_approval_stamp_draws_lodge_logo(app, tmp_path):
       const logo = await new Promise((ok) => { const i = new Image(); i.onload = () => ok(i); i.src = u; });
       const px = (logoImg) => { const c = drawApproval(document.createElement('canvas'), { protocol: '1', date: '2026-11-02', lodge: approvalLodge('118') }, { logo: logoImg });
         return Array.from(c.getContext('2d').getImageData(265, 524, 1, 1).data).slice(0, 3); };
-      return { without: px(null), with: px(logo) }; }""")
+      const c = drawApproval(document.createElement('canvas'), { protocol: '1', date: '2026-11-02', lodge: approvalLodge('118') }, { logo });
+      const at = (x, y) => Array.from(c.getContext('2d').getImageData(x, y, 1, 1).data).slice(0, 3);
+      return { without: px(null), with: px(logo), corner: at(108, 391), outside: at(100, 524) }; }""")
     assert r['without'] == [255, 255, 255] and r['with'] != [255, 255, 255], r
+    # διπλάσιο με περικοπή: το σχέδιο γεμίζει και τις γωνίες του πλαισίου, αλλά δεν βγαίνει έξω από αυτό
+    assert r['corner'] != [255, 255, 255] and r['outside'] == [255, 255, 255], r
     # το παράθυρο του σήματος φορτώνει τον θυρεό της επιλεγμένης Στοάς
     app.go('/letters/new')
     app.page.wait_for_selector('#tplSel')

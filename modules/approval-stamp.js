@@ -79,8 +79,11 @@ export function drawApproval(canvas, { protocol = '', date = '', lodge = null },
   ctx.fillText(`Αθήνα, ${prettyDate(date)}`, 122, 359);
   // Θυρεός της Στοάς: όλο το κενό αριστερά από τον Μεγάλο Γραμματέα και κάτω από το «Αθήνα, …»
   if (logo && logo.naturalWidth) {
-    const bx = 105, by = 388, bw = 320, bh = 272, k = Math.min(bw / logo.naturalWidth, bh / logo.naturalHeight), w = logo.naturalWidth * k, h = logo.naturalHeight * k;
+    // διπλάσιο μέγεθος με περικοπή (crop) στο πλαίσιο: φαίνεται μεγαλύτερο το κεντρικό σχέδιο του θυρεού
+    const bx = 105, by = 388, bw = 320, bh = 272, k = 2 * Math.min(bw / logo.naturalWidth, bh / logo.naturalHeight), w = logo.naturalWidth * k, h = logo.naturalHeight * k;
+    ctx.save(); ctx.beginPath(); ctx.rect(bx, by, bw, bh); ctx.clip();
     ctx.drawImage(logo, bx + (bw - w) / 2, by + (bh - h) / 2, w, h);
+    ctx.restore();
   }
   if (seal) ctx.drawImage(seal, 1040, 344, 250, 250);
   if (signature) {

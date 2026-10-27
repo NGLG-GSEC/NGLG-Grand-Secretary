@@ -240,6 +240,7 @@ function mountLetterForm(el, x, isNew) {
   bind(el, { protoImgDel: () => setProto(''),
     regDel() { regPending = null; f.reg_remove.value = '1'; pbox.querySelector('.reg-name').innerHTML = '<span class="muted">Δεν έχει επισυναφθεί PDF.</span>'; },
     async approvalStamp() { // η εφαρμογή «Έγκριση Εσωτερικού Κανονισμού»: η εικόνα μπαίνει ως ΕΙΚΟΝΑ ΠΡΩΤΟΚΟΛΛΟΥ
+      if (document.querySelector('.approval-app')) return; // ήδη ανοιχτό (π.χ. αυτόματο άνοιγμα με την επιλογή του προτύπου)
       const { openApprovalStamp } = await import('./approval-stamp.js');
       const no = String(fl.value).split('·')[0].trim() || (/(?:αριθ|αρ)\S*\s*(\d+)\s*$/i.exec(f.recipient_name.value) || [])[1] || '';
       const v = await openApprovalStamp({ protocol: String(x.protocol_seq || suggestedProtocol()), date: x.letter_date || today(), lodge: no });
