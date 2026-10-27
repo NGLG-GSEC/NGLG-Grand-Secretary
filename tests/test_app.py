@@ -3616,3 +3616,17 @@ def test_lodge_118_atlas_founding_date_and_logo(app, tmp_path):
     app.go('/lodges?q=ΑΤΛΑΣ')
     app.page.wait_for_selector('img.lodge-logo[src^="blob:"]')
     assert 'Ίδρυση 02/11/2026' in app.text()
+
+
+def test_menu_new_internal_regulation_approval(app):
+    # Έγγραφα → «+ Έγκριση Εσωτερικού Κανονισμού»: νέα επιστολή από το ενεργό πρότυπο με αυτό το όνομα (όχι από αντίγραφο)
+    app.connect_local()
+    tid = app.page.evaluate("""async () => { const {db} = await import('./core/store.js'); let id;
+      await db.save('x', (tx) => { tx.insert('letter_templates', { name: 'Έγκριση Εσωτερικού Κανονισμού (αντίγραφο)', body: 'ΑΝΤΙΓΡΑΦΟ', active: 1 });
+        id = tx.insert('letter_templates', { name: 'Έγκριση Εσωτερικού Κανονισμού', subject: 'Έγκριση Εσωτερικού Κανονισμού', body: 'Φίλτατε Αδ. Γραμματέα, κανόνας 136', active: 1 }).id; });
+      return id; }""")
+    assert app.page.locator('.navdrop.letters .navdrop-menu a[href="#/letters/new?template=kanonismos"]').count() == 1
+    app.go('/letters/new?template=kanonismos')
+    app.page.wait_for_selector('#tplSel')
+    assert app.page.input_value('#tplSel') == str(tid)
+    assert 'κανόνας 136' in app.page.input_value('[name="body"]')

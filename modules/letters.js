@@ -3,7 +3,7 @@
 import { db } from '../core/store.js';
 import { module, onSubmit, go, flash, toast, bind, confirmDo, table, notice, actor, ACTORS } from '../core/app.js';
 import { crud } from '../core/crud.js';
-import { esc, today, fmtDate, matches, sortBy, safeFileName, latinFileName, EMAIL_RE, splitEmails, download, outgoingProtocolBtn } from '../core/util.js';
+import { esc, foldName, today, fmtDate, matches, sortBy, safeFileName, latinFileName, EMAIL_RE, splitEmails, download, outgoingProtocolBtn } from '../core/util.js';
 import { richPlain } from '../core/rich.js';
 import { letterPaper, printPaper, signerProfile, IMG, fitPaper, letterFields, LETTER_FIELDS, protocolImage, hasProtocolField } from '../core/paper.js';
 import { makeDocx, letterBlocks } from '../core/docx.js';
@@ -117,6 +117,11 @@ function protoImageBox(x) {
 <div class="toolbar"><label class="btn">📤 Επιλογή PDF Κανονισμού<input type="file" id="regFile" accept="application/pdf,.pdf" hidden></label><button type="button" class="btn danger" data-act="regDel">Αφαίρεση PDF</button></div></div></div>`;
 }
 const regLabel = (x, pending) => (pending ? `📄 <b>${esc(pending)}</b> <small class="muted">(θα αποθηκευτεί με την επιστολή)</small>` : x.reg_file ? `📄 <b>${esc(x.reg_name || 'Εσωτερικός Κανονισμός.pdf')}</b>` : '<span class="muted">Δεν έχει επισυναφθεί PDF.</span>');
+// Πρότυπο «Έγκριση Εσωτερικού Κανονισμού» (ενεργό, όχι αντίγραφο· αλλιώς το πρώτο που ταιριάζει)
+export function kanonismosTemplate() {
+  const ts = sortBy(db.all('letter_templates').filter((t) => !t.kind && foldName(t.name).includes('εγκρισ') && foldName(t.name).includes('εσωτερικου κανονισμου')), 'id');
+  return ts.find((t) => t.active && !/αντιγραφο/.test(foldName(t.name))) || ts.find((t) => t.active) || ts[0] || null;
+}
 // Ο εγκεκριμένος Εσωτερικός Κανονισμός (PDF) μιας επιστολής → { blob, name }
 export async function regPdf(x) {
   const bytes = x && x.reg_file ? await db.file(x.reg_file) : null;
@@ -396,6 +401,8 @@ module({
       // Επιστολή Επίσκεψης: πάντα από το τρέχον πρότυπο (και από παλιούς συνδέσμους με το παλιό κείμενο προς τον ΕπΜΓρ.)
       const vis = visitOf(query);
       if (vis) query = { ...query, ...provinceLetter(vis) };
+      // Μενού «Έγγραφα → + Έγκριση Εσωτερικού Κανονισμού»: το ενεργό πρότυπο με αυτό το όνομα (όποιος κι αν είναι ο αριθμός του)
+      if (query.template === 'kanonismos') { const t = kanonismosTemplate(); if (t) query = { ...query, template_id: String(t.id) }; }
       let x = { status: 'draft', signer: actor() };
       if (query.copy_from) { const s = db.get('letters', query.copy_from); if (s) x = { ...x, template_id: s.template_id, subject: s.subject, body: s.body, recipient_name: s.recipient_name, recipient_email: s.recipient_email, recipient_member_id: s.recipient_member_id, cc_name: s.cc_name || '', closing: s.closing || '', category: s.category || 'ΕΠΙΣΤΟΛΗ', source_letter_id: s.id }; }
       else if (query.template_id) { const t = db.get('letter_templates', query.template_id); if (t) x = { ...x, template_id: t.id, body: t.body, subject: t.subject || '', closing: t.closing || '', category: t.category || 'ΕΠΙΣΤΟΛΗ' }; }
