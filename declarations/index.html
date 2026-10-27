@@ -988,6 +988,9 @@
         const r = await callApi(Object.assign({ action: "decide", meeting: meetingId, representative: sel.value }, reportAuth()));
         if (!r.ok) throw new Error(r.error || "error");
         decisions = r.decisions || {};
+        if (sel.value) JUST_DECIDED[meetingId] = sel.value; else delete JUST_DECIDED[meetingId];
+        // η εφαρμογή (όταν η σελίδα είναι μέσα της) περνά αμέσως την απόφαση στην Επίσκεψη
+        try { if (window.parent !== window) window.parent.postMessage({ type: "nglg-decl-decided", meeting: meetingId }, location.origin); } catch (e) { /* */ }
         state.className = "decide-state ok"; state.textContent = sel.value ? "✓ Αποθηκεύτηκε" : "✓ Χωρίς απόφαση";
         sel.classList.toggle("done", !!sel.value);
         sel.parentElement.querySelector(".decide-print").textContent = sel.value;
@@ -1024,6 +1027,17 @@
       sel.addEventListener("change", () => { const op = sel.selectedOptions[0]; if (op && op.value) editDeclaration("submit", m, op.value, Number(op.dataset.rank) || null, sel); });
       box.appendChild(sel);
       return box;
+    }
+    // Ενιαία εκπροσώπηση: ο εκπρόσωπος του Προγράμματος (Επισκέψεις της εφαρμογής) είναι η τρέχουσα απόφαση·
+    // αλλιώς η απόφαση που πάρθηκε εδώ. Το όνομα του Προγράμματος («Σεβασμιώτατος Αδ. Όνομα Επώνυμο, Αξίωμα») → τιμή του καταλόγου
+    const JUST_DECIDED = {}; // αποφάσεις αυτής της επίσκεψης της σελίδας (μέχρι να φτάσουν στο Πρόγραμμα)
+    function currentRepOf(m) {
+      if (m.id in JUST_DECIDED) return JUST_DECIDED[m.id];
+      const reg = registeredOf(m);
+      if (!reg) return decisionOf(m);
+      if (reg === GM_SELF) return GM_SELF;
+      const off = officerOf(reg.replace(/,.*$/, ""));
+      return off ? officerValue(off) : reg;
     }
     // Επιλογές απόφασης: όσοι δήλωσαν (με σειρά προβαδίσματος), αυτοπροσώπως, ή άλλος από τον κατάλογο
     function decisionSelect(m, ranked, current) {
@@ -1376,7 +1390,7 @@
           cell.appendChild(list);
         }
         cell.appendChild(addDeclarationBox(m, ranked));
-        tr.children[4].appendChild(decisionSelect(m, ranked, decisionOf(m)));
+        tr.children[4].appendChild(decisionSelect(m, ranked, currentRepOf(m)));
         if (registeredOf(m)) { const p = document.createElement("p"); p.className = "registered"; p.textContent = "📌 Καταχωρημένος στο πρόγραμμα: " + registeredOf(m); tr.children[4].appendChild(p); }
         tbody.appendChild(tr);
       });

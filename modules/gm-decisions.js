@@ -108,6 +108,43 @@ export function visitOfMeetingId(id, oldMeetings = [], vs = visitsAll()) {
   const v = vs.find((x) => meetingIdOf(x) === id); if (v) return v;
   const m = oldMeetings.find((x) => x.id === id); return m ? visitForMeeting(m, vs) : null;
 }
+// Ενιαία λογική εκπροσώπησης: η Επίσκεψη (visits.rep_id) είναι η μία πηγή. Μια απόφαση που πάρθηκε στη σελίδα Δηλώσεων
+// (Apps Script, «decisions») περνά αυτόματα στην Επίσκεψη — μόνο όταν είναι ΝΕΑ (άλλη από την τελευταία που είδε η εφαρμογή,
+// πεδίο decl_decision), ώστε μια μεταγενέστερη αλλαγή στις Επισκέψεις να μην πατιέται από παλιά απόφαση. Η πρώτη φορά, σε Επίσκεψη
+// που έχει ήδη εκπρόσωπο, απλώς καταγράφεται. Οι αλλαγές της εφαρμογής φτάνουν στη σελίδα Δηλώσεων με το programme.json.
+let syncing = null, lastSync = 0;
+export function syncDeclDecisions(force = false) {
+  if (syncing) return syncing;
+  if (!db.backend || (!force && Date.now() - lastSync < 20000)) return Promise.resolve(0);
+  lastSync = Date.now();
+  syncing = (async () => {
+    let cfg; try { cfg = await declarationsConfig(); } catch { return 0; }
+    if (!cfg || !cfg.API_URL) return 0;
+    let decisions; try { decisions = await fetchDecisions(cfg.API_URL); } catch { return 0; }
+    const cands = repCandidates(), todo = [];
+    for (const [id, text] of Object.entries(decisions)) {
+      const v = visitOfMeetingId(id, cfg.MEETINGS || []);
+      if (!v || !text || v.decl_decision === text) continue;
+      if (v.decl_decision === undefined && Number(v.rep_id)) { todo.push({ v, text, rep: null }); continue; }
+      const rep = repForDecision(text, cands);
+      if (!rep.error) todo.push({ v, text, rep });
+    }
+    if (!todo.length) return 0;
+    const applied = todo.filter((t) => t.rep).length, done = {};
+    await db.save(`Αποφάσεις Μ.Δ. (σελίδα Δηλώσεων) → Επισκέψεις: ${applied || 'καταγραφή'}`, (tx) => {
+      for (const t of todo) {
+        const patch = { decl_decision: t.text };
+        if (t.rep) patch.rep_id = (done[t.rep.value] ||= repIdIn(tx, t.rep.value, cands));
+        tx.update('visits', t.v.id, patch);
+      }
+    });
+    return applied;
+  })().catch((e) => { console.warn('Αποφάσεις Μ.Δ.:', e); return 0; }).finally(() => { syncing = null; });
+  return syncing;
+}
+let firstSync = true;
+db.on((ev) => { if (ev.type === 'refresh' && firstSync && db.backend && db.backend.kind === 'github') { firstSync = false; setTimeout(() => syncDeclDecisions(true), 800); } });
+
 function decisionsPage({ query = {} }) {
   // Προεπιλογή: μόνο όσες περιμένουν απόφαση (χωρίς εκπρόσωπο)· με «Και όσες έχουν ήδη εκπρόσωπο» για αλλαγή απόφασης
   const frm = query.frm || today(), to = query.to || addDays(frm, 60), prov = query.prov || '', all = query.all === '1', open = !all;
@@ -184,6 +221,7 @@ ${decRep && !decRep.error && decRep.value !== String(v.rep_id) ? `<div class="gd
         } catch (err) { toast(err.message || String(err), 'error'); sv.disabled = false; }
       });
       draw(); load();
+      syncDeclDecisions().then((n) => { if (n && el.isConnected) { flash(`✓ ${n} απόφαση(-εις) από τη σελίδα Δηλώσεων πέρασαν στις Επισκέψεις.`); go('/visits/decisions', query); } });
     },
   };
 }

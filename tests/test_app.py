@@ -2491,13 +2491,15 @@ def test_gm_decisions_in_app_with_declarations(app):
     app.go('/visits/decisions?frm=2026-10-01&to=2026-12-31')
     # όπου πηγαίνει ο ίδιος ο ΜΔ δεν χρειάζεται απόφαση: δεν εμφανίζεται (μόνο στις Επισκέψεις Στοών)
     assert app.page.locator('.gd-card', has_text='ΕΝΩΣΙΣ').count() == 0 and 'με τον Μ.Δ. αυτοπροσώπως' in app.text()
+    # ενιαία λογική: η απόφαση της σελίδας Δηλώσεων (ΑΤΛΑΣ) περνά ΑΥΤΟΜΑΤΑ στην Επίσκεψη
+    app.page.wait_for_selector('text=1 απόφαση(-εις) από τη σελίδα Δηλώσεων')
     app.page.wait_for_selector('text=1 δηλώσεις διάθεσης')
-    atlas = app.page.locator('.gd-card', has_text='ΑΤΛΑΣ'); akro = app.page.locator('.gd-card', has_text='ΑΚΡΟΠΟΛΙΣ')
-    assert 'Απόφαση στη σελίδα Δηλώσεων' in atlas.inner_text() and '✋ Δήλωσαν' in akro.inner_text()
-    atlas.locator('.gd-decl [data-pick]').click()
+    assert app.page.locator('.gd-card', has_text='ΑΤΛΑΣ').count() == 0
+    akro = app.page.locator('.gd-card', has_text='ΑΚΡΟΠΟΛΙΣ')
+    assert '✋ Δήλωσαν' in akro.inner_text()
     akro.locator('.gd-decl [data-pick]').click()
     app.page.click('#gdSave')
-    app.page.wait_for_selector('text=Αποθηκεύτηκαν 2 αποφάσεις')
+    app.page.wait_for_selector('text=Αποθηκεύτηκαν 1 αποφάσεις')
     st = app.page.evaluate("async () => { const {db} = await import('./core/store.js'); return db.all('visits').map((v) => (db.get('reps', v.rep_id) || {}).surname); }")
     assert st == ['Διαβάτης', 'Διαβάτης', 'Μπενετάτος'], st
     # με εκπρόσωπο πλέον: δεν εμφανίζονται (μόνο όσες περιμένουν απόφαση)· με «all=1» ξαναφαίνονται για αλλαγή
@@ -3704,3 +3706,59 @@ def test_approval_stamp_lodges_from_unified_catalog(app):
     assert r['excl'] == 0 and r['dup'] == 0, r
     l = r['n118']
     assert l['name'] == 'ΑΤΛΑΣ' and l['administration'] == 'ΕπΜΣτ.' and l['province'] == 'ΠΕΙΡΑΙΩΣ & ΑΡΧΙΠΕΛΑΓΟΥΣ ΑΙΓΑΙΟΥ' and l['seat'] == 'Πειραιάς' and l['kind'] == 'ΚΑΝΟΝΙΚΗ', l
+
+
+def test_unified_representation_sync(app):
+    # Μία πηγή εκπροσώπησης (visits.rep_id): νέα απόφαση της σελίδας Δηλώσεων περνά στην Επίσκεψη· μεταγενέστερη αλλαγή στην
+    # εφαρμογή δεν πατιέται από την ίδια παλιά απόφαση· νεότερη απόφαση ξαναπερνά
+    app.connect_local()
+    import json as _j
+    dec = {'text': 'Διαβάτης Χρήστος (Βοηθός Μέγας Γραμματεύς)'}
+    def api(route):
+        b = _j.loads(route.request.post_data or '{}')
+        if b.get('action') == 'decisions':
+            return route.fulfill(json={'ok': True, 'decisions': {'l31_20261030': dec['text']}})
+        return route.fulfill(json={'ok': True})
+    app.page.route('https://script.google.com/**', api)
+    r = app.page.evaluate("""async () => { const {db} = await import('./core/store.js'); const {syncDeclDecisions} = await import('./modules/gm-decisions.js');
+      let ids;
+      await db.save('x', (tx) => { tx.replace('visits', []);
+        const a = tx.insert('reps', { name: 'Χρήστος', surname: 'Διαβάτης', office: 'Βοηθός Μέγας Γραμματεύς', email: '', mobile: '' });
+        const b = tx.insert('reps', { name: 'Στυλιανός', surname: 'Φασουλίδης', office: 'Πρόεδρος του Συμβουλίου Γενικών Υποθέσεων', email: '', mobile: '' });
+        const v = tx.insert('visits', { visit_date: '2026-10-30', lodge: 'ΣΩΚΡΑΤΗΣ', lodge_number: '31', location: '', province: 'ΕπΜΣτ. Πειραιώς', rep_id: null, notes: '' });
+        ids = { a: a.id, b: b.id, v: v.id }; });
+      const out = [];
+      out.push(await syncDeclDecisions(true), db.get('visits', ids.v).rep_id === ids.a);
+      await db.save('y', (tx) => tx.update('visits', ids.v, { rep_id: ids.b }));
+      out.push(await syncDeclDecisions(true), db.get('visits', ids.v).rep_id === ids.b);
+      return out; }""")
+    assert r == [1, True, 0, True], r
+    dec['text'] = 'Ο Μέγας Διδάσκαλος (αυτοπροσώπως)'
+    r = app.page.evaluate("""async () => { const {db} = await import('./core/store.js'); const {syncDeclDecisions} = await import('./modules/gm-decisions.js');
+      await db.save('g', (tx) => tx.insert('reps', { name: 'Ιωάννης', surname: 'Μπενετάτος', office: 'Μέγας Διδάσκαλος', email: '', mobile: '' }));
+      const n = await syncDeclDecisions(true), v = db.all('visits')[0]; return [n, db.get('reps', v.rep_id).surname, v.decl_decision]; }""")
+    assert r == [1, 'Μπενετάτος', 'Ο Μέγας Διδάσκαλος (αυτοπροσώπως)'], r
+
+
+def test_declarations_decision_shows_programme_rep(browser, base_url):
+    # Σελίδα Δηλώσεων: όταν το Πρόγραμμα (Επισκέψεις) έχει ήδη εκπρόσωπο, η «Απόφαση Μ.Δ.» δείχνει αυτόν (όχι «Χωρίς απόφαση»)
+    import json
+    def api(route):
+        b = json.loads(route.request.post_data or '{}')
+        if b.get('action') == 'report':
+            return route.fulfill(json={'ok': b.get('key') == 'test-key', 'decisions': {}, 'data': {}})
+        return route.fulfill(json={'ok': True, 'decisions': {}})
+    page = browser.new_page()
+    page.route('https://script.google.com/**', api)
+    page.route('https://accounts.google.com/**', lambda r: r.abort())
+    page.route('**/programme/programme.json*', lambda r: r.fulfill(json={'rows': [{'date': '2026-11-02', 'no': '118', 'lodge': 'ΑΤΛΑΣ', 'rep': 'Λίαν Σεβάσμιος Αδ. Χρήστος Διαβάτης, Βοηθός Μέγας Γραμματεύς'}]}))
+    page.goto(base_url + 'declarations/#report')
+    page.evaluate("document.getElementById('auth-alt').open = true")
+    page.fill('#admin-pass', 'test-key')
+    page.click('#auth-btn')
+    row = page.locator('#report-table-body tr', has_text='ΑΤΛΑΣ')
+    row.locator('.decide-select').wait_for()
+    assert 'Καταχωρημένος στο πρόγραμμα' in row.inner_text()
+    v = row.locator('.decide-select').input_value()
+    assert v.startswith('Διαβάτης Χρήστος') and 'Βοηθός Μέγας Γραμματεύς' in v, v
+    page.close()

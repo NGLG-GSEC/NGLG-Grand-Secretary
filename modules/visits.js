@@ -343,6 +343,8 @@ ${table(['Επαρχία', 'Ενεργές Στοές', 'Δήλωσαν ημερ
 <label><input type="checkbox" name="past"${query.past ? ' checked' : ''}> Παλαιότερες</label><button>Φίλτρο</button></form>${body}`,
     mount(el) {
       onSubmit(el.querySelector('#flt'), (d) => go('/visits', { ...d, past: d.past ? '1' : '' }));
+      // ενιαία εκπροσώπηση: νέες αποφάσεις της σελίδας Δηλώσεων περνούν στις Επισκέψεις
+      import('./gm-decisions.js').then(({ syncDeclDecisions }) => syncDeclDecisions()).then((n) => { if (n && el.isConnected) { flash(`✓ ${n} απόφαση(-εις) από τη σελίδα Δηλώσεων πέρασαν στις Επισκέψεις.`); go('/visits', query); } });
       const ef = el.querySelector('#epFile');
       if (ef) ef.addEventListener('change', async () => {
         try { const r = await importEpeteiridaAny({ file: ef.files[0] }); flash(r.message); go('/visits'); } catch (e) { toast(e.message || String(e), 'error'); }

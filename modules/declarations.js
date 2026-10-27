@@ -45,6 +45,12 @@ ${frameHtml('declFrame', 'Δηλώσεις Διάθεσης Μεγάλων Αξ�
         } catch { /* άλλο domain: σταθερό ύψος από το CSS */ }
       };
       const timer = setInterval(fit, 800);
+      // απόφαση Μ.Δ. μέσα στη σελίδα Δηλώσεων → αμέσως στην Επίσκεψη (μία πηγή: visits.rep_id)
+      const onMsg = (e) => {
+        if (!frame.isConnected) { window.removeEventListener('message', onMsg); return; }
+        if (e.origin === location.origin && e.data && e.data.type === 'nglg-decl-decided') import('./gm-decisions.js').then(({ syncDeclDecisions }) => syncDeclDecisions(true));
+      };
+      window.addEventListener('message', onMsg);
       frame.addEventListener('load', fit);
     },
   };
