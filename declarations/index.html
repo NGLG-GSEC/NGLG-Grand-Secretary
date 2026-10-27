@@ -450,6 +450,9 @@
     .officer-name, .officer-name.first { font-weight: 700; color: #c62828; font-size: 16px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .typed-note { color: #64748b; font-size: 11px; font-style: italic; }
     .highest-note { color: #475569; font-size: 11px; }
+    .decl-pick { margin-left: 6px; border: 1px solid #86efac; background: #fff; color: #15803d; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 700; line-height: 1; padding: 2px 6px; }
+    .decl-pick:hover { background: #dcfce7; }
+    .decl-pick.on { background: #16a34a; border-color: #16a34a; color: #fff; }
     .decl-del { margin-left: 6px; border: 1px solid #fca5a5; background: #fff; color: #b91c1c; border-radius: 4px; cursor: pointer; font-size: 11px; line-height: 1; padding: 2px 5px; }
     .decl-del:hover { background: #fee2e2; }
     .decl-add { margin-top: 6px; }
@@ -557,7 +560,7 @@
       .rank-badge { font-size: 8px; padding: 0 3px; min-width: 0; }
       .order-tag { font-size: 8px; padding: 0 4px; min-width: 0; margin-right: 3px; }
       .typed-note { font-size: 8px; }
-      .decl-del, .decl-add { display: none !important; }
+      .decl-del, .decl-add, .decl-pick { display: none !important; }
       .highest-note { font-size: 8px; }
       .empty-note { font-size: 9px; }
     }
@@ -994,6 +997,9 @@
         state.className = "decide-state ok"; state.textContent = sel.value ? "✓ Αποθηκεύτηκε" : "✓ Χωρίς απόφαση";
         sel.classList.toggle("done", !!sel.value);
         sel.parentElement.querySelector(".decide-print").textContent = sel.value;
+        const row = sel.closest("tr");
+        if (row) row.querySelectorAll(".officer-list li").forEach(li => { const b = li.querySelector(".decl-pick"), on = li.querySelector(".officer-name").textContent === sel.value; if (b) { b.classList.toggle("on", on); b.textContent = on ? "✓ Εκπρόσωπος" : "✓"; } });
+        if (row && sel.value) row.className = "rep-done";
         renderDecisions();
       } catch (e) {
         state.className = "decide-state err";
@@ -1379,6 +1385,18 @@
               t.textContent = ` — όπως δηλώθηκε: «${o.typed}»`;
               li.appendChild(t);
             }
+            // ✓ Επιλογή ως τελικός εκπρόσωπος του Μ.Δ. (ίδιο με την επιλογή από τη λίστα «Απόφαση Μ.Δ.»)
+            const pick = document.createElement("button");
+            pick.type = "button"; pick.className = "decl-pick" + (o.officer === currentRepOf(m) ? " on" : "");
+            pick.textContent = o.officer === currentRepOf(m) ? "✓ Εκπρόσωπος" : "✓";
+            pick.title = "Επιλογή ως εκπρόσωπος του Μ.Δ."; pick.setAttribute("aria-label", `Επιλογή ως εκπρόσωπος — ${o.officer} · ${m.name || ""} ${m.date || ""}`);
+            pick.addEventListener("click", () => {
+              const sel = tr.querySelector(".decide-select");
+              if (!sel || sel.value === o.officer) return;
+              sel.value = o.officer;
+              decide(m.id, sel, tr.querySelector(".decide-state"));
+            });
+            li.appendChild(pick);
             // Διαγραφή της δήλωσης (η γραμμή στο Sheet σημειώνεται «Ακυρώθηκε», δεν σβήνεται)
             const del = document.createElement("button");
             del.type = "button"; del.className = "decl-del"; del.textContent = "✕";

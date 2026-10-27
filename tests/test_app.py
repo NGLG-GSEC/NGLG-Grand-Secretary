@@ -3762,3 +3762,33 @@ def test_declarations_decision_shows_programme_rep(browser, base_url):
     v = row.locator('.decide-select').input_value()
     assert v.startswith('Διαβάτης Χρήστος') and 'Βοηθός Μέγας Γραμματεύς' in v, v
     page.close()
+
+
+def test_declarations_tick_picks_representative(browser, base_url):
+    # ✓ δίπλα σε κάθε δήλωση: ορίζει τον αξιωματικό ως εκπρόσωπο του Μ.Δ. (όπως η λίστα «Απόφαση Μ.Δ.»)
+    import json
+    decided = {}
+    def api(route):
+        b = json.loads(route.request.post_data or '{}')
+        a = b.get('action')
+        if a == 'report':
+            out = {'ok': b.get('key') == 'test-key', 'decisions': decided, 'data': {'atlas_118': [{'officer': 'Διαβάτης Χρήστος (Βοηθός Μέγας Γραμματεύς)', 'rank': 283}]}}
+        elif a == 'decide':
+            decided[b['meeting']] = b['representative']; out = {'ok': True, 'decisions': decided}
+        else:
+            out = {'ok': True, 'decisions': decided}
+        route.fulfill(json=out)
+    page = browser.new_page()
+    page.route('https://script.google.com/**', api)
+    page.route('https://accounts.google.com/**', lambda r: r.abort())
+    page.goto(base_url + 'declarations/#report')
+    page.evaluate("document.getElementById('auth-alt').open = true")
+    page.fill('#admin-pass', 'test-key')
+    page.click('#auth-btn')
+    row = page.locator('#report-table-body tr', has_text='ΑΤΛΑΣ')
+    row.locator('.decl-pick').click()
+    page.wait_for_selector('.decide-state.ok')
+    assert decided == {'atlas_118': 'Διαβάτης Χρήστος (Βοηθός Μέγας Γραμματεύς)'}
+    assert row.locator('.decide-select').input_value() == 'Διαβάτης Χρήστος (Βοηθός Μέγας Γραμματεύς)'
+    assert row.locator('.decl-pick.on').inner_text() == '✓ Εκπρόσωπος'
+    page.close()
