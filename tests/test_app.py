@@ -636,7 +636,7 @@ def test_lodge_rituals_and_masters_pasted(app):
     app.page.locator('details.fold summary').click()
     app.page.fill('#imp [name=paste]', 'Email address\tΣτοά  \tαριθμός \nphoenix@example.com\tΦΟΙΝΙΞ\t0\nakro@example.com\tΑΚΡΟΠΟΛΙΣ\t2\n\tΚΑΜΕΙΡΟΣ\t28\n')
     app.page.locator('#imp button').click()
-    app.page.wait_for_selector('text=Εισαγωγή ολοκληρώθηκε')
+    app.page.wait_for_function("async () => (await import('./core/store.js')).db.all('lodges').some((l) => l.email === 'phoenix@example.com')")
     ls = app.page.evaluate("async () => { const m = await import('./core/store.js'); return Object.fromEntries(m.db.all('lodges').map((l) => [l.number, l])); }")
     assert ls['Φ']['email'] == 'phoenix@example.com' and ls['2']['email'] == 'akro@example.com' and ls['28']['email'] == '' and '0' not in ls and ls['Φ']['name'] == 'ΦΟΙΝΙΞ ΚΕΡΚΥΡΑΣ'
 
