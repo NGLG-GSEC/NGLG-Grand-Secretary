@@ -2448,6 +2448,12 @@ def test_declarations_gm_decision_on_the_spot(browser, base_url):
     page.locator('#report-table-body tr').nth(0).locator('.decide-select').select_option('Ο Μέγας Διδάσκαλος (αυτοπροσώπως)')
     page.wait_for_function("document.querySelectorAll('.decide-state.ok').length === 2")
     assert decided == {'atlas_118': 'Διαβάτης Χρήστος (Βοηθός Μέγας Γραμματεύς)', 'akropolis_104': 'Ο Μέγας Διδάσκαλος (αυτοπροσώπως)'}
+    # PDF: έντονο κουμπί (και επάνω)· στην εκτύπωση κρύβεται η στήλη «Απόφαση Μ.Δ.» και οι θυρεοί — συμπυκνωμένος πίνακας
+    assert page.locator('.btn-print').count() == 2 and page.locator('.report-top-actions .btn-print').is_visible()
+    page.emulate_media(media='print')
+    assert not page.locator('.report-table th').nth(4).is_visible() and not page.locator('#report-table-body tr').first.locator('td').nth(4).is_visible()
+    assert page.locator('.report-table th').nth(3).is_visible() and page.eval_on_selector('#report-table-body tr', 'e => e.getBoundingClientRect().height') < 60
+    page.emulate_media(media='screen')
     page.goto(base_url + 'declarations/#programme')
     assert page.locator('#decisions-body').count() == 0 and 'Αποφάσεις Μεγάλου Διδασκάλου' not in page.locator('#programme-view').inner_text()
     page.goto(base_url + 'declarations/#form')

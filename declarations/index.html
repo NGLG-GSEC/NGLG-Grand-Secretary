@@ -484,19 +484,25 @@
       font-size: 14px;
       font-weight: 600;
     }
+    /* Κουμπί PDF: έντονο (κόκκινο με χρυσά γράμματα, όπως το «Ενημέρωση ΜΔ») */
     .btn-print {
-      background: var(--gold-dark);
-      color: #fff;
-      padding: 10px 20px;
-      border-radius: 6px;
-      border: none;
+      background: #a3111b;
+      color: #f1d58f;
+      padding: 13px 24px;
+      border-radius: 8px;
+      border: 2px solid #c5a059;
       cursor: pointer;
-      font-size: 14px;
-      font-weight: 600;
+      font-size: 17px;
+      font-weight: 800;
+      letter-spacing: .02em;
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 8px;
+      box-shadow: 0 6px 16px -8px rgba(163,17,27,.7);
     }
+    .btn-print:hover { background: #7d0b13; color: #ffe3a0; }
+    .btn-print:focus-visible { outline: 3px solid #074ce0; outline-offset: 2px; }
+    .report-top-actions { display: flex; justify-content: flex-end; margin: 0 0 12px; }
 
     /* Printable format */
     @media print {
@@ -522,6 +528,31 @@
       .print-header h1 { font-size: 18px; margin-bottom: 5px; }
       .print-header h2 { font-size: 14px; font-weight: normal; margin-bottom: 5px; }
       .print-header h3 { font-size: 13px; font-weight: bold; }
+      /* Συμπυκνωμένος πίνακας: χωρίς τη στήλη «Απόφαση Μ.Δ.», χωρίς θυρεούς, μικρότερα κενά — τα ονόματα παίρνουν το πλάτος */
+      @page { size: A4; margin: 10mm; }
+      #printable-report { padding: 0; }
+      .print-header { margin-bottom: 8px; padding-bottom: 6px; }
+      .report-top-actions, .field-hint, #printable-report .card-title, .rep-stats { display: none !important; }
+      .report-table th:nth-child(5), .report-table td:nth-child(5) { display: none !important; }
+      .report-table th:nth-child(1), .report-table td:nth-child(1) { width: 14% !important; }
+      .report-table th:nth-child(2), .report-table td:nth-child(2) { width: 22% !important; }
+      .report-table th:nth-child(3), .report-table td:nth-child(3) { width: 14% !important; }
+      .report-table th:nth-child(4), .report-table td:nth-child(4) { width: 50% !important; }
+      .report-table { font-size: 10px; line-height: 1.2; }
+      .report-table th, .report-table td { padding: 2px 4px !important; vertical-align: middle; }
+      .report-table thead { display: table-header-group; }
+      .report-table tr { break-inside: avoid; }
+      .report-table .lodge-logo { display: none !important; }
+      .report-table .lodge-cell { gap: 0; }
+      .report-table .kind-badge { font-size: 8px; padding: 0 4px; margin: 1px 0 0; }
+      .report-table .lodge-note { font-size: 9px; }
+      .report-table .registered { display: none; }
+      .officer-list li { margin: 0; line-height: 1.25; }
+      .officer-name, .officer-name.first { font-size: 11px; }
+      .rank-badge { font-size: 8px; padding: 0 3px; min-width: 0; }
+      .order-tag { font-size: 8px; padding: 0 4px; min-width: 0; margin-right: 3px; }
+      .typed-note { font-size: 8px; }
+      .empty-note { font-size: 9px; }
     }
     .print-header { display: none; }
 
@@ -680,6 +711,7 @@
             <span style="font-size: 12px; color: var(--text-muted);">Περίοδος: <strong class="months"></strong></span>
           </div>
           <div class="rep-stats" id="rep-stats"></div>
+          <div class="report-top-actions"><button class="btn-print" onclick="window.print()">🖨️ PDF — Κατάσταση Δηλώσεων</button></div>
 
           <p class="field-hint" style="margin-bottom: 12px;">Στη στήλη «Απόφαση Μ.Δ.» ο Μέγας Διδάσκαλος επιλέγει επί τόπου εκπρόσωπο ανάμεσα σε όσους δήλωσαν, «αυτοπροσώπως», ή άλλον Μεγάλο Αξιωματικό. Η επιλογή αποθηκεύεται αμέσως και εμφανίζεται στις κάρτες των Στοών της Δήλωσης («✔ Εκπρόσωπος»).</p>
           <div class="table-wrap">
@@ -702,7 +734,7 @@
           <div class="report-actions">
             <button class="btn-secondary" onclick="renderReportTable()">Ανανέωση</button>
             <button class="btn-print" onclick="window.print()">
-              🖨️ Προεπισκόπηση & Λήψη PDF
+              🖨️ PDF — Κατάσταση Δηλώσεων
             </button>
           </div>
         </div>
