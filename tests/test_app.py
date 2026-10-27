@@ -3453,3 +3453,16 @@ def test_lodge_portal_admin_codes_push_and_apply(app):
     assert 'ΑλλαγήΣτοά2έκδοση2-27Οκτ26' in app.text() and 'Αναγγελία Εισδοχής — Μύηση' in app.text()
     commits = app.page.evaluate("async () => (await import('./core/store.js')).db.backend.kind")
     assert commits
+
+
+def test_diploma_reachable_from_menu_and_home(app):
+    # Το Δίπλωμα Διδασκάλου Τέκτονος δημιουργείται από το μενού «Έγγραφα» (μία φορά στο μενού) και από την Αρχική
+    app.connect_local()
+    hrefs = app.page.eval_on_selector_all('.top nav .navdrop-menu a', "as => as.map((a) => a.textContent.trim() + '|' + a.getAttribute('href'))")
+    dip = [h for h in hrefs if h.endswith('|#/members/diploma')]
+    assert len(dip) == 1 and 'Δίπλωμα Διδασκάλου Τέκτονος' in dip[0], hrefs
+    assert app.page.locator('.navdrop.letters .navdrop-menu a[href="#/members/diploma"]').count() == 1
+    app.go('/')
+    app.page.click('.home-hero a[href="#/members/diploma"]')
+    app.page.wait_for_url('**/#/members/diploma')
+    assert 'Δίπλωμα Διδασκάλου' in app.text()
