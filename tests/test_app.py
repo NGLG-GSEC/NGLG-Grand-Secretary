@@ -432,7 +432,7 @@ def test_portal_and_old_links(browser, base_url):
     ctx.close()
 
 
-@pytest.mark.parametrize('path', ['/', '/letters/new', '/decrees/new', '/members', '/directory', '/visits', '/namedays', '/projects', '/database', '/settings', '/members/new', '/members/diplomas', '/visits/decisions', '/declarations', '/epeteirida/pinakas', '/templates'])
+@pytest.mark.parametrize('path', ['/', '/letters/new', '/decrees/new', '/members', '/directory', '/visits', '/namedays', '/projects', '/database', '/settings', '/members/new', '/members/diplomas', '/visits/decisions', '/declarations', '/epeteirida/pinakas', '/templates', '/lodge-portal'])
 def test_mobile_no_horizontal_scroll(browser, base_url, path):
     ctx = browser.new_context(viewport={'width': 390, 'height': 800})
     page = ctx.new_page()
@@ -632,6 +632,13 @@ def test_lodge_rituals_and_masters_pasted(app):
     assert ls['95']['orient'] == 'Κερκύρας' and ls['95']['kind'] == 'Γαλλόφωνη'
     assert ls['28']['master'] == 'Άλλος Δοκιμαστικός' and ls['28']['kind'] == 'Κανονική' and ls['28']['email'] == ''
     assert 'ΔΟΚΙΜΟΣ ΣΕΒΑΣΜΙΟΣ' in app.text() and '6900000095' in app.text()
+    # Επίσημα email Στοών (στήλες «Email address · Στοά · αριθμός»)· «0 ΦΟΙΝΙΞ» → Στοά «Φ»· κενό email δεν σβήνει
+    app.page.locator('details.fold summary').click()
+    app.page.fill('#imp [name=paste]', 'Email address\tΣτοά  \tαριθμός \nphoenix@example.com\tΦΟΙΝΙΞ\t0\nakro@example.com\tΑΚΡΟΠΟΛΙΣ\t2\n\tΚΑΜΕΙΡΟΣ\t28\n')
+    app.page.locator('#imp button').click()
+    app.page.wait_for_selector('text=Εισαγωγή ολοκληρώθηκε')
+    ls = app.page.evaluate("async () => { const m = await import('./core/store.js'); return Object.fromEntries(m.db.all('lodges').map((l) => [l.number, l])); }")
+    assert ls['Φ']['email'] == 'phoenix@example.com' and ls['2']['email'] == 'akro@example.com' and ls['28']['email'] == '' and '0' not in ls and ls['Φ']['name'] == 'ΦΟΙΝΙΞ ΚΕΡΚΥΡΑΣ'
 
 
 def test_epeteirida_import_of_grand_officers(app):
@@ -3314,3 +3321,132 @@ def test_members_export_active_lodge_province(app, tmp_path):
     assert 'Ενεργός' in names and 'Ανενεργός' not in names
     r = [x for x in rows[1:] if x[1] == 'Ενεργός'][0]
     assert r[0] == 'Γεώργιος' and 'ΑΚΡΟΠΟΛΙΣ' in r[2] and str(r[3]) == '2' and r[4] == 'ΕπΜΣτ. Αθηνών', r
+
+
+def test_lodge_portal_apps_script_logic():
+    # Ο server της Πύλης (lodge/apps-script/Code.gs) με ψεύτικο Drive/Mail: δημοσίευση → σύνδεση → αλλαγή (έκδοση + email) → λήψη → επαναφορά
+    import subprocess
+    r = subprocess.run(['node', str(ROOT / 'tests' / 'gas' / 'lodge_portal.test.js')], capture_output=True, text=True)
+    assert r.returncode == 0, r.stdout + r.stderr
+
+
+def test_lodge_secretary_page(browser, base_url):
+    # Σελίδα Γραμματέα: είσοδος με κωδικό Στοάς, αλλαγή μέλους, νέο μέλος, σημείωση, επιβεβαίωση, αποθήκευση· PDF πίνακα μελών
+    import json as _j
+    API = 'https://script.google.com/macros/s/TESTLODGE/exec'
+    members = [{'id': 1, 'surname': 'Αλφαίος', 'first_name': 'Γεώργιος', 'email': '', 'mobile': '', 'degree': 'Διδάσκαλος', 'date_ea': '', 'date_fc': '', 'date_mm': '',
+                'lodge': {'member_status': '1. ΤΑΚΤΙΚΟ', 'capacity': 'Τακτικό'}, 'ro': {'registry': 'M100', 'office': 'Σεβάσμιος Διδάσκαλος (ΑΤΛΑΣ 118)', 'office_date': '2024-06-01'}},
+               {'id': 2, 'surname': 'Βήτας', 'first_name': 'Νικόλαος', 'email': '', 'mobile': '', 'degree': 'Διδάσκαλος', 'date_ea': '', 'date_fc': '', 'date_mm': '',
+                'lodge': {'member_status': 'ΔΙΑΓΡΑΦΕΝ', 'dereg_date': '2025-01-10'}, 'ro': {}}]
+    saved = []
+
+    def api(route):
+        b = _j.loads(route.request.post_data or '{}')
+        if b.get('action') == 'login':
+            ok = b.get('lodge') == '118' and b.get('code') == 'ABCD-2345'
+            return route.fulfill(json={'ok': True, 'lodge': {'number': '118', 'name': 'ΑΤΛΑΣ', 'provincial': 'ΕπΜΣτ. Πειραιώς'}, 'members': members, 'version': 4, 'note_types': ['Αναγγελία Εισδοχής', 'Άλλο']} if ok else {'ok': False, 'error': 'unauthorized'})
+        if b.get('action') == 'save':
+            saved.append(b)
+            return route.fulfill(json={'ok': True, 'version': 5, 'version_name': 'ΑλλαγήΣτοά118έκδοση5-27Οκτ26', 'changes': 2, 'mailed': 'atlas@example.com'})
+        return route.fulfill(json={'ok': False, 'error': 'unknown_action'})
+    page = browser.new_page()
+    page.route('**/lodge/portal.json*', lambda r: r.fulfill(json={'api_url': API, 'lodges': [{'number': '2', 'name': 'ΑΚΡΟΠΟΛΙΣ'}, {'number': '118', 'name': 'ΑΤΛΑΣ'}]}))
+    page.route(API, api)
+    page.goto(base_url + 'lodge/?lodge=118')
+    page.wait_for_function("document.querySelector('#lno').options.length === 3")
+    assert page.input_value('#lno') == '118'
+    page.fill('#lcode', 'λάθος'); page.click('#lbtn')
+    page.wait_for_selector('text=Λάθος κωδικός Στοάς')
+    page.fill('#lcode', 'abcd-2345'); page.click('#lbtn')
+    page.wait_for_selector('#ltitle:has-text("Στοά ΑΤΛΑΣ Αρ. 118")')
+    assert page.locator('#mbody tr').count() == 1  # ο διαγραφείς κρύβεται
+    page.check('#showDereg')
+    assert page.locator('#mbody tr').count() == 2
+    assert page.is_hidden('#savebar')  # χωρίς αλλαγές δεν φαίνεται η μπάρα αποθήκευσης
+    page.click('[data-edit="0"]')
+    page.fill('#f_mobile', '6900000001')
+    page.click('#ef button[value=ok]')
+    page.wait_for_selector('#nchg:has-text("1 μέλος άλλαξε")')
+    page.click('#addBtn')
+    page.fill('#f_surname', 'Νεοφώτιστος'); page.fill('#f_first_name', 'Πέτρος'); page.fill('#f_degree', 'Μαθητής'); page.fill('#f_date_ea', '2026-10-20')
+    page.click('#ef button[value=ok]')
+    page.wait_for_selector('#nchg:has-text("2 μέλη άλλαξαν")')
+    page.select_option('#ntype', 'Αναγγελία Εισδοχής'); page.fill('#note', 'Συνεδρία 20/10'); page.fill('#nby', 'Γραμματέας Δοκιμής')
+    page.click('#saveBtn')
+    page.wait_for_selector('#confirm[open]')
+    c = page.inner_text('#clist')
+    assert 'ΝΕΟ ΜΕΛΟΣ: Νεοφώτιστος Πέτρος' in c and 'Κινητό: — → 6900000001' in c and 'Αναγγελία Εισδοχής — Συνεδρία 20/10' in c
+    page.click('#confirm button[value=ok]')
+    page.wait_for_selector('text=ΑλλαγήΣτοά118έκδοση5-27Οκτ26')
+    b = saved[0]
+    assert b['lodge'] == '118' and b['code'] == 'ABCD-2345' and b['base_version'] == 4 and b['note_type'] == 'Αναγγελία Εισδοχής' and b['by'] == 'Γραμματέας Δοκιμής'
+    new = [m for m in b['members'] if m['id'] is None]
+    assert len(new) == 1 and new[0]['surname'] == 'Νεοφώτιστος' and new[0]['lodge']['member_status'] == '1. ΤΑΚΤΙΚΟ'
+    assert [m for m in b['members'] if m['id'] == 1][0]['mobile'] == '6900000001' and 'ro' not in b['members'][0]
+    # PDF · Πίνακας μελών (Α4): ενεργοί και διαγραφέντες, βαθμός, αξίωμα, ημερομηνία αξιώματος
+    page.evaluate('window.print = () => {}')
+    page.click('#pdfBtn')
+    paper = page.inner_text('#paper')
+    assert 'Πίνακας Μελών — Στοά ΑΤΛΑΣ Αρ. 118' in paper and 'Ενεργά μέλη (1)' in paper and 'Διαγραφέντες (1)' in paper
+    assert 'Σεβάσμιος Διδάσκαλος' in page.inner_html('#paper') and '01/06/2024' in page.inner_html('#paper') and '10/01/2025' in page.inner_html('#paper')
+    page.close()
+
+
+def test_lodge_portal_admin_codes_push_and_apply(app):
+    # Εφαρμογή: ρύθμιση Πύλης, κωδικός Στοάς, δημοσίευση (μητρώο + hash κωδικού), λήψη αλλαγής Γραμματέα → Μητρώο, ιστορικό
+    import hashlib, json as _j
+    app.connect_local()
+    add_member(app, surname='Αλφαίος', first='Γεώργιος', email='a@example.com', mobile='6944000001', lodges='ΑΚΡΟΠΟΛΙΣ | 2 | 1. ΤΑΚΤΙΚΟ')
+    API = 'https://script.google.com/macros/s/TESTADMIN/exec'
+    calls = []
+    mid = app.page.evaluate("async () => (await import('./core/store.js')).db.all('member_registry').find((x) => x.surname === 'Αλφαίος').id")
+    pending = [{'id': 'ΑλλαγήΣτοά2έκδοση2-27Οκτ26', 'lodge': '2', 'lodge_name': 'ΑΚΡΟΠΟΛΙΣ', 'version': 2, 'version_name': 'ΑλλαγήΣτοά2έκδοση2-27Οκτ26', 'at': '2026-10-27T10:00:00Z',
+                'source': 'lodge', 'note_type': 'Αναγγελία Εισδοχής', 'note': 'Μύηση', 'by': 'Γραμματέας',
+                'changes': [{'id': mid, 'name': 'Αλφαίος Γεώργιος', 'fields': {'mobile': ['6944000001', '6900000009'], 'member_status': ['1. ΤΑΚΤΙΚΟ', 'ΔΙΑΓΡΑΦΕΝ']}},
+                            {'id': 'nx1', 'is_new': True, 'name': 'Νέος Μαθητής', 'fields': {'surname': ['', 'Νέος'], 'first_name': ['', 'Μαθητής'], 'degree': ['', 'Μαθητής'], 'member_status': ['', '1. ΤΑΚΤΙΚΟ']}}]}]
+
+    def api(route):
+        b = _j.loads(route.request.post_data or '{}')
+        calls.append(b)
+        assert b.get('key') == 'kleidi-test'
+        a = b.get('action')
+        if a == 'admin_status': return route.fulfill(json={'ok': True, 'version': 1, 'lodges': 1})
+        if a == 'admin_push': return route.fulfill(json={'ok': True, 'written': len(b.get('lodges', [])), 'skipped': []})
+        if a == 'admin_pull': return route.fulfill(json={'ok': True, 'changes': pending})
+        if a == 'admin_ack': pending.clear(); return route.fulfill(json={'ok': True, 'acked': 1})
+        return route.fulfill(json={'ok': False, 'error': 'unknown_action'})
+    app.page.route(API, api)
+    app.go('/lodge-portal')
+    app.page.fill('#pcfg [name=url]', API); app.page.fill('#pcfg [name=key]', 'kleidi-test')
+    app.page.click('#pcfg button.primary')
+    app.page.wait_for_selector('text=Η ρύθμιση της Πύλης αποθηκεύτηκε')
+    pub = app.page.evaluate("async () => { const {db} = await import('./core/store.js'); const b = await db.file('public/lodge-portal.json'); return new TextDecoder().decode(b); }")
+    assert _j.loads(pub) == {'api_url': API, 'lodges': []}
+    app.page.on('dialog', lambda d: d.accept())
+    app.page.click('[data-act=gen][data-n="2"]')
+    app.page.wait_for_function("document.querySelector('[data-act=send][data-n=\"2\"]') || document.querySelector('.pcode')")
+    code = app.page.evaluate("async () => (await import('./core/store.js')).db.all('lodge_portal_codes')[0].code")
+    pub = app.page.evaluate("async () => { const {db} = await import('./core/store.js'); return new TextDecoder().decode(await db.file('public/lodge-portal.json')); }")
+    assert _j.loads(pub)['lodges'] == [{'number': '2', 'name': 'ΑΚΡΟΠΟΛΙΣ'}] and code not in pub
+    import re as _re
+    assert _re.fullmatch(r'[A-Z2-9]{4}-[A-Z2-9]{4}', code)
+    push = [c for c in calls if c['action'] == 'admin_push'][-1]
+    assert push['codes']['2'] == hashlib.sha256(f'nglg-lodge|2|{code}'.encode()).hexdigest()
+    L = push['lodges'][0]
+    assert L['meta']['number'] == '2' and L['meta']['name'] == 'ΑΚΡΟΠΟΛΙΣ'
+    m = [x for x in L['members'] if x['surname'] == 'Αλφαίος'][0]
+    assert m['mobile'] == '6944000001' and m['lodge']['member_status'] == '1. ΤΑΚΤΙΚΟ' and m['ro']['registry'].startswith('M') and 'other_emails' not in m
+    # λήψη αλλαγών → Μητρώο
+    app.page.click('[data-act=pull]')
+    app.page.wait_for_selector('text=Πέρασαν στο Μητρώο 1 αλλαγή')
+    st = app.page.evaluate("""async (mid) => { const {db} = await import('./core/store.js'); const m = db.get('member_registry', mid), n = db.all('member_registry').find((x) => x.surname === 'Νέος');
+      return { mobile: m.mobile, no_contact: m.no_contact, status: db.all('member_lodges').find((l) => l.member_id === mid).member_status,
+        nw: n && db.all('member_lodges').filter((l) => l.member_id === n.id).map((l) => l.lodge_number + ' ' + l.member_status), reg: n && n.registry_no,
+        log: db.all('lodge_portal_log').map((x) => x.version_name) }; }""", mid)
+    assert st['mobile'] == '6900000009' and st['status'] == 'ΔΙΑΓΡΑΦΕΝ' and st['no_contact'] == 1, st
+    assert st['nw'] == ['2 1. ΤΑΚΤΙΚΟ'] and st['reg'], st
+    assert st['log'] == ['ΑλλαγήΣτοά2έκδοση2-27Οκτ26']
+    assert [c['action'] for c in calls][-3:] == ['admin_pull', 'admin_ack', 'admin_push']
+    assert 'ΑλλαγήΣτοά2έκδοση2-27Οκτ26' in app.text() and 'Αναγγελία Εισδοχής — Μύηση' in app.text()
+    commits = app.page.evaluate("async () => (await import('./core/store.js')).db.backend.kind")
+    assert commits

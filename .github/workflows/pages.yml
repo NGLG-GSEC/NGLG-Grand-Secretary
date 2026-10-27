@@ -53,6 +53,17 @@ jobs:
             "https://api.github.com/repos/$DATA_REPO/contents/files/public/officers.json" -o declarations/officers.json \
             && python3 -c "import json; d=json.load(open('declarations/officers.json')); print('Αξιωματικοί:', len(d.get('officers', [])))" \
             || { echo "Δεν βρέθηκε ακόμη κατάλογος αξιωματικών· μένει το officers.js."; rm -f declarations/officers.json; }
+      - name: Πύλη Γραμματέων Στοών (διεύθυνση του Apps Script)
+        env:
+          DATA_TOKEN: ${{ secrets.DATA_REPO_TOKEN }}
+          DATA_REPO: ${{ vars.DATA_REPO || 'NGLG-GSEC/nglg-grammateia-data' }}
+        run: |
+          if [ -z "$DATA_TOKEN" ]; then exit 0; fi
+          # Μόνο η διεύθυνση /exec (όχι κωδικοί ή δεδομένα): {"api_url": "..."}
+          curl -fsSL -H "Authorization: Bearer $DATA_TOKEN" -H "Accept: application/vnd.github.raw" \
+            "https://api.github.com/repos/$DATA_REPO/contents/files/public/lodge-portal.json" -o lodge/portal.json \
+            && python3 -c "import json; d=json.load(open('lodge/portal.json')); assert set(d) <= {'api_url'}; print('Πύλη:', 'ενεργή' if d.get('api_url') else 'χωρίς URL')" \
+            || { echo "Η Πύλη Γραμματέων δεν έχει ρυθμιστεί ακόμη."; rm -f lodge/portal.json; }
       - name: Upload site
         uses: actions/upload-pages-artifact@v3
         with:

@@ -2,9 +2,9 @@ name: App tests
 
 on:
   push:
-    paths: ['app/**', 'core/**', 'modules/**', 'css/**', 'img/**', 'seed/**', 'vendor/**', 'tests/**', 'diatagma/**', 'index.html', 'main.js', '.github/workflows/app-tests.yml']
+    paths: ['app/**', 'lodge/**', 'core/**', 'modules/**', 'css/**', 'img/**', 'seed/**', 'vendor/**', 'tests/**', 'diatagma/**', 'index.html', 'main.js', '.github/workflows/app-tests.yml']
   pull_request:
-    paths: ['app/**', 'core/**', 'modules/**', 'css/**', 'img/**', 'seed/**', 'vendor/**', 'tests/**', 'diatagma/**', 'index.html', 'main.js', '.github/workflows/app-tests.yml']
+    paths: ['app/**', 'lodge/**', 'core/**', 'modules/**', 'css/**', 'img/**', 'seed/**', 'vendor/**', 'tests/**', 'diatagma/**', 'index.html', 'main.js', '.github/workflows/app-tests.yml']
   workflow_dispatch:
 
 permissions:

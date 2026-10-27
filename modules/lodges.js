@@ -120,7 +120,7 @@ module({
     excel: {
       file: 'EMSTE_SYMBOLIKES_STOES.xlsx', sheet: 'ΣΥΜΒΟΛΙΚΕΣ ΣΤΟΕΣ', key: 'number',
       cols: [{ k: 'number', label: 'Αριθμός', aliases: ['Αρ.', 'Αρ', 'Number', 'No', 'ΝΟ'], w: 9 }, { k: 'name', label: 'Όνομα', aliases: ['Στοά', 'Name', 'Lodge'], w: 32 }, { k: 'orient', label: 'Ανατολή', aliases: ['Πόλη', 'Orient', 'City'], w: 16 },
-        { k: 'provincial', label: 'Επαρχιακή Μεγάλη Στοά', aliases: ['ΕπΜΣτ.', 'ΕπΜΣτ', 'Provincial'], w: 34 }, { k: 'email', label: 'Email Στοάς', aliases: ['Email'], w: 32 }, { k: 'master', label: 'Σεβάσμιος', aliases: ['Master'], w: 26 }, { k: 'master_mobile', label: 'Κινητό Σεβασμίου', aliases: ['Κιν', 'Κινητό'], w: 16 },
+        { k: 'provincial', label: 'Επαρχιακή Μεγάλη Στοά', aliases: ['ΕπΜΣτ.', 'ΕπΜΣτ', 'Provincial'], w: 34 }, { k: 'email', label: 'Email Στοάς', aliases: ['Email', 'Email address', 'E-mail', 'Επίσημο email'], w: 32 }, { k: 'master', label: 'Σεβάσμιος', aliases: ['Master'], w: 26 }, { k: 'master_mobile', label: 'Κινητό Σεβασμίου', aliases: ['Κιν', 'Κινητό'], w: 16 },
         { k: 'secretary', label: 'Γραμματέας', aliases: ['Secretary'], w: 26 }, { k: 'secretary_email', label: 'Email Γραμματέα', aliases: ['Secretary Email'], w: 32 }, { k: 'status', label: 'Κατάσταση', aliases: ['Status'], w: 12 },
         { k: 'ritual', label: 'Τυπικό', aliases: ['Ritual'], w: 18 }, { k: 'meeting_place', label: 'Τόπος συνεδριάσεων', aliases: ['Τόπος', 'Venue'], w: 40 }, { k: 'notes', label: 'Σημειώσεις', aliases: ['Notes'], w: 30 },
         { k: 'kind', label: 'Είδος', aliases: ['ΕΙΔΟΣ'], w: 14 }, { k: 'full_title', label: 'Πλήρης τίτλος', aliases: ['Πληρης', 'Πλήρης'], w: 70 }],
@@ -133,6 +133,14 @@ module({
       },
       normalize(d, tx) {
         d.number = lodgeNoKey(d.number);
+        // Αριθμός που δεν υπάρχει στον κατάλογο (π.χ. «0» για τη ΦΟΙΝΙΞ «Φ»): ταύτιση με το όνομα της Στοάς
+        const all = tx ? tx.all('lodges') : db.all('lodges');
+        if (d.name && !all.some((x) => lodgeNoKey(x.number) === d.number)) {
+          const nm = fold(cleanLodgeName(d.name));
+          let byName = all.filter((x) => fold(x.name) === nm);
+          if (!byName.length) byName = all.filter((x) => fold(x.name).startsWith(nm + ' ')); // «ΦΟΙΝΙΞ» → «ΦΟΙΝΙΞ ΚΕΡΚΥΡΑΣ»
+          if (byName.length === 1) d.number = lodgeNoKey(byName[0].number);
+        }
         const fn = String(d._fn || '').trim(), sn = String(d._sn || '').trim();
         delete d._fn; delete d._sn;
         if (fn || sn) d.master = `${fn} ${sn}`.trim();
@@ -141,7 +149,7 @@ module({
         if (d.name) d.name = cleanLodgeName(d.name);
         if (d.provincial) d.provincial = provincialChoices().find((p) => fold(p) === fold(d.provincial)) || d.provincial;
         if (d.status && !LODGE_STATUSES.includes(d.status)) d.status = 'Ενεργή';
-        const ex = db.all('lodges').find((x) => lodgeNoKey(x.number) === d.number);
+        const ex = all.find((x) => lodgeNoKey(x.number) === d.number);
         if (ex) d.number = ex.number;
         return d;
       },

@@ -22,6 +22,7 @@ import './modules/projects.js';
 import './modules/database.js';
 import './modules/settings.js';
 import './modules/portal.js';
+import './modules/lodge-portal.js';
 
 await boot();
 start();

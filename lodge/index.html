@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="el">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>Μητρώο Στοάς · Πύλη Γραμματέων</title>
+<link rel="icon" href="../img/header_emblem.png">
+<style>
+  :root{--ground:#fcfcfd;--muted:#f3f4f6;--panel:#fff;--ink:#16191f;--ink2:#454c58;--rule:#dde0e6;--accent:#074ce0;--warn:#b42318;--ok:#187a3d;--r:12px;
+    --font:system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--ground);color:var(--ink);font:16px/1.55 var(--font)}
+  .wrap{max-width:1100px;margin:0 auto;padding:16px}
+  header.top{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--rule);background:var(--panel)}
+  header.top img{width:44px;height:auto}
+  header.top b{display:block;font-size:15px;letter-spacing:.02em}
+  header.top small{color:var(--ink2)}
+  h1{font-size:clamp(1.35rem,1rem + 1.4vw,1.9rem);letter-spacing:-.02em;line-height:1.15;margin:18px 0 6px}
+  .muted{color:var(--ink2)}
+  .card{background:var(--panel);border:1px solid var(--rule);border-radius:var(--r);padding:16px;margin:14px 0;box-shadow:0 8px 20px -14px rgba(22,25,31,.25)}
+  label{display:block;font-size:14px;font-weight:600;color:var(--ink2);margin:10px 0 4px}
+  input,select,textarea{width:100%;font:inherit;padding:10px;border:1px solid #cfd3db;border-radius:8px;background:#fff;color:var(--ink)}
+  input:focus,select:focus,textarea:focus{outline:2px solid rgba(7,76,224,.25);border-color:var(--accent)}
+  textarea{min-height:70px}
+  .btn{display:inline-flex;align-items:center;gap:6px;font:600 15px var(--font);padding:10px 14px;border-radius:8px;border:1px solid #c9ced8;background:#fff;color:var(--ink);cursor:pointer;text-decoration:none;
+    transition:transform 160ms ease-out,background-color 160ms ease-out}
+  .btn:hover{background:var(--muted);transform:translateY(-1px)}
+  .btn:active{transform:none}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  .btn.primary:hover{background:#063fbd}
+  .btn.small{font-size:13px;padding:6px 9px}
+  .btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
+  :focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+  .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}
+  .stats{display:flex;flex-wrap:wrap;gap:6px 20px;color:var(--ink2)}.stats b{color:var(--ink)}
+  table{width:100%;border-collapse:collapse;background:#fff}
+  th,td{padding:8px 10px;border-bottom:1px solid var(--rule);text-align:left;vertical-align:top}
+  th{background:var(--muted);color:var(--ink2);font-size:13px}
+  tr.changed td{background:#fff8e1}
+  tr.dereg td{color:#8a8f99}
+  .pill{display:inline-block;font-size:12px;padding:1px 8px;border-radius:999px;background:#e8efff;color:var(--accent)}
+  .pill.warn{background:#fdecea;color:var(--warn)}
+  .pill.ok{background:#e6f4ea;color:var(--ok)}
+  .msg{padding:10px 12px;border-radius:8px;margin:10px 0}.msg.err{background:#fdecea;color:var(--warn)}.msg.ok{background:#e6f4ea;color:var(--ok)}
+  .savebar{position:sticky;bottom:0;background:var(--panel);border-top:1px solid var(--rule);padding:12px 16px;box-shadow:0 -6px 18px -12px rgba(22,25,31,.3)}
+  dialog{border:1px solid var(--rule);border-radius:var(--r);padding:18px;max-width:min(640px,calc(100vw - 24px));width:100%}
+  dialog::backdrop{background:rgba(22,25,31,.45)}
+  .chg{font-size:14px;margin:6px 0}.chg b{display:block}
+  .hidden{display:none!important}
+  #paper{display:none}
+  @media (max-width:760px){
+    .grid2{grid-template-columns:1fr}
+    .savebar textarea{min-height:44px}.savebar label{margin-top:6px}
+    #mtable thead{display:none}
+    #mtable tr{display:block;border:1px solid var(--rule);border-radius:10px;margin:8px 0;padding:6px 10px;background:#fff}
+    #mtable td{display:block;border:0;padding:3px 0}
+    #mtable td[data-l]::before{content:attr(data-l) ': ';font-size:12px;color:var(--ink2)}
+  }
+  @media (prefers-reduced-motion:reduce){.btn{transition:none}.btn:hover{transform:none}}
+  /* Πίνακας μελών σε Α4 */
+  @media print{
+    @page{size:A4;margin:12mm}
+    body{background:#fff;font:10pt/1.35 Georgia,'Times New Roman',serif}
+    body>*:not(#paper){display:none!important}
+    #paper{display:block}
+    #paper .ph{text-align:center;margin-bottom:6mm}#paper .ph img{width:22mm}
+    #paper h2{font-size:12pt;margin:5mm 0 2mm}
+    #paper table{font-size:9pt}#paper th,#paper td{border:1px solid #bbb;padding:3px 5px}
+    #paper th{background:#eef1f6;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    #paper tr{break-inside:avoid}#paper thead{display:table-header-group}
+  }
+</style>
+</head>
+<body>
+<header class="top"><img src="../img/header_emblem.png" alt=""><div><b>ΕΘΝΙΚΗ ΜΕΓΑΛΗ ΣΤΟΑ ΤΗΣ ΕΛΛΑΔΟΣ</b><small>Πύλη Γραμματέων Στοών — Μητρώο Μελών</small></div></header>
+<main class="wrap">
+  <section id="login" class="card" style="max-width:520px;margin:28px auto">
+    <h1 style="margin-top:0">Είσοδος Γραμματέα Στοάς</h1>
+    <p class="muted">Βλέπετε και διορθώνετε μόνο το Μητρώο Μελών της Στοάς σας. Τον κωδικό τον στέλνει η Μεγάλη Γραμματεία στο επίσημο email της Στοάς.</p>
+    <form id="lf">
+      <label for="lno">Στοά</label><select id="lno" required><option value="">— Επιλέξτε Στοά —</option></select>
+      <label for="lcode">Κωδικός Στοάς</label><input id="lcode" autocomplete="off" autocapitalize="characters" spellcheck="false" required placeholder="π.χ. ABCD-2345">
+      <div class="row" style="margin-top:14px"><button class="btn primary" id="lbtn">Είσοδος</button></div>
+    </form>
+    <div id="lmsg"></div>
+  </section>
+
+  <section id="app" class="hidden">
+    <h1 id="ltitle"></h1>
+    <div class="stats" id="stats"></div>
+    <div class="card">
+      <div class="row">
+        <input id="q" type="search" placeholder="🔎 Αναζήτηση μέλους…" style="flex:1;min-width:200px">
+        <label class="row" style="margin:0;font-weight:500"><input type="checkbox" id="showDereg" style="width:auto"> Και οι διαγραφέντες</label>
+        <button type="button" class="btn" id="addBtn">+ Νέο μέλος</button>
+        <button type="button" class="btn" id="pdfBtn">🖨 PDF · Πίνακας μελών</button>
+        <button type="button" class="btn small" id="logout">Έξοδος</button>
+      </div>
+    </div>
+    <div id="amsg"></div>
+    <table id="mtable"><thead><tr><th>Ονοματεπώνυμο</th><th>Βαθμός</th><th>Κατάσταση · Ιδιότητα</th><th>Αξίωμα</th><th>Επικοινωνία</th><th></th></tr></thead><tbody id="mbody"></tbody></table>
+  </section>
+</main>
+
+<div id="savebar" class="savebar hidden">
+  <div class="wrap" style="padding:0">
+    <div class="grid2">
+      <div><label for="ntype">Σημείωση πριν την αποθήκευση</label><select id="ntype"><option value="">— Είδος —</option></select></div>
+      <div><label for="nby">Καταχωρίζει (ονοματεπώνυμο Γραμματέα)</label><input id="nby" autocomplete="name"></div>
+    </div>
+    <label for="note" class="hidden">Σχόλιο</label><textarea id="note" placeholder="Σχόλιο (π.χ. ημερομηνία συνεδρίας, αριθμός πρακτικού)"></textarea>
+    <div class="row" style="margin-top:8px"><button type="button" class="btn primary" id="saveBtn" disabled>💾 Αποθήκευση</button><span class="muted" id="nchg">Καμία αλλαγή</span></div>
+  </div>
+</div>
+
+<dialog id="edit"><form method="dialog" id="ef">
+  <h2 style="margin-top:0" id="etitle">Μέλος</h2>
+  <div class="grid2">
+    <div><label for="f_surname">Επώνυμο</label><input id="f_surname" data-k="surname"></div>
+    <div><label for="f_first_name">Όνομα</label><input id="f_first_name" data-k="first_name"></div>
+    <div><label for="f_email">Email</label><input id="f_email" data-k="email" type="email"></div>
+    <div><label for="f_mobile">Κινητό</label><input id="f_mobile" data-k="mobile" inputmode="tel"></div>
+    <div><label for="f_degree">Βαθμός</label><input id="f_degree" data-k="degree" list="degrees"></div>
+    <div><label for="f_date_ea">Ημ. μύησης (Μαθητής)</label><input id="f_date_ea" data-k="date_ea" type="date"></div>
+    <div><label for="f_date_fc">Ημ. Διέλευσης (Εταίρος)</label><input id="f_date_fc" data-k="date_fc" type="date"></div>
+    <div><label for="f_date_mm">Ημ. Ανύψωσης (Διδάσκαλος)</label><input id="f_date_mm" data-k="date_mm" type="date"></div>
+    <div><label for="f_member_status">Κατάσταση στη Στοά</label><input id="f_member_status" data-l="member_status" list="statuses"></div>
+    <div><label for="f_capacity">Ιδιότητα</label><select id="f_capacity" data-l="capacity"><option value="">—</option></select></div>
+    <div><label for="f_capacity_date">Ημ. ιδιότητας</label><input id="f_capacity_date" data-l="capacity_date" type="date"></div>
+    <div><label for="f_dereg_date">Ημ. διαγραφής από τη Στοά</label><input id="f_dereg_date" data-l="dereg_date" type="date"></div>
+    <div><label for="f_jw_date">Ημ. Β΄ Επόπτη</label><input id="f_jw_date" data-l="jw_date" type="date"></div>
+    <div><label for="f_sw_date">Ημ. Α΄ Επόπτη</label><input id="f_sw_date" data-l="sw_date" type="date"></div>
+    <div><label for="f_wm_date">Ημ. Σεβασμίου</label><input id="f_wm_date" data-l="wm_date" type="date"></div>
+  </div>
+  <p class="muted" id="ero" style="font-size:14px"></p>
+  <div class="row" style="margin-top:12px"><button class="btn primary" value="ok">✔ Εντάξει</button><button class="btn" value="cancel" formnovalidate>Άκυρο</button></div>
+</form></dialog>
+
+<dialog id="confirm"><form method="dialog">
+  <h2 style="margin-top:0">Επιβεβαίωση αλλαγών</h2>
+  <div id="clist"></div>
+  <p class="muted">Θα αποθηκευτούν ως νέα έκδοση του Μητρώου της Στοάς και θα σταλεί email στη Στοά με τις αλλαγές.</p>
+  <div class="row"><button class="btn primary" value="ok">💾 Αποθήκευση</button><button class="btn" value="cancel">Άκυρο</button></div>
+</form></dialog>
+
+<datalist id="degrees"><option value="Μαθητής"><option value="Εταίρος"><option value="Διδάσκαλος"></datalist>
+<datalist id="statuses"></datalist>
+<div id="paper"></div>
+
+<script src="config.js"></script>
+<script>
+(function () {
+  'use strict';
+  const MEMBER_FIELDS = ['surname', 'first_name', 'email', 'mobile', 'degree', 'date_ea', 'date_fc', 'date_mm'];
+  const LODGE_FIELDS = ['member_status', 'capacity', 'capacity_date', 'jw_date', 'sw_date', 'wm_date', 'dereg_date'];
+  const LABELS = { surname: 'Επώνυμο', first_name: 'Όνομα', email: 'Email', mobile: 'Κινητό', degree: 'Βαθμός', date_ea: 'Ημ. μύησης', date_fc: 'Ημ. Εταίρου', date_mm: 'Ημ. Διδασκάλου',
+    member_status: 'Κατάσταση στη Στοά', capacity: 'Ιδιότητα', capacity_date: 'Ημ. ιδιότητας', jw_date: 'Ημ. Β΄ Επόπτη', sw_date: 'Ημ. Α΄ Επόπτη', wm_date: 'Ημ. Σεβασμίου', dereg_date: 'Ημ. διαγραφής' };
+  const CAPACITIES = ['Τακτικό', 'Υιοθετημένο', 'Επανελθόν', 'Ομότιμο', 'Επίτιμο', 'Μέτοικο', 'Αριστίνδην', 'Ισόβιο', 'Θεράπων'];
+  const SKEY = 'nglg-lodge-session';
+  const $ = (s) => document.querySelector(s);
+  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const str = (v) => String(v == null ? '' : v).replace(/\s+/g, ' ').trim();
+  const fmt = (iso) => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || ''); return m ? `${m[3]}/${m[2]}/${m[1]}` : (iso || ''); };
+  const isDereg = (m) => /ΔΙΑΓΡΑΦ/i.test(String((m.lodge || {}).member_status || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase());
+  let API = '', S = null, base = [], cur = [], meta = {}, version = 0, editing = null;
+
+  // portal.json: το δημοσιεύει η εφαρμογή — { api_url, lodges: [{ number, name }] } (οι Στοές με κωδικό)
+  let PUB = null;
+  async function config() {
+    try { const r = await fetch('portal.json?t=' + Date.now(), { cache: 'no-store' }); if (r.ok) PUB = await r.json(); } catch (e) { /* */ }
+    return (PUB && PUB.api_url) || window.LODGE_PORTAL_URL || '';
+  }
+  async function call(body) {
+    if (!API) throw new Error('Η Πύλη δεν έχει ενεργοποιηθεί ακόμη από τη Μεγάλη Γραμματεία.');
+    const r = await fetch(API, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(body) });
+    if (!r.ok) throw new Error('Ο server δεν απάντησε (' + r.status + ').');
+    return r.json();
+  }
+  const errText = (e) => ({ unauthorized: 'Λάθος κωδικός Στοάς.', too_many_tries: 'Πολλές λάθος προσπάθειες — δοκιμάστε ξανά σε 15 λεπτά.', no_registry: 'Το Μητρώο της Στοάς δεν έχει δημοσιευθεί ακόμη από τη Μεγάλη Γραμματεία.',
+    conflict: 'Το Μητρώο άλλαξε στο μεταξύ (από άλλη συσκευή ή τη Μεγάλη Γραμματεία). Φορτώθηκε ξανά — επαναλάβετε τις αλλαγές σας.', no_changes: 'Δεν υπάρχουν αλλαγές.', bad_lodge: 'Επιλέξτε Στοά.' }[e] || e);
+  const show = (el, text, kind) => { el.innerHTML = text ? `<div class="msg ${kind || 'err'}">${esc(text)}</div>` : ''; };
+
+  async function lodgesList() {
+    try {
+      const xs = PUB && PUB.lodges && PUB.lodges.length ? PUB.lodges : await (await fetch('../seed/lodges.json')).json();
+      $('#lno').insertAdjacentHTML('beforeend', xs.filter((x) => x.status !== 'Ανενεργή').sort((a, b) => (Number(a.number) || 1e9) - (Number(b.number) || 1e9))
+        .map((x) => `<option value="${esc(x.number)}">${esc(x.number)} · ${esc(x.name)}</option>`).join(''));
+    } catch (e) { /* χωρίς κατάλογο: πληκτρολόγηση */ }
+  }
+
+  async function login(lodge, code, quiet) {
+    const r = await call({ action: 'login', lodge, code });
+    if (!r.ok) { if (!quiet) show($('#lmsg'), errText(r.error)); sessionStorage.removeItem(SKEY); return false; }
+    S = { lodge, code }; sessionStorage.setItem(SKEY, JSON.stringify(S));
+    meta = r.lodge; version = r.version; base = r.members; cur = JSON.parse(JSON.stringify(r.members));
+    $('#ntype').innerHTML = '<option value="">— Είδος —</option>' + (r.note_types || []).map((t) => `<option>${esc(t)}</option>`).join('');
+    const sts = [...new Set(['1. ΤΑΚΤΙΚΟ', 'ΔΙΑΓΡΑΦΕΝ', ...base.map((m) => str((m.lodge || {}).member_status)).filter(Boolean)])];
+    $('#statuses').innerHTML = sts.map((s) => `<option value="${esc(s)}">`).join('');
+    $('#ltitle').textContent = `Στοά ${meta.name} Αρ. ${meta.number}`;
+    $('#login').classList.add('hidden'); $('#app').classList.remove('hidden');
+    show($('#amsg'), ''); render();
+    return true;
+  }
+
+  const changes = () => {
+    const by = Object.fromEntries(base.map((m) => [String(m.id), m])), out = [];
+    cur.forEach((m) => {
+      const o = by[String(m.id)], f = {};
+      MEMBER_FIELDS.forEach((k) => { const a = o ? str(o[k]) : '', z = str(m[k]); if (a !== z) f[k] = [a, z]; });
+      LODGE_FIELDS.forEach((k) => { const a = o ? str((o.lodge || {})[k]) : '', z = str((m.lodge || {})[k]); if (a !== z) f[k] = [a, z]; });
+      if (Object.keys(f).length) out.push({ id: m.id, is_new: !o, name: `${str(m.surname)} ${str(m.first_name)}`.trim(), fields: f });
+    });
+    return out;
+  };
+
+  function render() {
+    const q = str($('#q').value).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''), all = $('#showDereg').checked, ch = changes(), chIds = new Set(ch.map((c) => String(c.id)));
+    const act = cur.filter((m) => !isDereg(m)).length;
+    $('#stats').innerHTML = `<span><b>${act}</b> ενεργά μέλη</span><span><b>${cur.length - act}</b> διαγραφέντες</span><span>Έκδοση Μητρώου: <b>${version}</b></span>`;
+    const rows = cur.map((m, i) => ({ m, i })).filter(({ m }) => (all || !isDereg(m) || chIds.has(String(m.id))) && (!q || `${m.surname} ${m.first_name} ${m.email} ${m.mobile}`.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').includes(q)))
+      .sort((a, b) => `${a.m.surname} ${a.m.first_name}`.localeCompare(`${b.m.surname} ${b.m.first_name}`, 'el'));
+    $('#mbody').innerHTML = rows.map(({ m, i }) => `<tr class="${chIds.has(String(m.id)) ? 'changed' : ''}${isDereg(m) ? ' dereg' : ''}">
+<td><b>${esc(m.surname)} ${esc(m.first_name)}</b>${m.is_new || !base.some((b) => String(b.id) === String(m.id)) ? ' <span class="pill">νέο</span>' : ''}${m.ro && m.ro.registry ? `<br><small class="muted">Αρ. Μητρώου ${esc(m.ro.registry)}</small>` : ''}</td>
+<td data-l="Βαθμός">${esc(m.degree || '—')}</td>
+<td data-l="Κατάσταση">${isDereg(m) ? '<span class="pill warn">Διαγραφείς</span>' : esc((m.lodge || {}).member_status || '—')}${(m.lodge || {}).capacity ? ` · ${esc(m.lodge.capacity)}` : ''}</td>
+<td data-l="Αξίωμα">${esc((m.ro || {}).office || '—')}${(m.ro || {}).office_date ? `<br><small class="muted">${esc(fmt(m.ro.office_date))}</small>` : ''}</td>
+<td data-l="Επικοινωνία"><small>${esc(m.email || '')}${m.email && m.mobile ? '<br>' : ''}${esc(m.mobile || '')}</small></td>
+<td><button type="button" class="btn small" data-edit="${i}" aria-label="Επεξεργασία ${esc(m.surname)} ${esc(m.first_name)}">✎ Αλλαγή</button></td></tr>`).join('')
+      || '<tr><td colspan="6" class="muted">Κανένα μέλος.</td></tr>';
+    $('#saveBtn').disabled = !ch.length;
+    $('#savebar').classList.toggle('hidden', !ch.length); // η μπάρα αποθήκευσης εμφανίζεται μόνο όταν υπάρχουν αλλαγές
+    $('#nchg').textContent = ch.length ? `${ch.length} ${ch.length === 1 ? 'μέλος άλλαξε' : 'μέλη άλλαξαν'} — δεν έχουν αποθηκευτεί` : 'Καμία αλλαγή';
+  }
+
+  function openEdit(i) {
+    editing = i; const m = i === -1 ? { surname: '', first_name: '', lodge: { member_status: '1. ΤΑΚΤΙΚΟ', capacity: 'Τακτικό' }, ro: {} } : cur[i];
+    $('#etitle').textContent = i === -1 ? 'Νέο μέλος' : `${m.surname} ${m.first_name}`;
+    document.querySelectorAll('#ef [data-k]').forEach((x) => { x.value = str(m[x.dataset.k]); });
+    document.querySelectorAll('#ef [data-l]').forEach((x) => { x.value = str((m.lodge || {})[x.dataset.l]); });
+    const ro = m.ro || {};
+    $('#ero').textContent = [ro.registry ? 'Αρ. Μητρώου: ' + ro.registry : '', ro.office ? 'Ανώτατο αξίωμα: ' + ro.office + (ro.office_date ? ' (' + fmt(ro.office_date) + ')' : '') : ''].filter(Boolean).join(' · ') + (ro.registry || ro.office ? ' — αλλάζουν μόνο από τη Μεγάλη Γραμματεία.' : '');
+    $('#edit').showModal();
+  }
+  $('#edit').addEventListener('close', () => {
+    if ($('#edit').returnValue !== 'ok') return;
+    const m = editing === -1 ? { lodge: {}, ro: {}, is_new: true } : JSON.parse(JSON.stringify(cur[editing]));
+    document.querySelectorAll('#ef [data-k]').forEach((x) => { m[x.dataset.k] = str(x.value); });
+    m.lodge = m.lodge || {};
+    document.querySelectorAll('#ef [data-l]').forEach((x) => { m.lodge[x.dataset.l] = str(x.value); });
+    if (editing === -1) { if (!m.surname && !m.first_name) return; cur.push(m); } else cur[editing] = m;
+    render();
+  });
+
+  async function save() {
+    const ch = changes(); if (!ch.length) return;
+    $('#clist').innerHTML = ch.map((c) => `<div class="chg"><b>${c.is_new ? 'ΝΕΟ ΜΕΛΟΣ: ' : ''}${esc(c.name)}</b>${Object.keys(c.fields).map((k) => `${esc(LABELS[k] || k)}: ${esc(c.fields[k][0] || '—')} → <b style="display:inline">${esc(c.fields[k][1] || '—')}</b>`).join('<br>')}</div>`).join('')
+      + (($('#ntype').value || str($('#note').value)) ? `<p><b>Σημείωση:</b> ${esc([$('#ntype').value, str($('#note').value)].filter(Boolean).join(' — '))}</p>` : '');
+    $('#confirm').showModal();
+    const ok = await new Promise((res) => $('#confirm').addEventListener('close', () => res($('#confirm').returnValue === 'ok'), { once: true }));
+    if (!ok) return;
+    $('#saveBtn').disabled = true; show($('#amsg'), 'Αποθήκευση…', 'ok');
+    try {
+      const r = await call({ action: 'save', lodge: S.lodge, code: S.code, base_version: version, members: cur.map((m) => ({ id: m.is_new ? null : m.id, ...Object.fromEntries(MEMBER_FIELDS.map((k) => [k, str(m[k])])), lodge: Object.fromEntries(LODGE_FIELDS.map((k) => [k, str((m.lodge || {})[k])])) })),
+        note_type: $('#ntype').value, note: str($('#note').value), by: str($('#nby').value) });
+      if (!r.ok) { show($('#amsg'), errText(r.error)); if (r.error === 'conflict') await login(S.lodge, S.code, true); render(); return; }
+      try { localStorage.setItem('nglg-lodge-by', str($('#nby').value)); } catch (e) { /* */ }
+      await login(S.lodge, S.code, true);
+      $('#note').value = ''; $('#ntype').value = '';
+      show($('#amsg'), `✓ Αποθηκεύτηκε ως «${r.version_name}» (${r.changes} ${r.changes === 1 ? 'μέλος' : 'μέλη'})${r.mailed ? ' · email στη Στοά: ' + r.mailed : ''}.`, 'ok');
+    } catch (e) { show($('#amsg'), e.message || String(e)); render(); }
+  }
+
+  function pdf() {
+    const byName = (a, b) => `${a.surname} ${a.first_name}`.localeCompare(`${b.surname} ${b.first_name}`, 'el');
+    const active = cur.filter((m) => !isDereg(m)).sort(byName), dereg = cur.filter(isDereg).sort(byName);
+    const tbl = (xs, last) => `<table><thead><tr><th>Α/Α</th><th>Ονοματεπώνυμο</th><th>Βαθμός</th><th>Αξίωμα</th><th>Ημ. μεγαλύτερου αξιώματος</th><th>${last}</th></tr></thead><tbody>${xs.map((m, i) =>
+      `<tr><td>${i + 1}</td><td><b>${esc(m.surname)}</b> ${esc(m.first_name)}</td><td>${esc(m.degree || '')}</td><td>${esc((m.ro || {}).office || '')}</td><td>${esc(fmt((m.ro || {}).office_date || ''))}</td><td>${last === 'Ημ. διαγραφής' ? esc(fmt((m.lodge || {}).dereg_date || '')) : esc([(m.lodge || {}).capacity, (m.lodge || {}).member_status].filter(Boolean).join(' · '))}</td></tr>`).join('') || '<tr><td colspan="6">—</td></tr>'}</tbody></table>`;
+    $('#paper').innerHTML = `<div class="ph"><img src="../img/header_emblem.png" alt=""><div><b>ΕΘΝΙΚΗ ΜΕΓΑΛΗ ΣΤΟΑ ΤΗΣ ΕΛΛΑΔΟΣ</b></div><div>Πίνακας Μελών — Στοά ${esc(meta.name)} Αρ. ${esc(meta.number)}${meta.provincial ? ' · ' + esc(meta.provincial) : ''}</div><small>${esc(new Date().toLocaleDateString('el-GR'))} · Έκδοση Μητρώου ${esc(version)}</small></div>
+<h2>Ενεργά μέλη (${active.length})</h2>${tbl(active, 'Ιδιότητα · Κατάσταση')}${dereg.length ? `<h2>Διαγραφέντες (${dereg.length})</h2>${tbl(dereg, 'Ημ. διαγραφής')}` : ''}`;
+    const t = document.title; document.title = `Pinakas_Melon_Stoa_${meta.number}`; window.print(); document.title = t;
+  }
+
+  $('#mbody').addEventListener('click', (e) => { const b = e.target.closest('[data-edit]'); if (b) openEdit(Number(b.dataset.edit)); });
+  $('#addBtn').addEventListener('click', () => openEdit(-1));
+  $('#q').addEventListener('input', render); $('#showDereg').addEventListener('change', render);
+  $('#saveBtn').addEventListener('click', save); $('#pdfBtn').addEventListener('click', pdf);
+  $('#logout').addEventListener('click', () => { sessionStorage.removeItem(SKEY); location.reload(); });
+  $('#f_capacity').insertAdjacentHTML('beforeend', CAPACITIES.map((c) => `<option>${c}</option>`).join(''));
+  window.addEventListener('beforeunload', (e) => { if (S && changes().length) { e.preventDefault(); e.returnValue = ''; } });
+  $('#lf').addEventListener('submit', async (e) => {
+    e.preventDefault(); $('#lbtn').disabled = true; show($('#lmsg'), '');
+    try { await login($('#lno').value, str($('#lcode').value).toUpperCase()); } catch (err) { show($('#lmsg'), err.message || String(err)); }
+    $('#lbtn').disabled = false;
+  });
+
+  (async () => {
+    try { $('#nby').value = localStorage.getItem('nglg-lodge-by') || ''; } catch (e) { /* */ }
+    API = await config();
+    await lodgesList();
+    const qs = new URLSearchParams(location.search);
+    if (qs.get('lodge')) {
+      const n = qs.get('lodge').toUpperCase();
+      if (![...$('#lno').options].some((o) => o.value === n)) $('#lno').insertAdjacentHTML('beforeend', `<option value="${esc(n)}">${esc(n)}</option>`);
+      $('#lno').value = n;
+    }
+    let s = null; try { s = JSON.parse(sessionStorage.getItem(SKEY) || 'null'); } catch (e) { /* */ }
+    if (s && s.lodge && s.code) { try { await login(s.lodge, s.code, true); } catch (e) { /* */ } }
+    if (!API) show($('#lmsg'), 'Η Πύλη Γραμματέων δεν έχει ενεργοποιηθεί ακόμη από τη Μεγάλη Γραμματεία.');
+  })();
+})();
+</script>
+</body>
+</html>
