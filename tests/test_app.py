@@ -518,6 +518,7 @@ def test_official_lodges_applied_to_existing_database(app):
     assert a['email'] == 'akropolis@example.com' and a['master'] == 'Σεβάσμιος Α'
     assert a['full_title'] == 'ΣΣτ. 2 Ακρόπολις υπό την Σκ. της ΕπΜΣτ. Αθηνών'
     assert lodges['52']['status'] == 'Ανενεργή' and lodges['117']['kind'] == 'Ειδική' and lodges['Φ']['orient'] == 'Κερκύρας'
+    assert lodges['117']['provincial'] == 'ΕπΜΣτ. Αθηνών'  # κατά τον πίνακα «email Επαρχίας ανά Στοά»
     assert lodges['118']['name'] == 'ΑΤΛΑΣ' and lodges['118']['orient'] == 'Πειραιώς' and lodges['118']['founded_on'] == '2026-11-02' and lodges['118']['provincial'] == 'ΕπΜΣτ. Πειραιώς & Νήσων Αρχ. Αιγαίου'
     assert 'lodges-official-2026-10' in gh.read_json('data/settings.json')['_migrations']
     app.page.wait_for_timeout(3000)  # η πρώτη δημοσίευση των δημόσιων αρχείων (1,5″ μετά το άνοιγμα) να έχει τελειώσει
@@ -610,7 +611,7 @@ def test_official_provinces_applied_and_lodges_counted(app):
     assert ps['ΕΜΣτΕ Α.Ε. & Α.Τ.']['email'] == 'grand.secretary@nglgreece.gr'
     app.go('/provinces')
     rows = app.page.locator('tr', has_text='ΕπΜΣτ. Αθηνών').first.inner_text()
-    assert '36' in rows
+    assert '37' in rows  # 36 + η 117 ΣΠΥΡΟΣ ΣΑΜΑΡΑΣ
 
 
 def test_lodge_rituals_and_masters_pasted(app):
@@ -1093,7 +1094,7 @@ def test_grand_master_official_visit_letter_and_email(app):
     assert app.page.input_value('[name=subject]') == 'Επίσημη Επίσκεψη ΜΔ εις την Στοάν «ΔΙΩΝΗ» υπ’ αριθμ. 32 το Σάββατο, 16 Οκτωβρίου 2027'
     body = app.page.input_value('[name=body]')
     for s in ['Αγαπητέ Αδ. Γραμματεύ,', 'εργασίες της Στοάς «ΔΙΩΝΗ» υπ’ αρ. 32, το Σάββατο, 16 Οκτωβρίου 2027, και ώρα συμφώνως με την πρόσκλησή σας, θα παραστεί επισήμως ο Μέγας Διδάσκαλος',
-              'Σεβασμιώτατος Αδ. Ιωάννης Μπενετάτος.', 'Κανόνα 122', 'Κανόνα 144', 'Παρακαλούμε για την επιβεβαίωση λήψεως της παρούσης.', 'Κατ’ εντολήν του Μεγάλου Διδασκάλου,\nΜε αφοσίωση και εκτίμηση,', 'Πσεβ. Αδ. Δημήτριος Σκιαδόπουλος\nΜέγας Γραμματεύς']:
+              'Σεβασμιώτατος Αδ. Ιωάννης Μπενετάτος.', 'Κανόνα 122', 'Κανόνα 144', 'Παρακαλούμε για την επιβεβαίωση λήψεως της παρούσης.', 'Κατ’ εντολήν του Μεγάλου Διδασκάλου,\nΜε αφοσίωση και εκτίμηση,', 'Πσεβ. Αδ. Δημήτριος Σκιαδόπουλος Πρ.Α΄ΜΕπ., ΤΜΔ\nΜέγας Γραμματεύς']:
         assert s in body, s
     assert 'εκπροσωπ' not in body.lower() and '{' not in body
     app.go('/visits')
@@ -4138,7 +4139,7 @@ def test_province_secretaries_app_sync(app):
     assert '✓ μέλος' in row.inner_text() and 'χωρίς Δίπλωμα' in row.inner_text()
     # η δημοσίευση: email εισόδου Επαρχίας, Στοές της, μέλη με Δίπλωμα ή όχι (χωρίς email/κινητά μελών)
     ion = [p for p in pushed[-1] if 'Ιονίων' in p['short']][0]
-    assert 'ionian.secretary@nglgreece.gr' in ion['logins'] and 'provincialgrandsecretary@pglionianislands.gr' in ion['logins']
+    assert ion['logins'] == ['ionian.secretary@nglgreece.gr']  # ένα μοναδικό email ανά Επαρχία
     en = [x for x in ion['lodges'] if x['number'] == '16'][0]
     assert en['lodge_email'] == 'enosis16@example.com' and any(m['s'] == 'Ζαχαρίου' and m['mm'] == 0 for m in en['members'])
     assert 'z@example.com' not in _j.dumps(pushed) and '6944000016' not in _j.dumps(pushed)

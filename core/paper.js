@@ -5,7 +5,7 @@ import { esc, fmtDate, linkify } from './util.js';
 import { richHtml } from './rich.js';
 
 // Ενιαία αποφώνηση και υπογραφή του Μεγάλου Γραμματέα (παντού)
-export const GS_CLOSING = 'Με αφοσίωση και εκτίμηση,', GS_NAME = 'Πσεβ. Αδ. Δημήτριος Σκιαδόπουλος', GS_TITLE = 'Μέγας Γραμματεύς';
+export const GS_CLOSING = 'Με αφοσίωση και εκτίμηση,', GS_NAME = 'Πσεβ. Αδ. Δημήτριος Σκιαδόπουλος Πρ.Α΄ΜΕπ., ΤΜΔ', GS_TITLE = 'Μέγας Γραμματεύς';
 export const gsSignatureText = () => `${GS_CLOSING}\n\n${db.setting('grand_secretary_name') || GS_NAME}\n${db.setting('grand_secretary_title') || GS_TITLE}`;
 
 db.defaultSettings({
@@ -18,6 +18,11 @@ db.migrate('unified-closing-signature-2026-10', (tx) => {
   tx.setting('closing', GS_CLOSING); tx.setting('grand_secretary_name', GS_NAME); tx.setting('grand_secretary_title', GS_TITLE);
   tx.setting('visits_signer_name', GS_NAME); tx.setting('visits_signer_title', GS_TITLE);
   for (const t of tx.all('letter_templates')) if (t.closing && t.closing !== GS_CLOSING) tx.update('letter_templates', t.id, { closing: GS_CLOSING });
+});
+
+// Ο Μέγας Γραμματεύς γράφεται με τους τίτλους του: Πρώην Α΄ Μέγας Επόπτης (Πρ.Α΄ΜΕπ.) και Τάξη του Μεγάλου Διδασκάλου (ΤΜΔ)
+db.migrate('gs-name-honours-2026-10', (tx) => {
+  for (const k of ['grand_secretary_name', 'visits_signer_name']) if (/^\s*Πσεβ\. Αδ\. Δημήτριος Σκιαδόπουλος\s*$/.test(String(tx.setting(k) || ''))) tx.setting(k, GS_NAME);
 });
 
 export const IMG = { emblem: 'img/header_emblem.png', seal: 'img/seal.png', signature: 'img/signature.png', nikolaos: 'img/signature_nikolaos.png', grandMaster: 'img/signature_grand_master.png', hmeis: 'img/hmeis.png', diorizomen: 'img/diorizomen.png', aponemei: 'img/aponemei.png', evarestoumetha: 'img/evarestoumetha.png' };

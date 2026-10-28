@@ -89,7 +89,7 @@ export function drawApproval(canvas, { protocol = '', date = '', lodge = null },
     ctx.drawImage(signature, x, y, w, h);
     ctx.fillStyle = BLUE; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.font = '700 24px Arial, sans-serif'; ctx.fillText('ΜΕΓΑΣ ΓΡΑΜΜΑΤΕΑΣ', x + w / 2, y + h + 29);
-    ctx.font = '700 22px Arial, sans-serif'; ctx.fillText('Πσεβ. Αδ. Δημήτριος Σκιαδόπουλος', x + w / 2, y + h + 59);
+    const gs = 'Πσεβ. Αδ. Δημήτριος Σκιαδόπουλος Πρ.Α΄ΜΕπ., ΤΜΔ'; fitFont(ctx, gs, 560, 22, 700, 15); ctx.fillText(gs, x + w / 2, y + h + 59);
   }
   return canvas;
 }

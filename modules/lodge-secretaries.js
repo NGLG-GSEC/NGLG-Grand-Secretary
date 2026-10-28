@@ -12,10 +12,10 @@ import { portalApi, portalReady } from './lodge-portal.js';
 
 export const SECRETARIES_PAGE = 'https://nglg-gsec.github.io/NGLG-Grand-Secretary/secretaries/';
 db.seed('lodge_secretary_log', () => []);
-// Ιονίων Νήσων: και το email της Επαρχιακής Γραμματείας του pglionianislands.gr (από τις Επαφές της Μεγάλης Γραμματείας)
-db.migrate('province-ionian-secretary-email-2026-10', (tx) => {
-  const p = tx.find('grand_lodges', (x) => String(x.short || '').includes('Ιονίων'));
-  if (p && !String(p.secretary_email || '').trim()) tx.update('grand_lodges', p.id, { secretary_email: 'provincialgrandsecretary@pglionianislands.gr' });
+// Κάθε Επαρχία πιστοποιείται με ένα ΜΟΝΑΔΙΚΟ email (της Επαρχιακής Μεγάλης Γραμματείας)· αφαιρείται το δεύτερο email της Ιονίων
+// που είχε προστεθεί προσωρινά (η εγγραφή «province-ionian-secretary-email-2026-10» έχει ήδη τρέξει όπου άνοιξε η εφαρμογή)
+db.migrate('province-single-login-email-2026-10', (tx) => {
+  for (const p of tx.all('grand_lodges')) if (/pglionianislands\.gr$/i.test(String(p.secretary_email || '').trim())) tx.update('grand_lodges', p.id, { secretary_email: '' });
 });
 
 const S = (v) => String(v ?? '').replace(/\s+/g, ' ').trim();
@@ -51,7 +51,7 @@ const checkHtml = (c) => (c.status === 'empty' ? '<span class="muted">—</span>
 // Δημοσίευση στον server: Επαρχίες (email εισόδου), Στοές και τα ενεργά μέλη τους (μόνο για τον έλεγχο)
 export function provincePayload() {
   const lodges = lodgesAll(true).filter((l) => (l.status || 'Ενεργή') !== 'Ανενεργή');
-  return provincesAll(true).map((p) => ({ short: p.short, title: p.full_title || p.short, logins: [p.email, p.secretary_email].map((e) => S(e).toLowerCase()).filter((e) => EMAIL_RE.test(e)),
+  return provincesAll(true).map((p) => ({ short: p.short, title: p.full_title || p.short, logins: [S(p.email).toLowerCase()].filter((e) => EMAIL_RE.test(e)), // μόνο το μοναδικό email της Επαρχίας
     lodges: lodges.filter((l) => S(l.provincial) === S(p.short)).map((l) => { const s = secretaryOf(l), no = lodgeNoKey(l.number);
       return { number: no, name: S(l.name), lodge_email: S(l.email).toLowerCase(), secretary_first: s.first, secretary_last: s.last, secretary_mobile: S(l.secretary_mobile),
         members: membersOf(no).map((m) => ({ id: m.id, s: S(m.surname), f: S(m.first_name), mm: hasDiploma(m) ? 1 : 0 })) }; }) })).filter((p) => p.logins.length && p.lodges.length);
@@ -108,8 +108,8 @@ ${portalReady() ? '' : '<p class="vwarn">Χρειάζεται πρώτα η ρύ
 <button type="button" class="btn" data-act="copyMail">📋 Αντιγραφή πρόσκλησης προς τις Επαρχίες</button><span class="muted" id="sst"></span></div>
 <form class="toolbar" id="sprov"><select name="prov"><option value="">Όλες οι Επαρχίες</option>${provs.map((p) => `<option${p.short === prov ? ' selected' : ''}>${esc(p.short)}</option>`).join('')}</select><button class="btn">Φίλτρο</button>
 <span class="muted"><b>${full}</b> από ${rows.length} Στοές πλήρεις (email Στοάς + Γραμματέας μέλος της)</span></form>
-<details class="card fold"><summary><b>Email εισόδου ανά Επαρχία</b> <small class="muted">(email Γραμματείας και email ΕπΜΓρ. της Επαρχίας)</small></summary>
-${table(['Επαρχία', 'Email εισόδου'], provs.map((p) => [esc(p.short), esc([p.email, p.secretary_email].map(S).filter(Boolean).join(', ')) || '<span class="vwarn">—</span>']))}<p><a href="#/provinces">Επαρχίες → αλλαγή email</a></p></details>
+<details class="card fold"><summary><b>Email εισόδου ανά Επαρχία</b> <small class="muted">(το μοναδικό email της Επαρχιακής Μεγάλης Γραμματείας)</small></summary>
+${table(['Επαρχία', 'Email εισόδου', 'Στοές'], provs.map((p) => [esc(p.short), esc(S(p.email)) || '<span class="vwarn">—</span>', lodgesAll(true).filter((l) => S(l.provincial) === S(p.short) && (l.status || 'Ενεργή') !== 'Ανενεργή').length]))}<p><a href="#/provinces">Επαρχίες → αλλαγή email</a></p></details>
 ${table(['Αρ.', 'Στοά', 'Email Στοάς', 'Γραμματέας · κινητό', 'Μητρώο', 'Τελευταία αλλαγή'], rows.map((r) => r.html))}`,
     mount(el) {
       const st = el.querySelector('#sst'), busy = async (m, fn) => { st.textContent = '⏳ ' + m; try { return await fn(); } catch (e) { toast(e.message || String(e), 'error'); return null; } finally { st.textContent = ''; } };

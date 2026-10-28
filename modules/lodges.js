@@ -31,6 +31,15 @@ db.migrate('lodges-118-atlas-2026-10', async (tx) => {
   else tx.insert('lodges', { ...x, email: '', master: '', secretary: '', secretary_email: '', meeting_place: '', notes: '', source: 'Επίσημος κατάλογος' });
 });
 
+// Αντιστοίχιση Στοάς → Επαρχίας κατά τον πίνακα της Μεγάλης Γραμματείας (email Επαρχίας ανά Στοά, 28/10/2026): η Επαρχία κάθε Στοάς
+// από τον επίσημο κατάλογο (π.χ. η 117 ΣΠΥΡΟΣ ΣΑΜΑΡΑΣ υπάγεται στην ΕπΜΣτ. Αθηνών)· τα υπόλοιπα στοιχεία δεν αλλάζουν.
+db.migrate('lodges-provincial-by-province-email-2026-10', async (tx) => {
+  for (const x of await official()) {
+    const ex = tx.find('lodges', (l) => lodgeNoKey(l.number) === lodgeNoKey(x.number));
+    if (ex && ex.provincial !== x.provincial) tx.update('lodges', ex.id, { provincial: x.provincial, full_title: x.full_title });
+  }
+});
+
 // Τυπικό: 19 Στοές εργάζονται σε Σκωτικό (η Φοίνιξ Κερκύρας σε Σκωτικό 1700)· οι υπόλοιπες σε Emulation.
 db.migrate('lodges-rituals-2026-10', (tx) => {
   for (const l of tx.all('lodges')) {
