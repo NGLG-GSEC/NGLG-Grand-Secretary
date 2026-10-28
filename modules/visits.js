@@ -330,7 +330,7 @@ function visitsPage({ query }) {
     title: 'Καταχώρηση Εργασιών Στοών για Επισκέψεις ΜΔ',
     html: `${visitsFlow(1)}<div class="hero"><h1>ΚΑΤΑΧΩΡΗΣΗ ΕΡΓΑΣΙΩΝ ΣΤΟΩΝ ΓΙΑ ΕΠΙΣΚΕΨΕΙΣ ΜΔ</h1>${outgoingProtocolBtn()}</div>${notice(query.msg)}${hasEpeteirida() ? '' : `<div class="card nocontact noprint"><b>Οι υποψήφιοι εκπρόσωποι προέρχονται από την Επετηρίδα, που δεν έχει περαστεί ακόμη σε αυτή τη βάση.</b>
 <p style="margin:6px 0">Ανεβάστε το αρχείο Excel της Επετηρίδας (π.χ. «Επετηρίδα 2026») — μετά επικολλήστε και τον κατάλογο εν ενεργεία στην <a href="#/epeteirida?imp=1">Επετηρίδα → Εισαγωγή</a>.</p>
-<label class="btn primary" style="cursor:pointer">⬆ Αρχείο Επετηρίδας (.xlsx)<input type="file" id="epFile" accept=".xlsx,.xls" hidden></label></div>`}<div class="toolbar"><a class="btn primary" href="#/visits/new">+ Νέα επίσκεψη</a><a class="btn" href="#/visits/import">Επικόλληση λίστας</a>
+<label class="btn primary" style="cursor:pointer">⬆ Αρχείο Επετηρίδας (.xlsx)<input type="file" id="epFile" accept=".xlsx,.xls" hidden></label></div>`}<div class="toolbar"><a class="btn primary" href="#/visits/new">+ Νέα επίσκεψη</a><button type="button" class="btn primary" data-act="listPdf" title="Μία σελίδα A4: Στοές και ημερομηνίες κατά σειρά, με τον εκπρόσωπο (όπως το τρέχον φίλτρο)">⬇ PDF (1 σελίδα)</button><a class="btn" href="#/visits/import">Επικόλληση λίστας</a>
 <a class="btn" href="#/visits/publish${query.prov ? '?prov=' + encodeURIComponent(query.prov) : ''}">Ενημέρωση Επαρχίας</a><a class="btn" href="#/visits/report">Αναφορά</a><a class="btn" href="#/reps">Εκπρόσωποι</a><a class="btn" href="#/declarations">🗳 Δηλώσεις διάθεσης</a><a class="btn" href="#/visits/decisions">🗳 Αποφάσεις Μ.Δ.</a><a class="btn${sumAll.total - sumAll.declared ? ' warnbtn' : ''}" href="#/visits/missing${query.prov ? '?prov=' + encodeURIComponent(query.prov) : ''}">⚠ Στοές χωρίς ημερομηνία (${sumAll.total - sumAll.declared})</a></div>
 <details class="card fold vsum"${query.sum ? ' open' : ''}><summary><b>Σύνοψη Επαρχιών · τεκτονικό έτος ${yr.label}</b> — ${sumAll.declared} από ${sumAll.total} Στοές δήλωσαν ημερομηνία Εγκατάστασης</summary>
 ${table(['Επαρχία', 'Ενεργές Στοές', 'Δήλωσαν ημερομηνία', 'Χωρίς ημερομηνία', ''], summary.map((o) => [`<b>${esc(o.prov)}</b>`, o.total,
@@ -344,6 +344,17 @@ ${table(['Επαρχία', 'Ενεργές Στοές', 'Δήλωσαν ημερ
 <label><input type="checkbox" name="past"${query.past ? ' checked' : ''}> Παλαιότερες</label><button>Φίλτρο</button></form>${body}`,
     mount(el) {
       onSubmit(el.querySelector('#flt'), (d) => go('/visits', { ...d, past: d.past ? '1' : '' }));
+      bind(el, { async listPdf(_, b) {
+        const old = b.textContent; b.textContent = '⏳ PDF…';
+        try {
+          const box = Object.assign(document.createElement('div'), { className: 'vlist-render' });
+          box.innerHTML = visitsListPaper(lst, reps, query);
+          document.body.appendChild(box);
+          try { const { paperPdf } = await import('../core/pdf.js'); const name = `EPISKEPSEIS-MD_${t}`; download(name + '.pdf', await paperPdf(box.querySelector('.paper'), { title: name }), 'application/pdf'); }
+          finally { box.remove(); }
+        } catch (e) { toast(e.message || String(e), 'error'); }
+        b.textContent = old;
+      } });
       // ενιαία εκπροσώπηση: νέες αποφάσεις της σελίδας Δηλώσεων περνούν στις Επισκέψεις
       import('./gm-decisions.js').then(({ syncDeclDecisions }) => syncDeclDecisions()).then((n) => { if (n && el.isConnected) { flash(`✓ ${n} απόφαση(-εις) από τη σελίδα Δηλώσεων πέρασαν στις Επισκέψεις.`); go('/visits', query); } });
       const ef = el.querySelector('#epFile');
@@ -586,6 +597,22 @@ export function gmProgrammeRows(frm = today(), to = '') {
   const reps = repMap(), letters = db.all('letters');
   return sortBy(visitsAll().filter((v) => v.visit_date >= (frm || today()) && (!to || v.visit_date <= to) && !noRep(reps[v.rep_id])), 'visit_date', (v) => Number(v.lodge_number) || 0)
     .map((v) => { const l = visitLetter(v, letters); return { v, r: reps[v.rep_id], prot: l ? String(seqOf(l)) : '', letter: l }; });
+}
+// PDF μίας σελίδας από τη σελίδα Επισκέψεων: Στοές και ημερομηνίες κατά σειρά, με τον εκπρόσωπο· κεφαλίδα ΕΜΣτΕ / Μεγάλη Γραμματεία,
+// στο τέλος ο Μέγας Γραμματεύς (όπως το τρέχον φίλτρο της σελίδας)
+export function visitsListPaper(list, reps = repMap(), query = {}) {
+  const rows = sortBy(list, 'visit_date', (v) => Number(lodgeNoKey(v.lodge_number)) || 1e9);
+  const who = (v) => { const r = reps[v.rep_id]; return isNobody(v) ? 'ΟΥΔΕΙΣ' : !r ? '<span class="muted">— (χωρίς εκπρόσωπο)</span>' : isGM(r) ? '<b>Ο Μέγας Διδάσκαλος (αυτοπροσώπως)</b>' : esc(repFull(r)); };
+  const d = (iso) => { const x = parseIso(iso); return x ? `<b>${esc(fmtDate(iso))}</b> <small>${esc(DAYS[x.getDay()])}</small>` : esc(iso); };
+  const span = rows.length ? `${fmtDate(rows[0].visit_date)} – ${fmtDate(rows[rows.length - 1].visit_date)}` : '';
+  const sub = [span, query.prov || '', query.q ? `«${query.q}»` : ''].filter(Boolean).join(' · ');
+  const dense = rows.length > 24 ? (rows.length > 40 ? ' vl-dense2' : ' vl-dense') : '';
+  return `<article class="paper report gmprog vlist${dense}">${letterhead()}<div class="gmp-office">ΜΕΓΑΛΗ ΓΡΑΜΜΑΤΕΙΑ</div>
+<div class="gmp-meta">Εν Αθήναις, ${esc(longToday())}</div>
+<p class="gmp-subject"><b>Θέμα:</b> Πρόγραμμα Εργασιών Στοών — Επισκέψεις και εκπρόσωποι του Σεβασμιωτάτου Μεγάλου Διδασκάλου${sub ? ` <small>(${esc(sub)})</small>` : ''}</p>
+${rows.length ? `<table class="gmp-table"><thead><tr><th class="n">Α/Α</th><th>Ημερομηνία</th><th>Στοά</th><th>Επαρχία</th><th>Εκπρόσωπος</th></tr></thead><tbody>${rows.map((v, i) => `<tr><td class="n">${i + 1}</td><td class="d">${d(v.visit_date)}</td><td class="l"><b>«${esc(v.lodge || '')}»</b>${v.lodge_number ? ` <small>υπ’ αριθ. ${esc(v.lodge_number)}</small>` : ''}${kindOf(v) !== 'ΕΓΚΑΤΑΣΤΑΣΗ ΣΕΒ' ? ` <small>· ${esc(kindOf(v))}</small>` : ''}</td><td class="p">${esc(v.province || '')}</td><td class="r">${who(v)}</td></tr>`).join('')}</tbody></table>`
+    : '<p class="gmp-p muted"><i>Δεν υπάρχουν επισκέψεις.</i></p>'}
+<div class="gmp-sign"><img class="signature-img" src="${IMG.signature}" alt=""><div class="signature-line"></div><div>Ο ${esc(db.setting('grand_secretary_title') || GS_TITLE)}</div><b>${esc(GS_NAME)}</b></div></article>`;
 }
 function gmProgrammePaper(rows, { showRep = true } = {}) {
   const d = (iso) => { const x = parseIso(iso); return x ? `<b>${esc(fmtDate(iso))}</b><small>${esc(DAYS[x.getDay()])}</small>` : esc(iso); };

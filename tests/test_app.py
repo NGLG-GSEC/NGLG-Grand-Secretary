@@ -4031,3 +4031,26 @@ def test_treasury_fees_by_member_lodge_province_and_scope(app):
     app.go('/treasury/members?lodge=3')
     app.page.wait_for_selector('text=Ταμείοαλφα')
     assert 'Ταμείογάμμα' in app.text() and 'Ταμείοβήτα' not in app.text()
+
+
+def test_visits_one_page_pdf_report(app):
+    # Επισκέψεις: «⬇ PDF (1 σελίδα)» — Στοές και ημερομηνίες κατά σειρά με τον εκπρόσωπο· κεφαλίδα ΕΜΣτΕ / ΜΕΓΑΛΗ ΓΡΑΜΜΑΤΕΙΑ, υπογραφή Μεγάλου Γραμματέα
+    app.connect_local()
+    app.page.evaluate("""async () => { const {db} = await import('./core/store.js');
+      await db.save('x', (tx) => { tx.replace('visits', []);
+        const a = tx.insert('reps', { name: 'Χρήστος', surname: 'Διαβάτης', office: 'Βοηθός Μέγας Γραμματεύς', email: '', mobile: '' });
+        tx.insert('visits', { visit_date: '2099-11-20', lodge: 'ΟΜΗΡΟΣ', lodge_number: '59', province: 'ΕπΜΣτ. Αθηνών', rep_id: null });
+        tx.insert('visits', { visit_date: '2099-11-02', lodge: 'ΑΤΛΑΣ', lodge_number: '118', province: 'ΕπΜΣτ. Πειραιώς & Νήσων Αρχ. Αιγαίου', rep_id: a.id });
+        tx.insert('visits', { visit_date: '2099-11-02', lodge: 'ΑΚΡΟΠΟΛΙΣ', lodge_number: '104', province: 'ΕπΜΣτ. Αθηνών', rep_id: -1 }); }); }""")
+    html = app.page.evaluate("async () => { const {visitsListPaper} = await import('./modules/visits.js'); const {db} = await import('./core/store.js'); return visitsListPaper(db.all('visits')); }")
+    i1, i2, i3 = html.index('ΑΚΡΟΠΟΛΙΣ'), html.index('ΑΤΛΑΣ'), html.index('ΟΜΗΡΟΣ')
+    assert i1 < i2 < i3  # κατά ημερομηνία, μετά αριθμό Στοάς
+    assert 'ΜΕΓΑΛΗ ΓΡΑΜΜΑΤΕΙΑ' in html and 'Πσεβ. Αδ. Δημήτριος Σκιαδόπουλος' in html and 'Ο Μέγας Γραμματεύς' in html
+    assert 'Διαβάτης' in html and 'ΟΥΔΕΙΣ' in html and 'χωρίς εκπρόσωπο' in html
+    app.go('/visits?past=1')
+    with app.page.expect_download() as dl:
+        app.page.click('[data-act=listPdf]')
+    assert dl.value.suggested_filename.startswith('EPISKEPSEIS-MD_') and Path(dl.value.path()).read_bytes()[:4] == b'%PDF'
+    import os
+    if os.environ.get('SAVE_PDF'): dl.value.save_as(os.environ['SAVE_PDF'])
+    assert app.page.locator('.vlist-render').count() == 0

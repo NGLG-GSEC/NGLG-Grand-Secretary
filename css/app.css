@@ -659,3 +659,11 @@ s.mdereg-l{color:#991b1b}
 .tre-stat b{font-size:20px}.tre-big{font-size:28px;color:#0b5d1e}
 .tre-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px}
 .tre-as label{flex:1}.tre-lodge{margin:8px 0;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+
+/* Επισκέψεις: PDF μίας σελίδας */
+.vlist-render{position:fixed;left:-10000px;top:0;width:210mm}
+.paper.vlist .gmp-table{font-size:9.5pt;margin:4mm 0 2mm}.paper.vlist .gmp-table td{padding:1.6mm 2.4mm}
+.paper.vlist.vl-dense .gmp-table{font-size:8.5pt}.paper.vlist.vl-dense .gmp-table td{padding:1mm 2mm}
+.paper.vlist.vl-dense2 .gmp-table{font-size:7.5pt}.paper.vlist.vl-dense2 .gmp-table td{padding:.6mm 1.6mm}
+.paper.vlist .gmp-sign{margin-top:5mm}
+.paper.vlist .gmp-table th{white-space:nowrap}
