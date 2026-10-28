@@ -271,12 +271,13 @@ function otpVerify_(b) {
 function googleLogin_(b) {
   const clientId = String(prop_('GOOGLE_CLIENT_ID') || '').trim(), tok = String(b.access_token || '');
   if (!clientId) throw new Error('no_google_client_id');
-  if (!tok || tok.length > 4096) throw new Error('admin_unauthorized');
+  if (!tok || tok.length > 4096) throw new Error('google_token_invalid');
   const res = UrlFetchApp.fetch('https://oauth2.googleapis.com/tokeninfo?access_token=' + encodeURIComponent(tok), { muteHttpExceptions: true });
-  if (res.getResponseCode() !== 200) throw new Error('admin_unauthorized');
-  let t; try { t = JSON.parse(res.getContentText()); } catch (e) { throw new Error('admin_unauthorized'); }
+  if (res.getResponseCode() !== 200) throw new Error('google_token_invalid');
+  let t; try { t = JSON.parse(res.getContentText()); } catch (e) { throw new Error('google_token_invalid'); }
   const email = String(t.email || '').toLowerCase(), verified = t.email_verified === true || t.email_verified === 'true';
-  if ((t.aud !== clientId && t.azp !== clientId) || !verified || Number(t.expires_in || 0) <= 0) throw new Error('admin_unauthorized');
+  if (t.aud !== clientId && t.azp !== clientId) throw new Error('google_client_mismatch'); // GOOGLE_CLIENT_ID ≠ Client ID της εφαρμογής
+  if (!email || !verified || Number(t.expires_in || 0) <= 0) throw new Error('google_token_invalid');
   if (roleOf_(email) !== 'super') throw new Error('not_super_admin');
   return newSession_(email);
 }

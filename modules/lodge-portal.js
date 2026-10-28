@@ -29,9 +29,11 @@ const SESS = 'nglg-portal-session';
 export const portalSession = () => { try { return JSON.parse(sessionStorage.getItem(SESS) || 'null'); } catch { return null; } };
 const setSession = (v) => { try { if (v) sessionStorage.setItem(SESS, JSON.stringify(v)); else sessionStorage.removeItem(SESS); } catch { /* */ } };
 export const portalReady = () => !!(cfg().url && (cfg().key || portalSession()));
-const ERR = { admin_unauthorized: 'Δεν έχετε συνδεθεί ως διαχειριστής της Πύλης (κωδικός email ή κλειδί).', unknown_action: 'Το Apps Script της Πύλης είναι παλιά έκδοση — αντικαταστήστε το Code.gs και κάντε νέα έκδοση (Deploy → Manage deployments).',
+const ERR = { admin_unauthorized: 'Δεν έχετε συνδεθεί ως διαχειριστής της Πύλης — πρώτα «🔐 Σύνδεση διαχειριστή»: email → ✉ Αποστολή κωδικού → κωδικός → ✓ Επιβεβαίωση. Η σύνδεση ισχύει 6 ώρες και μόνο σε αυτή την καρτέλα. Αν δεν έρχεται ο κωδικός, το email δεν είναι στο SUPER_ADMINS / ADMIN_EMAILS του Apps Script.', unknown_action: 'Το Apps Script της Πύλης είναι παλιά έκδοση — αντικαταστήστε το Code.gs και κάντε νέα έκδοση (Deploy → Manage deployments).',
   otp_wrong: 'Λάθος κωδικός.', otp_expired: 'Ο κωδικός έληξε ή χρησιμοποιήθηκε — ζητήστε νέο.', too_many_tries: 'Πολλές προσπάθειες — δοκιμάστε σε 15 λεπτά.', bad_email: 'Μη έγκυρο email.',
-  not_super_admin: 'Η «Σύνδεση με Google» είναι μόνο για τον super admin (SUPER_ADMINS)· οι άλλοι διαχειριστές μπαίνουν με κωδικό email.', no_google_client_id: 'Λείπει το GOOGLE_CLIENT_ID στις Script Properties της Πύλης.' };
+  not_super_admin: 'Η «Σύνδεση με Google» είναι μόνο για τον super admin (SUPER_ADMINS)· οι άλλοι διαχειριστές μπαίνουν με κωδικό email.', no_google_client_id: 'Λείπει το GOOGLE_CLIENT_ID στις Script Properties της Πύλης.',
+  google_client_mismatch: 'Το GOOGLE_CLIENT_ID στις Script Properties της Πύλης δεν είναι ίδιο με το Google Client ID της εφαρμογής (Ρυθμίσεις → Google). Αντιγράψτε το ακριβώς — ή συνδεθείτε με κωδικό email.',
+  google_token_invalid: 'Η Google δεν επιβεβαίωσε τη σύνδεση (λείπει το email ή έληξε). Δοκιμάστε ξανά ή συνδεθείτε με κωδικό email.' };
 export async function portalApi(body) { return api(body); }
 async function api(body) {
   const { url, key } = cfg(), sess = portalSession();

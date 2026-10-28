@@ -37,8 +37,8 @@ assert.equal(E.call({ action: 'admin_otp_verify', email: 'second@example.com', c
 E.tokens.good = { aud: 'cid.apps.googleusercontent.com', email: 'super@example.com', email_verified: 'true', expires_in: '3500' };
 E.tokens.other = { aud: 'other-app', email: 'super@example.com', email_verified: 'true', expires_in: '3500' };
 E.tokens.admin = { aud: 'cid.apps.googleusercontent.com', email: 'gs@example.com', email_verified: 'true', expires_in: '3500' };
-assert.equal(E.call({ action: 'admin_google', access_token: 'other' }).error, 'admin_unauthorized');
-assert.equal(E.call({ action: 'admin_google', access_token: 'bad' }).error, 'admin_unauthorized');
+assert.equal(E.call({ action: 'admin_google', access_token: 'other' }).error, 'google_client_mismatch');
+assert.equal(E.call({ action: 'admin_google', access_token: 'bad' }).error, 'google_token_invalid');
 assert.equal(E.call({ action: 'admin_google', access_token: 'admin' }).error, 'not_super_admin');
 r = E.call({ action: 'admin_google', access_token: 'good' });
 assert.ok(r.ok && r.role === 'super' && r.session, JSON.stringify(r));
