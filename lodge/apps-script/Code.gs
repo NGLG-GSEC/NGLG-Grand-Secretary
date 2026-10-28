@@ -41,6 +41,19 @@ function doGet() {
     lodges: Object.keys(codes_()).length });
 }
 
+// Έλεγχος από τον editor: επιλέξτε «testSetup» → ▶ Run (δίνει και την άδεια αποστολής email). Γράφει στο Execution log τι λείπει
+// και στέλνει δοκιμαστικό email σε κάθε SUPER_ADMINS / ADMIN_EMAILS — αν φτάσει, θα φτάνει και ο κωδικός σύνδεσης.
+function testSetup() {
+  const to = emails_('SUPER_ADMINS').concat(emails_('ADMIN_EMAILS'));
+  Logger.log(JSON.stringify({ version: VERSION, superAdmins: emails_('SUPER_ADMINS').length, adminEmails: emails_('ADMIN_EMAILS').length,
+    googleClientId: prop_('GOOGLE_CLIENT_ID') ? 'ρυθμίστηκε' : 'ΛΕΙΠΕΙ', announceEmails: emails_('ANNOUNCE_EMAILS').length, mailQuota: MailApp.getRemainingDailyQuota() }));
+  if (!to.length) { Logger.log('ΛΕΙΠΟΥΝ τα SUPER_ADMINS / ADMIN_EMAILS στις Script Properties — χωρίς αυτά δεν στέλνεται κωδικός.'); return; }
+  to.forEach(function (email) {
+    MailApp.sendEmail(email, 'Δοκιμή — Πύλη Γραμματέων Στοών', 'Η αποστολή email της Πύλης λειτουργεί. Ρόλος: ' + roleOf_(email) + '.', { name: 'Μεγάλη Γραμματεία ΕΜΣτΕ' });
+    Logger.log('Δοκιμαστικό email → ' + email + ' (' + roleOf_(email) + ')');
+  });
+}
+
 function doPost(e) {
   let b;
   try { b = JSON.parse(e.postData.contents); } catch (err) { return json_({ ok: false, error: 'bad_request' }); }
