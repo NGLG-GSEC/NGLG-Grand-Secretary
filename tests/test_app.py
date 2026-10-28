@@ -4211,3 +4211,14 @@ def test_registry_audit_announcements(app):
     app.go('/registry-audit?kind=Διαγραφή')
     assert 'Ανυψωμένος' not in app.text('table')
     assert app.page.locator('.navdrop-menu a[href="#/registry-audit"]').count() == 1
+
+
+def test_concurrent_saves_do_not_lose_data(app):
+    # Δύο αποθηκεύσεις ταυτόχρονα (π.χ. συγχρονισμός στο παρασκήνιο + χρήστης): καμία δεν γράφει πάνω στην άλλη με παλιό αντίγραφο πίνακα
+    app.connect_local()
+    r = app.page.evaluate("""async () => { const {db} = await import('./core/store.js');
+      const slow = db.save('αργή', async (tx) => { tx.all('member_registry'); await new Promise((ok) => setTimeout(ok, 300)); tx.insert('member_registry', { surname: 'Ταυτόχρονος', first_name: 'Α' }); });
+      const fast = db.save('γρήγορη', (tx) => { tx.insert('member_registry', { surname: 'Ταυτόχρονος', first_name: 'Β' }); });
+      await Promise.all([slow, fast]);
+      return db.all('member_registry').filter((m) => m.surname === 'Ταυτόχρονος').map((m) => m.first_name).sort(); }""")
+    assert r == ['Α', 'Β'], r

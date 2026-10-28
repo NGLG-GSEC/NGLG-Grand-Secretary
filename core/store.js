@@ -147,11 +147,19 @@ export class Store {
   async idle(quiet = 400) {
     for (let i = 0; i < 300; i++) { if (!this.busy) { await new Promise((r) => setTimeout(r, quiet)); if (!this.busy) return; } else await new Promise((r) => setTimeout(r, 100)); }
   }
-  async save(message, fn) {
+  // Οι αποθηκεύσεις γίνονται μία-μία (ουρά): αλλιώς δύο ταυτόχρονες (π.χ. αυτόματος συγχρονισμός στο παρασκήνιο + αποθήκευση του χρήστη)
+  // μπορούσαν να γράψουν η μία πάνω στην άλλη με παλιό αντίγραφο πίνακα και να χαθούν εγγραφές.
+  save(message, fn) {
+    const run = (this._saveQueue || Promise.resolve()).then(() => this._save(message, fn));
+    this._saveQueue = run.catch(() => {});
+    return run;
+  }
+  async _save(message, fn) {
     this.busy++; this.emit({ type: 'busy', busy: this.busy });
     try {
       for (let attempt = 0; attempt < 6; attempt++) {
         if (attempt) await this.refresh(true);
+        const base = this.head; // η έκδοση πάνω στην οποία χτίζεται η αλλαγή: αν άλλαξε στο μεταξύ → σύγκρουση και νέα προσπάθεια
         const tx = new Tx(this);
         const result = await fn(tx);
         if (!tx.dirty.size && !tx.files.length) return result;
@@ -161,7 +169,8 @@ export class Store {
           else changes.push({ path: `data/${name}.json`, data: serialize(tx.tables[name]) });
         }
         try {
-          const res = await this.backend.commit(this.head, changes, message);
+          if (this.head !== base) throw new Conflict();
+          const res = await this.backend.commit(base, changes, message);
           for (const name of tx.dirty) { if (name === 'settings') this.settings = tx.settingsCopy; else this.tables[name] = tx.tables[name]; }
           for (const [p, s] of Object.entries(res.files)) { if (s) this.files[p] = s; else delete this.files[p]; }
           this.head = res.head;
