@@ -296,7 +296,7 @@
   const found = (text, err) => { const el = $('#lfound'); el.textContent = text; el.className = 'lfound' + (err ? ' err' : ''); };
   async function lookup() {
     const n = lno(); lookN = n; $('#lbtn').disabled = true;
-    if (!n) { found(''); return; }
+    if (!n || !API) { found(''); return; } // χωρίς διεύθυνση της Πύλης: μόνο το γενικό μήνυμα (όχι διπλό)
     try {
       const r = await call({ action: 'lodge_lookup', lodge: n });
       if (n !== lookN) return;
