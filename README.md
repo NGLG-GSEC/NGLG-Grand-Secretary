@@ -11,7 +11,7 @@ The way in to the work of the Secretariat. Everything opens at one address: the 
 `https://nglg-gsec.github.io/NGLG-Grand-Secretary/`
 
 Τρέχει **μόνο στο GitHub** (χωρίς Render, χωρίς κόστος)· τα δεδομένα φυλάσσονται στο ιδιωτικό αποθετήριο
-`NGLG-GSEC/nglg-grammateia-data`. Πρώτη χρήση και μεταφορά δεδομένων: [docs/ΕΦΑΡΜΟΓΗ.md](docs/ΕΦΑΡΜΟΓΗ.md). Πού βρίσκεται τι (GitHub, Google Drive, Apps Script) και πώς αλλάζουν οι κωδικοί: [docs/ΥΠΟΔΟΜΗ_ΚΑΙ_ΚΩΔΙΚΟΙ.md](docs/ΥΠΟΔΟΜΗ_ΚΑΙ_ΚΩΔΙΚΟΙ.md).
+`NGLG-GSEC/nglg-grammateia-data`. Πρώτη χρήση και μεταφορά δεδομένων: [docs/ΕΦΑΡΜΟΓΗ.md](docs/ΕΦΑΡΜΟΓΗ.md). Πού βρίσκεται τι (GitHub, Google Drive, Apps Script) και πώς αλλάζουν οι κωδικοί: [docs/ΥΠΟΔΟΜΗ_ΚΑΙ_ΚΩΔΙΚΟΙ.md](docs/ΥΠΟΔΟΜΗ_ΚΑΙ_ΚΩΔΙΚΟΙ.md). Ενεργοποίηση Πύλης Γραμματέων βήμα βήμα, με τον λογαριασμό Google κάθε βήματος: [docs/ΟΔΗΓΟΣ_ΕΝΕΡΓΟΠΟΙΗΣΗΣ_ΠΥΛΗΣ.md](docs/ΟΔΗΓΟΣ_ΕΝΕΡΓΟΠΟΙΗΣΗΣ_ΠΥΛΗΣ.md).
 
 Απευθείας σύνδεσμοι:
 [Νέα Επιστολή](https://nglg-gsec.github.io/NGLG-Grand-Secretary/#/letters/new) · [Νέο Διάταγμα](https://nglg-gsec.github.io/NGLG-Grand-Secretary/#/decrees/new) · [Επισκέψεις Στοών](https://nglg-gsec.github.io/NGLG-Grand-Secretary/#/visits) ·
