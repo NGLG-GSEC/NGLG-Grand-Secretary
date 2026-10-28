@@ -641,3 +641,7 @@ dialog.rptask input[type=radio] { width: auto; margin-top: 3px; }
 /* Λογότυπο / Θυρεός Στοάς */
 img.lodge-logo{width:44px;height:44px;object-fit:contain;display:block}
 img.lodge-logo-big{max-width:220px;max-height:220px;object-fit:contain;display:block;margin:8px 0}
+
+/* Πύλη Γραμματέων: email Γραμματέα ανά Στοά */
+input.secmail{width:100%;min-width:190px;margin-top:4px;font-size:13px}
+input.secmail.saved{border-color:#16a34a;background:#f0fdf4}

@@ -3938,3 +3938,28 @@ def test_lodge_portal_admin_login_otp_and_google(app):
     app.page.click('[data-act=glogin]')
     app.page.wait_for_selector('text=Συνδεθήκατε ως super@example.com')
     assert 'super admin' in app.text('#padm')
+
+
+def test_lodge_portal_secretary_emails_manual_and_bulk(app):
+    # Πύλη: email Γραμματέα ανά Στοά — χειρόγραφα στη στήλη «Email» και μαζικά με επικόλληση (αριθμός/όνομα Στοάς · email · Γραμματέας)
+    app.connect_local()
+    app.go('/lodge-portal')
+    app.page.wait_for_selector('input.secmail')
+    l2 = app.page.evaluate("async () => (await import('./core/store.js')).db.all('lodges').find((x) => x.number === '2').id")
+    inp = app.page.locator(f'input.secmail[data-id="{l2}"]')
+    inp.fill('akropolis.gr@example.com')
+    inp.press('Tab')
+    app.page.wait_for_selector('input.secmail.saved')
+    app.page.evaluate("document.getElementById('secbulk').open = true")
+    app.page.fill('#secPaste', 'Αριθμός\tEmail Γραμματέα\tΓραμματέας\n118\tAtlas.Gr@Example.com\tΔοκιμαστής Γεώργιος\nΠΑΡΘΕΝΩΝ;parthenon@example.com\n999\tx@example.com\nάσχετη γραμμή')
+    app.page.click('[data-act=secPreview]')
+    app.page.wait_for_selector('#secPrev table')
+    prev = app.text('#secPrev')
+    assert 'atlas.gr@example.com' in prev and 'Δοκιμαστής Γεώργιος' in prev and 'parthenon@example.com' in prev and 'Δεν αναγνωρίστηκαν (2)' in prev, prev
+    app.page.on('dialog', lambda d: d.accept())
+    app.page.click('[data-act=secSave]')
+    app.page.wait_for_selector('text=Καταχωρίστηκαν τα email Γραμματέων σε 2 Στοές')
+    r = app.page.evaluate("""async () => { const {db} = await import('./core/store.js'); const g = (n) => db.all('lodges').find((x) => x.number === n);
+      return [g('2').secretary_email, g('118').secretary_email, g('118').secretary, g('3').secretary_email]; }""")
+    assert r == ['akropolis.gr@example.com', 'atlas.gr@example.com', 'Δοκιμαστής Γεώργιος', 'parthenon@example.com'], r
+    assert '3 με email Γραμματέα' in app.page.locator('h2').first.inner_text()

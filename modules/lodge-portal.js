@@ -4,7 +4,7 @@
 // ιστορικό και επαναφορά έκδοσης. Μία πηγή: το Μητρώο της εφαρμογής· ο server κρατά μόνο αντίγραφο ανά Στοά και τις εκδόσεις.
 import { db } from '../core/store.js';
 import { module, bind, toast, table, go, flash } from '../core/app.js';
-import { esc, sortBy, today, fmtDate, EMAIL_RE } from '../core/util.js';
+import { esc, sortBy, today, fmtDate, EMAIL_RE, parsePasted } from '../core/util.js';
 import { regCode } from '../core/people.js';
 import { lodgesAll, lodgeNoKey } from './lodges.js';
 import { capacityOf, insertMember, deregEverywhere } from './members.js';
@@ -65,6 +65,28 @@ export async function codeHash(no, code) {
 }
 const codeOf = (no) => db.all('lodge_portal_codes').find((c) => lodgeNoKey(c.lodge_number) === lodgeNoKey(no));
 const lodgeEmails = (l) => [...new Set([l.email, l.secretary_email].map(S).filter((e) => EMAIL_RE.test(e)))];
+// Μαζική καταχώριση email Γραμματέων (επικόλληση από Excel ή κείμενο): κάθε γραμμή «αριθμός Στοάς · email [· ονοματεπώνυμο Γραμματέα]»
+// → [{ lodge, email, name }] και γραμμές που δεν αναγνωρίστηκαν. Ταύτιση με τον αριθμό (ή το όνομα) της Στοάς του καταλόγου.
+export function parseSecretaryEmails(text, lodges = lodgesAll()) {
+  const ok = [], bad = [];
+  for (const row of parsePasted(String(text || ''))) {
+    const cells = row.flatMap((c) => String(c ?? '').split(/[;|]/)).map(S).filter(Boolean); if (!cells.length) continue; // και «;» ή «|» ως διαχωριστικό
+    const line = cells.join(' '), email = (line.match(/[^\s@;,<>()]+@[^\s@;,<>()]+\.[^\s@;,<>()]+/) || [])[0];
+    if (!email) { if (!/email|αριθ|στοα|στοά|γραμματ/i.test(line)) bad.push(line); continue; } // γραμμή επικεφαλίδων: παραλείπεται
+    const rest = cells.filter((c) => !c.includes(email));
+    const numCell = rest.find((c) => /^(\d{1,3}|Φ)$/i.test(c.replace(/^(αρ\.?|no\.?)\s*/i, ''))) || (line.replace(email, ' ').match(/(?:^|\s)(\d{1,3})(?=\s|$)/) || [])[1] || '';
+    const no = numCell ? lodgeNoKey(String(numCell).replace(/^(αρ\.?|no\.?)\s*/i, '')) : '';
+    let l = no ? lodges.find((x) => lodgeNoKey(x.number) === no) : null;
+    if (!l) { const t = rest.map((c) => c.toUpperCase()); l = lodges.find((x) => t.some((c) => c === String(x.name).toUpperCase() || c.startsWith(String(x.name).toUpperCase() + ' '))) || null; }
+    if (!l || !EMAIL_RE.test(email)) { bad.push(line); continue; }
+    const name = rest.filter((c) => c !== numCell && String(c).toUpperCase() !== String(l.name).toUpperCase() && !/^(\d{1,3}|Φ)$/i.test(c) && !/@/.test(c) && /[Α-Ωα-ωA-Za-z]{2}/.test(c) && !String(l.name).toUpperCase().startsWith(String(c).toUpperCase())).join(' ');
+    ok.push({ lodge: l, email: email.toLowerCase(), name });
+  }
+  return { ok, bad };
+}
+export async function saveSecretaryEmails(list, msg = 'Πύλη Γραμματέων: email Γραμματέων') {
+  await db.save(`${msg} (${list.length} Στοές)`, (tx) => { for (const x of list) tx.update('lodges', x.lodge.id, { secretary_email: x.email, ...(x.name ? { secretary: x.name } : {}) }); });
+}
 
 // ---------------------------------------------------------------- μητρώο Στοάς για τον server
 function officeOf(m, rows) {
@@ -176,7 +198,8 @@ function portalPage({ query = {} }) {
   const { url, key } = cfg(), sess = portalSession(), ls = lodgesAll(true).filter((l) => l.status !== 'Ανενεργή').sort((a, b) => (Number(a.number) || 1e9) - (Number(b.number) || 1e9));
   const withCode = ls.filter((l) => codeOf(l.number)), log = sortBy(db.all('lodge_portal_log'), (x) => x.at || '').reverse().slice(0, 60);
   const rows = ls.map((l) => { const c = codeOf(l.number), em = lodgeEmails(l);
-    return [`<b>${esc(l.number)}</b>`, `${esc(l.name)}<br><small class="muted">${esc(l.provincial || '')}</small>`, em.length ? esc(em.join(', ')) : '<span class="vwarn">χωρίς email</span>',
+    return [`<b>${esc(l.number)}</b>`, `${esc(l.name)}<br><small class="muted">${esc(l.provincial || '')}</small>`,
+      `${S(l.email) ? `<small>Στοά: ${esc(l.email)}</small>` : '<small class="muted">Στοά: —</small>'}<br><input class="secmail" type="email" data-id="${l.id}" value="${esc(S(l.secretary_email))}" placeholder="email Γραμματέα" aria-label="Email Γραμματέα — Στοά ${esc(l.name)} ${esc(l.number)}">${em.length ? '' : '<br><span class="vwarn">χωρίς email</span>'}`,
       c ? `<code class="pcode" data-code="${esc(c.code)}">••••-••••</code> <button type="button" class="btn small" data-act="reveal" data-n="${esc(l.number)}" aria-label="Εμφάνιση κωδικού">👁</button><br><small class="muted">${esc(fmtDate(c.created_on))}${c.sent_on ? ' · στάλθηκε ' + esc(fmtDate(c.sent_on)) : ''}</small>` : '<span class="muted">—</span>',
       `<button type="button" class="btn small" data-act="gen" data-n="${esc(l.number)}">${c ? '🔁 Νέος' : '+ Κωδικός'}</button>${c && em.length ? ` <button type="button" class="btn small primary" data-act="send" data-n="${esc(l.number)}">✉ Αποστολή</button>` : ''} <a class="btn small" href="#/lodge-portal?v=${encodeURIComponent(l.number)}">Εκδόσεις</a>`]; });
   const vLodge = query.v ? ls.find((l) => lodgeNoKey(l.number) === lodgeNoKey(query.v)) : null;
@@ -200,7 +223,14 @@ ${sess ? '' : `<div class="toolbar" style="margin-top:8px"><button type="button"
 <div class="toolbar"><button type="button" class="btn primary" data-act="pull">⬇ Λήψη αλλαγών Γραμματέων</button><button type="button" class="btn" data-act="push">⬆ Δημοσίευση μητρώων (${withCode.length} Στοές)</button>
 <button type="button" class="btn" data-act="genAll">+ Κωδικοί για όσες δεν έχουν</button><button type="button" class="btn" data-act="sendAll">✉ Αποστολή κωδικών σε όλες</button><span class="muted" id="pst"></span></div>
 ${vLodge ? `<div class="card" id="vers"><h2 style="margin-top:0">Εκδόσεις Μητρώου · Στοά ${esc(vLodge.name)} ${esc(vLodge.number)}</h2><div id="vlist" class="muted">Φόρτωση…</div><p><a href="#/lodge-portal">← Όλες οι Στοές</a></p></div>` : ''}
-<h2>Στοές & κωδικοί <small class="muted">${withCode.length} από ${ls.length} με κωδικό</small></h2>${table(['Αρ.', 'Στοά', 'Email Στοάς', 'Κωδικός', 'Ενέργειες'], rows)}
+<h2>Στοές & κωδικοί <small class="muted">${withCode.length} από ${ls.length} με κωδικό · ${ls.filter((l) => S(l.secretary_email)).length} με email Γραμματέα</small></h2>
+<details class="card fold" id="secbulk"><summary><b>📋 Email Γραμματέων — μαζική καταχώριση</b> <small class="muted">(επικόλληση από Excel ή κείμενο)</small></summary>
+<p class="muted">Μία γραμμή ανά Στοά: <b>αριθμός Στοάς · email Γραμματέα</b> και, προαιρετικά, <b>ονοματεπώνυμο Γραμματέα</b> (σε οποιαδήποτε σειρά· δεκτό και το όνομα της Στοάς αντί για αριθμό).
+Π.χ. <code>118	grammateas@example.com	Παπαδόπουλος Γεώργιος</code>. Χειρόγραφα: γράψτε το email στη στήλη «Email» κάθε Στοάς παρακάτω (αποθηκεύεται αμέσως).
+Και από Excel όλου του καταλόγου: <a href="#/lodges">Συμβολικές Στοές</a> → Εισαγωγή (στήλες «Αριθμός», «Email Γραμματέα», «Γραμματέας»).</p>
+<textarea id="secPaste" class="short" placeholder="118	grammateas@example.com	Ονοματεπώνυμο"></textarea>
+<div class="toolbar"><button type="button" class="btn" data-act="secPreview">Προεπισκόπηση</button><button type="button" class="btn primary" data-act="secSave" hidden>💾 Καταχώριση</button></div><div id="secPrev"></div></details>
+${table(['Αρ.', 'Στοά', 'Email (Στοάς / Γραμματέα)', 'Κωδικός', 'Ενέργειες'], rows)}
 <h2>Ιστορικό αλλαγών Γραμματέων</h2>${log.length ? table(['Πότε', 'Στοά', 'Έκδοση', 'Σημείωση', 'Αλλαγές'], log.map((x) => [esc(fmtDate(String(x.at || '').slice(0, 10))), `${esc(x.lodge_name)} ${esc(x.lodge_number)}`, `<code>${esc(x.version_name)}</code>${x.source === 'restore' ? ' <span class="pill">επαναφορά</span>' : ''}`,
   esc([x.note_type, x.note].filter(Boolean).join(' — ')) + (x.by ? `<br><small class="muted">${esc(x.by)}</small>` : ''), `<small style="white-space:pre-wrap">${esc(x.summary)}</small>`])) : '<p class="muted">Δεν έχουν γίνει ακόμη αλλαγές από Γραμματείς.</p>'}`,
     mount(el) {
@@ -233,7 +263,31 @@ ${vLodge ? `<div class="card" id="vers"><h2 style="margin-top:0">Εκδόσει�
         }
         st.textContent = ''; flash(`Στάλθηκαν ${ok} από ${list.length} κωδικούς.`); go('/lodge-portal', query);
       };
+      // χειρόγραφο email Γραμματέα ανά Στοά: αποθήκευση με την αλλαγή του πεδίου
+      el.addEventListener('change', async (e) => {
+        const i = e.target.closest('.secmail'); if (!i) return;
+        const l = db.get('lodges', Number(i.dataset.id)), v = S(i.value).toLowerCase();
+        if (!l || v === S(l.secretary_email).toLowerCase()) return;
+        if (v && !EMAIL_RE.test(v)) { toast('Μη έγκυρο email.', 'error'); i.value = S(l.secretary_email); return; }
+        i.disabled = true;
+        try { await db.save(`Στοά ${l.number} · ${l.name}: email Γραμματέα`, (tx) => tx.update('lodges', l.id, { secretary_email: v })); i.classList.add('saved'); toast(`✓ Email Γραμματέα — Στοά ${l.name} ${l.number}`); }
+        catch (err) { toast(err.message || String(err), 'error'); }
+        i.disabled = false;
+      });
+      let secList = [];
       bind(el, {
+        secPreview() {
+          const r = parseSecretaryEmails(el.querySelector('#secPaste').value, lodgesAll());
+          secList = r.ok;
+          el.querySelector('#secPrev').innerHTML = (r.ok.length ? table(['Στοά', 'Email Γραμματέα', 'Γραμματέας', 'Πριν'], r.ok.map((x) => [`${esc(x.lodge.number)} ${esc(x.lodge.name)}`, esc(x.email), esc(x.name || '—'), `<small class="muted">${esc(S(x.lodge.secretary_email) || '—')}</small>`])) : '<p class="muted">Δεν αναγνωρίστηκε καμία γραμμή.</p>')
+            + (r.bad.length ? `<p class="vwarn">Δεν αναγνωρίστηκαν (${r.bad.length}): ${esc(r.bad.slice(0, 10).join(' · '))}</p>` : '');
+          el.querySelector('[data-act=secSave]').hidden = !r.ok.length;
+        },
+        async secSave() {
+          if (!secList.length) return;
+          if (!confirm(`Καταχώριση email Γραμματέα σε ${secList.length} Στοές;`)) return;
+          await saveSecretaryEmails(secList); flash(`Καταχωρίστηκαν τα email Γραμματέων σε ${secList.length} Στοές.`); go('/lodge-portal', query);
+        },
         async test() { const r = await busy('Έλεγχος…', () => api({ action: 'admin_status' })); if (r) toast(`✓ Η Πύλη απαντά (έκδοση ${r.version}, ${r.lodges} Στοές με κωδικό)${r.who ? ' · ' + r.who : ''}.`); },
         async glogin() { const r = await busy('Σύνδεση με Google…', portalGoogleLogin); if (r) { flash(`✓ Συνδεθήκατε ως ${r.email} (super admin).`); go('/lodge-portal', query); } },
         async otpSend() { const em = el.querySelector('#otpEmail').value; const r = await busy('Αποστολή κωδικού…', () => portalOtpSend(em)); if (r) { toast('Αν το email είναι διαχειριστή της Πύλης, στάλθηκε κωδικός (ισχύει 10 λεπτά).'); el.querySelector('#otpCode').focus(); } },
