@@ -3819,10 +3819,10 @@ def test_approval_stamp_draws_lodge_logo(app, tmp_path):
         return Array.from(c.getContext('2d').getImageData(265, 458, 1, 1).data).slice(0, 3); };
       const c = drawApproval(document.createElement('canvas'), { protocol: '1', date: '2026-11-02', lodge: approvalLodge('118') }, { logo });
       const at = (x, y) => Array.from(c.getContext('2d').getImageData(x, y, 1, 1).data).slice(0, 3);
-      return { without: px(null), with: px(logo), corner: at(108, 325), outside: at(100, 458), below: at(265, 640) }; }""")
+      return { without: px(null), with: px(logo), top: at(265, 325), corner: at(108, 325), outside: at(100, 458), below: at(265, 640) }; }""")
     assert r['without'] == [255, 255, 255] and r['with'] != [255, 255, 255], r
-    # διπλάσιο με περικοπή: το σχέδιο γεμίζει και τις γωνίες του πλαισίου, αλλά δεν βγαίνει έξω από αυτό
-    assert r['corner'] != [255, 255, 255] and r['outside'] == [255, 255, 255] and r['below'] == [255, 255, 255], r
+    # ολόκληρος (fit): τετράγωνος θυρεός → πλήρες ύψος του πλαισίου, κενό στα πλάγια, τίποτα έξω από το πλαίσιο
+    assert r['top'] != [255, 255, 255] and r['corner'] == [255, 255, 255] and r['outside'] == [255, 255, 255] and r['below'] == [255, 255, 255], r
     # το παράθυρο του σήματος φορτώνει τον θυρεό της επιλεγμένης Στοάς
     app.go('/letters/new')
     app.page.wait_for_selector('#tplSel')
