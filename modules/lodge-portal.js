@@ -7,15 +7,16 @@ import { module, bind, toast, table, go, flash } from '../core/app.js';
 import { esc, sortBy, today, fmtDate, EMAIL_RE, parsePasted } from '../core/util.js';
 import { regCode } from '../core/people.js';
 import { lodgesAll, lodgeNoKey } from './lodges.js';
+import { provinceByShort } from './provinces.js';
 import { capacityOf, insertMember, deregEverywhere } from './members.js';
 import { epeteiridaOf } from './epeteirida-table.js';
 import { senderFor } from '../core/mail.js';
 
 export const PORTAL_PAGE = 'https://nglg-gsec.github.io/NGLG-Grand-Secretary/lodge/';
 const MEMBER_FIELDS = ['surname', 'first_name', 'email', 'mobile', 'degree', 'date_ea', 'date_fc', 'date_mm'];
-const LODGE_FIELDS = ['member_status', 'capacity', 'capacity_date', 'jw_date', 'sw_date', 'wm_date', 'dereg_date'];
+const LODGE_FIELDS = ['member_status', 'capacity', 'capacity_date', 'jw_date', 'sw_date', 'wm_date', 'dereg_date', 'fee_rank'];
 const LABELS = { surname: 'Επώνυμο', first_name: 'Όνομα', email: 'Email', mobile: 'Κινητό', degree: 'Βαθμός', date_ea: 'Ημ. μύησης', date_fc: 'Ημ. Εταίρου', date_mm: 'Ημ. Διδασκάλου',
-  member_status: 'Κατάσταση', capacity: 'Ιδιότητα', capacity_date: 'Ημ. ιδιότητας', jw_date: 'Ημ. Β΄ Επόπτη', sw_date: 'Ημ. Α΄ Επόπτη', wm_date: 'Ημ. Σεβασμίου', dereg_date: 'Ημ. διαγραφής' };
+  member_status: 'Κατάσταση', capacity: 'Ιδιότητα', capacity_date: 'Ημ. ιδιότητας', jw_date: 'Ημ. Β΄ Επόπτη', sw_date: 'Ημ. Α΄ Επόπτη', wm_date: 'Ημ. Σεβασμίου', dereg_date: 'Ημ. διαγραφής', fee_rank: 'Στοά συνδρομής' };
 
 db.defaultSettings({ lodge_portal_url: '', lodge_portal_key: '' });
 db.seed('lodge_portal_codes', () => []);
@@ -110,7 +111,7 @@ export function lodgeSnapshot(l) {
       lodge: { ...Object.fromEntries(LODGE_FIELDS.map((k) => [k, S(r[k])])), capacity: S(capacityOf(r)) },
       ro: { registry: regCode(m), ...officeOf(m, byM[m.id] || []) } });
   }
-  return { meta: { number: no, name: S(l.name), provincial: S(l.provincial), emails: lodgeEmails(l), login_email: loginEmail(l) }, members: sortBy(members, 'surname', 'first_name') };
+  return { meta: { number: no, name: S(l.name), provincial: S(l.provincial), emails: lodgeEmails(l), login_email: loginEmail(l), province_email: S((provinceByShort(S(l.provincial)) || {}).email).toLowerCase() }, members: sortBy(members, 'surname', 'first_name') };
 }
 
 // Δημοσίευση: τα μητρώα των Στοών με κωδικό + τα hash των κωδικών (μόνο όσες άλλαξαν γίνονται νέα έκδοση στον server)
@@ -151,7 +152,8 @@ export function applyChange(tx, rec) {
     lines.push(`${c.name}: ${Object.keys(f).map((k) => `${LABELS[k] || k} ${f[k][0] || '—'} → ${f[k][1] || '—'}`).join('; ')}`);
   }
   tx.insert('lodge_portal_log', { rec_id: rec.id, lodge_number: no, lodge_name: lodge.name || rec.lodge_name || '', version_name: rec.version_name, at: rec.at, source: rec.source || 'lodge',
-    note_type: rec.note_type || '', note: rec.note || '', by: rec.by || '', summary: lines.join('\n'), applied_on: today() });
+    note_type: rec.note_type || '', note: rec.note || '', by: rec.by || '', summary: lines.join('\n'), applied_on: today(),
+    changes: rec.changes || [], announced: (rec.announced || []).map((a) => a.subject), announced_to: (rec.announced_to || []).join(', ') });
   return lines.length;
 }
 

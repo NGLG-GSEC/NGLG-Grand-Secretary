@@ -3346,7 +3346,7 @@ def test_members_export_active_lodge_province(app, tmp_path):
 def test_lodge_portal_apps_script_logic():
     # Ο server της Πύλης (lodge/apps-script/Code.gs) με ψεύτικο Drive/Mail: δημοσίευση → σύνδεση → αλλαγή (έκδοση + email) → λήψη → επαναφορά
     import subprocess
-    for t in ('lodge_portal.test.js', 'lodge_portal_admin.test.js', 'province_secretaries.test.js', 'lodge_email_login.test.js'):  # και σύνδεση διαχειριστή: OTP email / Google (super admin)
+    for t in ('lodge_portal.test.js', 'lodge_portal_admin.test.js', 'province_secretaries.test.js', 'lodge_email_login.test.js', 'announcements.test.js'):  # και σύνδεση διαχειριστή: OTP email / Google (super admin)
         r = subprocess.run(['node', str(ROOT / 'tests' / 'gas' / t)], capture_output=True, text=True)
         assert r.returncode == 0, t + ': ' + r.stdout + r.stderr
 
@@ -4159,3 +4159,44 @@ def test_lodge_emails_paste_register_format(app):
       const {loginEmail} = await import('./modules/lodge-portal.js');
       return [g('2').email, g('104').email, g('Φ').email, g('6') ? g('6').email || '' : '', g('2').name, loginEmail(g('104'))]; }""")
     assert r == ['akropolis.test@example.com', 'akro104.test@example.com', 'phoenix.test@example.com', '', 'ΑΚΡΟΠΟΛΙΣ', 'akro104.test@example.com'], r
+
+
+def test_registry_audit_announcements(app):
+    # Αναγγελίες: η αλλαγή Γραμματέα (από την Πύλη) περνά στο Μητρώο και φαίνεται στον «ΕΛΕΓΧΟ ΑΛΛΑΓΩΝ» ανά μέλος, με είδος, πριν → τώρα, αναγγελία, έκδοση
+    import json as _j
+    app.connect_local()
+    add_member(app, surname='Ανυψωμένος', first='Γεώργιος', email='an@example.com', mobile='6944000031', lodges='ΣΩΚΡΑΤΗΣ | 31 | 1. ΤΑΚΤΙΚΟ')
+    mid = app.page.evaluate("async () => (await import('./core/store.js')).db.all('member_registry').find((x) => x.surname === 'Ανυψωμένος').id")
+    API = 'https://script.google.com/macros/s/TESTAUD/exec'
+    pushed = []
+    change = {'id': 'ΑλλαγήΣτοά31έκδοση2-28Οκτ26', 'lodge': '31', 'lodge_name': 'ΣΩΚΡΑΤΗΣ', 'version': 2, 'version_name': 'ΑλλαγήΣτοά31έκδοση2-28Οκτ26', 'at': '2026-10-28T09:30:00Z',
+              'source': 'lodge', 'note_type': 'Αναγγελία Διδασκάλου Τέκτονος', 'note': '', 'by': 'Γραμματέας (sokr@example.com)',
+              'changes': [{'id': mid, 'name': 'Ανυψωμένος Γεώργιος', 'fields': {'degree': ['Εταίρος', 'Διδάσκαλος'], 'date_mm': ['', '2026-10-20'], 'fee_rank': ['1', '2']}}],
+              'announced': [{'id': mid, 'subject': 'Αναγγελία μέλους Ανυψωμένος Γεώργιος — Στοά ΣΩΚΡΑΤΗΣ 31 — Ανύψωση σε Διδάσκαλο · Στοά συνδρομής: 2η'}], 'announced_to': ['piraeus.secretary@nglgreece.gr', 'gs@example.com']}
+    pending = [change]
+
+    def api(route):
+        b = _j.loads(route.request.post_data or '{}')
+        a = b.get('action')
+        if a == 'admin_pull': return route.fulfill(json={'ok': True, 'changes': pending})
+        if a == 'admin_ack': pending.clear(); return route.fulfill(json={'ok': True})
+        if a == 'admin_push': pushed.append(b); return route.fulfill(json={'ok': True, 'written': 1, 'skipped': []})
+        return route.fulfill(json={'ok': True, 'changes': [], 'provinces': 0, 'lodges': 0})
+    app.page.route(API, api)
+    app.page.evaluate(f"""async () => {{ const {{db}} = await import('./core/store.js'); await db.save('x', (tx) => {{ tx.setting('lodge_portal_url', '{API}'); tx.setting('lodge_portal_key', 'k');
+      tx.update('lodges', tx.all('lodges').find((l) => l.number === '31').id, {{ email: 'sokr@example.com' }}); }}); }}""")
+    app.go('/lodge-portal')
+    app.page.click('[data-act=pull]')
+    app.page.wait_for_selector('text=Πέρασαν στο Μητρώο 1 αλλαγή')
+    r = app.page.evaluate("""async () => { const {db} = await import('./core/store.js'); const m = db.all('member_registry').find((x) => x.surname === 'Ανυψωμένος');
+      const l = db.all('member_lodges').find((x) => x.member_id === m.id); return [m.degree, m.date_mm, String(l.fee_rank)]; }""")
+    assert r == ['Διδάσκαλος', '2026-10-20', '2'], r
+    meta = [L['meta'] for p in pushed for L in p.get('lodges', []) if L['meta']['number'] == '31'][-1]
+    assert meta['province_email'] == 'piraeus.secretary@nglgreece.gr' and meta['login_email'] == 'sokr@example.com', meta
+    app.go('/registry-audit')
+    app.page.wait_for_selector('h1:has-text("ΕΛΕΓΧΟΣ ΑΛΛΑΓΩΝ")')
+    t = app.text('table')
+    assert 'Ανυψωμένος Γεώργιος' in t and 'Ανύψωση σε Διδάσκαλο' in t and 'Στοά συνδρομής: 2η' in t and 'Βαθμός: Εταίρος → Διδάσκαλος' in t and '✓ αναγγέλθηκε' in t, t
+    app.go('/registry-audit?kind=Διαγραφή')
+    assert 'Ανυψωμένος' not in app.text('table')
+    assert app.page.locator('.navdrop-menu a[href="#/registry-audit"]').count() == 1

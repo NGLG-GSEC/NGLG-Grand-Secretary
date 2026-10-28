@@ -12,10 +12,11 @@
  *   ADMIN_EMAILS     — email διαχειριστών (χωρισμένα με κόμμα): σύνδεση με κωδικό μιας χρήσης (OTP) που στέλνεται στο email τους.
  *   GOOGLE_CLIENT_ID — το Google Client ID της εφαρμογής (Ρυθμίσεις → Google)· χρειάζεται για τη «Σύνδεση με Google».
  *   BCC_EMAILS       — (προαιρετικό) κρυφή κοινοποίηση κάθε email αλλαγής, χωρισμένα με κόμμα.
+ *   ANNOUNCE_EMAILS  — email της Μεγάλης Γραμματείας για τις «Αναγγελίες» (μαζί με το email της Επαρχίας της Στοάς), χωρισμένα με κόμμα.
  * Ο κώδικας είναι δημόσιος: δεν περιέχει κωδικούς, email ή δεδομένα μελών. Οδηγίες: lodge/README.md
  */
 
-const VERSION = 4;
+const VERSION = 5;
 const SESSION_SECONDS = 21600; // σύνδεση διαχειριστή: 6 ώρες
 const OTP_SECONDS = 600, OTP_MAX_SENDS = 5, OTP_MAX_TRIES = 5;
 const ROOT_NAME = 'Μητρώα Στοών — Πύλη Γραμματέων';
@@ -24,12 +25,12 @@ const MAX_TRIES = 8; // λάθος κωδικοί ανά Στοά ανά 15 λε
 
 // Πεδία που αλλάζει ο Γραμματέας: στοιχεία & κατάσταση μελών (όχι Αρ. Μητρώου, Δίπλωμα, Επετηρίδα)
 const MEMBER_FIELDS = ['surname', 'first_name', 'email', 'mobile', 'degree', 'date_ea', 'date_fc', 'date_mm'];
-const LODGE_FIELDS = ['member_status', 'capacity', 'capacity_date', 'jw_date', 'sw_date', 'wm_date', 'dereg_date'];
+const LODGE_FIELDS = ['member_status', 'capacity', 'capacity_date', 'jw_date', 'sw_date', 'wm_date', 'dereg_date', 'fee_rank'];
 const LABELS = {
   surname: 'Επώνυμο', first_name: 'Όνομα', email: 'Email', mobile: 'Κινητό', degree: 'Βαθμός',
   date_ea: 'Ημ. μύησης', date_fc: 'Ημ. Εταίρου', date_mm: 'Ημ. Διδασκάλου',
   member_status: 'Κατάσταση στη Στοά', capacity: 'Ιδιότητα', capacity_date: 'Ημ. ιδιότητας',
-  jw_date: 'Ημ. Β΄ Επόπτη', sw_date: 'Ημ. Α΄ Επόπτη', wm_date: 'Ημ. Σεβασμίου', dereg_date: 'Ημ. διαγραφής'
+  jw_date: 'Ημ. Β΄ Επόπτη', sw_date: 'Ημ. Α΄ Επόπτη', wm_date: 'Ημ. Σεβασμίου', dereg_date: 'Ημ. διαγραφής', fee_rank: 'Στοά συνδρομής'
 };
 const NOTE_TYPES = ['Αναγγελία Διδασκάλου Τέκτονος', 'Αναγγελία Εισδοχής', 'Αναγγελία Διέλευσης', 'Αναγγελία νέων Αρχών',
   'Αναγγελία Διαγραφής', 'Αναγγελία Υιοθεσίας / Επανόδου', 'Διόρθωση στοιχείων', 'Άλλο'];
@@ -145,6 +146,7 @@ function save_(b) {
   const by = (String(b.by || '').replace(/\s+/g, ' ').trim().slice(0, 120) + (email ? ' (' + email + ')' : '')).trim();
   const rec = writeVersion_(no, cur, next, 'Αλλαγή', { changes: changes, note_type: noteType, note: note, by: by, source: 'lodge' });
   mailChange_(cur.meta, rec);
+  announce_(cur.meta, rec);
   return { ok: true, version: rec.version, version_name: rec.version_name, changes: changes.length, mailed: rec.mailed || '' };
 }
 
@@ -275,7 +277,7 @@ function push_(b) {
       return x;
     });
     const le = String(L.meta.login_email || '').trim().toLowerCase();
-    const meta = { number: no, name: str_(L.meta.name), provincial: str_(L.meta.provincial), emails: (L.meta.emails || []).map(str_).filter(Boolean), login_email: /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(le) ? le : '' };
+    const meta = { number: no, name: str_(L.meta.name), provincial: str_(L.meta.provincial), emails: (L.meta.emails || []).map(str_).filter(Boolean), login_email: /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(le) ? le : '', province_email: str_(L.meta.province_email).toLowerCase() };
     // email εισόδου → Στοές (ευρετήριο για τον κωδικό στο email)
     const lg = logins_(); Object.keys(lg).forEach(function (e) { lg[e] = lg[e].filter(function (x) { return x !== no; }); if (!lg[e].length) delete lg[e]; });
     if (meta.login_email) (lg[meta.login_email] = lg[meta.login_email] || []).push(no);
@@ -504,6 +506,47 @@ function provSave_(b) {
   xs.push({ id: 'p' + no + '-' + Date.now(), at: new Date().toISOString(), by: s.email, lodge: no, lodge_name: target.name, values: v, check: check });
   provSaveChanges_(xs);
   return { ok: true, lodge: provView_({ lodges: [target] }).lodges[0] };
+}
+
+// ---------------------------------------------------------------- Αναγγελίες: κάθε αλλαγή μέλους → Επαρχία της Στοάς + Μεγάλη Γραμματεία
+// Ένα email ανά μέλος, με θέμα το είδος της αλλαγής (π.χ. «Αναγγελία μέλους Όνομα Επώνυμο — Στοά Χ 12 — Διδάσκαλος»).
+const plainUp_ = function (v) { return String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase(); };
+function announceKind_(c) {
+  const f = c.fields || {}, to = function (k) { return f[k] ? String(f[k][1] || '') : ''; }, kinds = [];
+  if (c.is_new) kinds.push(/ΥΙΟΘΕΤ/.test(plainUp_(to('capacity'))) ? 'Υιοθεσία (νέο μέλος)' : /ΕΠΑΝΕΛΘ/.test(plainUp_(to('capacity'))) ? 'Επάνοδος (νέο μέλος)' : 'Εισδοχή (νέο μέλος — Μαθητής)');
+  if (f.member_status && /ΔΙΑΓΡΑΦ/.test(plainUp_(to('member_status')))) kinds.push('Διαγραφή');
+  else if (f.member_status && /ΔΙΑΓΡΑΦ/.test(plainUp_(f.member_status[0]))) kinds.push('Επάνοδος / άρση διαγραφής');
+  else if (f.member_status) kinds.push('Κατάσταση: ' + to('member_status'));
+  const deg = plainUp_(to('degree'));
+  if (!c.is_new && f.degree) kinds.push(/ΜΑΘΗΤ/.test(deg) ? 'Εισδοχή (Μαθητής)' : /ΕΤΑΙΡ/.test(deg) ? 'Διέλευση (Εταίρος)' : /ΔΙΔΑΣΚ/.test(deg) ? 'Ανύψωση σε Διδάσκαλο' : 'Βαθμός: ' + to('degree'));
+  else if (!c.is_new) { if (f.date_mm && to('date_mm')) kinds.push('Ανύψωση σε Διδάσκαλο'); else if (f.date_fc && to('date_fc')) kinds.push('Διέλευση (Εταίρος)'); else if (f.date_ea && to('date_ea')) kinds.push('Εισδοχή (Μαθητής)'); }
+  if (!c.is_new && f.capacity) kinds.push('Ιδιότητα: ' + (to('capacity') || '—'));
+  if (f.fee_rank) kinds.push('Στοά συνδρομής: ' + (to('fee_rank') === '1' ? '1η (πλήρης)' : to('fee_rank') ? to('fee_rank') + 'η' : '—'));
+  if (f.wm_date && to('wm_date')) kinds.push('Σεβάσμιος'); if (f.sw_date && to('sw_date')) kinds.push('Α΄ Επόπτης'); if (f.jw_date && to('jw_date')) kinds.push('Β΄ Επόπτης');
+  if (!kinds.length) kinds.push('Μεταβολή στοιχείων');
+  return kinds;
+}
+function announce_(meta, rec) {
+  const to = [String(meta.province_email || '').trim()].concat(String(prop_('ANNOUNCE_EMAILS') || '').split(/[,;\s]+/))
+    .map(function (e) { return String(e || '').trim().toLowerCase(); }).filter(function (e, i, a) { return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e) && a.indexOf(e) === i; });
+  rec.announced = [];
+  if (!to.length) return;
+  rec.changes.forEach(function (c) {
+    const kinds = announceKind_(c), name = String(c.name || '').trim();
+    const subject = 'Αναγγελία μέλους ' + name + ' — Στοά ' + meta.name + ' ' + meta.number + ' — ' + kinds.join(' · ');
+    const rows = Object.keys(c.fields || {}).map(function (k) { return '<tr><td style="padding:4px 10px;color:#4b5260">' + (LABELS[k] || k) + '</td><td style="padding:4px 10px">' + (c.fields[k][0] || '—') + '</td><td style="padding:4px 10px"><b>' + (c.fields[k][1] || '—') + '</b></td></tr>'; }).join('');
+    const html = '<div style="font-family:Georgia,serif;max-width:620px;border:1px solid #d9cfb4;border-radius:10px;overflow:hidden">'
+      + '<div style="background:#1d2f5e;color:#fff;padding:14px 20px"><div style="letter-spacing:.06em">ΕΘΝΙΚΗ ΜΕΓΑΛΗ ΣΤΟΑ ΤΗΣ ΕΛΛΑΔΟΣ</div><div style="font-size:12px;letter-spacing:.25em;color:#e5c98d">ΑΝΑΓΓΕΛΙΑ ΜΕΤΑΒΟΛΗΣ ΜΗΤΡΩΟΥ</div></div>'
+      + '<div style="padding:18px 20px;font-size:15px;line-height:1.55"><p><b>' + kinds.join(' · ') + '</b></p><p>Μέλος: <b>' + name + '</b><br>Σεβ. Στοά «' + meta.name + '» Αρ. ' + meta.number + (meta.provincial ? ' · ' + meta.provincial : '') + '</p>'
+      + '<table style="border-collapse:collapse;font-size:14px;margin:8px 0"><tr style="background:#f3f1ea"><th style="padding:4px 10px;text-align:left">Πεδίο</th><th style="padding:4px 10px;text-align:left">Πριν</th><th style="padding:4px 10px;text-align:left">Τώρα</th></tr>' + rows + '</table>'
+      + (rec.note_type || rec.note ? '<p>Σημείωση Γραμματέα: ' + [rec.note_type, rec.note].filter(Boolean).join(' — ') + '</p>' : '')
+      + '<p style="color:#6b7280;font-size:13px">Καταχώριση: ' + (rec.by || 'Γραμματεία της Στοάς') + ' · Έκδοση Μητρώου: ' + rec.version_name + '</p></div></div>';
+    MailApp.sendEmail({ to: to.join(','), subject: subject, htmlBody: html, body: subject + '\n' + Object.keys(c.fields || {}).map(function (k) { return (LABELS[k] || k) + ': ' + (c.fields[k][0] || '—') + ' → ' + (c.fields[k][1] || '—'); }).join('\n'), name: 'Μεγάλη Γραμματεία ΕΜΣτΕ' });
+    rec.announced.push({ id: c.id, subject: subject, kinds: kinds });
+  });
+  // η καταγραφή της αλλαγής κρατά και τις αναγγελίες που στάλθηκαν (για τον «Έλεγχο αλλαγών» της εφαρμογής)
+  const f = sub_(root_(), '_αλλαγές').getFilesByName(rec.id + '.json');
+  if (f.hasNext()) { const file = f.next(), x = JSON.parse(file.getBlob().getDataAsString()); x.announced = rec.announced; x.announced_to = to; file.setContent(JSON.stringify(x)); }
 }
 
 // ---------------------------------------------------------------- βοηθητικά

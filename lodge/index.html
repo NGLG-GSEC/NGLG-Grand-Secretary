@@ -137,6 +137,7 @@
     <div><label for="f_jw_date">Ημ. Β΄ Επόπτη</label><input id="f_jw_date" data-l="jw_date" type="date"></div>
     <div><label for="f_sw_date">Ημ. Α΄ Επόπτη</label><input id="f_sw_date" data-l="sw_date" type="date"></div>
     <div><label for="f_wm_date">Ημ. Σεβασμίου</label><input id="f_wm_date" data-l="wm_date" type="date"></div>
+    <div><label for="f_fee_rank">Στοά συνδρομής</label><select id="f_fee_rank" data-l="fee_rank"><option value="">—</option><option value="1">1η — πλήρης συνδρομή</option><option value="2">2η Στοά</option><option value="3">3η Στοά</option><option value="4">4η Στοά</option><option value="5">5η Στοά</option></select></div>
   </div>
   <p class="muted" id="ero" style="font-size:14px"></p>
   <div class="row" style="margin-top:12px"><button class="btn primary" value="ok">✔ Εντάξει</button><button class="btn" value="cancel" formnovalidate>Άκυρο</button></div>
@@ -158,7 +159,7 @@
 (function () {
   'use strict';
   const MEMBER_FIELDS = ['surname', 'first_name', 'email', 'mobile', 'degree', 'date_ea', 'date_fc', 'date_mm'];
-  const LODGE_FIELDS = ['member_status', 'capacity', 'capacity_date', 'jw_date', 'sw_date', 'wm_date', 'dereg_date'];
+  const LODGE_FIELDS = ['member_status', 'capacity', 'capacity_date', 'jw_date', 'sw_date', 'wm_date', 'dereg_date', 'fee_rank'];
   const LABELS = { surname: 'Επώνυμο', first_name: 'Όνομα', email: 'Email', mobile: 'Κινητό', degree: 'Βαθμός', date_ea: 'Ημ. μύησης', date_fc: 'Ημ. Εταίρου', date_mm: 'Ημ. Διδασκάλου',
     member_status: 'Κατάσταση στη Στοά', capacity: 'Ιδιότητα', capacity_date: 'Ημ. ιδιότητας', jw_date: 'Ημ. Β΄ Επόπτη', sw_date: 'Ημ. Α΄ Επόπτη', wm_date: 'Ημ. Σεβασμίου', dereg_date: 'Ημ. διαγραφής' };
   const CAPACITIES = ['Τακτικό', 'Υιοθετημένο', 'Επανελθόν', 'Ομότιμο', 'Επίτιμο', 'Μέτοικο', 'Αριστίνδην', 'Ισόβιο', 'Θεράπων'];
