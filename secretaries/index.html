@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="el">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>Γραμματείς Στοών · Επαρχίες</title>
+<link rel="icon" href="../img/header_emblem.png">
+<!-- Σελίδα των Επαρχιακών Γραμματειών: είσοδος με το email της Επαρχίας (κωδικός μιας χρήσης από τη Μεγάλη Γραμματεία),
+     και για ΚΑΘΕ Στοά της Επαρχίας: email Στοάς (το κλειδί της Στοάς), ονοματεπώνυμο και κινητό Γραμματέα.
+     Η σελίδα δεν περιέχει κανένα δεδομένο· όλα έρχονται από το Apps Script της Πύλης (lodge/apps-script/Code.gs) μετά την είσοδο. -->
+<style>
+  :root{--ground:#fbfaf6;--muted:#f3f1ea;--panel:#fff;--ink:#16191f;--ink2:#4b5260;--rule:#e2ddcf;--navy:#1d2f5e;--gold:#b08a3e;--warn:#b42318;--ok:#187a3d;--r:12px;
+    --font:system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--ground);color:var(--ink);font:16px/1.55 var(--font)}
+  header.top{background:var(--navy);color:#fff;padding:14px 16px;display:flex;align-items:center;gap:12px}
+  header.top img{width:46px;height:auto;background:#fff;border-radius:8px;padding:3px}
+  header.top b{display:block;letter-spacing:.06em}header.top small{color:#e5c98d;letter-spacing:.25em;font-size:11px}
+  .wrap{max-width:1000px;margin:0 auto;padding:16px}
+  h1{font-size:clamp(1.3rem,1rem + 1.4vw,1.8rem);margin:16px 0 4px;color:var(--navy)}
+  .muted{color:var(--ink2)}
+  .card{background:var(--panel);border:1px solid var(--rule);border-radius:var(--r);padding:16px;margin:14px 0;box-shadow:0 8px 20px -16px rgba(22,25,31,.3)}
+  label{display:block;font-size:13px;font-weight:600;color:var(--ink2);margin:8px 0 3px}
+  input{width:100%;font:inherit;padding:9px 10px;border:1px solid #cfd3db;border-radius:8px;background:#fff;color:var(--ink)}
+  input:focus{outline:2px solid rgba(29,47,94,.25);border-color:var(--navy)}
+  .btn{display:inline-flex;align-items:center;gap:6px;font:600 15px var(--font);padding:9px 14px;border-radius:8px;border:1px solid #c9ced8;background:#fff;color:var(--ink);cursor:pointer}
+  .btn.primary{background:var(--navy);border-color:var(--navy);color:#fff}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  .row{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end}
+  .row > div{flex:1 1 180px}
+  .msg{margin:8px 0;font-weight:600}.msg.err{color:var(--warn)}.msg.ok{color:var(--ok)}
+  .lodge{border:1px solid var(--rule);border-radius:10px;padding:12px;margin:10px 0;background:#fff}
+  .lodge h3{margin:0 0 4px;font-size:17px;color:var(--navy)}
+  .lgrid{display:grid;grid-template-columns:2fr 1.3fr 1.3fr 1.2fr;gap:0 10px}
+  .chk{margin-top:8px;font-size:14px}.chk .ok{color:var(--ok)}.chk .bad{color:var(--warn)}.chk .warn{color:#a15c07}
+  .saved{color:var(--ok);font-size:13px;margin-left:6px}
+  .pill{display:inline-block;border-radius:999px;padding:1px 9px;font-size:12px;background:var(--muted);color:var(--ink2);margin-left:6px}
+  @media (max-width:720px){.lgrid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header class="top"><img src="../img/header_emblem.png" alt=""><div><b>ΕΘΝΙΚΗ ΜΕΓΑΛΗ ΣΤΟΑ ΤΗΣ ΕΛΛΑΔΟΣ</b><small>ΜΕΓΑΛΗ ΓΡΑΜΜΑΤΕΙΑ</small></div></header>
+<main class="wrap">
+  <h1>Γραμματείς Στοών — στοιχεία ανά Επαρχία</h1>
+  <p class="muted">Για τις Επαρχιακές / Περιφερειακή Μεγάλες Γραμματείες: για κάθε Στοά της Επαρχίας σας καταχωρίστε το <b>επίσημο email της Στοάς</b>
+    (όχι το προσωπικό email του Γραμματέα) και το ονοματεπώνυμο και κινητό του Γραμματέα της.</p>
+
+  <section class="card" id="login">
+    <div id="step1"><label for="email">Email της Επαρχιακής Γραμματείας</label>
+      <div class="row"><div><input id="email" type="email" autocomplete="email" placeholder="π.χ. secretary@…"></div><button class="btn primary" id="send">✉ Αποστολή κωδικού</button></div></div>
+    <div id="step2" hidden><label for="code">Κωδικός (6 ψηφία) — στάλθηκε στο email σας από τη Μεγάλη Γραμματεία</label>
+      <div class="row"><div><input id="code" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="••••••"></div><button class="btn primary" id="verify">✓ Είσοδος</button><button class="btn" id="back">Άλλο email</button></div></div>
+    <p class="msg" id="lmsg" role="status"></p>
+  </section>
+
+  <section id="work" hidden>
+    <div class="row" style="justify-content:space-between"><p class="muted" id="who"></p><button class="btn" id="logout">Έξοδος</button></div>
+    <div id="provs"></div>
+  </section>
+  <p class="muted" style="font-size:13px">Ο κωδικός ισχύει 10 λεπτά και μία φορά· η σύνδεση κρατά έως 6 ώρες σε αυτή την καρτέλα. Ο έλεγχος «μέλος της Στοάς / Δίπλωμα Διδασκάλου» γίνεται από το Μητρώο της Μεγάλης Γραμματείας.</p>
+</main>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id), KEY = 'nglg-prov-session';
+  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const ERR = { bad_email: 'Μη έγκυρο email.', otp_wrong: 'Λάθος κωδικός.', otp_expired: 'Ο κωδικός έληξε ή χρησιμοποιήθηκε — ζητήστε νέο.', too_many_tries: 'Πολλές προσπάθειες — δοκιμάστε σε 15 λεπτά.',
+    unauthorized: 'Η σύνδεση έληξε — μπείτε ξανά.', not_your_lodge: 'Η Στοά δεν ανήκει στην Επαρχία σας.', bad_mobile: 'Το κινητό πρέπει να έχει τουλάχιστον 10 ψηφία.', unknown_action: 'Η υπηρεσία δεν έχει ενημερωθεί ακόμη (Μεγάλη Γραμματεία).' };
+  let API = '', session = null;
+  try { session = JSON.parse(sessionStorage.getItem(KEY) || 'null'); } catch (e) { session = null; }
+  const msg = (t, cls = '') => { const m = $('lmsg'); m.textContent = t; m.className = 'msg ' + cls; };
+  async function api(body) {
+    if (!API) {
+      const r = await fetch('../lodge/portal.json?t=' + Date.now(), { cache: 'no-store' }).catch(() => null);
+      const j = r && r.ok ? await r.json().catch(() => ({})) : {};
+      API = j.api_url || window.LODGE_PORTAL_URL || '';
+      if (!API) throw new Error('Η υπηρεσία δεν έχει ρυθμιστεί ακόμη από τη Μεγάλη Γραμματεία.');
+    }
+    const r = await fetch(API, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(body) });
+    if (!r.ok) throw new Error('Η υπηρεσία δεν απάντησε (' + r.status + ').');
+    const j = await r.json();
+    if (!j.ok) { if (j.error === 'unauthorized') logout(); throw new Error(ERR[j.error] || j.error); }
+    return j;
+  }
+  const checkHtml = (c) => {
+    if (!c || c.status === 'empty') return '<span class="warn">Συμπληρώστε τον Γραμματέα.</span>';
+    if (c.status === 'notfound') return '<span class="bad">⚠ Δεν βρέθηκε στο Μητρώο Μελών της Στοάς — ελέγξτε επώνυμο και όνομα.</span>';
+    if (c.status === 'ambiguous') return '<span class="warn">⚠ Βρέθηκαν ' + c.count + ' μέλη με αυτό το όνομα — γράψτε το πλήρες όνομα.</span>';
+    return '<span class="ok">✓ Μέλος της Στοάς (' + esc(c.name) + ')</span> · ' + (c.mm ? '<span class="ok">✓ Δίπλωμα Διδασκάλου</span>' : '<span class="bad">⚠ Χωρίς Δίπλωμα Διδασκάλου στο Μητρώο</span>');
+  };
+  const lodgeHtml = (l) => `<div class="lodge" data-no="${esc(l.number)}"><h3>Στοά «${esc(l.name)}» Αρ. ${esc(l.number)}</h3>
+    <div class="lgrid"><div><label>Email Στοάς (επίσημο)</label><input data-k="lodge_email" type="email" value="${esc(l.lodge_email)}" placeholder="email της Στοάς"></div>
+    <div><label>Επώνυμο Γραμματέα</label><input data-k="secretary_last" value="${esc(l.secretary_last)}"></div>
+    <div><label>Όνομα Γραμματέα</label><input data-k="secretary_first" value="${esc(l.secretary_first)}"></div>
+    <div><label>Κινητό Γραμματέα</label><input data-k="secretary_mobile" type="tel" value="${esc(l.secretary_mobile)}"></div></div>
+    <div class="row" style="margin-top:8px"><button class="btn primary small-save" data-save>💾 Αποθήκευση</button><span class="chk">${checkHtml(l.check)}</span><span class="saved"></span></div></div>`;
+  function show(data) {
+    $('login').hidden = true; $('work').hidden = false;
+    $('who').innerHTML = 'Συνδεδεμένοι ως <b>' + esc(data.email) + '</b>';
+    $('provs').innerHTML = data.provinces.map((p) => `<section class="card"><h2 style="margin:0;color:var(--navy)">${esc(p.title || p.short)} <span class="pill">${p.lodges.length} Στοές</span></h2>
+      <p class="muted" style="margin:4px 0 0">${p.lodges.filter((l) => l.lodge_email && l.check && l.check.status === 'found').length} από ${p.lodges.length} πλήρεις</p>${p.lodges.map(lodgeHtml).join('')}</section>`).join('');
+  }
+  function logout() { session = null; try { sessionStorage.removeItem(KEY); } catch (e) { /* */ } $('work').hidden = true; $('login').hidden = false; $('step1').hidden = false; $('step2').hidden = true; }
+  $('send').addEventListener('click', async () => {
+    const e = $('email').value.trim(); if (!e) { msg('Γράψτε το email.', 'err'); return; }
+    $('send').disabled = true; msg('Αποστολή…');
+    try { await api({ action: 'prov_otp_send', email: e }); $('step1').hidden = true; $('step2').hidden = false; $('code').focus();
+      msg('Αν το email ανήκει σε Επαρχιακή Γραμματεία, στάλθηκε κωδικός από τη Μεγάλη Γραμματεία (ελέγξτε και τα ανεπιθύμητα).', 'ok'); }
+    catch (err) { msg(err.message, 'err'); }
+    $('send').disabled = false;
+  });
+  $('back').addEventListener('click', () => { $('step1').hidden = false; $('step2').hidden = true; msg(''); });
+  $('verify').addEventListener('click', async () => {
+    $('verify').disabled = true; msg('Έλεγχος…');
+    try { const r = await api({ action: 'prov_otp_verify', email: $('email').value.trim(), code: $('code').value.trim() });
+      session = r.session; try { sessionStorage.setItem(KEY, JSON.stringify(session)); } catch (e) { /* */ } msg(''); show(r); }
+    catch (err) { msg(err.message, 'err'); }
+    $('verify').disabled = false;
+  });
+  $('code').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('verify').click(); });
+  $('email').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('send').click(); });
+  $('logout').addEventListener('click', logout);
+  $('provs').addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-save]'); if (!b) return;
+    const box = b.closest('.lodge'), v = Object.fromEntries([...box.querySelectorAll('[data-k]')].map((i) => [i.dataset.k, i.value.trim()])), out = box.querySelector('.saved');
+    b.disabled = true; out.textContent = '⏳';
+    try { const r = await api({ action: 'prov_save', session, lodge: box.dataset.no, ...v }); box.querySelector('.chk').innerHTML = checkHtml(r.lodge.check); box.querySelector('[data-k=lodge_email]').value = r.lodge.lodge_email; out.textContent = '✓ Αποθηκεύτηκε'; }
+    catch (err) { out.textContent = ''; box.querySelector('.chk').innerHTML = '<span class="bad">' + esc(err.message) + '</span>'; }
+    b.disabled = false;
+  });
+  if (session) api({ action: 'prov_load', session }).then(show).catch(() => logout());
+})();
+</script>
+</body>
+</html>

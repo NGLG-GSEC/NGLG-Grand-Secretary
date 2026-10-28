@@ -667,3 +667,5 @@ s.mdereg-l{color:#991b1b}
 .paper.vlist.vl-dense2 .gmp-table{font-size:7.5pt}.paper.vlist.vl-dense2 .gmp-table td{padding:.6mm 1.6mm}
 .paper.vlist .gmp-sign{margin-top:5mm}
 .paper.vlist .gmp-table th{white-space:nowrap}
+/* μακριά email (π.χ. Επαρχίες) δεν φαρδαίνουν τη σελίδα στο κινητό */
+a[data-mail]{overflow-wrap:anywhere;word-break:break-word}

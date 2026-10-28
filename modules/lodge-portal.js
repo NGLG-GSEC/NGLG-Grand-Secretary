@@ -31,6 +31,7 @@ export const portalReady = () => !!(cfg().url && (cfg().key || portalSession()))
 const ERR = { admin_unauthorized: 'Δεν έχετε συνδεθεί ως διαχειριστής της Πύλης (κωδικός email ή κλειδί).', unknown_action: 'Το Apps Script της Πύλης είναι παλιά έκδοση — αντικαταστήστε το Code.gs και κάντε νέα έκδοση (Deploy → Manage deployments).',
   otp_wrong: 'Λάθος κωδικός.', otp_expired: 'Ο κωδικός έληξε ή χρησιμοποιήθηκε — ζητήστε νέο.', too_many_tries: 'Πολλές προσπάθειες — δοκιμάστε σε 15 λεπτά.', bad_email: 'Μη έγκυρο email.',
   not_super_admin: 'Η «Σύνδεση με Google» είναι μόνο για τον super admin (SUPER_ADMINS)· οι άλλοι διαχειριστές μπαίνουν με κωδικό email.', no_google_client_id: 'Λείπει το GOOGLE_CLIENT_ID στις Script Properties της Πύλης.' };
+export async function portalApi(body) { return api(body); }
 async function api(body) {
   const { url, key } = cfg(), sess = portalSession();
   if (!url) throw new Error('Ορίστε πρώτα τη διεύθυνση (URL /exec) του Apps Script της Πύλης.');

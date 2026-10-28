@@ -3345,7 +3345,7 @@ def test_members_export_active_lodge_province(app, tmp_path):
 def test_lodge_portal_apps_script_logic():
     # Ο server της Πύλης (lodge/apps-script/Code.gs) με ψεύτικο Drive/Mail: δημοσίευση → σύνδεση → αλλαγή (έκδοση + email) → λήψη → επαναφορά
     import subprocess
-    for t in ('lodge_portal.test.js', 'lodge_portal_admin.test.js'):  # και σύνδεση διαχειριστή: OTP email / Google (super admin)
+    for t in ('lodge_portal.test.js', 'lodge_portal_admin.test.js', 'province_secretaries.test.js'):  # και σύνδεση διαχειριστή: OTP email / Google (super admin)
         r = subprocess.run(['node', str(ROOT / 'tests' / 'gas' / t)], capture_output=True, text=True)
         assert r.returncode == 0, t + ': ' + r.stdout + r.stderr
 
@@ -4054,3 +4054,87 @@ def test_visits_one_page_pdf_report(app):
     import os
     if os.environ.get('SAVE_PDF'): dl.value.save_as(os.environ['SAVE_PDF'])
     assert app.page.locator('.vlist-render').count() == 0
+
+
+def test_province_secretaries_public_page(browser, base_url):
+    # Δημόσια σελίδα secretaries/: email Επαρχίας → κωδικός → μόνο οι Στοές της → email Στοάς + Γραμματέας + κινητό → έλεγχος Μητρώου
+    import json
+    API = 'https://script.google.com/macros/s/TESTPROV/exec'
+    calls = []
+    lodges = [{'number': '16', 'name': 'ΕΝΩΣΙΣ', 'lodge_email': '', 'secretary_first': '', 'secretary_last': '', 'secretary_mobile': '', 'check': {'status': 'empty'}}]
+
+    def api(route):
+        b = json.loads(route.request.post_data or '{}')
+        calls.append(b)
+        a = b.get('action')
+        if a == 'prov_otp_send':
+            return route.fulfill(json={'ok': True, 'sent': True})
+        if a == 'prov_otp_verify':
+            return route.fulfill(json={'ok': True, 'session': 'p' * 40, 'email': b['email'], 'provinces': [{'short': 'ΕπΜΣτ. Ιονίων Νήσων', 'title': 'Επαρχιακή Μεγάλη Στοά Ιονίων Νήσων', 'lodges': lodges}]} if b.get('code') == '654321' else {'ok': False, 'error': 'otp_wrong'})
+        if a == 'prov_save':
+            assert b['session'] == 'p' * 40
+            return route.fulfill(json={'ok': True, 'lodge': {**lodges[0], 'lodge_email': b['lodge_email'].lower(), 'secretary_last': b['secretary_last'], 'check': {'status': 'found', 'name': 'Ζαχαρίου Πέτρος', 'mm': 0}}})
+        return route.fulfill(json={'ok': False, 'error': 'unknown_action'})
+    page = browser.new_page()
+    page.route('**/lodge/portal.json*', lambda r: r.fulfill(json={'api_url': API, 'lodges': []}))
+    page.route(API, api)
+    page.goto(base_url + 'secretaries/')
+    assert 'ΜΕΓΑΛΗ ΓΡΑΜΜΑΤΕΙΑ' in page.inner_text('header')
+    page.fill('#email', 'ionian@example.com')
+    page.click('#send')
+    page.wait_for_selector('#step2:not([hidden])')
+    page.fill('#code', '111111')
+    page.click('#verify')
+    page.wait_for_selector('text=Λάθος κωδικός')
+    page.fill('#code', '654321')
+    page.click('#verify')
+    page.wait_for_selector('.lodge[data-no="16"]')
+    assert 'Ιονίων Νήσων' in page.inner_text('#provs') and page.locator('.lodge').count() == 1
+    box = page.locator('.lodge[data-no="16"]')
+    box.locator('[data-k=lodge_email]').fill('Enosis16@Example.com')
+    box.locator('[data-k=secretary_last]').fill('Ζαχαρίου')
+    box.locator('[data-k=secretary_first]').fill('Πέτρος')
+    box.locator('[data-k=secretary_mobile]').fill('6900000016')
+    box.locator('[data-save]').click()
+    page.wait_for_selector('text=✓ Αποθηκεύτηκε')
+    t = box.inner_text()
+    assert '✓ Μέλος της Στοάς' in t and 'Χωρίς Δίπλωμα Διδασκάλου' in t, t
+    assert calls[-1]['lodge'] == '16' and calls[-1]['secretary_mobile'] == '6900000016'
+    # επαναφόρτωση: η σύνδεση μένει στην καρτέλα (prov_load)
+    page.close()
+
+
+def test_province_secretaries_app_sync(app):
+    # Εφαρμογή (Μητρώο → Γραμματείς Στοών): δημοσίευση Επαρχιών/Στοών/μελών, λήψη αλλαγών → κατάλογος Στοών, έλεγχος μέλους/Διπλώματος
+    import json as _j
+    app.connect_local()
+    add_member(app, surname='Ζαχαρίου', first='Πέτρος', email='z@example.com', mobile='6944000016', lodges='ΕΝΩΣΙΣ | 16 | 1. ΤΑΚΤΙΚΟ')
+    API = 'https://script.google.com/macros/s/TESTSEC/exec'
+    pushed, changes = [], [{'id': 'p16-1', 'at': '2026-10-28T10:00:00Z', 'by': 'ionian@example.com', 'lodge': '16', 'lodge_name': 'ΕΝΩΣΙΣ',
+        'values': {'lodge_email': 'enosis16@example.com', 'secretary_first': 'Πέτρος', 'secretary_last': 'Ζαχαρίου', 'secretary_mobile': '6900000016'}, 'check': {'status': 'found'}}]
+
+    def api(route):
+        b = _j.loads(route.request.post_data or '{}')
+        a = b.get('action')
+        if a == 'admin_prov_push':
+            pushed.append(b['provinces']); return route.fulfill(json={'ok': True, 'provinces': len(b['provinces']), 'lodges': sum(len(p['lodges']) for p in b['provinces']), 'pending': 0})
+        if a == 'admin_prov_pull': return route.fulfill(json={'ok': True, 'changes': changes})
+        if a == 'admin_prov_ack': changes.clear(); return route.fulfill(json={'ok': True, 'left': 0})
+        return route.fulfill(json={'ok': True, 'changes': [], 'written': 0, 'skipped': []})
+    app.page.route(API, api)
+    app.page.evaluate(f"""async () => {{ const {{db}} = await import('./core/store.js'); await db.save('x', (tx) => {{ tx.setting('lodge_portal_url', '{API}'); tx.setting('lodge_portal_key', 'k'); }}); }}""")
+    app.go('/lodge-secretaries')
+    app.page.wait_for_selector('[data-act=sync]')
+    app.page.click('[data-act=sync]')
+    app.page.wait_for_selector('text=Ενημερώθηκαν 1 Στοές από τις Επαρχίες')
+    l = app.page.evaluate("async () => (await import('./core/store.js')).db.all('lodges').find((x) => x.number === '16')")
+    assert l['email'] == 'enosis16@example.com' and l['secretary'] == 'Ζαχαρίου Πέτρος' and l['secretary_mobile'] == '6900000016', l
+    row = app.page.locator('tr', has_text='enosis16@example.com')
+    assert '✓ μέλος' in row.inner_text() and 'χωρίς Δίπλωμα' in row.inner_text()
+    # η δημοσίευση: email εισόδου Επαρχίας, Στοές της, μέλη με Δίπλωμα ή όχι (χωρίς email/κινητά μελών)
+    ion = [p for p in pushed[-1] if 'Ιονίων' in p['short']][0]
+    assert 'ionian.secretary@nglgreece.gr' in ion['logins'] and 'provincialgrandsecretary@pglionianislands.gr' in ion['logins']
+    en = [x for x in ion['lodges'] if x['number'] == '16'][0]
+    assert en['lodge_email'] == 'enosis16@example.com' and any(m['s'] == 'Ζαχαρίου' and m['mm'] == 0 for m in en['members'])
+    assert 'z@example.com' not in _j.dumps(pushed) and '6944000016' not in _j.dumps(pushed)
+    assert app.page.locator('.navdrop-menu a[href="#/lodge-secretaries"]').count() == 1

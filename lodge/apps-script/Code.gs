@@ -15,7 +15,7 @@
  * Ο κώδικας είναι δημόσιος: δεν περιέχει κωδικούς, email ή δεδομένα μελών. Οδηγίες: lodge/README.md
  */
 
-const VERSION = 2;
+const VERSION = 3;
 const SESSION_SECONDS = 21600; // σύνδεση διαχειριστή: 6 ώρες
 const OTP_SECONDS = 600, OTP_MAX_SENDS = 5, OTP_MAX_TRIES = 5;
 const ROOT_NAME = 'Μητρώα Στοών — Πύλη Γραμματέων';
@@ -47,6 +47,13 @@ function doPost(e) {
     switch (b.action) {
       case 'login': return json_(login_(b));
       case 'save': return json_(withLock_(() => save_(b)));
+      case 'prov_otp_send': return json_(provOtpSend_(b));
+      case 'prov_otp_verify': return json_(provOtpVerify_(b));
+      case 'prov_load': return json_(provLoad_(b));
+      case 'prov_save': return json_(withLock_(() => provSave_(b)));
+      case 'admin_prov_push': admin_(b); return json_(withLock_(() => provPush_(b)));
+      case 'admin_prov_pull': admin_(b); return json_({ ok: true, changes: provChanges_() });
+      case 'admin_prov_ack': admin_(b); return json_(withLock_(() => provAck_(b)));
       case 'admin_otp_send': return json_(otpSend_(b));
       case 'admin_otp_verify': return json_(otpVerify_(b));
       case 'admin_google': return json_(googleLogin_(b));
@@ -341,6 +348,105 @@ function mailChange_(meta, rec) {
   if (bcc) opt.bcc = bcc;
   MailApp.sendEmail(to.join(','), subject, body, opt);
   rec.mailed = to.join(', ');
+}
+
+// ---------------------------------------------------------------- Επαρχίες: στοιχεία Γραμματέων των Στοών τους
+// Η Επαρχιακή Γραμματεία μπαίνει με το email της (κωδικός μιας χρήσης από τον λογαριασμό του script) και βλέπει ΜΟΝΟ τις Στοές της:
+// email Στοάς (το κλειδί της Στοάς), ονοματεπώνυμο και κινητό Γραμματέα· έλεγχος αν ο Γραμματέας είναι μέλος της Στοάς και αν έχει Δίπλωμα Διδασκάλου.
+// Η εφαρμογή στέλνει Επαρχίες, Στοές και μέλη (admin_prov_push) και παίρνει τις αλλαγές (admin_prov_pull / admin_prov_ack).
+function provData_() { const it = sub_(root_(), '_επαρχίες').getFilesByName('επαρχίες.json'); return it.hasNext() ? JSON.parse(it.next().getBlob().getDataAsString()) : { provinces: [] }; }
+function provSaveData_(d) { putFile_(sub_(root_(), '_επαρχίες'), 'επαρχίες.json', JSON.stringify(d)); }
+function provChanges_() { const it = sub_(root_(), '_επαρχίες').getFilesByName('αλλαγές.json'); return it.hasNext() ? JSON.parse(it.next().getBlob().getDataAsString()) : []; }
+function provSaveChanges_(xs) { putFile_(sub_(root_(), '_επαρχίες'), 'αλλαγές.json', JSON.stringify(xs)); }
+function provsOf_(email) { const e = String(email || '').trim().toLowerCase(); return provData_().provinces.filter(function (p) { return (p.logins || []).indexOf(e) !== -1; }); }
+function provPush_(b) {
+  const provinces = (Array.isArray(b.provinces) ? b.provinces : []).map(function (p) {
+    return { short: str_(p.short), title: str_(p.title), logins: (p.logins || []).map(function (e) { return String(e || '').trim().toLowerCase(); }).filter(function (e) { return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e); }),
+      lodges: (p.lodges || []).map(function (l) { return { number: lodgeNo_(l.number), name: str_(l.name), lodge_email: str_(l.lodge_email).toLowerCase(), secretary_first: str_(l.secretary_first), secretary_last: str_(l.secretary_last), secretary_mobile: str_(l.secretary_mobile),
+        members: (l.members || []).slice(0, 3000).map(function (m) { return { id: m.id, s: str_(m.s), f: str_(m.f), mm: m.mm ? 1 : 0 }; }) }; }) };
+  });
+  // αλλαγές Επαρχιών που δεν έχει πάρει ακόμη η εφαρμογή: μένουν (δεν πατιούνται από τη δημοσίευση)
+  const pend = {}; provChanges_().forEach(function (c) { pend[c.lodge] = c.values; });
+  provinces.forEach(function (p) { p.lodges.forEach(function (l) { if (pend[l.number]) Object.keys(pend[l.number]).forEach(function (k) { l[k] = pend[l.number][k]; }); }); });
+  provSaveData_({ provinces: provinces, at: new Date().toISOString() });
+  return { ok: true, provinces: provinces.length, lodges: provinces.reduce(function (a, p) { return a + p.lodges.length; }, 0), pending: Object.keys(pend).length };
+}
+function provAck_(b) {
+  const ids = Array.isArray(b.ids) ? b.ids.map(String) : [];
+  const rest = provChanges_().filter(function (c) { return ids.indexOf(String(c.id)) === -1; });
+  provSaveChanges_(rest);
+  return { ok: true, left: rest.length };
+}
+const plain_ = function (s) { return String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/Σ/g, 'Σ').replace(/ς/g, 'Σ').replace(/[^A-ZΑ-Ω ]/g, ' ').replace(/\s+/g, ' ').trim(); };
+// Ο Γραμματέας στο Μητρώο της Στοάς: ίδιο επώνυμο και όνομα (ή αρχή του ονόματος)
+function provCheck_(l) {
+  const ln = plain_(l.secretary_last), fn = plain_(l.secretary_first);
+  if (!ln) return { status: 'empty' };
+  const hits = (l.members || []).filter(function (m) { const s = plain_(m.s), f = plain_(m.f); return s === ln && (!fn || f === fn || f.indexOf(fn) === 0 || fn.indexOf(f) === 0); });
+  if (!hits.length) return { status: 'notfound' };
+  if (hits.length > 1) return { status: 'ambiguous', count: hits.length };
+  return { status: 'found', name: hits[0].s + ' ' + hits[0].f, mm: hits[0].mm ? 1 : 0 };
+}
+function provView_(p) {
+  return { short: p.short, title: p.title, lodges: p.lodges.map(function (l) { return { number: l.number, name: l.name, lodge_email: l.lodge_email, secretary_first: l.secretary_first, secretary_last: l.secretary_last, secretary_mobile: l.secretary_mobile, check: provCheck_(l) }; }) };
+}
+function provSession_(b) {
+  const sid = String(b.session || ''), email = /^[\w-]{20,80}$/.test(sid) ? CacheService.getScriptCache().get('psess_' + sid) : '';
+  if (!email) throw new Error('unauthorized');
+  const ps = provsOf_(email);
+  if (!ps.length) throw new Error('unauthorized');
+  return { email: email, provinces: ps };
+}
+function provOtpSend_(b) {
+  const email = String(b.email || '').trim().toLowerCase();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new Error('bad_email');
+  const ps = provsOf_(email);
+  if (!ps.length) { Utilities.sleep(800); return { ok: true, sent: true }; } // ίδια απάντηση: δεν αποκαλύπτεται ποια email έχουν πρόσβαση
+  const cache = CacheService.getScriptCache(), nKey = 'potpn_' + email, n = Number(cache.get(nKey) || 0);
+  if (n >= OTP_MAX_SENDS) throw new Error('too_many_tries');
+  const code = String(parseInt(Utilities.getUuid().replace(/-/g, '').slice(0, 12), 16) % 1000000).padStart(6, '0');
+  cache.put('potp_' + email, otpHash_(email, code), OTP_SECONDS); cache.put('potpt_' + email, '0', OTP_SECONDS); cache.put(nKey, String(n + 1), 900);
+  const who = ps.map(function (p) { return p.title || p.short; }).join(', ');
+  const html = '<div style="font-family:Georgia,serif;max-width:560px;margin:auto;border:1px solid #d9cfb4;border-radius:10px;overflow:hidden">'
+    + '<div style="background:#1d2f5e;color:#fff;padding:18px 22px;text-align:center"><div style="font-size:18px;letter-spacing:.06em">ΕΘΝΙΚΗ ΜΕΓΑΛΗ ΣΤΟΑ ΤΗΣ ΕΛΛΑΔΟΣ</div><div style="font-size:12px;letter-spacing:.3em;color:#e5c98d;margin-top:4px">ΜΕΓΑΛΗ ΓΡΑΜΜΑΤΕΙΑ</div></div>'
+    + '<div style="padding:22px;color:#1f2937;font-size:15px;line-height:1.6"><p>Προς τη Γραμματεία της <b>' + who + '</b>,</p>'
+    + '<p>Ο κωδικός σας για τη σελίδα <b>«Γραμματείς Στοών»</b> της Μεγάλης Γραμματείας είναι:</p>'
+    + '<div style="text-align:center;margin:18px 0"><span style="display:inline-block;font-size:32px;letter-spacing:.35em;font-weight:bold;color:#1d2f5e;background:#f7f3e8;border:1px solid #d9cfb4;border-radius:8px;padding:10px 18px">' + code + '</span></div>'
+    + '<p>Γράψτε τον στο πεδίο «Κωδικός» της σελίδας. Ισχύει για 10 λεπτά και μία μόνο χρήση.</p>'
+    + '<p style="color:#6b7280;font-size:13px">Αν δεν ζητήσατε εσείς τον κωδικό, αγνοήστε αυτό το μήνυμα.</p>'
+    + '<p style="margin-top:22px">Με αδελφικούς χαιρετισμούς,<br><b>Μεγάλη Γραμματεία ΕΜΣτΕ</b></p></div></div>';
+  MailApp.sendEmail({ to: email, subject: 'Κωδικός σύνδεσης ' + code + ' — Γραμματείς Στοών (ΕΜΣτΕ)', htmlBody: html,
+    body: 'Κωδικός για τη σελίδα «Γραμματείς Στοών»: ' + code + ' (ισχύει 10 λεπτά).', name: 'Μεγάλη Γραμματεία ΕΜΣτΕ' });
+  return { ok: true, sent: true };
+}
+function provOtpVerify_(b) {
+  const email = String(b.email || '').trim().toLowerCase(), code = String(b.code || '').replace(/\D/g, '');
+  const cache = CacheService.getScriptCache(), want = cache.get('potp_' + email), tries = Number(cache.get('potpt_' + email) || 0);
+  if (!want || tries >= OTP_MAX_TRIES) throw new Error('otp_expired');
+  if (code.length !== 6 || otpHash_(email, code) !== want) { cache.put('potpt_' + email, String(tries + 1), OTP_SECONDS); throw new Error('otp_wrong'); }
+  cache.put('potp_' + email, '', 1);
+  const ps = provsOf_(email);
+  if (!ps.length) throw new Error('unauthorized');
+  const sid = Utilities.getUuid().replace(/-/g, '') + Utilities.getUuid().replace(/-/g, '');
+  cache.put('psess_' + sid, email, SESSION_SECONDS);
+  return { ok: true, session: sid, email: email, provinces: ps.map(provView_) };
+}
+function provLoad_(b) { const s = provSession_(b); return { ok: true, email: s.email, provinces: s.provinces.map(provView_) }; }
+function provSave_(b) {
+  const s = provSession_(b), no = lodgeNo_(b.lodge), d = provData_();
+  const allowed = s.provinces.map(function (p) { return p.short; });
+  let target = null;
+  d.provinces.forEach(function (p) { if (allowed.indexOf(p.short) !== -1) p.lodges.forEach(function (l) { if (l.number === no) target = l; }); });
+  if (!target) throw new Error('not_your_lodge');
+  const v = { lodge_email: str_(b.lodge_email).toLowerCase(), secretary_first: str_(b.secretary_first), secretary_last: str_(b.secretary_last), secretary_mobile: str_(b.secretary_mobile) };
+  if (v.lodge_email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v.lodge_email)) throw new Error('bad_email');
+  if (v.secretary_mobile && String(v.secretary_mobile).replace(/\D/g, '').length < 10) throw new Error('bad_mobile');
+  Object.keys(v).forEach(function (k) { target[k] = v[k]; });
+  provSaveData_(d);
+  const check = provCheck_(target), xs = provChanges_().filter(function (c) { return c.lodge !== no; });
+  xs.push({ id: 'p' + no + '-' + Date.now(), at: new Date().toISOString(), by: s.email, lodge: no, lodge_name: target.name, values: v, check: check });
+  provSaveChanges_(xs);
+  return { ok: true, lodge: provView_({ lodges: [target] }).lodges[0] };
 }
 
 // ---------------------------------------------------------------- βοηθητικά

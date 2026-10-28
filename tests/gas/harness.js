@@ -19,7 +19,7 @@ function makeEnv() {
     CacheService: { getScriptCache: () => ({ get: (k) => cache[k] || null, put: (k, v) => { cache[k] = v; } }) },
     LockService: { getScriptLock: () => ({ waitLock() {}, releaseLock() {} }) },
     DriveApp: { createFolder: (n) => mkFolder(n), getFolderById: (id) => { if (!folders[id]) throw new Error('nf'); return folders[id]; } },
-    MailApp: { sendEmail: (to, subject, body, opt) => mails.push({ to, subject, body, opt }) },
+    MailApp: { sendEmail: (to, subject, body, opt) => mails.push(typeof to === 'object' ? { ...to, opt: to } : { to, subject, body, opt }) },
     UrlFetchApp: { fetch: (url) => { const t = decodeURIComponent(String(url).split('access_token=')[1] || ''), info = tokens[t];
       return { getResponseCode: () => (info ? 200 : 400), getContentText: () => JSON.stringify(info || { error: 'invalid_token' }) }; } },
     Session: { getScriptTimeZone: () => 'Europe/Athens' },

@@ -59,10 +59,10 @@ jobs:
           DATA_REPO: ${{ vars.DATA_REPO || 'NGLG-GSEC/nglg-grammateia-data' }}
         run: |
           if [ -z "$DATA_TOKEN" ]; then exit 0; fi
-          # Μόνο η διεύθυνση /exec (όχι κωδικοί ή δεδομένα): {"api_url": "..."}
+          # Μόνο η διεύθυνση /exec και αριθμός/όνομα Στοών (όχι κωδικοί ή δεδομένα μελών): {"api_url": "...", "lodges": [{number, name}]}
           curl -fsSL -H "Authorization: Bearer $DATA_TOKEN" -H "Accept: application/vnd.github.raw" \
             "https://api.github.com/repos/$DATA_REPO/contents/files/public/lodge-portal.json" -o lodge/portal.json \
-            && python3 -c "import json; d=json.load(open('lodge/portal.json')); assert set(d) <= {'api_url'}; print('Πύλη:', 'ενεργή' if d.get('api_url') else 'χωρίς URL')" \
+            && python3 -c "import json; d=json.load(open('lodge/portal.json')); assert set(d) <= {'api_url', 'lodges'} and all(set(x) <= {'number', 'name'} for x in d.get('lodges', [])); print('Πύλη:', 'ενεργή' if d.get('api_url') else 'χωρίς URL')" \
             || { echo "Η Πύλη Γραμματέων δεν έχει ρυθμιστεί ακόμη."; rm -f lodge/portal.json; }
       - name: Upload site
         uses: actions/upload-pages-artifact@v3

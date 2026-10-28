@@ -23,6 +23,7 @@ import './modules/database.js';
 import './modules/settings.js';
 import './modules/portal.js';
 import './modules/lodge-portal.js';
+import './modules/lodge-secretaries.js';
 import './modules/treasury.js';
 
 await boot();

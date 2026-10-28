@@ -53,5 +53,5 @@ E.props.ADMIN_KEY = 'k-123';
 assert.equal(E.call({ action: 'admin_status', key: 'k-123' }).role, 'key');
 // doGet: μόνο πλήθη, όχι email
 const g = JSON.parse(E.ctx.doGet().text);
-assert.ok(g.version === 2 && g.superAdmins === 1 && g.adminEmails === 1 && !JSON.stringify(g).includes('@'), JSON.stringify(g));
+assert.ok(g.version >= 2 && g.superAdmins === 1 && g.adminEmails === 1 && !JSON.stringify(g).includes('@'), JSON.stringify(g));
 console.log('lodge portal admin: OK');
