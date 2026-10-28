@@ -10,6 +10,7 @@ import { provincialChoices } from './provinces.js';
 import { noContact, NO_CONTACT } from '../core/pickers.js';
 import { epeteiridaOf, highestOfficeText } from './epeteirida-table.js';
 import { reportPaper, printPaper } from '../core/paper.js';
+import { lodgeFeeTotal, euro } from './treasury.js';
 import { identify, canonicalId, person, digits10, sameNameGroups, regCode, matchesCode, codeKey } from '../core/people.js';
 import { isSealed } from '../core/connect.js';
 import { smallLodgesPage } from './small-lodges.js';
@@ -274,6 +275,10 @@ function listPage({ query }) {
       noContact(x) ? '<span class="muted">⛔</span>' : H(x.email, 'email') + extra(x, 'other_emails', 'email'), noContact(x) ? '<span class="muted">⛔</span>' : H(x.mobile, 'mobile') + extra(x, 'other_mobiles', 'mobile'),
       esc(x.degree) + [['date_ea', 'Μαθ.'], ['date_fc', 'Εταίρ.'], ['date_mm', 'Διδ.']].filter(([k]) => x[k]).map(([k, a]) => `<br><small class="muted">${a} ${esc(fmtDate(x[k]))}</small>`).join(''), `<small>${esc(highestOfficeText(x.id))}</small>`, lod, noContact(x) ? `<span class="pill bad" title="${NO_CONTACT}">⛔ Διαγραμμένος</span>` : x.active ? 'ΝΑΙ' : 'ΟΧΙ', `<a class="btn small" href="#/members/${x.id}">Επεξεργασία</a> <a class="btn small" href="#/members/card?ids=${x.id}">🪪 Κάρτα Μέλους</a>`];
   });
+  // Αναζήτηση ανά Στοά: σύνολο εισφορών της Στοάς (Ταμείο)
+  const feeLodge = field === 'lodge' && q ? (qNo ? lodgeByNumber(qNo) : (() => { const c = lodgesAll().filter((l) => fold(l.name) === fold(lq)); return c.length === 1 ? c[0] : null; })()) : null;
+  const feeBox = feeLodge ? (() => { const a = lodgeFeeTotal(feeLodge.number); return `<div class="card tre-lodge">💶 <b>Εισφορές Στοάς ${esc(feeLodge.name)} ${esc(feeLodge.number)}: ${euro(a.total)}</b>
+<small class="muted">${a.full} πλήρεις (1η Στοά) ${euro(a.fullSum)} · ${a.extra} επιπλέον Στοές ${euro(a.extraSum)} · ${a.exempt} απαλλαγές</small> <a class="btn small" href="#/treasury/members?lodge=${encodeURIComponent(feeLodge.number)}">Ανά μέλος →</a></div>`; })() : '';
   const [qlabel, ph, itype] = HINTS[field];
   const flabel = Object.fromEntries(MEMBER_FIELDS)[field];
   const summary = q ? `${xs.length === 1 ? 'Βρέθηκε <b>1</b> μέλος' : `Βρέθηκαν <b>${xs.length}</b> μέλη`} για «<b>${esc(q)}</b>» σε: <b>${esc(flabel)}</b>` : `Σύνολο <b>${xs.length}</b> μελών`;
@@ -289,7 +294,7 @@ ${status === 'dereg' ? `<a class="btn small primary" href="#/members/deregistere
 ${MEMBER_FIELDS.map(([k, v]) => `<label class="chip"><input type="radio" name="field" value="${k}"${k === field ? ' checked' : ''}><span>${esc(v)}</span></label>`).join('')}</fieldset>
 <div><label for="msq" id="msqlabel">2. ${esc(qlabel)}</label><input id="msq" name="q" value="${esc(q)}" autofocus autocomplete="off" type="${itype}" placeholder="${esc(ph)}"${field === 'lodge' ? ' list="lodgelist"' : ''}>
 <datalist id="lodgelist">${lodgesAll().map((l) => `<option value="${esc(l.number)} · ${esc(l.name)}">`).join('')}</datalist></div>
-<div class="msbtns"><button class="btn primary">Αναζήτηση</button>${q ? '<a class="btn" href="#/members">Καθαρισμός</a>' : ''}</div></form><p class="msresult">${summary}</p></div>
+<div class="msbtns"><button class="btn primary">Αναζήτηση</button>${q ? '<a class="btn" href="#/members">Καθαρισμός</a>' : ''}</div></form><p class="msresult">${summary}</p></div>${feeBox}
 ${stBar}<div class="toolbar"><small class="muted">Αποτελέσματα σελίδας (${xs.length}):</small>${exportBar()}<button type="button" class="btn" data-act="activeXlsx" title="Όλα τα ενεργά μέλη: Όνομα, Επώνυμο, 1η Στοά, Αριθμός, Επαρχία">⬇ Excel όλων των ενεργών (Στοά · Επαρχία)</button></div><div class="memtable">${table(['ID', 'Αρ. Μητρώου', 'Επώνυμο', 'Όνομα', 'Email', 'Κινητό', 'Βαθμός', 'Ανώτατο αξίωμα (Επετηρίδα)', 'Στοές', 'Ενεργός', 'Ενέργειες'], rows, q ? `Δεν βρέθηκε μέλος για «${q}» σε: ${flabel}. Δοκιμάστε «Όλα» ή λιγότερες λέξεις.` : 'Δεν υπάρχουν εγγραφές.')}</div>
 ${pager(xs.length, pg, PAGE, mk)}
 ${importBox()}`,

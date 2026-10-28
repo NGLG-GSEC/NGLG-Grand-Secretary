@@ -2708,7 +2708,7 @@ def test_unified_menu_and_visits_flow(app):
     app.connect_local()
     app.go('/')
     groups = app.page.eval_on_selector_all('#mainnav details.navdrop > summary', 'els => els.map((e) => e.textContent.replace("▾", "").trim())')
-    assert groups == ['✉ Έγγραφα', '👥 Μητρώο', '🏛 ΣΓΥ', '📅 Επισκέψεις ΜΔ', '🎉 Εορτολόγιο & Πρότζεκτ', '🌐 Δημόσιες σελίδες', '⚙ Διαχείριση'], groups
+    assert groups == ['✉ Έγγραφα', '👥 Μητρώο', '🏛 ΣΓΥ', '💶 Ταμείο', '📅 Επισκέψεις ΜΔ', '🎉 Εορτολόγιο & Πρότζεκτ', '🌐 Δημόσιες σελίδες', '⚙ Διαχείριση'], groups
     hrefs = app.page.eval_on_selector_all('#mainnav a', 'els => els.map((e) => e.getAttribute("href"))')
     inner = [h for h in hrefs if h.startswith('#/')]
     assert len(inner) == len(set(inner)), inner  # κάθε σελίδα μία φορά στο μενού
@@ -3982,3 +3982,52 @@ def test_member_deregistered_in_one_lodge_active_elsewhere(app):
     app.go(f'/members/card?ids={mid}')
     app.page.wait_for_selector('.mc-dereg-note')
     assert 'Διαγραμμένος από: ΘΕΜΙΣΤΟΚΛΗΣ 96' in app.text('.mc-dereg-note') and 'ΑΚΡΟΠΟΛΙΣ 2' in app.text('.mc-dereg-note')
+
+
+def test_treasury_fees_by_member_lodge_province_and_scope(app):
+    # Ταμείο: τακτικό 200 € στη Στοά 1ης συνδρομής, +20 € ανά επιπλέον Στοά (10 € στις ειδικές), Επίτιμο/Ομότιμο 0 €,
+    # όχι οι διαγραμμένοι· σύνολα ανά μέλος / Στοά / Επαρχία· προβολή ως email Γραμματέα Στοάς ή Επαρχιακής Γραμματείας
+    app.connect_local()
+    app.page.evaluate("""async () => { const {db} = await import('./core/store.js');
+      await db.save('x', (tx) => {
+        const m = (sn) => tx.insert('member_registry', { surname: sn, first_name: 'Δοκιμή', active: 1 }).id;
+        const ml = (id, no, name, status, capacity, fee_rank, seq) => tx.insert('member_lodges', { member_id: id, lodge_number: no, lodge_name: name, member_status: status, capacity, fee_rank, seq });
+        const a = m('Ταμείοαλφα'), b = m('Ταμείοβήτα'), c = m('Ταμείογάμμα'), d = m('Ταμείοδέλτα');
+        ml(a, '2', 'ΑΚΡΟΠΟΛΙΣ', '1. ΤΑΚΤΙΚΟ', 'Τακτικό', 1, 1); ml(a, '3', 'ΠΑΡΘΕΝΩΝ', '1. ΤΑΚΤΙΚΟ', 'Τακτικό', 2, 2);
+        ml(b, '2', 'ΑΚΡΟΠΟΛΙΣ', 'ΕΠΙΤΙΜΟ', 'Επίτιμο', '', 1);
+        ml(c, '2', 'ΑΚΡΟΠΟΛΙΣ', 'ΔΙΑΓΡΑΦΕΝ', 'Τακτικό', 1, 1); ml(c, '3', 'ΠΑΡΘΕΝΩΝ', '1. ΤΑΚΤΙΚΟ', '', '', 2);
+        ml(d, '3', 'ΠΑΡΘΕΝΩΝ', '1. ΤΑΚΤΙΚΟ', 'Ομότιμο', 1, 1);
+        tx.update('lodges', tx.all('lodges').find((l) => l.number === '2').id, { secretary_email: 'grammateas2@example.com' });
+      }); }""")
+    r = app.page.evaluate("""async () => { const t = await import('./modules/treasury.js'); const {db} = await import('./core/store.js');
+      const own = (n) => t.feeLines().filter((x) => x.m.surname.startsWith('Ταμείο') && x.lodge_no === n);
+      const per = (sn) => t.feeLines().filter((x) => x.m.surname === sn).reduce((s, x) => s + x.amount, 0);
+      return { a: per('Ταμείοαλφα'), b: per('Ταμείοβήτα'), c: per('Ταμείογάμμα'), d: per('Ταμείοδέλτα'), l2: own('2').reduce((s, x) => s + x.amount, 0), l3: own('3').reduce((s, x) => s + x.amount, 0),
+        cNote: t.feeLines().find((x) => x.m.surname === 'Ταμείογάμμα').note }; }""")
+    assert r['a'] == 220 and r['b'] == 0 and r['c'] == 200 and r['d'] == 0, r
+    assert r['l2'] == 200 and r['l3'] == 220 and 'υποτίθεται' in r['cNote'], r
+    # ειδική Στοά 3: η επιπλέον εισφορά 10 €
+    app.go('/treasury/settings')
+    app.page.fill('[name=fee_special_lodges]', '3')
+    app.page.click('#treS button.primary')
+    app.page.wait_for_selector('text=Οι ρυθμίσεις του Ταμείου αποθηκεύτηκαν')
+    assert app.page.evaluate("async () => (await import('./modules/treasury.js')).feeLines().filter((x) => x.m.surname === 'Ταμείοαλφα').map((x) => x.amount)") == [200, 10]
+    t = app.text()
+    assert 'Σύνολο εισφορών' in t and 'Ανά Επαρχία' in t and 'ΕπΜΣτ. Αθηνών' in t
+    # αναζήτηση μελών ανά Στοά: σύνολο εισφορών της Στοάς
+    app.go('/members?field=lodge&q=' + '3 · ΠΑΡΘΕΝΩΝ')
+    app.page.wait_for_selector('.tre-lodge')
+    assert 'Εισφορές Στοάς ΠΑΡΘΕΝΩΝ 3: 210 €' in app.text('.tre-lodge'), app.text('.tre-lodge')
+    # προβολή ως email Γραμματέα της Στοάς 2: μόνο η Στοά του
+    app.go('/treasury/lodges?as=grammateas2@example.com')
+    app.page.wait_for_selector('text=Προβολή ως')
+    rows = app.page.locator('table tbody tr:not(.stack-head)').all_inner_texts()
+    assert len(rows) == 1 and 'ΑΚΡΟΠΟΛΙΣ' in rows[0], rows
+    # Επαρχιακή Γραμματεία Αθηνών: μόνο Στοές της Επαρχίας
+    app.go('/treasury/lodges?as=athens.secretary@nglgreece.gr')
+    app.page.wait_for_selector('text=Προβολή ως')
+    rows = app.page.locator('table tbody tr:not(.stack-head)').all_inner_texts()
+    assert rows and all('ΕπΜΣτ. Αθηνών' in x for x in rows) and not any('ΠΑΡΘΕΝΩΝ' in x for x in rows), rows
+    app.go('/treasury/members?lodge=3')
+    app.page.wait_for_selector('text=Ταμείοαλφα')
+    assert 'Ταμείογάμμα' in app.text() and 'Ταμείοβήτα' not in app.text()
