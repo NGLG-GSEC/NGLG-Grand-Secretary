@@ -24,8 +24,8 @@ def set_lodges(app, lodges):
         if rows.count() <= i:
             app.page.click('[data-act=addlodge]')
         r = rows.nth(i)
+        r.locator('[data-k=name]').fill(p[0])  # πρώτα το όνομα: ο αριθμός (στην αλλαγή) το συμπληρώνει από τον κατάλογο
         r.locator('[data-k=number]').fill(p[1])
-        r.locator('[data-k=name]').fill(p[0])
         r.locator('[data-k=status]').fill(p[2])
         if p[3]:
             r.locator('[data-k=capacity]').select_option(p[3])
@@ -3963,3 +3963,22 @@ def test_lodge_portal_secretary_emails_manual_and_bulk(app):
       return [g('2').secretary_email, g('118').secretary_email, g('118').secretary, g('3').secretary_email]; }""")
     assert r == ['akropolis.gr@example.com', 'atlas.gr@example.com', 'Δοκιμαστής Γεώργιος', 'parthenon@example.com'], r
     assert '3 με email Γραμματέα' in app.page.locator('h2').first.inner_text()
+
+
+def test_member_deregistered_in_one_lodge_active_elsewhere(app):
+    # Μέλη Στοάς: όποιος είναι διαγραμμένος από τη Στοά φαίνεται ⛔ εκεί, και ✓ τακτικό μέλος ΕΜΣτΕ σε άλλη Στοά (λίστα και Κάρτα Μέλους)
+    app.connect_local()
+    add_member(app, surname='Διπλοστοΐτης', first='Νικόλαος', email='dp@example.com', mobile='6944000091', lodges='ΘΕΜΙΣΤΟΚΛΗΣ | 96 | ΔΙΑΓΡΑΦΕΝ\nΑΚΡΟΠΟΛΙΣ | 2 | 1. ΤΑΚΤΙΚΟ')
+    app.go('/members?field=lodge&q=' + '96 · ΘΕΜΙΣΤΟΚΛΗΣ')
+    app.page.wait_for_selector('.mdereg')
+    t = app.text('.mdereg')
+    assert 'Διαγραμμένος από τη Στοά ΘΕΜΙΣΤΟΚΛΗΣ 96' in t and 'Τακτικό μέλος ΕΜΣτΕ — Στοά ΑΚΡΟΠΟΛΙΣ 2' in t, t
+    assert app.page.locator('s.mdereg-l').count() == 1
+    # σε άλλη Στοά (όπου είναι ενεργός) δεν εμφανίζεται η σημείωση
+    app.go('/members?field=lodge&q=' + '2 · ΑΚΡΟΠΟΛΙΣ')
+    app.page.wait_for_selector('text=Διπλοστοΐτης')
+    assert app.page.locator('.mdereg').count() == 0 and app.page.locator('s.mdereg-l').count() == 1
+    mid = app.page.evaluate("async () => (await import('./core/store.js')).db.all('member_registry').find((x) => x.surname === 'Διπλοστοΐτης').id")
+    app.go(f'/members/card?ids={mid}')
+    app.page.wait_for_selector('.mc-dereg-note')
+    assert 'Διαγραμμένος από: ΘΕΜΙΣΤΟΚΛΗΣ 96' in app.text('.mc-dereg-note') and 'ΑΚΡΟΠΟΛΙΣ 2' in app.text('.mc-dereg-note')

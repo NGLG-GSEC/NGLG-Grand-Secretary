@@ -645,3 +645,10 @@ img.lodge-logo-big{max-width:220px;max-height:220px;object-fit:contain;display:b
 /* Πύλη Γραμματέων: email Γραμματέα ανά Στοά */
 input.secmail{width:100%;min-width:190px;margin-top:4px;font-size:13px}
 input.secmail.saved{border-color:#16a34a;background:#f0fdf4}
+
+/* Μητρώο: διαγραμμένος από μία Στοά */
+.mdereg{margin-bottom:4px;display:flex;flex-wrap:wrap;gap:4px}
+s.mdereg-l{color:#991b1b}
+.mc-dereg{color:#b91c1c}
+.mc-dereg-note{color:#7f1d1d}
+.pill.dg{background:#fee2e2;color:#991b1b;border-color:#fca5a5}

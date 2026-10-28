@@ -260,9 +260,16 @@ function listPage({ query }) {
   const lq = field === 'lodge' ? q.replace(/^\s*(\d+|Φ)\s*·\s*/, '') : q;
   const H = (v, f) => hl(v, q, field === 'all' || field === f);
   const extra = (x, col, f) => { const v = x[col]; if (!(q && v && (field === 'all' || field === f))) return ''; const h = hl(v, q); return h.includes('<mark>') ? `<br><small class="muted">${h}</small>` : ''; };
+  // Αναζήτηση ανά Στοά: η Στοά της αναζήτησης πρώτη, και σαφές αν το μέλος είναι διαγραμμένο εκεί αλλά ενεργό (τακτικό) αλλού
+  const qNo = field === 'lodge' ? ((q.match(/^\s*(\d+|Φ)\b/) || [])[1] || '') : '';
+  const isQLodge = (l) => field === 'lodge' && !!q && (qNo ? lodgeNoKey(l.lodge_number) === lodgeNoKey(qNo) : fold(`${l.lodge_name} ${l.lodge_number}`).includes(fold(lq)));
   const rows = shown.map((x) => {
-    const ls = byM[x.id] || [];
-    const lod = ls.slice(0, 3).map((l) => hl(`${l.lodge_name} ${l.lodge_number}`.trim(), lq, field === 'lodge' || field === 'all') + ((c, f) => (c || f ? ` <small class="muted">${esc([c, f].filter(Boolean).join(' · '))}</small>` : ''))(capacityOf(l), Number(l.fee_rank) === 1 ? 'πλήρης συνδρ.' : feeRankLabel(l.fee_rank))).join('<br>') + (ls.length > 3 ? `<br><small>+${ls.length - 3} ακόμη</small>` : '');
+    const ls = sortBy(byM[x.id] || [], (l) => (isQLodge(l) ? 0 : 1));
+    const here = ls.filter(isQLodge), elsewhere = ls.filter((l) => !isQLodge(l) && !lodgeDeregged(l));
+    const note = here.length && here.every(lodgeDeregged)
+      ? `<div class="mdereg"><span class="pill dg">⛔ Διαγραμμένος από τη Στοά ${esc(here[0].lodge_name)} ${esc(here[0].lodge_number)}${here[0].dereg_date ? ' · ' + esc(fmtDate(here[0].dereg_date)) : ''}</span>${elsewhere.length
+        ? ` <span class="pill ok">✓ ${esc(capacityOf(elsewhere[0]) || 'Τακτικό')} μέλος ΕΜΣτΕ — Στοά ${esc(elsewhere.map((l) => `${l.lodge_name} ${l.lodge_number}`.trim()).join(', '))}</span>` : ' <span class="pill dg">διαγραμμένος από όλες τις Στοές</span>'}</div>` : '';
+    const lod = note + ls.slice(0, 3).map((l) => (lodgeDeregged(l) ? '<s class="mdereg-l">' : '') + hl(`${l.lodge_name} ${l.lodge_number}`.trim(), lq, field === 'lodge' || field === 'all') + (lodgeDeregged(l) ? `</s> <span class="pill dg" title="${esc(l.member_status)}">⛔ Διαγραφείς${l.dereg_date ? ' ' + esc(fmtDate(l.dereg_date)) : ''}</span>` : '') + ((c, f) => (c || f ? ` <small class="muted">${esc([c, f].filter(Boolean).join(' · '))}</small>` : ''))(lodgeDeregged(l) ? '' : capacityOf(l), Number(l.fee_rank) === 1 ? 'πλήρης συνδρ.' : feeRankLabel(l.fee_rank))).join('<br>') + (ls.length > 3 ? `<br><small>+${ls.length - 3} ακόμη</small>` : '');
     return [`<b>${x.id}</b>`, regBadge(x), (x.title && x.title !== 'Αδ.' ? `<small class="mtitle">${esc(x.title)}</small><br>` : '') + H(x.surname, 'surname') + extra(x, 'surname_variants', 'surname'), H(x.first_name, 'first_name') + extra(x, 'first_name_variants', 'first_name'),
       noContact(x) ? '<span class="muted">⛔</span>' : H(x.email, 'email') + extra(x, 'other_emails', 'email'), noContact(x) ? '<span class="muted">⛔</span>' : H(x.mobile, 'mobile') + extra(x, 'other_mobiles', 'mobile'),
       esc(x.degree) + [['date_ea', 'Μαθ.'], ['date_fc', 'Εταίρ.'], ['date_mm', 'Διδ.']].filter(([k]) => x[k]).map(([k, a]) => `<br><small class="muted">${a} ${esc(fmtDate(x[k]))}</small>`).join(''), `<small>${esc(highestOfficeText(x.id))}</small>`, lod, noContact(x) ? `<span class="pill bad" title="${NO_CONTACT}">⛔ Διαγραμμένος</span>` : x.active ? 'ΝΑΙ' : 'ΟΧΙ', `<a class="btn small" href="#/members/${x.id}">Επεξεργασία</a> <a class="btn small" href="#/members/card?ids=${x.id}">🪪 Κάρτα Μέλους</a>`];
@@ -487,6 +494,8 @@ const plainUpper = (v) => String(v || '').normalize('NFD').replace(/[̀-ͯ]/g, '
 const yes = (v) => ['ΝΑΙ', 'NAI', 'YES', 'TRUE', '1', 'Y'].includes(plainUpper(v));
 // Κανόνας διαγραφής (απαγορεύεται η επικοινωνία): ΔΙΑΓΡΑΦΕΝ σε ΟΛΕΣ τις Στοές του μέλους — η διαγραφή από μία Στοά δεν αρκεί.
 // Χωρίς καταστάσεις Στοών: η ένδειξη All_Deregistered της πηγής.
+// Διαγραμμένος (ή μετεγγραφείς) από μία συγκεκριμένη Στοά
+export const lodgeDeregged = (l) => /ΔΙΑΓΡΑΦ|ΜΕΤΕΣΘ/.test(plainUpper((l || {}).member_status));
 export const deregEverywhere = (statuses) => { const st = statuses.map(plainUpper).filter(Boolean); return st.length > 0 && st.every((x) => /ΔΙΑΓΡΑΦ/.test(x)); };
 export const isDereg = (all, statuses = []) => (statuses.some((x) => String(x || '').trim()) ? deregEverywhere(statuses) : yes(all));
 // Αριθμός Στοάς από το όνομα όταν λείπει. Ονόματα που υπάρχουν δύο φορές (ΠΛΑΤΩΝ 70/103, ΑΚΡΟΠΟΛΙΣ 2/104) ξεχωρίζουν με το έτος.

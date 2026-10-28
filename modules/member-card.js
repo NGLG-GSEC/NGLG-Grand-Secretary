@@ -8,7 +8,7 @@ import { regCode, canonicalId } from '../core/people.js';
 import { noContact, attachPicker, memberItems } from '../core/pickers.js';
 import { IMG, printPaper, gsSignatureText } from '../core/paper.js';
 import { senderBanner } from '../core/mail.js';
-import { isoOf, lodgesByMember, capacityOf, feeRankLabel } from './members.js';
+import { isoOf, lodgesByMember, capacityOf, feeRankLabel, lodgeDeregged } from './members.js';
 import { epeteiridaOf } from './epeteirida-table.js';
 import { memberVisits } from './visits.js';
 
@@ -40,8 +40,9 @@ export function memberCardPaper(m) {
 <section><h3>Τεκτονική πορεία</h3>${kv([['Εισδοχή — Μαθητής', d(m.date_ea) || '<span class="mc-empty">—</span>'], ['Διέλευση — Εταίρος', d(m.date_fc) || '<span class="mc-empty">—</span>'],
   ['Έγερση — Διδάσκαλος', d(m.date_mm) || '<span class="mc-empty">—</span>'], ['Στοά Εγέρσεως', dash(`${m.mm_lodge_name || ''} ${m.mm_lodge_number || ''}`.trim())]])}</section>
 <section><h3>Στοές</h3>${tbl(['Στοά', 'Ιδιότητα', 'Συνδρομή', 'Κατάσταση', 'Ημ. ιδιότητας', 'Β΄ Επόπτης', 'Α΄ Επόπτης', 'Σεβάσμιος', 'Διαγραφή'],
-  ls.map((l) => [`<b>${esc(`${l.lodge_name} ${l.lodge_number}`.trim())}</b>`, dash(capacityOf(l)), dash(feeRankLabel(l.fee_rank)), dash(l.member_status), d(l.capacity_date), d(l.jw_date), d(l.sw_date), d(l.wm_date), d(l.dereg_date)]),
+  ls.map((l) => [`<b>${esc(`${l.lodge_name} ${l.lodge_number}`.trim())}</b>`, lodgeDeregged(l) ? '<span class="mc-empty">—</span>' : dash(capacityOf(l)), dash(feeRankLabel(l.fee_rank)), lodgeDeregged(l) ? `<b class="mc-dereg">⛔ ${esc(l.member_status)}</b>` : dash(l.member_status), d(l.capacity_date), d(l.jw_date), d(l.sw_date), d(l.wm_date), d(l.dereg_date)]),
   'Δεν έχουν καταχωριστεί Στοές.')}
+${ls.some(lodgeDeregged) && ls.some((l) => !lodgeDeregged(l)) ? `<p class="mc-sub mc-dereg-note">⛔ Διαγραμμένος από: ${ls.filter(lodgeDeregged).map((l) => `<b>${esc(`${l.lodge_name} ${l.lodge_number}`.trim())}</b>`).join(', ')} · ✓ ${esc(capacityOf(ls.find((l) => !lodgeDeregged(l))) || 'Τακτικό')} μέλος ΕΜΣτΕ — ${ls.filter((l) => !lodgeDeregged(l)).map((l) => `<b>${esc(`${l.lodge_name} ${l.lodge_number}`.trim())}</b>`).join(', ')}</p>` : ''}
 ${offices.length ? `<p class="mc-sub">Αξιώματα σε Στοές: ${offices.map(([t, l, x]) => `<b>${t}</b> ${l}${x ? ` (${x})` : ''}`).join(' · ')}</p>` : ''}</section>
 <section><h3>Επετηρίδα</h3>${tbl(['Ανώτατο αξίωμα / βαθμός', 'Τίτλος κατά το Σύνταγμα', 'Προσφώνηση', 'Διάταγμα', 'Εν ενεργεία', 'ΤΜΔ', 'Επαρχία / Στοά'],
   ep.map((r) => [`<b>${dash(r.rank)}</b>`, dash(r.title), dash(r.honorific), dash(r.decree_no ? `${r.decree_no}${r.decree_year ? '/' + r.decree_year : ''}` : r.decree_year), Number(r.active) ? `ΝΑΙ${r.current ? ' — ' + esc(r.current) : ''}` : dash(r.current),
