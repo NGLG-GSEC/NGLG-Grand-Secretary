@@ -161,7 +161,7 @@ module({
     },
     excel: {
       file: 'EMSTE_SYMBOLIKES_STOES.xlsx', sheet: 'ΣΥΜΒΟΛΙΚΕΣ ΣΤΟΕΣ', key: 'number',
-      cols: [{ k: 'number', label: 'Αριθμός', aliases: ['Αρ.', 'Αρ', 'Number', 'No', 'ΝΟ'], w: 9 }, { k: 'name', label: 'Όνομα', aliases: ['Στοά', 'Name', 'Lodge'], w: 32 }, { k: 'orient', label: 'Ανατολή', aliases: ['Πόλη', 'Orient', 'City'], w: 16 },
+      cols: [{ k: 'number', label: 'Αριθμός', aliases: ['Αρ.', 'Αρ', 'Number', 'No', 'ΝΟ', 'ΣΤΟΑ ΥΠ. ΑΡΙΘΜ.', 'ΥΠ. ΑΡΙΘΜ.', 'Αριθμός Στοάς'], w: 9 }, { k: 'name', label: 'Όνομα', aliases: ['Στοά', 'Name', 'Lodge'], w: 32 }, { k: 'orient', label: 'Ανατολή', aliases: ['Πόλη', 'Orient', 'City'], w: 16 },
         { k: 'provincial', label: 'Επαρχιακή Μεγάλη Στοά', aliases: ['ΕπΜΣτ.', 'ΕπΜΣτ', 'Provincial'], w: 34 }, { k: 'email', label: 'Email Στοάς', aliases: ['Email', 'Email address', 'E-mail', 'Επίσημο email'], w: 32 }, { k: 'master', label: 'Σεβάσμιος', aliases: ['Master'], w: 26 }, { k: 'master_mobile', label: 'Κινητό Σεβασμίου', aliases: ['Κιν', 'Κινητό'], w: 16 },
         { k: 'secretary', label: 'Γραμματέας', aliases: ['Secretary'], w: 26 }, { k: 'secretary_email', label: 'Email Γραμματέα', aliases: ['Secretary Email'], w: 32 }, { k: 'secretary_mobile', label: 'Κινητό Γραμματέα', aliases: ['Κινητό Γραμματέως'], w: 16 }, { k: 'status', label: 'Κατάσταση', aliases: ['Status'], w: 12 },
         { k: 'founded_on', label: 'Ημ. ίδρυσης', aliases: ['Ίδρυση', 'Ημερομηνία ίδρυσης', 'Founded'], w: 12 },

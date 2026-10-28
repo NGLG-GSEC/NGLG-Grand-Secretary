@@ -15,7 +15,7 @@
  * Ο κώδικας είναι δημόσιος: δεν περιέχει κωδικούς, email ή δεδομένα μελών. Οδηγίες: lodge/README.md
  */
 
-const VERSION = 3;
+const VERSION = 4;
 const SESSION_SECONDS = 21600; // σύνδεση διαχειριστή: 6 ώρες
 const OTP_SECONDS = 600, OTP_MAX_SENDS = 5, OTP_MAX_TRIES = 5;
 const ROOT_NAME = 'Μητρώα Στοών — Πύλη Γραμματέων';
@@ -45,6 +45,8 @@ function doPost(e) {
   try { b = JSON.parse(e.postData.contents); } catch (err) { return json_({ ok: false, error: 'bad_request' }); }
   try {
     switch (b.action) {
+      case 'lodge_otp_send': return json_(lodgeOtpSend_(b));
+      case 'lodge_otp_verify': return json_(lodgeOtpVerify_(b));
       case 'login': return json_(login_(b));
       case 'save': return json_(withLock_(() => save_(b)));
       case 'prov_otp_send': return json_(provOtpSend_(b));
@@ -71,9 +73,59 @@ function doPost(e) {
 }
 
 // ---------------------------------------------------------------- Γραμματέας Στοάς
+// Είσοδος στη Στοά: με σύνδεση από κωδικό στο email της Στοάς (session)· ο παλιός κωδικός Στοάς μόνο όπου δεν έχει οριστεί email Στοάς
+function lodgeAuth_(no, b) {
+  if (b.session) {
+    const raw = /^[\w-]{20,80}$/.test(String(b.session)) ? CacheService.getScriptCache().get('lsess_' + b.session) : null;
+    const s = raw ? JSON.parse(raw) : null, cur = readCurrent_(no);
+    if (!s || s.lodges.indexOf(no) === -1 || !cur || String(cur.meta.login_email || '') !== s.email) throw new Error('unauthorized');
+    return s.email;
+  }
+  const cur = readCurrent_(no);
+  if (cur && cur.meta && cur.meta.login_email) throw new Error('email_only');
+  checkCode_(no, b.code);
+  return '';
+}
+function logins_() { try { return JSON.parse(prop_('LOGINS') || '{}'); } catch (e) { return {}; } }
+// Κωδικός μιας χρήσης στο email της Στοάς (μόνο αυτό το email ανοίγει τη Στοά)
+function lodgeOtpSend_(b) {
+  const email = String(b.email || '').trim().toLowerCase();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new Error('bad_email');
+  const nos = logins_()[email] || [];
+  if (!nos.length) { Utilities.sleep(800); return { ok: true, sent: true }; } // ίδια απάντηση για άγνωστο email
+  const cache = CacheService.getScriptCache(), nKey = 'lotpn_' + email, n = Number(cache.get(nKey) || 0);
+  if (n >= OTP_MAX_SENDS) throw new Error('too_many_tries');
+  const code = String(parseInt(Utilities.getUuid().replace(/-/g, '').slice(0, 12), 16) % 1000000).padStart(6, '0');
+  cache.put('lotp_' + email, otpHash_(email, code), OTP_SECONDS); cache.put('lotpt_' + email, '0', OTP_SECONDS); cache.put(nKey, String(n + 1), 900);
+  const names = nos.map(function (no) { const c = readCurrent_(no); return 'Σεβ. Στοά «' + (c ? c.meta.name : '') + '» Αρ. ' + no; }).join(', ');
+  const html = '<div style="font-family:Georgia,serif;max-width:560px;margin:auto;border:1px solid #d9cfb4;border-radius:10px;overflow:hidden">'
+    + '<div style="background:#1d2f5e;color:#fff;padding:18px 22px;text-align:center"><div style="font-size:18px;letter-spacing:.06em">ΕΘΝΙΚΗ ΜΕΓΑΛΗ ΣΤΟΑ ΤΗΣ ΕΛΛΑΔΟΣ</div><div style="font-size:12px;letter-spacing:.3em;color:#e5c98d;margin-top:4px">ΜΕΓΑΛΗ ΓΡΑΜΜΑΤΕΙΑ</div></div>'
+    + '<div style="padding:22px;color:#1f2937;font-size:15px;line-height:1.6"><p>Προς τη Γραμματεία της <b>' + names + '</b>,</p>'
+    + '<p>Ο κωδικός σας για την <b>Πύλη Γραμματέων Στοών</b> (Μητρώο Μελών της Στοάς) είναι:</p>'
+    + '<div style="text-align:center;margin:18px 0"><span style="display:inline-block;font-size:32px;letter-spacing:.35em;font-weight:bold;color:#1d2f5e;background:#f7f3e8;border:1px solid #d9cfb4;border-radius:8px;padding:10px 18px">' + code + '</span></div>'
+    + '<p>Γράψτε τον στο πεδίο «Κωδικός» της σελίδας. Ισχύει για 10 λεπτά και μία μόνο χρήση.</p>'
+    + '<p style="color:#6b7280;font-size:13px">Αν δεν ζητήσατε εσείς τον κωδικό, αγνοήστε αυτό το μήνυμα.</p>'
+    + '<p style="margin-top:22px">Με αδελφικούς χαιρετισμούς,<br><b>Μεγάλη Γραμματεία ΕΜΣτΕ</b></p></div></div>';
+  MailApp.sendEmail({ to: email, subject: 'Κωδικός σύνδεσης ' + code + ' — Πύλη Γραμματέων Στοών (ΕΜΣτΕ)', htmlBody: html,
+    body: 'Κωδικός για την Πύλη Γραμματέων Στοών: ' + code + ' (ισχύει 10 λεπτά).', name: 'Μεγάλη Γραμματεία ΕΜΣτΕ' });
+  return { ok: true, sent: true };
+}
+function lodgeOtpVerify_(b) {
+  const email = String(b.email || '').trim().toLowerCase(), code = String(b.code || '').replace(/\D/g, '');
+  const cache = CacheService.getScriptCache(), want = cache.get('lotp_' + email), tries = Number(cache.get('lotpt_' + email) || 0);
+  if (!want || tries >= OTP_MAX_TRIES) throw new Error('otp_expired');
+  if (code.length !== 6 || otpHash_(email, code) !== want) { cache.put('lotpt_' + email, String(tries + 1), OTP_SECONDS); throw new Error('otp_wrong'); }
+  cache.put('lotp_' + email, '', 1);
+  const nos = logins_()[email] || [];
+  if (!nos.length) throw new Error('unauthorized');
+  const sid = Utilities.getUuid().replace(/-/g, '') + Utilities.getUuid().replace(/-/g, '');
+  cache.put('lsess_' + sid, JSON.stringify({ email: email, lodges: nos }), SESSION_SECONDS);
+  return { ok: true, session: sid, email: email, lodges: nos.map(function (no) { const c = readCurrent_(no); return { number: no, name: c ? c.meta.name : '' }; }) };
+}
+
 function login_(b) {
   const no = lodgeNo_(b.lodge);
-  checkCode_(no, b.code);
+  lodgeAuth_(no, b);
   const cur = readCurrent_(no);
   if (!cur) return { ok: false, error: 'no_registry' };
   return { ok: true, lodge: cur.meta, members: cur.members, version: cur.version, version_name: cur.version_name, note_types: NOTE_TYPES };
@@ -81,7 +133,7 @@ function login_(b) {
 
 function save_(b) {
   const no = lodgeNo_(b.lodge);
-  checkCode_(no, b.code);
+  const email = lodgeAuth_(no, b);
   const cur = readCurrent_(no);
   if (!cur) return { ok: false, error: 'no_registry' };
   if (Number(b.base_version) !== Number(cur.version)) return { ok: false, error: 'conflict', version: cur.version };
@@ -90,7 +142,7 @@ function save_(b) {
   if (!changes.length) return { ok: false, error: 'no_changes' };
   const noteType = NOTE_TYPES.indexOf(b.note_type) >= 0 ? b.note_type : '';
   const note = String(b.note || '').slice(0, 2000);
-  const by = String(b.by || '').replace(/\s+/g, ' ').trim().slice(0, 120);
+  const by = (String(b.by || '').replace(/\s+/g, ' ').trim().slice(0, 120) + (email ? ' (' + email + ')' : '')).trim();
   const rec = writeVersion_(no, cur, next, 'Αλλαγή', { changes: changes, note_type: noteType, note: note, by: by, source: 'lodge' });
   mailChange_(cur.meta, rec);
   return { ok: true, version: rec.version, version_name: rec.version_name, changes: changes.length, mailed: rec.mailed || '' };
@@ -222,7 +274,12 @@ function push_(b) {
       LODGE_FIELDS.forEach(function (k) { x.lodge[k] = str_((m.lodge || {})[k]); });
       return x;
     });
-    const meta = { number: no, name: str_(L.meta.name), provincial: str_(L.meta.provincial), emails: (L.meta.emails || []).map(str_).filter(Boolean) };
+    const le = String(L.meta.login_email || '').trim().toLowerCase();
+    const meta = { number: no, name: str_(L.meta.name), provincial: str_(L.meta.provincial), emails: (L.meta.emails || []).map(str_).filter(Boolean), login_email: /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(le) ? le : '' };
+    // email εισόδου → Στοές (ευρετήριο για τον κωδικό στο email)
+    const lg = logins_(); Object.keys(lg).forEach(function (e) { lg[e] = lg[e].filter(function (x) { return x !== no; }); if (!lg[e].length) delete lg[e]; });
+    if (meta.login_email) (lg[meta.login_email] = lg[meta.login_email] || []).push(no);
+    PropertiesService.getScriptProperties().setProperty('LOGINS', JSON.stringify(lg));
     if (cur && JSON.stringify(cur.members) === JSON.stringify(members) && JSON.stringify(cur.meta) === JSON.stringify(meta)) return;
     writeVersion_(no, cur || { version: 0, members: [], meta: meta }, members, 'ΕνημέρωσηΜΓ', { source: 'app', changes: [], meta: meta });
     written++;

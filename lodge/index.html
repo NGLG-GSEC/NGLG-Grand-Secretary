@@ -78,12 +78,16 @@
 <main class="wrap">
   <section id="login" class="card" style="max-width:520px;margin:28px auto">
     <h1 style="margin-top:0">Είσοδος Γραμματέα Στοάς</h1>
-    <p class="muted">Βλέπετε και διορθώνετε μόνο το Μητρώο Μελών της Στοάς σας. Τον κωδικό τον στέλνει η Μεγάλη Γραμματεία στο επίσημο email της Στοάς.</p>
+    <p class="muted">Βλέπετε και διορθώνετε μόνο το Μητρώο Μελών της Στοάς σας. Είσοδος <b>μόνο με το επίσημο email της Στοάς</b>: εκεί στέλνεται κωδικός μιας χρήσης.</p>
     <form id="lf">
-      <label for="lno">Στοά</label><select id="lno" required><option value="">— Επιλέξτε Στοά —</option></select>
-      <label for="lcode">Κωδικός Στοάς</label><input id="lcode" autocomplete="off" autocapitalize="characters" spellcheck="false" required placeholder="π.χ. ABCD-2345">
-      <div class="row" style="margin-top:14px"><button class="btn primary" id="lbtn">Είσοδος</button></div>
+      <div id="s1"><label for="lemail">Email της Στοάς</label><input id="lemail" type="email" autocomplete="email" required placeholder="το επίσημο email της Στοάς">
+        <div class="row" style="margin-top:14px"><button class="btn primary" id="lbtn">✉ Αποστολή κωδικού</button></div></div>
+      <div id="s2" class="hidden"><label for="lcode">Κωδικός (6 ψηφία) — στάλθηκε στο email της Στοάς</label><input id="lcode" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="••••••">
+        <div class="row" style="margin-top:14px"><button type="button" class="btn primary" id="vbtn">✓ Είσοδος</button><button type="button" class="btn" id="rbtn">Άλλο email</button></div></div>
+      <div id="s3" class="hidden"><label for="lno">Στοά</label><select id="lno"></select>
+        <div class="row" style="margin-top:14px"><button type="button" class="btn primary" id="obtn">Άνοιγμα Μητρώου</button></div></div>
     </form>
+    <p class="muted" style="font-size:13px">Αν η Στοά δεν έχει καταχωρισμένο email ή αυτό άλλαξε, επικοινωνήστε με τη Μεγάλη Γραμματεία.</p>
     <div id="lmsg"></div>
   </section>
 
@@ -178,22 +182,14 @@
     if (!r.ok) throw new Error('Ο server δεν απάντησε (' + r.status + ').');
     return r.json();
   }
-  const errText = (e) => ({ unauthorized: 'Λάθος κωδικός Στοάς.', too_many_tries: 'Πολλές λάθος προσπάθειες — δοκιμάστε ξανά σε 15 λεπτά.', no_registry: 'Το Μητρώο της Στοάς δεν έχει δημοσιευθεί ακόμη από τη Μεγάλη Γραμματεία.',
+  const errText = (e) => ({ unauthorized: 'Η σύνδεση έληξε ή το email δεν αντιστοιχεί πια στη Στοά — ζητήστε νέο κωδικό.', email_only: 'Η Στοά μπαίνει μόνο με το email της.', otp_wrong: 'Λάθος κωδικός.', otp_expired: 'Ο κωδικός έληξε ή χρησιμοποιήθηκε — ζητήστε νέο.', bad_email: 'Μη έγκυρο email.', too_many_tries: 'Πολλές λάθος προσπάθειες — δοκιμάστε ξανά σε 15 λεπτά.', no_registry: 'Το Μητρώο της Στοάς δεν έχει δημοσιευθεί ακόμη από τη Μεγάλη Γραμματεία.',
     conflict: 'Το Μητρώο άλλαξε στο μεταξύ (από άλλη συσκευή ή τη Μεγάλη Γραμματεία). Φορτώθηκε ξανά — επαναλάβετε τις αλλαγές σας.', no_changes: 'Δεν υπάρχουν αλλαγές.', bad_lodge: 'Επιλέξτε Στοά.' }[e] || e);
   const show = (el, text, kind) => { el.innerHTML = text ? `<div class="msg ${kind || 'err'}">${esc(text)}</div>` : ''; };
 
-  async function lodgesList() {
-    try {
-      const xs = PUB && PUB.lodges && PUB.lodges.length ? PUB.lodges : await (await fetch('../seed/lodges.json')).json();
-      $('#lno').insertAdjacentHTML('beforeend', xs.filter((x) => x.status !== 'Ανενεργή').sort((a, b) => (Number(a.number) || 1e9) - (Number(b.number) || 1e9))
-        .map((x) => `<option value="${esc(x.number)}">${esc(x.number)} · ${esc(x.name)}</option>`).join(''));
-    } catch (e) { /* χωρίς κατάλογο: πληκτρολόγηση */ }
-  }
-
-  async function login(lodge, code, quiet) {
-    const r = await call({ action: 'login', lodge, code });
+  async function login(lodge, session, quiet) {
+    const r = await call({ action: 'login', lodge, session });
     if (!r.ok) { if (!quiet) show($('#lmsg'), errText(r.error)); sessionStorage.removeItem(SKEY); return false; }
-    S = { lodge, code }; sessionStorage.setItem(SKEY, JSON.stringify(S));
+    S = { lodge, session }; sessionStorage.setItem(SKEY, JSON.stringify(S));
     meta = r.lodge; version = r.version; base = r.members; cur = JSON.parse(JSON.stringify(r.members));
     $('#ntype').innerHTML = '<option value="">— Είδος —</option>' + (r.note_types || []).map((t) => `<option>${esc(t)}</option>`).join('');
     const sts = [...new Set(['1. ΤΑΚΤΙΚΟ', 'ΔΙΑΓΡΑΦΕΝ', ...base.map((m) => str((m.lodge || {}).member_status)).filter(Boolean)])];
@@ -262,11 +258,11 @@
     if (!ok) return;
     $('#saveBtn').disabled = true; show($('#amsg'), 'Αποθήκευση…', 'ok');
     try {
-      const r = await call({ action: 'save', lodge: S.lodge, code: S.code, base_version: version, members: cur.map((m) => ({ id: m.is_new ? null : m.id, ...Object.fromEntries(MEMBER_FIELDS.map((k) => [k, str(m[k])])), lodge: Object.fromEntries(LODGE_FIELDS.map((k) => [k, str((m.lodge || {})[k])])) })),
+      const r = await call({ action: 'save', lodge: S.lodge, session: S.session, base_version: version, members: cur.map((m) => ({ id: m.is_new ? null : m.id, ...Object.fromEntries(MEMBER_FIELDS.map((k) => [k, str(m[k])])), lodge: Object.fromEntries(LODGE_FIELDS.map((k) => [k, str((m.lodge || {})[k])])) })),
         note_type: $('#ntype').value, note: str($('#note').value), by: str($('#nby').value) });
-      if (!r.ok) { show($('#amsg'), errText(r.error)); if (r.error === 'conflict') await login(S.lodge, S.code, true); render(); return; }
+      if (!r.ok) { show($('#amsg'), errText(r.error)); if (r.error === 'conflict') await login(S.lodge, S.session, true); render(); return; }
       try { localStorage.setItem('nglg-lodge-by', str($('#nby').value)); } catch (e) { /* */ }
-      await login(S.lodge, S.code, true);
+      await login(S.lodge, S.session, true);
       $('#note').value = ''; $('#ntype').value = '';
       show($('#amsg'), `✓ Αποθηκεύτηκε ως «${r.version_name}» (${r.changes} ${r.changes === 1 ? 'μέλος' : 'μέλη'})${r.mailed ? ' · email στη Στοά: ' + r.mailed : ''}.`, 'ok');
     } catch (e) { show($('#amsg'), e.message || String(e)); render(); }
@@ -289,24 +285,35 @@
   $('#logout').addEventListener('click', () => { sessionStorage.removeItem(SKEY); location.reload(); });
   $('#f_capacity').insertAdjacentHTML('beforeend', CAPACITIES.map((c) => `<option>${c}</option>`).join(''));
   window.addEventListener('beforeunload', (e) => { if (S && changes().length) { e.preventDefault(); e.returnValue = ''; } });
+  // Είσοδος: email Στοάς → κωδικός στο email → (αν το email έχει πολλές Στοές) επιλογή Στοάς
+  let pendingSession = '';
+  const step = (n) => ['#s1', '#s2', '#s3'].forEach((id, i) => $(id).classList.toggle('hidden', i !== n - 1));
   $('#lf').addEventListener('submit', async (e) => {
     e.preventDefault(); $('#lbtn').disabled = true; show($('#lmsg'), '');
-    try { await login($('#lno').value, str($('#lcode').value).toUpperCase()); } catch (err) { show($('#lmsg'), err.message || String(err)); }
+    try { const r = await call({ action: 'lodge_otp_send', email: str($('#lemail').value) }); if (!r.ok) show($('#lmsg'), errText(r.error));
+      else { step(2); $('#lcode').focus(); show($('#lmsg'), 'Αν το email είναι καταχωρισμένο email Στοάς, στάλθηκε κωδικός από τη Μεγάλη Γραμματεία (ελέγξτε και τα ανεπιθύμητα).', 'ok'); } }
+    catch (err) { show($('#lmsg'), err.message || String(err)); }
     $('#lbtn').disabled = false;
   });
+  $('#rbtn').addEventListener('click', () => { step(1); show($('#lmsg'), ''); });
+  $('#lcode').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); $('#vbtn').click(); } });
+  $('#vbtn').addEventListener('click', async () => {
+    $('#vbtn').disabled = true; show($('#lmsg'), '');
+    try {
+      const r = await call({ action: 'lodge_otp_verify', email: str($('#lemail').value), code: str($('#lcode').value) });
+      if (!r.ok) show($('#lmsg'), errText(r.error));
+      else if (r.lodges.length === 1) await login(r.lodges[0].number, r.session);
+      else { pendingSession = r.session; $('#lno').innerHTML = r.lodges.map((x) => `<option value="${esc(x.number)}">${esc(x.number)} · ${esc(x.name)}</option>`).join(''); step(3); }
+    } catch (err) { show($('#lmsg'), err.message || String(err)); }
+    $('#vbtn').disabled = false;
+  });
+  $('#obtn').addEventListener('click', () => login($('#lno').value, pendingSession));
 
   (async () => {
     try { $('#nby').value = localStorage.getItem('nglg-lodge-by') || ''; } catch (e) { /* */ }
     API = await config();
-    await lodgesList();
-    const qs = new URLSearchParams(location.search);
-    if (qs.get('lodge')) {
-      const n = qs.get('lodge').toUpperCase();
-      if (![...$('#lno').options].some((o) => o.value === n)) $('#lno').insertAdjacentHTML('beforeend', `<option value="${esc(n)}">${esc(n)}</option>`);
-      $('#lno').value = n;
-    }
     let s = null; try { s = JSON.parse(sessionStorage.getItem(SKEY) || 'null'); } catch (e) { /* */ }
-    if (s && s.lodge && s.code) { try { await login(s.lodge, s.code, true); } catch (e) { /* */ } }
+    if (s && s.lodge && s.session) { try { await login(s.lodge, s.session, true); } catch (e) { /* */ } }
     if (!API) show($('#lmsg'), 'Η Πύλη Γραμματέων δεν έχει ενεργοποιηθεί ακόμη από τη Μεγάλη Γραμματεία.');
   })();
 })();

@@ -3345,7 +3345,7 @@ def test_members_export_active_lodge_province(app, tmp_path):
 def test_lodge_portal_apps_script_logic():
     # Ο server της Πύλης (lodge/apps-script/Code.gs) με ψεύτικο Drive/Mail: δημοσίευση → σύνδεση → αλλαγή (έκδοση + email) → λήψη → επαναφορά
     import subprocess
-    for t in ('lodge_portal.test.js', 'lodge_portal_admin.test.js', 'province_secretaries.test.js'):  # και σύνδεση διαχειριστή: OTP email / Google (super admin)
+    for t in ('lodge_portal.test.js', 'lodge_portal_admin.test.js', 'province_secretaries.test.js', 'lodge_email_login.test.js'):  # και σύνδεση διαχειριστή: OTP email / Google (super admin)
         r = subprocess.run(['node', str(ROOT / 'tests' / 'gas' / t)], capture_output=True, text=True)
         assert r.returncode == 0, t + ': ' + r.stdout + r.stderr
 
@@ -3362,8 +3362,12 @@ def test_lodge_secretary_page(browser, base_url):
 
     def api(route):
         b = _j.loads(route.request.post_data or '{}')
+        if b.get('action') == 'lodge_otp_send':
+            return route.fulfill(json={'ok': True, 'sent': True})
+        if b.get('action') == 'lodge_otp_verify':
+            return route.fulfill(json={'ok': True, 'session': 'l' * 40, 'email': b['email'], 'lodges': [{'number': '118', 'name': 'ΑΤΛΑΣ'}]} if b.get('code') == '123456' else {'ok': False, 'error': 'otp_wrong'})
         if b.get('action') == 'login':
-            ok = b.get('lodge') == '118' and b.get('code') == 'ABCD-2345'
+            ok = b.get('lodge') == '118' and b.get('session') == 'l' * 40
             return route.fulfill(json={'ok': True, 'lodge': {'number': '118', 'name': 'ΑΤΛΑΣ', 'provincial': 'ΕπΜΣτ. Πειραιώς'}, 'members': members, 'version': 4, 'note_types': ['Αναγγελία Εισδοχής', 'Άλλο']} if ok else {'ok': False, 'error': 'unauthorized'})
         if b.get('action') == 'save':
             saved.append(b)
@@ -3373,11 +3377,12 @@ def test_lodge_secretary_page(browser, base_url):
     page.route('**/lodge/portal.json*', lambda r: r.fulfill(json={'api_url': API, 'lodges': [{'number': '2', 'name': 'ΑΚΡΟΠΟΛΙΣ'}, {'number': '118', 'name': 'ΑΤΛΑΣ'}]}))
     page.route(API, api)
     page.goto(base_url + 'lodge/?lodge=118')
-    page.wait_for_function("document.querySelector('#lno').options.length === 3")
-    assert page.input_value('#lno') == '118'
-    page.fill('#lcode', 'λάθος'); page.click('#lbtn')
-    page.wait_for_selector('text=Λάθος κωδικός Στοάς')
-    page.fill('#lcode', 'abcd-2345'); page.click('#lbtn')
+    # είσοδος μόνο με το email της Στοάς: κωδικός στο email
+    page.fill('#lemail', 'atlas118@example.com'); page.click('#lbtn')
+    page.wait_for_selector('#s2:not(.hidden)')
+    page.fill('#lcode', '000000'); page.click('#vbtn')
+    page.wait_for_selector('text=Λάθος κωδικός')
+    page.fill('#lcode', '123456'); page.click('#vbtn')
     page.wait_for_selector('#ltitle:has-text("Στοά ΑΤΛΑΣ Αρ. 118")')
     assert page.locator('#mbody tr').count() == 1  # ο διαγραφείς κρύβεται
     page.check('#showDereg')
@@ -3399,7 +3404,7 @@ def test_lodge_secretary_page(browser, base_url):
     page.click('#confirm button[value=ok]')
     page.wait_for_selector('text=ΑλλαγήΣτοά118έκδοση5-27Οκτ26')
     b = saved[0]
-    assert b['lodge'] == '118' and b['code'] == 'ABCD-2345' and b['base_version'] == 4 and b['note_type'] == 'Αναγγελία Εισδοχής' and b['by'] == 'Γραμματέας Δοκιμής'
+    assert b['lodge'] == '118' and b['session'] == 'l' * 40 and b['base_version'] == 4 and b['note_type'] == 'Αναγγελία Εισδοχής' and b['by'] == 'Γραμματέας Δοκιμής'
     new = [m for m in b['members'] if m['id'] is None]
     assert len(new) == 1 and new[0]['surname'] == 'Νεοφώτιστος' and new[0]['lodge']['member_status'] == '1. ΤΑΚΤΙΚΟ'
     assert [m for m in b['members'] if m['id'] == 1][0]['mobile'] == '6900000001' and 'ro' not in b['members'][0]
@@ -4138,3 +4143,18 @@ def test_province_secretaries_app_sync(app):
     assert en['lodge_email'] == 'enosis16@example.com' and any(m['s'] == 'Ζαχαρίου' and m['mm'] == 0 for m in en['members'])
     assert 'z@example.com' not in _j.dumps(pushed) and '6944000016' not in _j.dumps(pushed)
     assert app.page.locator('.navdrop-menu a[href="#/lodge-secretaries"]').count() == 1
+
+
+def test_lodge_emails_paste_register_format(app):
+    # Συμβολικές Στοές → Εισαγωγή: πίνακας «ΣΤΟΑ ΥΠ. ΑΡΙΘΜ. · email · Low1» — το email γίνεται email Στοάς (είσοδος στην Πύλη)·
+    # κενό email δεν σβήνει, το όνομα της στήλης Low1 δεν αλλάζει τα ονόματα του καταλόγου, και η «Φ» ταυτίζεται
+    app.connect_local()
+    app.go('/lodges')
+    app.page.evaluate("document.querySelector('#imp').closest('details').open = true")
+    app.page.fill('#imp [name=paste]', 'ΣΤΟΑ ΥΠ. ΑΡΙΘΜ.\temail\tLow1\n2\takropolis.test@example.com\tΑκρόπολις\n6\t\tΟμόνοια Στοά Μεγάλου Διδασκάλου\n104\takro104.test@example.com\tΑκρόπολις\nΦ\tphoenix.test@example.com\tΦοίνιξ Κέρκυρας')
+    app.page.click('#imp button.primary')
+    app.wait_saved()
+    r = app.page.evaluate("""async () => { const {db} = await import('./core/store.js'); const g = (n) => db.all('lodges').find((x) => x.number === n);
+      const {loginEmail} = await import('./modules/lodge-portal.js');
+      return [g('2').email, g('104').email, g('Φ').email, g('6') ? g('6').email || '' : '', g('2').name, loginEmail(g('104'))]; }""")
+    assert r == ['akropolis.test@example.com', 'akro104.test@example.com', 'phoenix.test@example.com', '', 'ΑΚΡΟΠΟΛΙΣ', 'akro104.test@example.com'], r

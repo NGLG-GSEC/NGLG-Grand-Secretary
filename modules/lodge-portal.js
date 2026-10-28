@@ -65,6 +65,8 @@ export async function codeHash(no, code) {
   return Array.from(new Uint8Array(d), (x) => x.toString(16).padStart(2, '0')).join('');
 }
 const codeOf = (no) => db.all('lodge_portal_codes').find((c) => lodgeNoKey(c.lodge_number) === lodgeNoKey(no));
+// Email εισόδου της Στοάς στην Πύλη: ΜΟΝΟ το επίσημο email της Στοάς (Γραμματεία της Στοάς) — εκεί στέλνεται ο κωδικός
+export const loginEmail = (l) => { const e = S(l.email).toLowerCase(); return EMAIL_RE.test(e) ? e : ''; };
 const lodgeEmails = (l) => [...new Set([l.email, l.secretary_email].map(S).filter((e) => EMAIL_RE.test(e)))];
 // Μαζική καταχώριση email Γραμματέων (επικόλληση από Excel ή κείμενο): κάθε γραμμή «αριθμός Στοάς · email [· ονοματεπώνυμο Γραμματέα]»
 // → [{ lodge, email, name }] και γραμμές που δεν αναγνωρίστηκαν. Ταύτιση με τον αριθμό (ή το όνομα) της Στοάς του καταλόγου.
@@ -108,7 +110,7 @@ export function lodgeSnapshot(l) {
       lodge: { ...Object.fromEntries(LODGE_FIELDS.map((k) => [k, S(r[k])])), capacity: S(capacityOf(r)) },
       ro: { registry: regCode(m), ...officeOf(m, byM[m.id] || []) } });
   }
-  return { meta: { number: no, name: S(l.name), provincial: S(l.provincial), emails: lodgeEmails(l) }, members: sortBy(members, 'surname', 'first_name') };
+  return { meta: { number: no, name: S(l.name), provincial: S(l.provincial), emails: lodgeEmails(l), login_email: loginEmail(l) }, members: sortBy(members, 'surname', 'first_name') };
 }
 
 // Δημοσίευση: τα μητρώα των Στοών με κωδικό + τα hash των κωδικών (μόνο όσες άλλαξαν γίνονται νέα έκδοση στον server)
@@ -116,7 +118,7 @@ export async function pushPortal(only = null) {
   const codes = db.all('lodge_portal_codes').filter((c) => c.code);
   const hashes = {};
   for (const c of codes) hashes[lodgeNoKey(c.lodge_number)] = await codeHash(c.lodge_number, c.code);
-  const want = new Set((only || codes.map((c) => c.lodge_number)).map(lodgeNoKey));
+  const want = new Set((only || [...codes.map((c) => c.lodge_number), ...lodgesAll(true).filter(loginEmail).map((l) => l.number)]).map(lodgeNoKey));
   const lodges = lodgesAll(true).filter((l) => want.has(lodgeNoKey(l.number))).map(lodgeSnapshot);
   return api({ action: 'admin_push', lodges, codes: only ? undefined : hashes });
 }
@@ -188,7 +190,7 @@ export function codeMail(l, code) {
 
 // Δημόσιο αρχείο της σελίδας lodge/: μόνο η διεύθυνση του Apps Script και ποιες Στοές έχουν πρόσβαση (αριθμός, όνομα) — κανένα προσωπικό στοιχείο
 export function publishPublic(tx) {
-  const nos = new Set(tx.all('lodge_portal_codes').filter((c) => c.code).map((c) => lodgeNoKey(c.lodge_number)));
+  const nos = new Set([...tx.all('lodge_portal_codes').filter((c) => c.code).map((c) => lodgeNoKey(c.lodge_number)), ...tx.all('lodges').filter(loginEmail).map((l) => lodgeNoKey(l.number))]);
   const lodges = tx.all('lodges').filter((l) => nos.has(lodgeNoKey(l.number))).map((l) => ({ number: lodgeNoKey(l.number), name: S(l.name) }))
     .sort((a, b) => (Number(a.number) || 1e9) - (Number(b.number) || 1e9));
   tx.putFile('public/lodge-portal.json', new TextEncoder().encode(JSON.stringify({ api_url: S(tx.setting('lodge_portal_url')), lodges })));
