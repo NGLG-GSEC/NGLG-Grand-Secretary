@@ -33,3 +33,19 @@ assert.equal(E.mails.length, 1 + 1 /* αλλαγή */, 'το παλιό email δ
 E.call({ action: 'lodge_otp_send', email: 'new2@example.com' });
 assert.equal(E.mails[E.mails.length - 1].to, 'new2@example.com');
 console.log('lodge email login: OK');
+
+// Είσοδος μόνο με τον αριθμό της Στοάς: ο κωδικός πηγαίνει στο καταχωρισμένο email· «φ» / «F» = «Φ»
+{
+  const E2 = makeEnv(); E2.props.ADMIN_KEY = 'k';
+  E2.call({ action: 'admin_push', key: 'k', lodges: [L('96', 'ΘΕΜΙΣΤΟΚΛΗΣ', 'themis96@example.com'), L('Φ', 'ΦΟΙΝΙΞ ΚΕΡΚΥΡΑΣ', 'phoenix@example.com'), { meta: { number: '6', name: 'ΟΜΟΝΟΙΑ', provincial: 'Π', emails: [] }, members: [] }] });
+  let x = E2.call({ action: 'lodge_lookup', lodge: '96' });
+  assert.ok(x.found && x.has_email && x.name === 'ΘΕΜΙΣΤΟΚΛΗΣ' && x.masked === 'th••••••@example.com', JSON.stringify(x));
+  assert.ok(E2.call({ action: 'lodge_lookup', lodge: 'φ' }).name === 'ΦΟΙΝΙΞ ΚΕΡΚΥΡΑΣ' && E2.call({ action: 'lodge_lookup', lodge: 'F' }).lodge === 'Φ');
+  assert.ok(!E2.call({ action: 'lodge_lookup', lodge: '6' }).has_email && !E2.call({ action: 'lodge_lookup', lodge: '999' }).found);
+  assert.equal(E2.call({ action: 'lodge_otp_send', lodge: '6' }).error, 'no_email');
+  assert.ok(E2.call({ action: 'lodge_otp_send', lodge: 'φ' }).ok && E2.mails[0].to === 'phoenix@example.com');
+  const c2 = /(\d{6})/.exec(E2.mails[0].subject)[1];
+  x = E2.call({ action: 'lodge_otp_verify', lodge: 'Φ', code: c2 });
+  assert.ok(x.ok && x.lodges[0].number === 'Φ' && E2.call({ action: 'login', lodge: 'Φ', session: x.session }).ok, JSON.stringify(x));
+  console.log('lodge number login: OK');
+}

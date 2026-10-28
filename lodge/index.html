@@ -71,6 +71,8 @@
     #paper th{background:#eef1f6;-webkit-print-color-adjust:exact;print-color-adjust:exact}
     #paper tr{break-inside:avoid}#paper thead{display:table-header-group}
   }
+  .lfound{margin-top:10px;font-size:14px;text-transform:uppercase;letter-spacing:.02em;font-weight:700;color:var(--ok)}
+  .lfound.err{color:var(--warn)}
 </style>
 </head>
 <body>
@@ -78,16 +80,17 @@
 <main class="wrap">
   <section id="login" class="card" style="max-width:520px;margin:28px auto">
     <h1 style="margin-top:0">Είσοδος Γραμματέα Στοάς</h1>
-    <p class="muted">Βλέπετε και διορθώνετε μόνο το Μητρώο Μελών της Στοάς σας. Είσοδος <b>μόνο με το επίσημο email της Στοάς</b>: εκεί στέλνεται κωδικός μιας χρήσης.</p>
+    <p class="muted">Βλέπετε και διορθώνετε μόνο το Μητρώο Μελών της Στοάς σας. Γράψτε τον <b>αριθμό της Στοάς</b>: ο κωδικός εισόδου στέλνεται στο καταχωρισμένο email της Στοάς.</p>
     <form id="lf">
-      <div id="s1"><label for="lemail">Email της Στοάς</label><input id="lemail" type="email" autocomplete="email" required placeholder="το επίσημο email της Στοάς">
-        <div class="row" style="margin-top:14px"><button class="btn primary" id="lbtn">✉ Αποστολή κωδικού</button></div></div>
-      <div id="s2" class="hidden"><label for="lcode">Κωδικός (6 ψηφία) — στάλθηκε στο email της Στοάς</label><input id="lcode" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="••••••">
-        <div class="row" style="margin-top:14px"><button type="button" class="btn primary" id="vbtn">✓ Είσοδος</button><button type="button" class="btn" id="rbtn">Άλλο email</button></div></div>
-      <div id="s3" class="hidden"><label for="lno">Στοά</label><select id="lno"></select>
-        <div class="row" style="margin-top:14px"><button type="button" class="btn primary" id="obtn">Άνοιγμα Μητρώου</button></div></div>
+      <div id="s1"><label for="lno">Αριθμός Στοάς</label><input id="lno" inputmode="text" autocomplete="off" autocapitalize="characters" spellcheck="false" required placeholder="π.χ. 96" style="max-width:180px">
+        <small class="muted" style="display:block;margin-top:4px">Για τη Σεβ. Στοά «Φοίνιξ Κερκύρας» γράψτε το ελληνικό κεφαλαίο <b>Φ</b>.</small>
+        <div id="lfound" class="lfound" aria-live="polite"></div>
+        <div class="row" style="margin-top:14px"><button class="btn primary" id="lbtn" disabled>✉ Αποστολή κωδικού</button></div></div>
+      <div id="s2" class="hidden"><label for="lcode">Κωδικός (6 ψηφία) — στάλθηκε στο καταχωρισμένο email της Στοάς</label><input id="lcode" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="••••••">
+        <div class="row" style="margin-top:14px"><button type="button" class="btn primary" id="vbtn">✓ Είσοδος</button><button type="button" class="btn" id="rbtn">Άλλη Στοά</button></div></div>
+
     </form>
-    <p class="muted" style="font-size:13px">Αν η Στοά δεν έχει καταχωρισμένο email ή αυτό άλλαξε, επικοινωνήστε με τη Μεγάλη Γραμματεία.</p>
+    <p class="muted" style="font-size:13px">Αν το email της Στοάς άλλαξε, ενημερώστε τη Μεγάλη Γραμματεία.</p>
     <div id="lmsg"></div>
   </section>
 
@@ -183,7 +186,7 @@
     if (!r.ok) throw new Error('Ο server δεν απάντησε (' + r.status + ').');
     return r.json();
   }
-  const errText = (e) => ({ unauthorized: 'Η σύνδεση έληξε ή το email δεν αντιστοιχεί πια στη Στοά — ζητήστε νέο κωδικό.', email_only: 'Η Στοά μπαίνει μόνο με το email της.', otp_wrong: 'Λάθος κωδικός.', otp_expired: 'Ο κωδικός έληξε ή χρησιμοποιήθηκε — ζητήστε νέο.', bad_email: 'Μη έγκυρο email.', too_many_tries: 'Πολλές λάθος προσπάθειες — δοκιμάστε ξανά σε 15 λεπτά.', no_registry: 'Το Μητρώο της Στοάς δεν έχει δημοσιευθεί ακόμη από τη Μεγάλη Γραμματεία.',
+  const errText = (e) => ({ unauthorized: 'Η σύνδεση έληξε ή το email δεν αντιστοιχεί πια στη Στοά — ζητήστε νέο κωδικό.', no_email: 'Η Στοά δεν έχει καταχωρισμένο email — επικοινωνήστε με τη Μεγάλη Γραμματεία.', email_only: 'Η Στοά μπαίνει μόνο με το email της.', otp_wrong: 'Λάθος κωδικός.', otp_expired: 'Ο κωδικός έληξε ή χρησιμοποιήθηκε — ζητήστε νέο.', bad_email: 'Μη έγκυρο email.', too_many_tries: 'Πολλές λάθος προσπάθειες — δοκιμάστε ξανά σε 15 λεπτά.', no_registry: 'Το Μητρώο της Στοάς δεν έχει δημοσιευθεί ακόμη από τη Μεγάλη Γραμματεία.',
     conflict: 'Το Μητρώο άλλαξε στο μεταξύ (από άλλη συσκευή ή τη Μεγάλη Γραμματεία). Φορτώθηκε ξανά — επαναλάβετε τις αλλαγές σας.', no_changes: 'Δεν υπάρχουν αλλαγές.', bad_lodge: 'Επιλέξτε Στοά.' }[e] || e);
   const show = (el, text, kind) => { el.innerHTML = text ? `<div class="msg ${kind || 'err'}">${esc(text)}</div>` : ''; };
 
@@ -286,13 +289,28 @@
   $('#logout').addEventListener('click', () => { sessionStorage.removeItem(SKEY); location.reload(); });
   $('#f_capacity').insertAdjacentHTML('beforeend', CAPACITIES.map((c) => `<option>${c}</option>`).join(''));
   window.addEventListener('beforeunload', (e) => { if (S && changes().length) { e.preventDefault(); e.returnValue = ''; } });
-  // Είσοδος: email Στοάς → κωδικός στο email → (αν το email έχει πολλές Στοές) επιλογή Στοάς
-  let pendingSession = '';
-  const step = (n) => ['#s1', '#s2', '#s3'].forEach((id, i) => $(id).classList.toggle('hidden', i !== n - 1));
+  // Είσοδος: αριθμός Στοάς («Φ»/«φ» = Φοίνιξ Κερκύρας) → μήνυμα για το καταχωρισμένο email → κωδικός στο email της Στοάς → Μητρώο
+  const step = (n) => ['#s1', '#s2'].forEach((id, i) => $(id).classList.toggle('hidden', i !== n - 1));
+  const lno = () => str($('#lno').value).toUpperCase().replace(/^F$/, 'Φ');
+  let lookT = null, lookN = '';
+  const found = (text, err) => { const el = $('#lfound'); el.textContent = text; el.className = 'lfound' + (err ? ' err' : ''); };
+  async function lookup() {
+    const n = lno(); lookN = n; $('#lbtn').disabled = true;
+    if (!n) { found(''); return; }
+    try {
+      const r = await call({ action: 'lodge_lookup', lodge: n });
+      if (n !== lookN) return;
+      if (!r.ok) found(errText(r.error), true);
+      else if (!r.found) found(`Δεν βρέθηκε Στοά με αριθμό ${n}.`, true);
+      else if (!r.has_email) found(`Η Στοά «${r.name}» Αρ. ${r.lodge} δεν έχει καταχωρισμένο email — επικοινωνήστε με τη Μεγάλη Γραμματεία.`, true);
+      else { found(`Υπάρχει καταχωρισμένο email για τη Στοά «${r.name}» Αρ. ${r.lodge} (${r.masked}) — εκεί θα σταλεί ο κωδικός εισόδου.`); $('#lbtn').disabled = false; }
+    } catch (err) { found(err.message || String(err), true); }
+  }
+  $('#lno').addEventListener('input', () => { clearTimeout(lookT); lookT = setTimeout(lookup, 350); });
   $('#lf').addEventListener('submit', async (e) => {
-    e.preventDefault(); $('#lbtn').disabled = true; show($('#lmsg'), '');
-    try { const r = await call({ action: 'lodge_otp_send', email: str($('#lemail').value) }); if (!r.ok) show($('#lmsg'), errText(r.error));
-      else { step(2); $('#lcode').focus(); show($('#lmsg'), 'Αν το email είναι καταχωρισμένο email Στοάς, στάλθηκε κωδικός από τη Μεγάλη Γραμματεία (ελέγξτε και τα ανεπιθύμητα).', 'ok'); } }
+    e.preventDefault(); if ($('#lbtn').disabled) return; $('#lbtn').disabled = true; show($('#lmsg'), '');
+    try { const r = await call({ action: 'lodge_otp_send', lodge: lno() }); if (!r.ok) show($('#lmsg'), errText(r.error));
+      else { step(2); $('#lcode').focus(); show($('#lmsg'), 'Ο κωδικός στάλθηκε στο email της Στοάς (ελέγξτε και τα ανεπιθύμητα).', 'ok'); } }
     catch (err) { show($('#lmsg'), err.message || String(err)); }
     $('#lbtn').disabled = false;
   });
@@ -301,18 +319,18 @@
   $('#vbtn').addEventListener('click', async () => {
     $('#vbtn').disabled = true; show($('#lmsg'), '');
     try {
-      const r = await call({ action: 'lodge_otp_verify', email: str($('#lemail').value), code: str($('#lcode').value) });
+      const r = await call({ action: 'lodge_otp_verify', lodge: lno(), code: str($('#lcode').value) });
       if (!r.ok) show($('#lmsg'), errText(r.error));
-      else if (r.lodges.length === 1) await login(r.lodges[0].number, r.session);
-      else { pendingSession = r.session; $('#lno').innerHTML = r.lodges.map((x) => `<option value="${esc(x.number)}">${esc(x.number)} · ${esc(x.name)}</option>`).join(''); step(3); }
+      else await login(lno(), r.session);
     } catch (err) { show($('#lmsg'), err.message || String(err)); }
     $('#vbtn').disabled = false;
   });
-  $('#obtn').addEventListener('click', () => login($('#lno').value, pendingSession));
 
   (async () => {
     try { $('#nby').value = localStorage.getItem('nglg-lodge-by') || ''; } catch (e) { /* */ }
     API = await config();
+    const pre = new URLSearchParams(location.search).get('lodge');
+    if (pre) { $('#lno').value = pre; if (API) lookup(); }
     let s = null; try { s = JSON.parse(sessionStorage.getItem(SKEY) || 'null'); } catch (e) { /* */ }
     if (s && s.lodge && s.session) { try { await login(s.lodge, s.session, true); } catch (e) { /* */ } }
     if (!API) show($('#lmsg'), 'Η Πύλη Γραμματέων δεν έχει ενεργοποιηθεί ακόμη από τη Μεγάλη Γραμματεία.');

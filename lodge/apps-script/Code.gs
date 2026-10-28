@@ -16,7 +16,7 @@
  * Ο κώδικας είναι δημόσιος: δεν περιέχει κωδικούς, email ή δεδομένα μελών. Οδηγίες: lodge/README.md
  */
 
-const VERSION = 5;
+const VERSION = 6;
 const SESSION_SECONDS = 21600; // σύνδεση διαχειριστή: 6 ώρες
 const OTP_SECONDS = 600, OTP_MAX_SENDS = 5, OTP_MAX_TRIES = 5;
 const ROOT_NAME = 'Μητρώα Στοών — Πύλη Γραμματέων';
@@ -46,6 +46,7 @@ function doPost(e) {
   try { b = JSON.parse(e.postData.contents); } catch (err) { return json_({ ok: false, error: 'bad_request' }); }
   try {
     switch (b.action) {
+      case 'lodge_lookup': return json_(lodgeLookup_(b));
       case 'lodge_otp_send': return json_(lodgeOtpSend_(b));
       case 'lodge_otp_verify': return json_(lodgeOtpVerify_(b));
       case 'login': return json_(login_(b));
@@ -88,8 +89,18 @@ function lodgeAuth_(no, b) {
   return '';
 }
 function logins_() { try { return JSON.parse(prop_('LOGINS') || '{}'); } catch (e) { return {}; } }
+// Ο Γραμματέας γράφει μόνο τον αριθμό της Στοάς («Φ» ή «φ» για τη Φοίνιξ Κερκύρας): ο κωδικός πηγαίνει στο καταχωρισμένο email της Στοάς
+function lodgeEmailOf_(no) { const cur = readCurrent_(no); return cur && cur.meta ? String(cur.meta.login_email || '') : ''; }
+function maskEmail_(e) { const p = String(e).split('@'); return p[0].slice(0, 2) + '•'.repeat(Math.max(3, p[0].length - 2)) + '@' + p[1]; }
+function lodgeLookup_(b) {
+  const no = lodgeNo_(b.lodge), cur = readCurrent_(no);
+  if (!cur) return { ok: true, lodge: no, found: false };
+  const e = String(cur.meta.login_email || '');
+  return { ok: true, lodge: no, found: true, name: cur.meta.name, has_email: !!e, masked: e ? maskEmail_(e) : '' };
+}
 // Κωδικός μιας χρήσης στο email της Στοάς (μόνο αυτό το email ανοίγει τη Στοά)
 function lodgeOtpSend_(b) {
+  if (b.lodge != null && b.lodge !== '' && !b.email) { const e = lodgeEmailOf_(lodgeNo_(b.lodge)); if (!e) throw new Error('no_email'); b = { email: e }; }
   const email = String(b.email || '').trim().toLowerCase();
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new Error('bad_email');
   const nos = logins_()[email] || [];
@@ -112,6 +123,7 @@ function lodgeOtpSend_(b) {
   return { ok: true, sent: true };
 }
 function lodgeOtpVerify_(b) {
+  if (b.lodge != null && b.lodge !== '' && !b.email) b = { email: lodgeEmailOf_(lodgeNo_(b.lodge)), code: b.code };
   const email = String(b.email || '').trim().toLowerCase(), code = String(b.code || '').replace(/\D/g, '');
   const cache = CacheService.getScriptCache(), want = cache.get('lotp_' + email), tries = Number(cache.get('lotpt_' + email) || 0);
   if (!want || tries >= OTP_MAX_TRIES) throw new Error('otp_expired');
@@ -556,7 +568,7 @@ function hash_(no, code) {
   const bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, 'nglg-lodge|' + no + '|' + String(code || '').trim().toUpperCase(), Utilities.Charset.UTF_8);
   return bytes.map(function (x) { return ((x + 256) % 256).toString(16).padStart(2, '0'); }).join('');
 }
-function lodgeNo_(v) { const n = String(v == null ? '' : v).replace(/\s+/g, '').toUpperCase(); const k = n.replace(/^0+/, '') || n; if (!/^[0-9Α-ΩA-Z]{1,6}$/.test(k)) throw new Error('bad_lodge'); return k; }
+function lodgeNo_(v) { const n = String(v == null ? '' : v).replace(/\s+/g, '').toUpperCase().replace(/^F$/, 'Φ'); const k = n.replace(/^0+/, '') || n; if (!/^[0-9Α-ΩA-Z]{1,6}$/.test(k)) throw new Error('bad_lodge'); return k; }
 function str_(v) { return String(v == null ? '' : v).replace(/\s+/g, ' ').trim().slice(0, 200); }
 function prop_(n) { return PropertiesService.getScriptProperties().getProperty(n); }
 function withLock_(fn) { const l = LockService.getScriptLock(); l.waitLock(30000); try { return fn(); } finally { l.releaseLock(); } }

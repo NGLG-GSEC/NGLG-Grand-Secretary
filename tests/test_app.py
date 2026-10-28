@@ -3363,10 +3363,14 @@ def test_lodge_secretary_page(browser, base_url):
 
     def api(route):
         b = _j.loads(route.request.post_data or '{}')
+        if b.get('action') == 'lodge_lookup':
+            n = b.get('lodge')
+            return route.fulfill(json={'ok': True, 'lodge': n, 'found': n in ('118', 'Φ'), 'name': 'ΑΤΛΑΣ' if n == '118' else 'ΦΟΙΝΙΞ ΚΕΡΚΥΡΑΣ', 'has_email': n == '118', 'masked': 'at••••@example.com' if n == '118' else ''})
         if b.get('action') == 'lodge_otp_send':
+            assert b.get('lodge') == '118' and 'email' not in b
             return route.fulfill(json={'ok': True, 'sent': True})
         if b.get('action') == 'lodge_otp_verify':
-            return route.fulfill(json={'ok': True, 'session': 'l' * 40, 'email': b['email'], 'lodges': [{'number': '118', 'name': 'ΑΤΛΑΣ'}]} if b.get('code') == '123456' else {'ok': False, 'error': 'otp_wrong'})
+            return route.fulfill(json={'ok': True, 'session': 'l' * 40, 'email': 'x', 'lodges': [{'number': '118', 'name': 'ΑΤΛΑΣ'}]} if b.get('code') == '123456' and b.get('lodge') == '118' else {'ok': False, 'error': 'otp_wrong'})
         if b.get('action') == 'login':
             ok = b.get('lodge') == '118' and b.get('session') == 'l' * 40
             return route.fulfill(json={'ok': True, 'lodge': {'number': '118', 'name': 'ΑΤΛΑΣ', 'provincial': 'ΕπΜΣτ. Πειραιώς'}, 'members': members, 'version': 4, 'note_types': ['Αναγγελία Εισδοχής', 'Άλλο']} if ok else {'ok': False, 'error': 'unauthorized'})
@@ -3377,9 +3381,16 @@ def test_lodge_secretary_page(browser, base_url):
     page = browser.new_page()
     page.route('**/lodge/portal.json*', lambda r: r.fulfill(json={'api_url': API, 'lodges': [{'number': '2', 'name': 'ΑΚΡΟΠΟΛΙΣ'}, {'number': '118', 'name': 'ΑΤΛΑΣ'}]}))
     page.route(API, api)
-    page.goto(base_url + 'lodge/?lodge=118')
-    # είσοδος μόνο με το email της Στοάς: κωδικός στο email
-    page.fill('#lemail', 'atlas118@example.com'); page.click('#lbtn')
+    page.goto(base_url + 'lodge/')
+    # είσοδος με τον αριθμό της Στοάς: μήνυμα για το καταχωρισμένο email (κεφαλαία 14px) → κωδικός στο email της Στοάς
+    assert 'ελληνικό κεφαλαίο Φ' in page.inner_text('#s1') and page.locator('#lemail').count() == 0
+    page.fill('#lno', 'φ')
+    page.wait_for_selector('.lfound.err')
+    assert 'ΔΕΝ ΕΧΕΙ ΚΑΤΑΧΩΡΙΣΜΕΝΟ EMAIL' in page.inner_text('#lfound') and 'ΦΟΙΝΙΞ' in page.inner_text('#lfound') and page.locator('#lbtn').is_disabled()
+    page.fill('#lno', '118')
+    page.wait_for_selector('.lfound:not(.err):has-text("at••••@example.com")')
+    assert page.inner_text('#lfound').startswith('ΥΠΑΡΧΕΙ ΚΑΤΑΧΩΡΙΣΜΕΝΟ EMAIL') and page.eval_on_selector('#lfound', 'e => getComputedStyle(e).fontSize') == '14px'
+    page.click('#lbtn')
     page.wait_for_selector('#s2:not(.hidden)')
     page.fill('#lcode', '000000'); page.click('#vbtn')
     page.wait_for_selector('text=Λάθος κωδικός')
