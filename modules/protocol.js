@@ -60,10 +60,29 @@ export function askProtocol(self = {}, current = 0, intro = '') {
   const n = parseInt(String(v).replace(/\D/g, ''), 10);
   if (!n) throw new Error('Μη έγκυρος αριθμός πρωτοκόλλου.');
   if (n === current) return null;
+  return checkProtocol(n, self, current, sug);
+}
+// Έλεγχος ενός αριθμού που έγραψε ο χρήστης (prompt ή πεδίο φόρμας): διπλός → ερώτηση· μικρότερος από τον προτεινόμενο → ερώτηση
+// αν η αρίθμηση θα συνεχίσει από εκεί. Επιστρέφει null (ακύρωση), 0 (ο προτεινόμενος) ή τον αριθμό.
+export function checkProtocol(n, self = {}, current = 0, sug = suggestedProtocol()) {
   if (protocolOwner(n, self) && !window.confirm(`Ο αριθμός πρωτοκόλλου ${n} υπάρχει ήδη σε άλλο έγγραφο. Να χρησιμοποιηθεί παρ’ όλα αυτά;`)) return null;
   // μεγαλύτερος από τον προτεινόμενο: η αρίθμηση συνεχίζει αυτόματα από εκεί· μικρότερος: ερώτηση
   if (n < sug && window.confirm(`Ο ${n} είναι μικρότερος από τον προτεινόμενο ${sug}.\n\nOK = η αρίθμηση να συνεχίσει από τον ${n + 1} (επόμενος ελεύθερος)\nΆκυρο = μόνο αυτό το έγγραφο· η αρίθμηση συνεχίζει από τον ${sug}`)) continueFrom.add(n);
   return n === sug && !current ? 0 : n;
+}
+// Αριθμός πρωτοκόλλου από το πεδίο «Αρ. Πρωτοκόλλου» μιας φόρμας (π.χ. του Διατάγματος), πριν από την αποθήκευση
+export function formProtocol(v, self = {}, current = 0) {
+  const n = intOf(v);
+  if (!n) throw new Error('Συμπληρώστε τον αριθμό πρωτοκόλλου.');
+  return n === current ? n : checkProtocol(n, self, current);
+}
+// Απόδοση/αλλαγή αριθμού πρωτοκόλλου μέσα στην αποθήκευση: manual 0 = ο επόμενος ελεύθερος (υπολογίζεται εδώ)
+export function setProtocol(tx, table, id, manual = 0) {
+  const r = tx.get(table, id);
+  if (!r || (manual && Number(r.protocol_seq) === manual)) return r;
+  if (!manual && r.protocol_seq) return r;
+  const p = nextProtocol(tx, table === 'letters' ? 'Επιστολή' : 'Διάταγμα', '', manual);
+  return tx.update(table, id, { protocol_seq: p.seq, protocol_year: r.protocol_year || p.year, protocol_no: p.no });
 }
 // Ο αριθμός πρωτοκόλλου στο έγγραφο είναι μόνο ο αριθμός (π.χ. 20545)· η κατηγορία και το θέμα μπαίνουν μόνο στο όνομα αρχείου.
 db.migrate('protocol-number-only-2026-10', (tx) => {

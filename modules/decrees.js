@@ -12,7 +12,7 @@ import { attachPicker, memberItems, contactItems } from '../core/pickers.js';
 import { DECREE_KINDS, DECREE_PLACEHOLDERS, GENERAL_BODY, PROVINCIAL_OFFICES, keyFor, decreeKey, decreeTemplate, layoutOf } from './decree-templates.js';
 import { planDecreeSync, planChanges, planText, applyDecreeSync, revertDecreeSync, syncInfo, EP_LABEL } from './decree-sync.js';
 import { gmName } from './letter-fill.js';
-import { nextProtocol, askProtocol, claimProtocol } from './protocol.js';
+import { nextProtocol, askProtocol, claimProtocol, suggestedProtocol, formProtocol, setProtocol } from './protocol.js';
 import { findMember, insertMember } from './members.js';
 import { identify } from '../core/people.js';
 import { DEC_OFFICES, AWARD_OFFICES, AWARD_MAP, DEC_MAP, DEC_BASIS, HON_ACC_BY_SHORT, HONORIFIC_OPTIONS, OFFICE_FORMS, DEGREE_CC_DEFAULT, PRECEDENCE } from './decree-catalog.js';
@@ -69,6 +69,8 @@ const meta = (d) => {
 };
 const apps = (d) => { try { return typeof d.appointments === 'string' ? JSON.parse(d.appointments || '[]') : d.appointments || []; } catch { return []; } };
 const decreeNo = (d) => `${d.decree_no}/${d.decree_year}`;
+// «… και με αριθμ. πρωτ. 20601» μετά τον αριθμό/ημερομηνία του Διατάγματος (ενιαία αρίθμηση με τις Επιστολές — Βιβλίο Πρωτοκόλλου)
+const protoPhrase = (d) => (d.protocol_seq ? ` και με αριθμ. πρωτ. ${d.protocol_seq}` : '');
 // Ονόματα των Αδελφών στο Διάταγμα (η γραμμή μετά το «… Αδελφόν» και οι γραμμές «• …»): έντονα, 20px
 const NAME_AFTER = /^(τον [^\n]*Αδελφόν\n)([^\n]+)$/gm, NAME_BULLET = /^(• )([^\n]+)$/gm;
 // Χωρίς κενή γραμμή ανάμεσα στο «… Κανονισμών,» και στο «περί …» (και στα ήδη αποθηκευμένα Διατάγματα)
@@ -110,7 +112,7 @@ async function decreeDocxBlob(d) {
   }
   const PT = 72 / 25.4, MARGIN_TOP = 1000 / 1440 * 25.4; // περιθώριο σελίδας (mm)
   const blocks = letterBlocks({ noHead: top != null, topSpace: top != null ? (top - MARGIN_TOP) * PT : 0, org: S('organization_name'), founded: S('founded_year'), gmTitle: S('grand_master_title'), gmName: S('grand_master_name'),
-    number: d.protocol_seq ? String(d.protocol_seq) : (d.protocol_no || ''), date: fmtDate(d.decree_date), place: 'Εν Αθήναις', title: `ΔΙΑΤΑΓΜΑ υπ’ αριθμ. ${decreeNo(d)}`,
+    number: d.protocol_seq ? String(d.protocol_seq) : (d.protocol_no || ''), date: fmtDate(d.decree_date), place: 'Εν Αθήναις', title: `ΔΙΑΤΑΓΜΑ υπ’ αριθμ. ${decreeNo(d)}${protoPhrase(d)}`,
     paragraphs: (decreeKey(d) === 'decree-general' ? String(d.body || '') : markNames(tightPeri(d.body), (n) => `[b][size=15]${n}[/size][/b]`)).split(/\n\s*\n/).map((t) => ({ text: t.trim(), align: 'center', bold: /^(ΗΜΕΙΣ|ΔΙΟΡΙΖΟΜΕΝ|ΑΠΟΝΕΜΕΙ|ΕΥΑΡΕΣΤΟΥΜΕΘΑ)/.test(t.trim()) })),
     artwork: Object.fromEntries(Object.entries(DECREE_ARTWORK).map(([w, a]) => [w, w === 'ΔΙΟΡΙΖΟΜΕΝ' ? { img: dioImg, width: +(Math.max(5, +dio.w) / 10).toFixed(2) } : { img: a.img, width: a.word }])),
     signature: IMG.signature, signer: 'Δημήτριος Σκιαδόπουλος', signerTitle: 'Ο ΜΕΓΑΣ ΓΡΑΜΜΑΤΕΑΣ',
@@ -148,7 +150,7 @@ export function decreePaper(d, opts = {}) {
     w === 'ΔΙΟΡΙΖΟΜΕΝ' ? diorHtml(L, urls) : `<span class="${a.cls}" role="img" aria-label="${w}"><img src="${a.img}" alt=""></span>`), bodyHtml);
   const withOffice = officeImage(hmeisHtml, L, urls);
   return `<article class="paper decree${layers ? ' has-layers' : ''}"${top != null ? ` style="--pt:${top}mm"` : ''}>${layers}${top != null ? '' : headOn(L.head) ? customHead(L.head) : letterhead()}<div class="dec-title">ΔΙΑΤΑΓΜΑ</div>
-<div class="dec-no official-number">${action === 'service_award' ? 'υπ’ αριθ. ' : 'υπ’ αριθμ. '}${esc(decreeNo(d))}, ημερ. ${esc(fmtDate(d.decree_date))}</div>
+<div class="dec-no official-number">${action === 'service_award' ? 'υπ’ αριθ. ' : 'υπ’ αριθμ. '}${esc(decreeNo(d))}, ημερ. ${esc(fmtDate(d.decree_date))}${esc(protoPhrase(d))}</div>
 <div class="decbody">${withOffice}</div>
 <div class="decsig"><div><div class="t">ΜΕΓΑΣ ΓΡΑΜΜΑΤΕΑΣ</div><img class="signature-img" src="${IMG.signature}" alt=""><div class="signature-line"></div><b>Δημήτριος Σκιαδόπουλος</b></div>
 <div><img class="seal-img" src="${IMG.seal}" alt=""></div><div><div class="t">Ο ΜΕΓΑΣ ΔΙΔΑΣΚΑΛΟΣ</div><img class="signature-img" src="${IMG.grandMaster}" alt=""><div class="signature-line"></div><b>Ιωάννης Μπενετάτος</b></div></div></article>`;
@@ -232,7 +234,9 @@ function decreeForm(d, query = {}) {
 <div class="dec-noedit"><label>Αρ. Διατάγματος</label><div class="dec-norow"><input name="decree_no" type="number" min="1" step="1" inputmode="numeric" value="${esc(d && d.id ? d.decree_no : suggestDecreeNo())}" required>
 <span>/</span><input name="decree_year" type="number" min="1900" max="2999" inputmode="numeric" value="${esc(d && d.id ? d.decree_year : new Date().getFullYear())}" required></div>
 <label style="margin-top:10px">Ημερομηνία Διατάγματος</label><input name="decree_date" type="date" class="dec-date-in" value="${esc(d && d.id ? d.decree_date || today() : today())}" required>
-<small class="muted">${d && d.id ? 'Μπορείτε να διορθώσετε τον αριθμό.' : 'Προτείνεται ο επόμενος· μπορείτε να τον αλλάξετε.'} Το επόμενο Διάταγμα θα προταθεί αμέσως μετά τον μεγαλύτερο αριθμό.</small></div>${d && d.id ? `<input type="hidden" name="template_key" value="${key}">` : ''}</div>
+<small class="muted">${d && d.id ? 'Μπορείτε να διορθώσετε τον αριθμό.' : 'Προτείνεται ο επόμενος· μπορείτε να τον αλλάξετε.'} Το επόμενο Διάταγμα θα προταθεί αμέσως μετά τον μεγαλύτερο αριθμό.</small>
+<label style="margin-top:14px">Αρ. Πρωτοκόλλου</label><div class="dec-norow"><input name="protocol_seq" type="number" min="1" step="1" inputmode="numeric" value="${esc((d && d.id && d.protocol_seq) || suggestedProtocol())}" required></div>
+<small class="muted">${d && d.id && d.protocol_seq ? 'Ο αριθμός του Διατάγματος στο Βιβλίο Πρωτοκόλλου· μπορείτε να τον διορθώσετε.' : 'Προτείνεται ο επόμενος ελεύθερος του Βιβλίου Πρωτοκόλλου· γράψτε τον τελικό αριθμό.'} Ενιαία αρίθμηση Επιστολών και Διαταγμάτων: η αρίθμηση συνεχίζει από τον αριθμό που γράφετε.</small></div>${d && d.id ? `<input type="hidden" name="template_key" value="${key}">` : ''}</div>
 <fieldset class="plainfs" id="generalPart"${gen ? '' : ' disabled hidden'}><div class="card"><div class="grid">
 <div class="full"><label>Περί</label><input name="g_matter" value="${esc(d && gen ? d.matter : '')}" placeholder="π.χ. ιδρύσεως της Στοάς «……»"></div>
 <div class="full"><label>Κείμενο Διατάγματος</label><textarea name="g_body" style="min-height:320px">${esc(gBody)}</textarea><small class="muted">Από το πρότυπο «ΓΕΝΙΚΟ ΔΙΑΤΑΓΜΑ». Πεδία: ${DECREE_PLACEHOLDERS.map(([k, h]) => `{${esc(k)}} = ${esc(h)}`).join(' · ')}. Γραμμές με ΚΕΦΑΛΑΙΑ τυπώνονται έντονα.</small></div>
@@ -311,7 +315,7 @@ function mountDecreeForm(el, d, m0) {
     if (isGen()) {
       const date = data.decree_date || (d ? d.decree_date : today()), year = Number(data.decree_year) || (d ? d.decree_year : new Date().getFullYear());
       const no = Number(data.decree_no) || (d ? d.decree_no : suggestDecreeNo());
-      return { template_key: 'decree-general', decree_no: no, decree_year: year, decree_date: date, body: fillGeneral(data.g_body, { matter: String(data.g_matter || '').trim(), date, no: `${no}/${year}` }), rules: JSON.stringify({ action: 'general' }) };
+      return { template_key: 'decree-general', decree_no: no, decree_year: year, decree_date: date, protocol_seq: Number(data.protocol_seq) || 0, body: fillGeneral(data.g_body, { matter: String(data.g_matter || '').trim(), date, no: `${no}/${year}` }), rules: JSON.stringify({ action: 'general' }) };
     }
     const office = service ? '' : data.office || '', period = String(data.period || '').trim() || DOTS;
     const matter = service ? SERVICE_MATTER : String(data.matter || '').trim() || DOTS;
@@ -323,7 +327,7 @@ function mountDecreeForm(el, d, m0) {
     const date = data.decree_date || (d ? d.decree_date : today()), year = Number(data.decree_year) || (d ? d.decree_year : new Date().getFullYear());
     const no = Number(data.decree_no) || (d ? d.decree_no : suggestDecreeNo());
     const { body } = decreeBody(matter, people.length ? people : [{ first_name: DOTS, last_name: DOTS }], date, action, action === 'award' ? office || DOTS : '', period);
-    return { template_key: keyFor(action, office), decree_no: no, decree_year: year, decree_date: date, body, rules: JSON.stringify({ action }) };
+    return { template_key: keyFor(action, office), decree_no: no, decree_year: year, decree_date: date, protocol_seq: Number(data.protocol_seq) || 0, body, rules: JSON.stringify({ action }) };
   };
   // αλλαγή ημερομηνίας → το έτος του αριθμού ακολουθεί (αλλάζει και χωριστά)
   const dIn = f.querySelector('[name=decree_date]'), yIn = f.querySelector('[name=decree_year]');
@@ -340,12 +344,15 @@ function mountDecreeForm(el, d, m0) {
       if (!matter) throw new Error('Συμπληρώστε το «Περί».');
       if (!src) throw new Error('Συμπληρώστε το κείμενο του Διατάγματος.');
       if (bad.length) throw new Error('Μη έγκυρο email: ' + bad.join(', '));
+      const proto = askFormProtocol(data, d);
+      if (proto === null) return;
       const id = await db.save(d ? `Διάταγμα ${decreeNo(d)}: ενημέρωση` : `Νέο Γενικό Διάταγμα: ${matter}`, (tx) => {
         const date = formDecreeDate(data, d), { no, year } = formDecreeNo(tx, data, d);
         const row = { template_key: 'decree-general', decree_no: no, decree_year: year, decree_date: date, subject: `ΔΙΑΤΑΓΜΑ υπ’ αριθμ. ${no}/${year} – ${matter}`, matter,
           body: fillGeneral(src, { matter, date, no: `${no}/${year}` }), body_src: src, rules: JSON.stringify({ action: 'general' }), appointments: '[]',
           recipient_name: String(data.g_to_name || '').trim(), recipient_email: emails.join(', ') };
         const r = d ? tx.update('decree_documents', d.id, row) : tx.insert('decree_documents', { ...row, status: 'draft' });
+        setProtocol(tx, 'decree_documents', r.id, proto);
         tx.remove('member_degrees_offices', (o) => o.decree_id === r.id);
         return r.id;
       });
@@ -369,6 +376,8 @@ function mountDecreeForm(el, d, m0) {
         honorific: service ? '' : hon, former_office: service ? '' : q('.former'), email: em, mobile: mo, office: action === 'appoint' ? office : '', rule: action === 'appoint' ? DEC_MAP[office].rule : '19' };
     });
     if (!people.length) throw new Error('Συμπληρώστε τουλάχιστον έναν Αδελφό.');
+    const proto = askFormProtocol(data, d);
+    if (proto === null) return;
     // Διάταγμα → Επετηρίδα → Μητρώο: ερώτηση πριν από την αυτόματη ενημέρωση, με ό,τι θα αλλάξει
     const plan = planDecreeSync({ action, office, award_office: office, decree_no: Number(data.decree_no), decree_year: Number(data.decree_year) }, people, db, d ? d.id : null);
     const doSync = planChanges(plan).length ? confirmDo(`Με ${d ? 'την αποθήκευση' : 'την έκδοση'} του Διατάγματος θα ενημερωθούν αυτόματα η ΕΠΕΤΗΡΙΔΑ και ο Τίτλος στο ΜΗΤΡΩΟ:\n\n${planText(plan)}\n\nOK = ενημέρωση τώρα · Άκυρο = χωρίς ενημέρωση (γίνεται και αργότερα από τη σελίδα του Διατάγματος)`) : false;
@@ -382,7 +391,8 @@ function mountDecreeForm(el, d, m0) {
         appointments: JSON.stringify(people), recipient_name: people.map((a) => a.full_name).join(', '), recipient_email: [...new Set(people.map((a) => a.email.toLowerCase()))].join(', ') };
       let r;
       if (d) r = tx.update('decree_documents', d.id, row);
-      else r = tx.insert('decree_documents', { ...row, status: 'draft' }); // αρ. πρωτοκόλλου μόνο όταν οριστεί «Έτοιμο»
+      else r = tx.insert('decree_documents', { ...row, status: 'draft' });
+      setProtocol(tx, 'decree_documents', r.id, proto); // κάθε Διάταγμα παίρνει αριθμό πρωτοκόλλου (Βιβλίο Πρωτοκόλλου)
       if (service) tx.remove('member_degrees_offices', (o) => o.decree_id === r.id); else syncOffices(tx, r);
       if (doSync) synced = applyDecreeSync(tx, tx.get('decree_documents', r.id));
       return r.id;
@@ -390,6 +400,18 @@ function mountDecreeForm(el, d, m0) {
     if (synced.length) flash(`${d ? 'Το Διάταγμα αποθηκεύτηκε' : 'Το Διάταγμα εκδόθηκε'}. ✓ Ενημερώθηκαν Επετηρίδα και Μητρώο για: ${synced.map((c) => c.name).join(', ')} — δείτε «Επετηρίδα & Μητρώο» στη σελίδα του Διατάγματος.`);
     flash(d ? 'Το Διάταγμα αποθηκεύτηκε.' : 'Το Διάταγμα εκδόθηκε.'); go(`/decrees/${id}`);
   });
+}
+
+// Ο αριθμός πρωτοκόλλου του πεδίου της φόρμας: null = ακύρωση, 0 = ο επόμενος ελεύθερος, αλλιώς ο αριθμός που γράφτηκε
+const askFormProtocol = (data, d) => formProtocol(data.protocol_seq, { table: 'decree_documents', id: d && d.id }, (d && d.id && Number(d.protocol_seq)) || 0);
+// Προσθήκη αριθμού πρωτοκόλλου σε Διάταγμα που δεν έχει (π.χ. παλαιά Διατάγματα) — η κατάσταση δεν αλλάζει
+async function addDecreeProtocol(d) {
+  const manual = askProtocol({ table: 'decree_documents', id: d.id }, 0, `Αριθμός πρωτοκόλλου για το Διάταγμα ${decreeNo(d)}.`);
+  if (manual === null) return false;
+  let n = 0;
+  await db.save(`Διάταγμα ${decreeNo(d)}: αρ. πρωτοκόλλου`, (tx) => { n = setProtocol(tx, 'decree_documents', d.id, manual).protocol_seq; });
+  flash(`Το Διάταγμα ${decreeNo(d)} πήρε αριθμό πρωτοκόλλου ${n}.`);
+  return true;
 }
 
 function viewDecree({ params }) {
@@ -402,7 +424,7 @@ function viewDecree({ params }) {
     html: `<section class="card send-panel noprint"><h3>${esc(DECREE_KINDS[decreeKey(d)].name)} — Αποστολή & Αποθήκευση</h3>${senderBanner('official')}
 <div class="toolbar"><button class="btn primary" data-act="pdf">⬇ PDF / Εκτύπωση</button>${mailButtons({ to, cc: db.setting('decree_cc'), subject: d.subject, body: d.body, kind: 'official' }, '✉ Αποστολή με Email')}
 <a class="btn" target="_blank" rel="noopener" href="${wa}">WhatsApp μήνυμα</a>${d.status === 'ready' ? '' : '<button class="btn primary" data-act="ready">✅ Έτοιμο: απόδοση αρ. πρωτοκόλλου</button>'}</div>
-<p class="send-help">Αρ. Πρωτ.: <b>${esc(d.protocol_no || 'θα δοθεί όταν οριστεί «Έτοιμο»')}</b>${d.protocol_seq ? ' <button class="btn small" data-act="protocol">✏ Αλλαγή αρ. πρωτοκόλλου</button>' : ''} · Κοινοποίηση: ${esc(db.setting('decree_cc'))} (αλλαγή στις Ρυθμίσεις).</p>${driveBox(d, fileName(d))}
+<p class="send-help">Αρ. Πρωτ.: <b>${esc(d.protocol_no || 'δεν έχει δοθεί')}</b>${d.protocol_seq ? ' <button class="btn small" data-act="protocol">✏ Αλλαγή αρ. πρωτοκόλλου</button>' : ' <button class="btn small" data-act="addproto">➕ Αρ. πρωτοκόλλου</button>'} · Κοινοποίηση: ${esc(db.setting('decree_cc'))} (αλλαγή στις Ρυθμίσεις).</p>${driveBox(d, fileName(d))}
 <div class="toolbar"><button class="btn" data-act="word">⬇ Word</button></div></section>
 <div class="toolbar noprint"><a class="btn" href="#/decrees/${d.id}/edit">Επεξεργασία Διατάγματος</a><a class="btn" href="#/decrees/new?copy_from=${d.id}">Νέο πάνω σε αυτό</a><a class="btn" href="#/decrees">Αρχείο Διαταγμάτων</a>
 <button class="btn danger" data-act="del">Διαγραφή</button></div>${syncCard(d)}<div class="print-area">${decreePaper(d)}</div>`,
@@ -429,7 +451,7 @@ function viewDecree({ params }) {
           const manual = d.protocol_seq ? 0 : askProtocol({ table: 'decree_documents', id: d.id });
           if (manual === null) return;
           await db.save(`Διάταγμα ${decreeNo(d)}: έτοιμο`, (tx) => { const p = d.protocol_seq ? null : nextProtocol(tx, 'Διάταγμα', '', manual); tx.update('decree_documents', d.id, { status: 'ready', ...(p ? { protocol_seq: p.seq, protocol_year: p.year, protocol_no: p.no } : {}) }); });
-          flash('Το Διάταγμα είναι έτοιμο και πήρε αριθμό πρωτοκόλλου.'); go(`/decrees/${d.id}`);
+          flash(d.protocol_seq ? 'Το Διάταγμα είναι έτοιμο.' : 'Το Διάταγμα είναι έτοιμο και πήρε αριθμό πρωτοκόλλου.'); go(`/decrees/${d.id}`);
         },
         async protocol() {
           const n = askProtocol({ table: 'decree_documents', id: d.id }, Number(d.protocol_seq));
@@ -437,6 +459,7 @@ function viewDecree({ params }) {
           await db.save(`Διάταγμα ${decreeNo(d)}: αρ. πρωτοκόλλου ${n}`, (tx) => { claimProtocol(tx, n); tx.update('decree_documents', d.id, { protocol_seq: n, protocol_no: String(n) }); });
           flash(`Ο αριθμός πρωτοκόλλου άλλαξε σε ${n}.`); go(`/decrees/${d.id}`);
         },
+        async addproto() { if (await addDecreeProtocol(d)) go(`/decrees/${d.id}`); },
         async del() { if (await deleteDecree(d)) go('/decrees'); },
       });
     },
@@ -760,11 +783,14 @@ function archive({ query }) {
     html: `<div class="hero"><div><h1>Αρχείο Διαταγμάτων</h1><p class="muted">Ανεξάρτητο από το Αρχείο Επιστολών.</p></div><div class="toolbar"><a class="btn primary" href="#/decrees/new">+ Νέο Διάταγμα</a>${protocolGreenBtn()}</div></div>${notice(query.msg)}
 <form class="filters" id="flt"><input name="q" value="${esc(query.q || '')}" placeholder="Αριθμός, περί, όνομα" autofocus><input type="date" name="from" value="${esc(query.from || '')}"><input type="date" name="to" value="${esc(query.to || '')}"><button>Αναζήτηση</button></form>
 ${pend.length ? `<div class="card sync-card warn"><b>⚠ ${pend.length} Διατάγματα δεν έχουν περάσει στην Επετηρίδα και στο Μητρώο:</b> ${pend.map((d) => `<a href="#/decrees/${d.id}">${esc(decreeNo(d))}</a>`).join(', ')} — ανοίξτε το καθένα και πατήστε «🔄 Ενημέρωση Επετηρίδας & Μητρώου».</div>` : ''}
-${table(['Αρ. Διατάγματος', 'Ημερομηνία', 'Περί', 'Αδελφοί', 'Ενέργειες'], xs.slice(0, 500).map((d) => [`<span class="official-number">${esc(decreeNo(d))}</span>${syncInfo(d) ? '<br><small class="vok" title="Η Επετηρίδα και το Μητρώο ενημερώθηκαν">✓ Επετηρίδα</small>' : pendIds.has(d.id) ? '<br><small class="vwarn">⚠ Επετηρίδα</small>' : ''}`, esc(fmtDate(d.decree_date)), esc(d.matter), esc(d.recipient_name),
+${table(['Αρ. Διατάγματος', 'Αρ. Πρωτ.', 'Ημερομηνία', 'Περί', 'Αδελφοί', 'Ενέργειες'], xs.slice(0, 500).map((d) => [`<span class="official-number">${esc(decreeNo(d))}</span>${syncInfo(d) ? '<br><small class="vok" title="Η Επετηρίδα και το Μητρώο ενημερώθηκαν">✓ Επετηρίδα</small>' : pendIds.has(d.id) ? '<br><small class="vwarn">⚠ Επετηρίδα</small>' : ''}`, d.protocol_seq ? `<span class="official-number">${esc(String(d.protocol_seq))}</span>` : `<button type="button" class="btn small" data-act="addproto" data-id="${d.id}">➕ Αρ. πρωτοκόλλου</button>`, esc(fmtDate(d.decree_date)), esc(d.matter), esc(d.recipient_name),
   `<a href="#/decrees/${d.id}">Άνοιγμα</a> · <a href="#/decrees/${d.id}/edit">Επεξεργασία</a> · <a href="#/decrees/new?copy_from=${d.id}">Νέο πάνω σε αυτό</a> <button type="button" class="btn small danger" data-act="del" data-id="${d.id}">🗑 Διαγραφή</button>`]), 'Δεν βρέθηκαν Διατάγματα.')}`,
     mount(el) {
       onSubmit(el.querySelector('#flt'), (q) => go('/decrees', q));
-      bind(el, { async del(x) { const d = db.get('decree_documents', Number(x.id)); if (d && await deleteDecree(d)) go('/decrees', query); } });
+      bind(el, {
+        async del(x) { const d = db.get('decree_documents', Number(x.id)); if (d && await deleteDecree(d)) go('/decrees', query); },
+        async addproto(x) { const d = db.get('decree_documents', Number(x.id)); if (d && await addDecreeProtocol(d)) go('/decrees', query); },
+      });
     },
   };
 }
@@ -775,7 +801,7 @@ module({
     '/decrees': archive,
     '/decrees/new': ({ query }) => {
       let src = query.copy_from ? db.get('decree_documents', query.copy_from) : null;
-      if (src) src = { ...src, id: undefined };
+      if (src) src = { ...src, id: undefined, protocol_seq: null, protocol_no: '', protocol_year: null, status: undefined };
       const { m, html } = decreeForm(src, query);
       const n = suggestDecreeNo();
       return { title: 'Νέο Διάταγμα', html: `<div class="hero"><h1>Νέο Διάταγμα</h1><div class="toolbar">${protocolGreenBtn()}</div></div><div class="card decree-banner"><b>Προτεινόμενος αριθμός Διατάγματος: <span class="official-number">${n}/${new Date().getFullYear()}</span></b> (αλλάζει στο πεδίο «Αρ. Διατάγματος») · Ξεχωριστό αρχείο — δεν δημιουργεί επιστολή.</div>${html}`,

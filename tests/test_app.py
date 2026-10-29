@@ -88,11 +88,11 @@ def test_decree_epeteirida_and_members(app):
     app.pick('.registry-search', 'Παπαδ')
     app.click('Έκδοση Διατάγματος')
     app.page.wait_for_url('**/#/decrees/1')
-    assert 'θα δοθεί όταν οριστεί «Έτοιμο»' in app.text()  # πρόχειρο: χωρίς αριθμό πρωτοκόλλου
+    t = app.text()  # κάθε Διάταγμα παίρνει αριθμό πρωτοκόλλου με την έκδοση (ενιαίο πρωτόκολλο με τις Επιστολές)
+    assert 'υπ’ αριθμ. 513/' in t and 'Αρ. Πρωτ.: 20546' in t and 'και με αριθμ. πρωτ. 20546' in app.text('.dec-no')
     app.click('✅ Έτοιμο: απόδοση αρ. πρωτοκόλλου')
-    app.page.wait_for_selector('text=πήρε αριθμό πρωτοκόλλου')
-    t = app.text()
-    assert 'υπ’ αριθμ. 513/' in t and 'Αρ. Πρωτ.: 20546' in t  # ενιαίο πρωτόκολλο με τις Επιστολές
+    app.page.wait_for_selector('text=Το Διάταγμα είναι έτοιμο')
+    assert 'Αρ. Πρωτ.: 20546' in app.text()
     body = app.text('.decbody')
     assert app.page.locator('.decbody [aria-label="ΔΙΟΡΙΖΟΜΕΝ"]').count() >= 1  # «ΔΙΟΡΙΖΟΜΕΝ» ως καλλιγραφική εικόνα
     for s in ['ΜΕΓΑΝ ΓΡΑΜΜΑΤΕΑ', 'τον Λίαν Σεβάσμιον Αδελφόν', 'Γεώργιον Παπαδόπουλον', 'λαβόντες υπ’ όψιν τον Κανόνα 22']:
@@ -1499,17 +1499,18 @@ def test_protocol_suggested_or_manual(app):
     app.connect_local()
     add_member(app)
     app.go('/decrees/new')
+    assert app.page.input_value('[name=protocol_seq]') == '20545'  # προτείνεται ο επόμενος· ο χρήστης γράφει τον τελικό
     app.fill(matter='διορισμού Μεγάλων Αξιωματικών')
     app.page.select_option('#dOffice', 'Μέγας Γραμματεύς')
     app.pick('.registry-search', 'Παπαδ')
+    app.page.fill('[name=protocol_seq]', '21000')
+    app.page.wait_for_function("() => document.querySelector('#dprev .dec-no').innerText.includes('και με αριθμ. πρωτ. 21000')")
     app.click('Έκδοση Διατάγματος')
     app.page.wait_for_url('**/#/decrees/1')
-    app.page.evaluate("window.prompt = (m, d) => { sessionStorage.setItem('asked', JSON.stringify([m, d])); return '21000'; }")
-    app.click('✅ Έτοιμο: απόδοση αρ. πρωτοκόλλου')
-    app.page.wait_for_selector('text=πήρε αριθμό πρωτοκόλλου')
     assert 'Αρ. Πρωτ.: 21000' in app.text()
-    asked = app.page.evaluate("JSON.parse(sessionStorage.getItem('asked'))")
-    assert 'Προτείνω αριθμό πρωτοκόλλου 20545' in asked[0] and asked[1] == '20545'
+    app.click('✅ Έτοιμο: απόδοση αρ. πρωτοκόλλου')
+    app.page.wait_for_selector('text=Το Διάταγμα είναι έτοιμο')
+    assert 'Αρ. Πρωτ.: 21000' in app.text()
     # η αρίθμηση συνεχίζει μετά τον χειροκίνητο αριθμό (ο προτεινόμενος γίνεται δεκτός με OK)
     app.page.evaluate("window.prompt = (m, d) => d")
     app.go('/letters/new').fill(subject='Επόμενη', body='x').click('Αποθήκευση & απόδοση')
@@ -4222,3 +4223,37 @@ def test_concurrent_saves_do_not_lose_data(app):
       await Promise.all([slow, fast]);
       return db.all('member_registry').filter((m) => m.surname === 'Ταυτόχρονος').map((m) => m.first_name).sort(); }""")
     assert r == ['Α', 'Β'], r
+
+
+def test_every_decree_has_protocol_number(app):
+    # Κάθε Διάταγμα έχει αριθμό πρωτοκόλλου στην ενιαία αρίθμηση (Βιβλίο Πρωτοκόλλου)· τα παλαιά χωρίς αριθμό τον παίρνουν
+    # από το Αρχείο, τη σελίδα του Διατάγματος ή την Επεξεργασία («… ημερ. … και με αριθμ. πρωτ. …»)
+    app.connect_local()
+    app.page.evaluate("""async () => { const {db} = await import('./core/store.js');
+      await db.save('x', (tx) => { tx.insert('decree_documents', { decree_no: 517, decree_year: 2026, decree_date: '2026-10-20', matter: 'παλαιό', body: 'x', template_key: 'decree-general', rules: '{"action":"general"}', status: 'ready' });
+        tx.insert('decree_documents', { decree_no: 518, decree_year: 2026, decree_date: '2026-10-29', matter: 'δεύτερο', body: 'y', template_key: 'decree-general', rules: '{"action":"general"}' });
+        tx.insert('letters', { subject: 'Επιστολή', body: 'z', status: 'ready', protocol_seq: 20600, protocol_no: '20600', letter_date: '2026-10-28' }); }); }""")
+    app.go('/database/protocol')
+    assert '2 Διατάγματα χωρίς αριθμό πρωτοκόλλου' in app.text()
+    app.go('/decrees')
+    assert app.page.locator('[data-act=addproto]').count() == 2
+    app.page.evaluate("window.prompt = (m, d) => d")  # ο προτεινόμενος
+    app.page.locator('[data-act=addproto]').nth(1).click()  # 517/2026 (ταξινόμηση: νεότερο πρώτα)
+    app.page.wait_for_selector('text=πήρε αριθμό πρωτοκόλλου 20601')
+    assert app.page.evaluate("async () => (await import('./core/store.js')).db.get('decree_documents', 1).status") == 'ready'
+    # Επεξεργασία: προτείνεται ο επόμενος (20602), ο χρήστης γράφει τον τελικό
+    app.go('/decrees/2/edit')
+    assert app.page.input_value('[name=protocol_seq]') == '20602'
+    app.page.fill('[name=protocol_seq]', '20610')
+    app.page.click('button:has-text("Αποθήκευση Διατάγματος")')
+    app.page.wait_for_url('**/#/decrees/2')
+    assert 'υπ’ αριθμ. 518/2026, ημερ. 29/10/2026 και με αριθμ. πρωτ. 20610' in app.text('.paper')
+    # η αρίθμηση συνεχίζει από εκεί· η επεξεργασία χωρίς αλλαγή κρατά τον αριθμό
+    app.go('/decrees/2/edit')
+    assert app.page.input_value('[name=protocol_seq]') == '20610'
+    app.page.click('button:has-text("Αποθήκευση Διατάγματος")')
+    app.page.wait_for_url('**/#/decrees/2')
+    st = app.page.evaluate("async () => { const m = await import('./modules/protocol.js'); return [m.suggestedProtocol(), m.protocolBook().map((r) => [r.cat, r.protocol_seq])]; }")
+    assert st == [20611, [['Διάταγμα', 20610], ['Διάταγμα', 20601], ['Επιστολή', 20600]]], st
+    app.go('/database/protocol')
+    assert '20610' in app.text() and '20601' in app.text() and 'χωρίς αριθμό πρωτοκόλλου' not in app.text()

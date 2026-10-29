@@ -46,6 +46,7 @@ function protocolPage({ query }) {
     title: 'Βιβλίο Πρωτοκόλλου',
     html: `<h1>📖 Βιβλίο Πρωτοκόλλου</h1><p><a href="#/database">← Βάση Δεδομένων</a></p><form class="card filters" id="flt"><input name="q" value="${esc(query.q || '')}" placeholder="🔎 Αριθμός, θέμα, παραλήπτης">
 <select name="year"><option value="">Όλα τα έτη</option>${years.map((y) => `<option${y === query.year ? ' selected' : ''}>${y}</option>`).join('')}</select><select name="cat"><option value="">Όλα</option>${['Επιστολή', 'Διάταγμα'].map((c) => `<option${c === query.cat ? ' selected' : ''}>${c}</option>`).join('')}</select><button>Αναζήτηση</button></form>
+${(() => { const miss = db.all('decree_documents').filter((d) => !d.protocol_seq); return miss.length ? `<div class="card sync-card warn"><b>⚠ ${miss.length} Διατάγματα χωρίς αριθμό πρωτοκόλλου:</b> ${miss.map((d) => `<a href="#/decrees/${d.id}">${esc(`${d.decree_no}/${d.decree_year}`)}</a>`).join(', ')} — ανοίξτε το καθένα και πατήστε «➕ Αρ. πρωτοκόλλου» (ή από το <a href="#/decrees">Αρχείο Διαταγμάτων</a>).</div>` : ''; })()}
 <div class="toolbar"><button class="btn" data-act="xlsx">⬇ Excel</button><span class="muted" style="align-self:center">${rows.length} εγγραφές</span></div>
 ${table(['Αρ. Πρωτ.', 'Είδος', 'Ημ/νία', 'Θέμα', 'Παραλήπτης', 'Κατάσταση'], rows.slice(0, 500).map((r) => [`<b class="official-number">${esc(r.protocol_no)}</b>`, r.cat, esc(fmtDate(r.d)), `<a href="${r.href}">${esc(r.subject || '(χωρίς θέμα)')}</a>`, esc(r.who), esc(r.status)]), 'Δεν βρέθηκαν εγγραφές.')}`,
     mount(el) {
