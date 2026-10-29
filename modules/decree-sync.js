@@ -77,15 +77,54 @@ export function applyDecreeSync(tx, d) {
     if (!Object.keys(p.set).length) continue;
     if (p.create) {
       const r = tx.insert('epeteirida', { aa: nextAa(), active: 0, title: '', honorific: '', full_name: p.name, rank: '', province: '', decree_no: '', decree_year: '', tmd: 0, tmd_decree: '', current: '', member_id: p.member_id, ...p.set });
+      placeByPrecedence(tx, r.id);
       done.push({ ep_id: r.id, created: true, name: p.name, member_id: p.member_id, after: p.set });
     } else {
       tx.update('epeteirida', p.ep_id, p.set);
+      if ('rank' in p.set || 'title' in p.set) placeByPrecedence(tx, p.ep_id);
       done.push({ ep_id: p.ep_id, created: false, name: p.name, member_id: p.member_id, before: Object.fromEntries(Object.keys(p.set).map((k) => [k, p.before[k]])), after: p.set });
     }
   }
   tx.update('decree_documents', d.id, { ep_sync: JSON.stringify({ at: new Date().toISOString(), changes: done, text: planText(plan) }) });
   return done;
 }
+// Θέση (Α/Α) μιας γραμμής της Επετηρίδας κατά την τάξη προβαδίσματος: μπαίνει ακριβώς πριν από την πρώτη γραμμή με
+// κατώτερο αξίωμα — π.χ. ο (εν ενεργεία) Πρώτος Μέγας Επόπτης πάνω από τους Πρώην Πρώτους Μεγάλους Επόπτας, μετά τους
+// υπόλοιπους του ίδιου αξιώματος. Αλλάζουν μόνο τα Α/Α των γραμμών ανάμεσα στην παλιά και στη νέα θέση (τα κενά αρίθμησης μένουν).
+const epPrec = (r) => precedenceOf(r.rank) ?? precedenceOf(r.title);
+const aaOf = (r) => (r.aa === '' || r.aa == null ? 1e9 : Number(r.aa) || 1e9);
+export function placeByPrecedence(tx, id) {
+  const rows = tx.all('epeteirida').slice().sort((a, b) => aaOf(a) - aaOf(b) || a.id - b.id);
+  const from = rows.findIndex((r) => r.id === id), me = rows[from], p = me ? epPrec(me) : null;
+  if (p == null) return false;
+  const rest = rows.filter((r) => r.id !== id);
+  let to = rest.findIndex((r) => { const q = epPrec(r); return q != null && q > p; });
+  if (to < 0) to = rest.length;
+  if (to === from) return false;
+  rest.splice(to, 0, me);
+  const lo = Math.min(from, to), hi = Math.max(from, to);
+  const nums = rows.slice(lo, hi + 1).map(aaOf).sort((a, b) => a - b);
+  rest.slice(lo, hi + 1).forEach((r, i) => { const aa = nums[i] >= 1e9 ? '' : nums[i]; if (String(r.aa ?? '') !== String(aa)) tx.update('epeteirida', r.id, { aa }); });
+  return true;
+}
+// Γραμμές που είχαν μπει εκτός σειράς (στο τέλος του πίνακα από Διάταγμα ή με αναβάθμιση που κράτησε το παλιό Α/Α)
+export function fixPrecedenceOrder(tx) {
+  let n = 0;
+  for (let guard = 0; guard < 500; guard++) {
+    let max = -1, bad = null;
+    for (const r of tx.all('epeteirida').slice().sort((a, b) => aaOf(a) - aaOf(b) || a.id - b.id)) {
+      const q = epPrec(r);
+      if (q == null) continue;
+      if (q < max) { bad = r; break; }
+      max = q;
+    }
+    if (!bad || !placeByPrecedence(tx, bad.id)) break;
+    n++;
+  }
+  return n;
+}
+db.migrate('epeteirida-precedence-order-2026-10', (tx) => { fixPrecedenceOrder(tx); });
+
 // Αναίρεση: επαναφέρει μόνο τα πεδία που έχουν ακόμη την τιμή που έγραψε το Διάταγμα
 export function revertDecreeSync(tx, d) {
   const s = syncInfo(d);

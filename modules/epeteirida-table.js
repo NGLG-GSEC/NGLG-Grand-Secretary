@@ -3,7 +3,7 @@
 // στο μέλος εμφανίζεται το «Ανώτατο αξίωμα / βαθμός» και το διάταγμά του, χωρίς να αντιγράφονται στοιχεία.
 import { db } from '../core/store.js';
 import { module, bind, flash, go, confirmDo, toast } from '../core/app.js';
-import { esc, fold, sortBy, parsePasted, exportXlsx, today, fmtDate } from '../core/util.js';
+import { esc, fold, sortBy, parsePasted, exportXlsx, today, fmtDate, outgoingProtocolBtn } from '../core/util.js';
 import { attachPicker, memberItems } from '../core/pickers.js';
 import { identify, canonicalId, person, regCode, regSortKey } from '../core/people.js';
 import { reportPaper, printPaper } from '../core/paper.js';
@@ -122,7 +122,7 @@ function tablePage() {
 <div id="epSyncNote"></div><p class="muted ep-sync-help">Η Επετηρίδα ενημερώνεται αυτόματα από τα Διατάγματα (διορισμός Μεγάλου Αξιωματικού, Επαρχιακού ή Περιφερειακού Μεγάλου Διδασκάλου, απονομή «Πρώην», Τάξις ΜΔ), αφού το επιβεβαιώσετε· ο Τίτλος κάθε μέλους στο Μητρώο ακολουθεί την Επετηρίδα.</p>
 <div class="card ep-filters" id="epf"></div>
 <div class="toolbar ep-tools"><button class="btn primary" data-act="save" disabled>💾 Αποθήκευση αλλαγών</button><button class="btn" data-act="add">+ Νέα γραμμή</button>
-<button class="btn" data-act="relink">🔗 Σύνδεση με το Μητρώο</button><button class="btn" data-act="xlsx">⬇ Excel</button><button class="btn" data-act="print">🖨 Εκτύπωση</button>
+<button class="btn" data-act="relink">🔗 Σύνδεση με το Μητρώο</button><button class="btn" data-act="xlsx">⬇ Excel</button><button class="btn" data-act="print">🖨 Εκτύπωση</button>${outgoingProtocolBtn('📂 ΑΡΧΕΙΟ ΕΞΕΡΧΟΜΕΝΩΝ', 'protogreen')}
 <span class="muted" id="epcount" style="align-self:center"></span></div>
 <div class="card tablecard ep-wrap"><table class="ep-grid" id="epg"></table></div>
 <details class="card fold"><summary><b>Εισαγωγή / αντικατάσταση από Excel (επικόλληση)</b></summary><form id="epimp2" style="margin-top:10px">

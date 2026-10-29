@@ -375,7 +375,7 @@ function archive({ query }) {
   const shown = xs.slice(0, 500);
   return {
     title: 'Αρχείο Επιστολών',
-    html: `<div class="hero"><h1>Αρχείο Επιστολών</h1><div class="toolbar"><a class="btn primary" href="#/letters/new">+ Νέα Επιστολή</a>${outgoingProtocolBtn()}</div></div>${notice(query.msg)}
+    html: `<div class="hero"><h1>Αρχείο Επιστολών</h1><div class="toolbar"><a class="btn primary" href="#/letters/new">+ Νέα Επιστολή</a>${outgoingProtocolBtn('📂 ΑΡΧΕΙΟ ΕΞΕΡΧΟΜΕΝΩΝ', 'protogreen')}</div></div>${notice(query.msg)}
 <div class="card protonext"><span>Επόμενος αριθμός πρωτοκόλλου: <b class="official-number" id="protonext">${suggestedProtocol()}</b></span><button type="button" class="btn small" data-act="nextproto">✏ Αλλαγή επόμενου αριθμού</button>
 <small class="muted">Ενιαία αρίθμηση Επιστολών και Διαταγμάτων. Όταν γράφετε αριθμό σε ένα έγγραφο, η αρίθμηση συνεχίζει από εκεί· οι αριθμοί που υπάρχουν ήδη παραλείπονται.</small></div>
 <form class="filters" id="flt"><input name="q" value="${esc(query.q || '')}" placeholder="Αρ. πρωτ., θέμα, παραλήπτης" autofocus><input type="date" name="from" value="${esc(query.from || '')}"><input type="date" name="to" value="${esc(query.to || '')}"><button>Αναζήτηση</button></form>

@@ -4258,3 +4258,30 @@ def test_every_decree_has_protocol_number(app):
     assert st == [20611, [['Διάταγμα', 20610], ['Διάταγμα', 20601], ['Επιστολή', 20600]]], st
     app.go('/database/protocol')
     assert '20610' in app.text() and '20601' in app.text() and 'χωρίς αριθμό πρωτοκόλλου' not in app.text()
+
+
+def test_epeteirida_active_office_above_former_holders(app):
+    # Επετηρίδα (Πίνακας): ο εν ενεργεία Πρώτος Μέγας Επόπτης μπαίνει πάνω από τους Πρώην Πρώτους Μεγάλους Επόπτας —
+    # με τη διόρθωση της σειράς (γραμμές εκτός σειράς) και με τη νέα εγγραφή από Διάταγμα· κουμπί «📂 ΑΡΧΕΙΟ ΕΞΕΡΧΟΜΕΝΩΝ»
+    app.connect_local()
+    order = app.page.evaluate("""async () => { const {db} = await import('./core/store.js'); const m = await import('./modules/decree-sync.js');
+      await db.save('x', (tx) => { const r = (aa, rank, full_name) => tx.insert('epeteirida', { aa, active: 0, title: rank, honorific: '', full_name, rank });
+        r(1, 'Πρώην Πρώτος Μέγας Επόπτης', 'Α'); r(2, 'Πρώην Πρώτος Μέγας Επόπτης', 'Β'); r(3, 'Δεύτερος Μέγας Επόπτης', 'Γ'); r(4, 'Μέλος Συμβουλίου', 'Δ'); r(70, 'Πρώτος Μέγας Επόπτης', 'Ε'); });
+      await db.save('fix', (tx) => m.fixPrecedenceOrder(tx));
+      return db.all('epeteirida').slice().sort((a, b) => a.aa - b.aa).map((r) => `${r.aa}:${r.full_name}`); }""")
+    assert order == ['1:Ε', '2:Α', '3:Β', '4:Γ', '70:Δ'], order
+    # νέος Πρώτος Μέγας Επόπτης από Διάταγμα: μετά τον υπάρχοντα εν ενεργεία, πάνω από τους Πρώην
+    add_member(app)
+    app.go('/decrees/new')
+    app.fill(matter='διορισμού Μεγάλων Αξιωματικών')
+    app.page.select_option('#dOffice', 'Πρώτος Μέγας Επόπτης')
+    app.pick('.registry-search', 'Παπαδ')
+    app.click('Έκδοση Διατάγματος')
+    app.page.wait_for_url('**/#/decrees/1')
+    order = app.page.evaluate("async () => (await import('./core/store.js')).db.all('epeteirida').slice().sort((a, b) => a.aa - b.aa).map((r) => r.full_name)")
+    assert order[:3] == ['Ε', 'Παπαδόπουλος Γεώργιος', 'Α'], order
+    app.go('/epeteirida/pinakas')
+    assert app.page.locator('a.btn.protogreen:has-text("ΑΡΧΕΙΟ ΕΞΕΡΧΟΜΕΝΩΝ")').count() == 1
+    assert app.page.locator('#epg tbody tr').nth(1).inner_text().count('Παπαδόπουλος Γεώργιος') == 1
+    app.go('/letters')
+    assert app.page.locator('a.btn.protogreen:has-text("ΑΡΧΕΙΟ ΕΞΕΡΧΟΜΕΝΩΝ")').get_attribute('href').endswith('1kKR7v86jjs5QJE9-K5uUebvS6nZd9J03?usp=sharing')
