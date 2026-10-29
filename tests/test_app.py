@@ -4287,3 +4287,22 @@ def test_epeteirida_active_office_above_former_holders(app):
     assert app.page.locator('#epg tbody tr').nth(1).inner_text().count('Παπαδόπουλος Γεώργιος') == 1
     app.go('/letters')
     assert app.page.locator('a.btn.protogreen:has-text("ΑΡΧΕΙΟ ΕΞΕΡΧΟΜΕΝΩΝ")').get_attribute('href').endswith('1kKR7v86jjs5QJE9-K5uUebvS6nZd9J03?usp=sharing')
+
+
+def test_letter_date_editable_and_kept_after_protocol(app):
+    # Η Ημερομηνία της επιστολής αλλάζει στη φόρμα και μένει και μετά την απόδοση αρ. πρωτοκόλλου
+    app.connect_local()
+    app.go('/letters/new')
+    app.fill(subject='Με ημερομηνία', body='Κείμενο', letter_date='2026-10-20')
+    app.click('💾 Αποθήκευση')
+    app.page.wait_for_url('**/#/letters/1')
+    app.click('✅ Έτοιμη: απόδοση αρ. πρωτοκόλλου')
+    app.page.wait_for_selector('text=πήρε αριθμό πρωτοκόλλου')
+    assert '20/10/2026' in app.text() or '20.10.2026' in app.text()
+    app.go('/letters/1/edit')
+    assert app.page.locator('[name=letter_date]').input_value() == '2026-10-20'
+    app.page.fill('[name=letter_date]', '2026-10-22')
+    app.click('💾 Αποθήκευση')
+    app.page.wait_for_url('**/#/letters/1')
+    d = app.page.evaluate("async () => { const {db} = await import('./core/store.js'); return db.get('letters', 1).letter_date; }")
+    assert d == '2026-10-22', d

@@ -54,7 +54,7 @@ function assignProtocol(tx, id, manual = 0) {
   const r = tx.get('letters', id);
   if (!r || r.protocol_seq) return r;
   const p = nextProtocol(tx, 'Επιστολή', '', manual);
-  return tx.update('letters', id, { protocol_seq: p.seq, protocol_year: p.year, protocol_no: p.no, letter_date: today() });
+  return tx.update('letters', id, { protocol_seq: p.seq, protocol_year: p.year, protocol_no: p.no, letter_date: r.letter_date_manual && r.letter_date ? r.letter_date : today() }); // ημερομηνία που όρισε ο χρήστης μένει
 }
 const fileName = (x) => (x.protocol_seq ? docTitle(x.protocol_seq, category(x), letterFields(x.subject, x)) : safeFileName(`${category(x)} ${letterFields(x.subject, x)}`));
 
@@ -146,7 +146,7 @@ function letterForm(x, query = {}) {
   const tpl = templates();
   return `<form id="lf" class="grid card">
 <div><label>Πρότυπο / Περίπτωση</label><select name="template_id" id="tplSel"><option value="">— Επιλογή —</option>${tpl.map((t) => `<option value="${t.id}"${Number(x.template_id) === t.id ? ' selected' : ''}>${t.id}. ${esc(t.name)}</option>`).join('')}</select></div>
-<div><label>Ημερομηνία</label><input value="${esc(fmtDate(x.letter_date || today()))}" disabled></div>
+<div><label>Ημερομηνία</label><input type="date" name="letter_date" value="${esc(x.letter_date || today())}"></div>
 ${fillPanel(x, query)}
 <div class="full"><label>🔎 Παραλήπτης από τον Κατάλογο / Μητρώο</label><input id="rcptPick" placeholder="Επαρχία, Στοά, ΕπΜΔ, όνομα μέλους…" autocomplete="off"></div>
 <input type="hidden" name="recipient_member_id" value="${esc(x.recipient_member_id || '')}"><input type="hidden" name="visit_id" value="${esc(x.visit_id || '')}"><input type="hidden" name="closing" value="${esc(x.closing || '')}"><input type="hidden" name="category" value="${esc(category(x))}">
@@ -236,19 +236,19 @@ function mountLetterForm(el, x, isNew) {
   for (const i of [fl, fd]) i.addEventListener('change', () => { fv.value = ''; apply(true); });
   if (tpl && !box.hidden && (fv.value || !f.body.value.trim() || hasPlaceholders(f.body.value))) apply(true);
   if (!x.id && isKanonismos(tpl) && !f.protocol_image.value) setTimeout(() => { const b = el.querySelector('[data-act=approvalStamp]'); if (b && b.isConnected) b.click(); }, 0); // νέα επιστολή από το μενού «+ Έγκριση Εσωτ. Κανονισμού»
-  const cur = () => ({ ...x, ...Object.fromEntries(new FormData(f)), letter_date: x.letter_date || today() });
+  const cur = () => ({ ...x, ...Object.fromEntries(new FormData(f)), letter_date: f.letter_date.value || x.letter_date || today() });
   bind(el, { protoImgDel: () => setProto(''),
     regDel() { regPending = null; f.reg_remove.value = '1'; pbox.querySelector('.reg-name').innerHTML = '<span class="muted">Δεν έχει επισυναφθεί PDF.</span>'; },
     async approvalStamp() { // η εφαρμογή «Έγκριση Εσωτερικού Κανονισμού»: η εικόνα μπαίνει ως ΕΙΚΟΝΑ ΠΡΩΤΟΚΟΛΛΟΥ
       if (document.querySelector('.approval-app')) return; // ήδη ανοιχτό (π.χ. αυτόματο άνοιγμα με την επιλογή του προτύπου)
       const { openApprovalStamp } = await import('./approval-stamp.js');
       const no = String(fl.value).split('·')[0].trim() || (/(?:αριθ|αρ)\S*\s*(\d+)\s*$/i.exec(f.recipient_name.value) || [])[1] || '';
-      const v = await openApprovalStamp({ protocol: String(x.protocol_seq || suggestedProtocol()), date: x.letter_date || today(), lodge: no });
+      const v = await openApprovalStamp({ protocol: String(x.protocol_seq || suggestedProtocol()), date: f.letter_date.value || x.letter_date || today(), lodge: no });
       if (v) { setProto(v); toast('Το ειδικό σήμα μπήκε ως ΕΙΚΟΝΑ ΠΡΩΤΟΚΟΛΛΟΥ.'); }
     }, ready() { f.status.value = 'ready'; f.requestSubmit(); }, form: () => openInDigitalForm(cur()), word: () => letterDocx(cur()), preview() {
     const d = Object.fromEntries(new FormData(f));
     const pv = el.querySelector('#pv');
-    pv.innerHTML = letterPaper({ ...x, ...d, letter_date: x.letter_date || today() });
+    pv.innerHTML = letterPaper({ ...x, ...d, letter_date: d.letter_date || x.letter_date || today() });
     pv.hidden = false; pv.scrollIntoView({ behavior: 'smooth' });
   } });
   onSubmit(f, async (d) => {
@@ -256,11 +256,15 @@ function mountLetterForm(el, x, isNew) {
     if (bad.length) throw new Error('Μη έγκυρο email: ' + bad.join(', '));
     const row = { subject: d.subject.trim(), body: d.body.trim(), template_id: d.template_id ? Number(d.template_id) : null, recipient_name: d.recipient_name.trim(),
       recipient_email: emails.join(', '), recipient_member_id: d.recipient_member_id ? Number(d.recipient_member_id) : null, visit_id: Number(d.visit_id) || x.visit_id || null, cc_name: String(d.cc_name || '').trim(), closing: String(d.closing || '').trim(), category: LETTER_CATEGORIES[d.category] ? d.category : 'ΕΠΙΣΤΟΛΗ', status: d.status, signer: d.signer, protocol_image: String(d.protocol_image || '') };
+    // Ημερομηνία: επεξεργάσιμη· αν αλλάξει από τον χρήστη μένει και όταν δοθεί αριθμός πρωτοκόλλου
+    const ld = /^\d{4}-\d{2}-\d{2}$/.test(String(d.letter_date || '')) ? d.letter_date : (x.letter_date || today());
+    row.letter_date = ld;
+    if (ld !== (x.letter_date || today())) row.letter_date_manual = true;
     // «Έτοιμη» χωρίς αριθμό: πρόταση του επόμενου αριθμού πρωτοκόλλου ή χειροκίνητος
     const manualProtocol = row.status === 'ready' && !x.protocol_seq ? askProtocol({ table: 'letters', id: x.id }) : 0;
     if (manualProtocol === null) return;
     const id = await db.save(isNew ? `Νέα Επιστολή: ${row.subject}` : `Επιστολή ${x.protocol_no || x.id}: ενημέρωση`, (tx) => {
-      const r = isNew ? tx.insert('letters', { ...row, letter_date: today(), source_letter_id: x.source_letter_id || null, visit_id: row.visit_id || x.visit_id || null }) : tx.update('letters', x.id, row);
+      const r = isNew ? tx.insert('letters', { ...row, source_letter_id: x.source_letter_id || null, visit_id: row.visit_id || x.visit_id || null }) : tx.update('letters', x.id, row);
       if (regPending) { const path = `letters/kanonismos-${r.id}-${Date.now()}.pdf`; tx.putFile(path, regPending.bytes); tx.update('letters', r.id, { reg_file: path, reg_name: regPending.name }); }
       else if (d.reg_remove) tx.update('letters', r.id, { reg_file: '', reg_name: '' });
       if (row.status === 'ready') assignProtocol(tx, r.id, manualProtocol);
