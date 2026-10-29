@@ -4235,6 +4235,7 @@ def test_every_decree_has_protocol_number(app):
         tx.insert('letters', { subject: 'Επιστολή', body: 'z', status: 'ready', protocol_seq: 20600, protocol_no: '20600', letter_date: '2026-10-28' }); }); }""")
     app.go('/database/protocol')
     assert '2 Διατάγματα χωρίς αριθμό πρωτοκόλλου' in app.text()
+    assert app.page.locator('a.btn:has-text("ΑΡΧΕΙΟ ΕΞΕΡΧΟΜΕΝΩΝ")').get_attribute('href') == 'https://drive.google.com/drive/folders/1kKR7v86jjs5QJE9-K5uUebvS6nZd9J03?usp=sharing'
     app.go('/decrees')
     assert app.page.locator('[data-act=addproto]').count() == 2
     app.page.evaluate("window.prompt = (m, d) => d")  # ο προτεινόμενος
