@@ -1017,6 +1017,7 @@
           const row = sel.closest("tr");
           if (row) row.querySelectorAll(".officer-list li").forEach(li => { const b = li.querySelector(".decl-pick"), on = li.querySelector(".officer-name").textContent === sel.value; if (b) { b.classList.toggle("on", on); b.textContent = on ? "✓ Εκπρόσωπος" : "✓"; } });
           if (row && sel.value) row.className = "rep-done";
+          try { await loadMeetings(); } catch (e) { /* */ } // το Πρόγραμμα της εφαρμογής, με την απόφαση
           renderDecisions();
           sel.disabled = false;
           return;
@@ -1478,7 +1479,10 @@
     async function getJson(url) { const r = await fetch(url + "?t=" + Date.now(), { cache: "no-store" }); if (!r.ok) throw new Error(r.status); return r.json(); }
     async function loadMeetings() {
       // Τα τρία αρχεία φορτώνονται παράλληλα
-      const [mj, oj, pj] = await Promise.all(["meetings.json", "officers.json", "../programme/programme.json"].map(u => getJson(u).catch(() => null)));
+      // Μέσα στην εφαρμογή: τα δεδομένα ζωντανά από την εφαρμογή (ίδιο origin)· αλλιώς τα δημόσια αρχεία
+      let live = null;
+      try { if (window.parent !== window && typeof window.parent.nglgDeclData === "function") live = await window.parent.nglgDeclData(); } catch (e) { live = null; }
+      const [mj, oj, pj] = await Promise.all(["meetings.json", "officers.json", "../programme/programme.json"].map(u => (live && live[u]) ? Promise.resolve(live[u]) : getJson(u).catch(() => null)));
       try {
         const pub = ((mj || {}).meetings || []).filter(m => m && m.id && m.date);
         if (pub.length) { MEETINGS = pub; FROM_APP = true; }

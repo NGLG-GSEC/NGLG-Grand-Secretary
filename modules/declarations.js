@@ -16,6 +16,14 @@ const VIEWS = [['form', 'Δήλωση Ενδιαφέροντος'], ['programme'
 const srcOf = (v) => `${DECLARATIONS_URL}?embed=1#${v}`;
 const frameHtml = (id, title, src) => `<iframe id="${id}" class="embed-frame" title="${title}" src="${src}"></iframe>`;
 
+// Η σελίδα Δηλώσεων μέσα στην εφαρμογή παίρνει Εργασίες, Αξιωματικούς και Πρόγραμμα ΖΩΝΤΑΝΑ από τα δεδομένα (όχι από τα δημόσια
+// αρχεία του GitHub Pages, που ενημερώνονται με καθυστέρηση) — έτσι μια απόφαση φαίνεται αμέσως.
+window.nglgDeclData = async () => {
+  const v = await import('./visits.js');
+  const officers = v.publicOfficers();
+  return { 'meetings.json': { meetings: v.publicMeetings() }, '../programme/programme.json': v.publicProgramme(), ...(officers.length >= 20 ? { 'officers.json': { officers } } : {}) };
+};
+
 function declarationsPage({ query }) {
   // «?view=report» (π.χ. κουμπί «🔒 Ενημέρωση ΜΔ» του πάνω μενού) ανοίγει κατευθείαν την καρτέλα
   const start = VIEWS.some(([v]) => v === query.view) ? query.view : 'form';

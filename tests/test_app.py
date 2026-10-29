@@ -4347,7 +4347,8 @@ def test_declarations_tick_in_app_with_old_apps_script(app):
         return route.fulfill(json={'ok': False, 'error': 'unknown_action'})
     app.page.route('https://script.google.com/**', api)
     app.page.route('https://accounts.google.com/**', lambda r: r.abort())
-    app.page.route('**/declarations/meetings.json*', lambda r: r.fulfill(json={'meetings': [{'kind': 'ΕΓΚΑΤΑΣΤΑΣΗ ΣΕΒ', 'id': 'l118_20261103', 'date': 'Τρίτη 03/11/2026', 'name': 'ΑΤΛΑΣ', 'no': '118', 'prov': 'ΕπΜΣτ. Πειραιώς'}]}))
+    # τα δημόσια αρχεία (GitHub Pages) είναι παλιά: μέσα στην εφαρμογή η σελίδα παίρνει τα δεδομένα ζωντανά
+    app.page.route('**/declarations/meetings.json*', lambda r: r.fulfill(json={'meetings': []}))
     app.page.route('**/programme/programme.json*', lambda r: r.fulfill(json={'rows': []}))
     app.page.evaluate("""async () => { const {db} = await import('./core/store.js');
       await db.save('x', (tx) => { tx.replace('visits', []);
@@ -4364,6 +4365,16 @@ def test_declarations_tick_in_app_with_old_apps_script(app):
     assert 'στην Επίσκεψη' in fr.locator('.decide-state.ok').inner_text()
     rep = app.page.evaluate("async () => { const {db} = await import('./core/store.js'); const v = db.all('visits')[0]; return [(db.get('reps', v.rep_id) || {}).surname, v.decl_decision]; }")
     assert rep == ['Διαβάτης', 'Διαβάτης Χρήστος (Βοηθός Μέγας Γραμματεύς)'], rep
+    # νέο άνοιγμα της σελίδας: η απόφαση φαίνεται (από το Πρόγραμμα της εφαρμογής, όχι από τα παλιά δημόσια αρχεία)
+    app.go('/visits')
+    app.go('/declarations?view=report')
+    fr = app.page.frame_locator('#declFrame')
+    fr.locator('#auth-alt').evaluate("d => d.open = true")
+    fr.locator('#admin-pass').fill('test-key')
+    fr.locator('#auth-btn').click()
+    row = fr.locator('#report-table-body tr', has_text='ΑΤΛΑΣ')
+    row.locator('.decide-select').wait_for()
+    assert 'Διαβάτης' in row.locator('.decide-select').input_value()
 
 
 def test_decl_decision_unknown_officer_creates_rep(app):
