@@ -4364,3 +4364,13 @@ def test_declarations_tick_in_app_with_old_apps_script(app):
     assert 'στην Επίσκεψη' in fr.locator('.decide-state.ok').inner_text()
     rep = app.page.evaluate("async () => { const {db} = await import('./core/store.js'); const v = db.all('visits')[0]; return [(db.get('reps', v.rep_id) || {}).surname, v.decl_decision]; }")
     assert rep == ['Διαβάτης', 'Διαβάτης Χρήστος (Βοηθός Μέγας Γραμματεύς)'], rep
+
+
+def test_decl_decision_unknown_officer_creates_rep(app):
+    # Απόφαση για αξιωματικό που δεν υπάρχει στους Εκπροσώπους/Επετηρίδα: νέος Εκπρόσωπος και ορισμός στην Επίσκεψη
+    app.connect_local()
+    r = app.page.evaluate("""async () => { const {db} = await import('./core/store.js');
+      await db.save('x', (tx) => { tx.replace('visits', []); tx.insert('visits', { visit_date: '2026-11-03', lodge: 'ΜΕΓΑΛΟΙ ΕΠΙΜΕΛΗΤΑΙ', lodge_number: '74', location: '', province: 'ΕπΜΣτ. Αθηνών', rep_id: null, notes: '' }); });
+      const g = await import('./modules/gm-decisions.js'); await g.applyDeclDecision('l74_20261103', 'Ζζζωτάκης Νικόλαος (Μέγας Γραμματεύς Εκπαιδεύσεως)');
+      const v = db.all('visits')[0], rep = db.get('reps', v.rep_id) || {}; return [rep.surname, rep.name, rep.office, v.decl_decision]; }""")
+    assert r == ['Ζζζωτάκης', 'Νικόλαος', 'Μέγας Γραμματεύς Εκπαιδεύσεως', 'Ζζζωτάκης Νικόλαος (Μέγας Γραμματεύς Εκπαιδεύσεως)'], r

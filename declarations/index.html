@@ -1003,6 +1003,24 @@
       state.className = "decide-state"; state.textContent = "Αποθήκευση…";
       sel.disabled = true;
       try {
+        // Μέσα στην εφαρμογή: η απόφαση γράφεται ΠΡΩΤΑ στην Επίσκεψη (μία πηγή για όλο το σύστημα)· το Sheet ενημερώνεται αν μπορεί
+        if (window.parent !== window) {
+          await applyInApp(meetingId, sel.value);
+          let r = null;
+          try { r = await callApi(Object.assign({ action: "decide", meeting: meetingId, representative: sel.value }, reportAuth())); } catch (e) { r = null; }
+          if (r && r.ok && r.decisions) decisions = r.decisions;
+          else if (sel.value) decisions[meetingId] = sel.value; else delete decisions[meetingId];
+          if (sel.value) JUST_DECIDED[meetingId] = sel.value; else delete JUST_DECIDED[meetingId];
+          state.className = "decide-state ok"; state.textContent = (sel.value ? "✓ Αποθηκεύτηκε" : "✓ Χωρίς απόφαση") + " στην Επίσκεψη";
+          sel.classList.toggle("done", !!sel.value);
+          sel.parentElement.querySelector(".decide-print").textContent = sel.value;
+          const row = sel.closest("tr");
+          if (row) row.querySelectorAll(".officer-list li").forEach(li => { const b = li.querySelector(".decl-pick"), on = li.querySelector(".officer-name").textContent === sel.value; if (b) { b.classList.toggle("on", on); b.textContent = on ? "✓ Εκπρόσωπος" : "✓"; } });
+          if (row && sel.value) row.className = "rep-done";
+          renderDecisions();
+          sel.disabled = false;
+          return;
+        }
         const r = await callApi(Object.assign({ action: "decide", meeting: meetingId, representative: sel.value }, reportAuth()));
         if (!r.ok) throw new Error(r.error || "error");
         decisions = r.decisions || {};
@@ -1017,24 +1035,8 @@
         if (row && sel.value) row.className = "rep-done";
         renderDecisions();
       } catch (e) {
-        // Παλιό Code.gs (χωρίς «decide»): μέσα στην εφαρμογή η απόφαση γράφεται απευθείας στην Επίσκεψη (μία πηγή για όλες τις σελίδες)
-        if (e.message === "unknown_action" && window.parent !== window) {
-          try {
-            await applyInApp(meetingId, sel.value);
-            if (sel.value) { decisions[meetingId] = sel.value; JUST_DECIDED[meetingId] = sel.value; } else { delete decisions[meetingId]; delete JUST_DECIDED[meetingId]; }
-            state.className = "decide-state ok"; state.textContent = (sel.value ? "✓ Αποθηκεύτηκε" : "✓ Χωρίς απόφαση") + " στην Επίσκεψη";
-            sel.classList.toggle("done", !!sel.value);
-            sel.parentElement.querySelector(".decide-print").textContent = sel.value;
-            const row = sel.closest("tr");
-            if (row) row.querySelectorAll(".officer-list li").forEach(li => { const b = li.querySelector(".decl-pick"), on = li.querySelector(".officer-name").textContent === sel.value; if (b) { b.classList.toggle("on", on); b.textContent = on ? "✓ Εκπρόσωπος" : "✓"; } });
-            if (row && sel.value) row.className = "rep-done";
-            renderDecisions();
-            sel.disabled = false;
-            return;
-          } catch (e2) { e = e2; }
-        }
         state.className = "decide-state err";
-        state.textContent = e.message === "unknown_action" ? "Χρειάζεται η νέα έκδοση του Code.gs (v4) στο Apps Script — ή ανοίξτε τις Δηλώσεις μέσα από την εφαρμογή." : e.message === "unauthorized" ? "Η σύνδεση έληξε — ανανεώστε." : "Δεν αποθηκεύτηκε — δοκιμάστε ξανά.";
+        state.textContent = e.message === "unknown_action" ? "Χρειάζεται η νέα έκδοση του Code.gs (v4) στο Apps Script — ή ανοίξτε τις Δηλώσεις μέσα από την εφαρμογή (#/declarations)." : e.message === "unauthorized" ? "Η σύνδεση έληξε — ανανεώστε." : "Δεν αποθηκεύτηκε: " + (e.message || "σφάλμα") + " — δοκιμάστε ξανά.";
         sel.value = decisions[meetingId] || "";
       }
       sel.disabled = false;

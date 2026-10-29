@@ -148,9 +148,15 @@ export async function applyDeclDecision(meetingId, text) {
   const v = visitOfMeetingId(meetingId, cfg.MEETINGS || []);
   if (!v) throw new Error('Δεν βρέθηκε η Επίσκεψη της Εργασίας.');
   const cands = repCandidates(), rep = text ? repForDecision(text, cands) : null;
-  if (rep && rep.error) throw new Error(rep.error);
+  if (rep && rep.error && /Περισσότεροι/.test(rep.error)) throw new Error(rep.error);
   await db.save(`Απόφαση Μ.Δ. (σελίδα Δηλώσεων) → Επίσκεψη ${v.lodge || ''} ${v.visit_date || ''}`, (tx) => {
-    tx.update('visits', v.id, rep ? { decl_decision: text, rep_id: repIdIn(tx, rep.value, cands) } : { decl_decision: '', rep_id: null });
+    let rid = null;
+    if (rep && !rep.error) rid = repIdIn(tx, rep.value, cands);
+    else if (rep) { // δεν υπάρχει στους Εκπροσώπους ούτε στην Επετηρίδα: νέος Εκπρόσωπος από το κείμενο «Επώνυμο Όνομα (Αξίωμα)»
+      const t = String(text).trim(), office = ((t.match(/\(([^()]*)\)\s*$/) || [])[1] || '').trim(), [surname = '', ...rest] = t.replace(/\(.*$/, '').trim().split(/\s+/);
+      rid = tx.insert('reps', { surname, name: rest.join(' '), office, email: '', mobile: '' }).id;
+    }
+    tx.update('visits', v.id, text ? { decl_decision: text, rep_id: rid } : { decl_decision: '', rep_id: null });
   });
   return v.id;
 }
