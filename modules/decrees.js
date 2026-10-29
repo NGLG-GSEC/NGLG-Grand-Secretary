@@ -76,7 +76,19 @@ const NAME_AFTER = /^(τον [^\n]*Αδελφόν\n)([^\n]+)$/gm, NAME_BULLET = 
 // Χωρίς κενή γραμμή ανάμεσα στο «… Κανονισμών,» και στο «περί …» (και στα ήδη αποθηκευμένα Διατάγματα)
 const tightPeri = (t) => String(t || '').replace(/(Γενικών Νόμων και Κανονισμών,)[ \t]*\n\s*\n(\s*περί )/, '$1\n$2');
 const markNames = (text, wrap) => String(text || '').replace(NAME_AFTER, (_, a, n) => a + wrap(n)).replace(NAME_BULLET, (_, a, n) => a + wrap(n));
-const fileName = (d) => (d.protocol_seq ? docTitle(d.protocol_seq, 'ΔΙΑΤΑΓΜΑ', `${decreeNo(d)} ${d.matter || ''}`) : safeFileName(`ΔΙΑΤΑΓΜΑ ${decreeNo(d)} ${d.matter || ''}`));
+// Όνομα αρχείου: «20575 - ΔΙΑΤΑΓΜΑ 518 2026 ΕΥΘΥΜΙΟΣ ΤΣΙΓΚΑΣ ΠΡΩΤΟΣ ΜΕΓΑΣ ΕΠΟΠΤΗΣ» — Αδελφοί + Αξίωμα (Γενικό Διάταγμα: το «Περί»)
+const capsGr = (v) => String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleUpperCase('el');
+export function decreeFileSubject(d) {
+  let apps = [], r = {};
+  try { apps = JSON.parse(d.appointments || '[]') || []; } catch { /* */ }
+  try { r = JSON.parse(d.rules || '{}') || {}; } catch { /* */ }
+  const names = apps.map((a) => `${a.first_name || ''} ${a.last_name || ''}`.trim()).filter(Boolean);
+  if (!names.length || r.action === 'general') return capsGr(d.matter);
+  const who = names.length > 3 ? `${names.slice(0, 3).join(', ')} ΚΑΙ ΑΛΛΟΙ ${names.length - 3}` : names.join(', ');
+  const office = r.action === 'award' ? (r.award_office ? 'Πρώην ' + r.award_office : '') : r.action === 'appoint' ? (r.decree_office || apps[0].office || '') : d.matter;
+  return capsGr(`${who} ${office || ''}`);
+}
+const fileName = (d) => (d.protocol_seq ? docTitle(d.protocol_seq, 'ΔΙΑΤΑΓΜΑ', `${decreeNo(d)} ${decreeFileSubject(d)}`) : safeFileName(`ΔΙΑΤΑΓΜΑ ${decreeNo(d)} ${decreeFileSubject(d)}`));
 // Εικόνα της Σχεδίασης σελίδας ως PNG (το Word δέχεται με ασφάλεια PNG)
 async function layerPng(path) {
   const bytes = await db.file(path);

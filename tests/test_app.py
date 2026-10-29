@@ -1241,6 +1241,8 @@ def test_letter_and_decree_saved_to_drive_word_and_pdf(app):
     app.page.wait_for_selector('text=✓ Στο Drive', timeout=30000)
     y = date.today().year
     assert len(uploads) == 2 and uploads[1]['name'].startswith('20546 - ΔΙΑΤΑΓΜΑ 513') and uploads[1]['name'].endswith('.pdf') and uploads[1]['pdf']
+    # όνομα αρχείου: Αδελφός + Αξίωμα με κεφαλαία (όχι το «Περί»)
+    assert 'ΠΑΠΑΔ' in uploads[1]['name'] and uploads[1]['name'].endswith(' ΜΕΓΑΣ ΓΡΑΜΜΑΤΕΥΣ.pdf') and 'διορισμού' not in uploads[1]['name'], uploads[1]['name']
     # Επιστολή από Επίσκεψη → κατηγορία ΕΠΙΣΚΕΨΗ
     app.go('/visits')
     rid = app.page.evaluate("async () => (await import('./core/store.js')).db.all('reps')[0].id")
