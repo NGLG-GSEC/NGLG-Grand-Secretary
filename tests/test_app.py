@@ -3651,14 +3651,14 @@ def test_menu_new_internal_regulation_approval(app):
     app.connect_local()
     tid = app.page.evaluate("""async () => { const {db} = await import('./core/store.js'); let id;
       await db.save('x', (tx) => { tx.insert('letter_templates', { name: 'Έγκριση Εσωτερικού Κανονισμού (αντίγραφο)', body: 'ΑΝΤΙΓΡΑΦΟ', active: 1 });
-        id = tx.insert('letter_templates', { name: 'Έγκριση Εσωτερικού Κανονισμού', subject: 'Έγκριση Εσωτερικού Κανονισμού', body: 'Φίλτατε Αδ. Γραμματέα, κανόνας 136', active: 1 }).id; });
+        id = tx.all('letter_templates').find((t) => t.name === 'Έγκριση Εσωτερικού Κανονισμού').id; });
       return id; }""")
     assert app.page.locator('.navdrop.letters .navdrop-menu a[href="#/letters/new?template=kanonismos"]').count() == 1
     app.go('/letters/new?template=kanonismos')
     app.page.wait_for_selector('.approval-app canvas')  # ανοίγει αμέσως το ΕΙΔΙΚΟ ΣΗΜΑ
     app.page.click('.approval-app .gprev-bar [data-no]')
     assert app.page.input_value('#tplSel') == str(tid)
-    assert 'κανόνας 136' in app.page.input_value('[name="body"]')
+    assert 'κανόνα 136' in app.page.input_value('[name="body"]') and 'ΑΝΤΙΓΡΑΦΟ' not in app.page.input_value('[name="body"]')
 
 
 def test_declarations_report_delete_and_add(browser, base_url):
@@ -4306,3 +4306,15 @@ def test_letter_date_editable_and_kept_after_protocol(app):
     app.page.wait_for_url('**/#/letters/1')
     d = app.page.evaluate("async () => { const {db} = await import('./core/store.js'); return db.get('letters', 1).letter_date; }")
     assert d == '2026-10-22', d
+
+
+def test_kanonismos_template_text(app):
+    # Το πρότυπο «Έγκριση Εσωτερικού Κανονισμού» έχει το κείμενο του κανόνα 136, με {Αριθμός Πρωτοκόλλου} και {Ημερομηνία επιστολής}
+    app.connect_local()
+    app.go('/letters/new?template=kanonismos')
+    app.page.wait_for_selector('.approval-app canvas')
+    app.page.click('.approval-app .gprev-bar [data-no]')
+    body = app.page.input_value('[name="body"]')
+    assert body.startswith('Φίλτατε Αδ. Γραμματέα,') and 'κανόνα 136' in body and 'Ιωάννη Μπενετάτου[/b]' in body, body[:200]
+    assert body.count('{Αριθμός Πρωτοκόλλου}') == 2 and body.count('{Ημερομηνία επιστολής}') == 2
+    assert 'Ο Μέγας Γραμματεύς' in body and 'Σεβτ. Αδ. Ιωάννης Μπενετάτος' in body
