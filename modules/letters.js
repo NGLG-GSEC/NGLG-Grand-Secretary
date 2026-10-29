@@ -264,7 +264,7 @@ function mountLetterForm(el, x, isNew) {
       if (document.querySelector('.approval-app')) return; // ήδη ανοιχτό (π.χ. αυτόματο άνοιγμα με την επιλογή του προτύπου)
       const { openApprovalStamp } = await import('./approval-stamp.js');
       const no = String(fl.value).split('·')[0].trim() || (/(?:αριθ|αρ)\S*\s*(\d+)\s*$/i.exec(f.recipient_name.value) || [])[1] || '';
-      const v = await openApprovalStamp({ protocol: String(x.protocol_seq || suggestedProtocol()), date: f.letter_date.value || x.letter_date || today(), lodge: no });
+      const v = await openApprovalStamp({ protocol: String(x.protocol_seq || suggestedProtocol()), date: f.letter_date.value || x.letter_date || today(), lodge: no, onDate: (d) => { f.letter_date.value = d; } });
       if (v) { setProto(v); toast('Το ειδικό σήμα μπήκε ως ΕΙΚΟΝΑ ΠΡΩΤΟΚΟΛΛΟΥ.'); }
     }, ready() { f.status.value = 'ready'; f.requestSubmit(); }, form: () => openInDigitalForm(cur()), word: () => letterDocx(cur()), preview() {
     const d = Object.fromEntries(new FormData(f));

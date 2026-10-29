@@ -4318,3 +4318,17 @@ def test_kanonismos_template_text(app):
     assert body.startswith('Φίλτατε Αδ. Γραμματέα,') and 'κανόνα 136' in body and 'Ιωάννη Μπενετάτου[/b]' in body, body[:200]
     assert body.count('{Αριθμός Πρωτοκόλλου}') == 2 and body.count('{Ημερομηνία επιστολής}') == 2
     assert 'Ο Μέγας Γραμματεύς' in body and 'Σεβτ. Αδ. Ιωάννης Μπενετάτος' in body
+
+
+def test_kanonismos_date_editable_and_synced_with_stamp(app):
+    # Νέα «Έγκριση Εσωτερικού Κανονισμού»: η Ημερομηνία αλλάζει στη φόρμα και ακολουθεί την ημερομηνία του ΕΙΔΙΚΟΥ ΣΗΜΑΤΟΣ
+    app.connect_local()
+    app.go('/letters/new?template=kanonismos')
+    app.page.wait_for_selector('.approval-app canvas')
+    app.page.fill('.approval-app [data-k="date"]', '2026-11-05')
+    app.page.dispatch_event('.approval-app [data-k="date"]', 'change')
+    app.page.click('.approval-app .gprev-bar [data-no]')
+    d = app.page.locator('#lf [name=letter_date]')
+    assert d.is_enabled() and d.input_value() == '2026-11-05'
+    d.fill('2026-11-06')
+    assert d.input_value() == '2026-11-06'

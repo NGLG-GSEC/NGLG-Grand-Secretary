@@ -96,7 +96,7 @@ export function drawApproval(canvas, { protocol = '', date = '', lodge = null },
 
 // Παράθυρο της εφαρμογής: στοιχεία έγκρισης → προεπισκόπηση → «Χρήση στην επιστολή» (PNG data URL) ή «Αποθήκευση JPEG».
 // → Promise<string|null>
-export function openApprovalStamp({ protocol = '', date = '', lodge = '' } = {}) {
+export function openApprovalStamp({ protocol = '', date = '', lodge = '', onDate = null } = {}) { // onDate: η ημερομηνία του σήματος → και στην επιστολή
   return new Promise((done) => {
     const ov = Object.assign(document.createElement('div'), { className: 'gprev approval-app' });
     ov.innerHTML = `<div class="gprev-box" role="dialog" aria-label="Ειδικό σήμα έγκρισης εσωτερικού κανονισμού"><div class="gprev-bar"><b>🏛 ΕΙΔΙΚΟ ΣΗΜΑ ΕΓΚΡΙΣΗΣ ΕΣΩΤ. ΚΑΝΟΝΙΣΜΟΥ</b><button type="button" class="btn small" data-no>✕</button></div>
@@ -149,7 +149,7 @@ export function openApprovalStamp({ protocol = '', date = '', lodge = '' } = {})
       else if (e.target.closest('[data-jpeg]')) { const c = check(); if (!c) return; canvas.toBlob((b) => { if (b) { download(approvalFileName(c.protocol, c.date), b, 'image/jpeg'); st.textContent = 'Το JPEG δημιουργήθηκε και ξεκίνησε η λήψη.'; } }, 'image/jpeg', 0.97); }
     });
     ov.addEventListener('input', (e) => { if (e.target === $('search')) options(); render(); });
-    ov.addEventListener('change', render);
+    ov.addEventListener('change', (e) => { if (onDate && e.target === $('date') && $('date').value) onDate($('date').value); render(); });
     document.addEventListener('keydown', key);
     document.body.append(ov);
     options(); render();
