@@ -48,7 +48,12 @@ ${frameHtml('declFrame', 'Δηλώσεις Διάθεσης Μεγάλων Αξ�
       // απόφαση Μ.Δ. μέσα στη σελίδα Δηλώσεων → αμέσως στην Επίσκεψη (μία πηγή: visits.rep_id)
       const onMsg = (e) => {
         if (!frame.isConnected) { window.removeEventListener('message', onMsg); return; }
-        if (e.origin === location.origin && e.data && e.data.type === 'nglg-decl-decided') import('./gm-decisions.js').then(({ syncDeclDecisions }) => syncDeclDecisions(true));
+        if (e.origin !== location.origin || !e.data) return;
+        if (e.data.type === 'nglg-decl-decided') import('./gm-decisions.js').then(({ syncDeclDecisions }) => syncDeclDecisions(true));
+        if (e.data.type === 'nglg-decl-apply') { // παλιό Code.gs χωρίς «decide»: η εφαρμογή γράφει την απόφαση στην Επίσκεψη
+          const reply = (ok, error = '') => { try { e.source.postMessage({ type: 'nglg-decl-applied', id: e.data.id, ok, error }, location.origin); } catch { /* */ } };
+          import('./gm-decisions.js').then(({ applyDeclDecision }) => applyDeclDecision(e.data.meeting, e.data.representative || '')).then(() => reply(true), (err) => reply(false, err.message || String(err)));
+        }
       };
       window.addEventListener('message', onMsg);
       frame.addEventListener('load', fit);

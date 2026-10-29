@@ -142,6 +142,18 @@ export function syncDeclDecisions(force = false) {
   })().catch((e) => { console.warn('Αποφάσεις Μ.Δ.:', e); return 0; }).finally(() => { syncing = null; });
   return syncing;
 }
+// Απόφαση από τη σελίδα Δηλώσεων όταν το Apps Script δεν έχει ακόμη «decide» (παλιό Code.gs): περνά απευθείας στην Επίσκεψη
+export async function applyDeclDecision(meetingId, text) {
+  let cfg = {}; try { cfg = (await declarationsConfig()) || {}; } catch { /* */ }
+  const v = visitOfMeetingId(meetingId, cfg.MEETINGS || []);
+  if (!v) throw new Error('Δεν βρέθηκε η Επίσκεψη της Εργασίας.');
+  const cands = repCandidates(), rep = text ? repForDecision(text, cands) : null;
+  if (rep && rep.error) throw new Error(rep.error);
+  await db.save(`Απόφαση Μ.Δ. (σελίδα Δηλώσεων) → Επίσκεψη ${v.lodge || ''} ${v.visit_date || ''}`, (tx) => {
+    tx.update('visits', v.id, rep ? { decl_decision: text, rep_id: repIdIn(tx, rep.value, cands) } : { decl_decision: '', rep_id: null });
+  });
+  return v.id;
+}
 let firstSync = true;
 db.on((ev) => { if (ev.type === 'refresh' && firstSync && db.backend && db.backend.kind === 'github') { firstSync = false; setTimeout(() => syncDeclDecisions(true), 800); } });
 

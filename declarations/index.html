@@ -990,6 +990,15 @@
       if (!note && grid) { note = document.createElement("p"); note.id = "gm-self-note"; note.className = "gm-self-note"; grid.after(note); }
       if (note) { note.hidden = !hidden; note.textContent = `Δεν εμφανίζ${hidden === 1 ? "εται 1 Εργασία" : "ονται " + hidden + " Εργασίες"} όπου θα παραστεί αυτοπροσώπως ο Μέγας Διδάσκαλος (βλ. «Πρόγραμμα Επισκέψεων Μ.Δ.»).`; }
     }
+    // Η εφαρμογή (γονική σελίδα) γράφει την απόφαση στην Επίσκεψη και απαντά
+    function applyInApp(meeting, representative) {
+      return new Promise((ok, bad) => {
+        const id = Math.random().toString(36).slice(2), t = setTimeout(() => { window.removeEventListener("message", on); bad(new Error("Η εφαρμογή δεν απάντησε.")); }, 20000);
+        function on(ev) { if (ev.origin !== location.origin || !ev.data || ev.data.type !== "nglg-decl-applied" || ev.data.id !== id) return; clearTimeout(t); window.removeEventListener("message", on); ev.data.ok ? ok() : bad(new Error(ev.data.error || "error")); }
+        window.addEventListener("message", on);
+        window.parent.postMessage({ type: "nglg-decl-apply", id, meeting, representative }, location.origin);
+      });
+    }
     async function decide(meetingId, sel, state) {
       state.className = "decide-state"; state.textContent = "Αποθήκευση…";
       sel.disabled = true;
@@ -1008,8 +1017,24 @@
         if (row && sel.value) row.className = "rep-done";
         renderDecisions();
       } catch (e) {
+        // Παλιό Code.gs (χωρίς «decide»): μέσα στην εφαρμογή η απόφαση γράφεται απευθείας στην Επίσκεψη (μία πηγή για όλες τις σελίδες)
+        if (e.message === "unknown_action" && window.parent !== window) {
+          try {
+            await applyInApp(meetingId, sel.value);
+            if (sel.value) { decisions[meetingId] = sel.value; JUST_DECIDED[meetingId] = sel.value; } else { delete decisions[meetingId]; delete JUST_DECIDED[meetingId]; }
+            state.className = "decide-state ok"; state.textContent = (sel.value ? "✓ Αποθηκεύτηκε" : "✓ Χωρίς απόφαση") + " στην Επίσκεψη";
+            sel.classList.toggle("done", !!sel.value);
+            sel.parentElement.querySelector(".decide-print").textContent = sel.value;
+            const row = sel.closest("tr");
+            if (row) row.querySelectorAll(".officer-list li").forEach(li => { const b = li.querySelector(".decl-pick"), on = li.querySelector(".officer-name").textContent === sel.value; if (b) { b.classList.toggle("on", on); b.textContent = on ? "✓ Εκπρόσωπος" : "✓"; } });
+            if (row && sel.value) row.className = "rep-done";
+            renderDecisions();
+            sel.disabled = false;
+            return;
+          } catch (e2) { e = e2; }
+        }
         state.className = "decide-state err";
-        state.textContent = e.message === "unknown_action" ? "Χρειάζεται η νέα έκδοση του Code.gs (v4) στο Apps Script." : e.message === "unauthorized" ? "Η σύνδεση έληξε — ανανεώστε." : "Δεν αποθηκεύτηκε — δοκιμάστε ξανά.";
+        state.textContent = e.message === "unknown_action" ? "Χρειάζεται η νέα έκδοση του Code.gs (v4) στο Apps Script — ή ανοίξτε τις Δηλώσεις μέσα από την εφαρμογή." : e.message === "unauthorized" ? "Η σύνδεση έληξε — ανανεώστε." : "Δεν αποθηκεύτηκε — δοκιμάστε ξανά.";
         sel.value = decisions[meetingId] || "";
       }
       sel.disabled = false;

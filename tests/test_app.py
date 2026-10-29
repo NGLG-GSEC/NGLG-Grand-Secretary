@@ -4332,3 +4332,35 @@ def test_kanonismos_date_editable_and_synced_with_stamp(app):
     assert d.is_enabled() and d.input_value() == '2026-11-05'
     d.fill('2026-11-06')
     assert d.input_value() == '2026-11-06'
+
+
+def test_declarations_tick_in_app_with_old_apps_script(app):
+    # ✓ στη σελίδα Δηλώσεων μέσα στην εφαρμογή, με παλιό Code.gs (χωρίς «decide»): η απόφαση γράφεται απευθείας στην Επίσκεψη
+    import json as _j
+    app.connect_local()
+    def api(route):
+        b = _j.loads(route.request.post_data or '{}')
+        if b.get('action') == 'report':
+            return route.fulfill(json={'ok': b.get('key') == 'test-key', 'decisions': {}, 'data': {'l118_20261103': [{'officer': 'Διαβάτης Χρήστος (Βοηθός Μέγας Γραμματεύς)', 'rank': 283}]}})
+        if b.get('action') == 'decisions':
+            return route.fulfill(json={'ok': True, 'decisions': {}})
+        return route.fulfill(json={'ok': False, 'error': 'unknown_action'})
+    app.page.route('https://script.google.com/**', api)
+    app.page.route('https://accounts.google.com/**', lambda r: r.abort())
+    app.page.route('**/declarations/meetings.json*', lambda r: r.fulfill(json={'meetings': [{'kind': 'ΕΓΚΑΤΑΣΤΑΣΗ ΣΕΒ', 'id': 'l118_20261103', 'date': 'Τρίτη 03/11/2026', 'name': 'ΑΤΛΑΣ', 'no': '118', 'prov': 'ΕπΜΣτ. Πειραιώς'}]}))
+    app.page.route('**/programme/programme.json*', lambda r: r.fulfill(json={'rows': []}))
+    app.page.evaluate("""async () => { const {db} = await import('./core/store.js');
+      await db.save('x', (tx) => { tx.replace('visits', []);
+        tx.insert('reps', { name: 'Χρήστος', surname: 'Διαβάτης', office: 'Βοηθός Μέγας Γραμματεύς', email: '', mobile: '' });
+        tx.insert('visits', { visit_date: '2026-11-03', lodge: 'ΑΤΛΑΣ', lodge_number: '118', location: '', province: 'ΕπΜΣτ. Πειραιώς', rep_id: null, notes: '' }); }); }""")
+    app.go('/declarations?view=report')
+    fr = app.page.frame_locator('#declFrame')
+    fr.locator('#auth-alt').evaluate("d => d.open = true")
+    fr.locator('#admin-pass').fill('test-key')
+    fr.locator('#auth-btn').click()
+    row = fr.locator('#report-table-body tr', has_text='ΑΤΛΑΣ')
+    row.locator('.decl-pick').click()
+    fr.locator('.decide-state.ok').wait_for()
+    assert 'στην Επίσκεψη' in fr.locator('.decide-state.ok').inner_text()
+    rep = app.page.evaluate("async () => { const {db} = await import('./core/store.js'); const v = db.all('visits')[0]; return [(db.get('reps', v.rep_id) || {}).surname, v.decl_decision]; }")
+    assert rep == ['Διαβάτης', 'Διαβάτης Χρήστος (Βοηθός Μέγας Γραμματεύς)'], rep
