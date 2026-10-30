@@ -4385,3 +4385,25 @@ def test_decl_decision_unknown_officer_creates_rep(app):
       const g = await import('./modules/gm-decisions.js'); await g.applyDeclDecision('l74_20261103', 'Ζζζωτάκης Νικόλαος (Μέγας Γραμματεύς Εκπαιδεύσεως)');
       const v = db.all('visits')[0], rep = db.get('reps', v.rep_id) || {}; return [rep.surname, rep.name, rep.office, v.decl_decision]; }""")
     assert r == ['Ζζζωτάκης', 'Νικόλαος', 'Μέγας Γραμματεύς Εκπαιδεύσεως', 'Ζζζωτάκης Νικόλαος (Μέγας Γραμματεύς Εκπαιδεύσεως)'], r
+
+
+def test_letter_form_outgoing_archive_button_and_last_protocol(app):
+    # Νέα Επιστολή: κουμπί «ΑΡΧΕΙΟ ΕΞΕΡΧΟΜΕΝΩΝ ΜΕΓΑΛΗΣ ΓΡΑΜΜΑΤΕΙΑΣ» (φάκελος Drive) και δίπλα ο τελευταίος αρ. πρωτοκόλλου·
+    # «🔄 Έλεγχος στο Drive» διαβάζει τον μεγαλύτερο αριθμό από τα ονόματα των αρχείων του φακέλου
+    def gapi(route, request):
+        assert '1kKR7v86jjs5QJE9-K5uUebvS6nZd9J03' in request.url
+        return route.fulfill(json={'files': [{'name': '20575 - ΔΙΑΤΑΓΜΑ 518 2026 ΕΥΘΥΜΙΟΣ ΤΣΙΓΚΑΣ.pdf'}, {'name': '20561 - ΕΠΙΣΤΟΛΗ Χ.pdf'}, {'name': 'Σημειώσεις.docx'}]})
+    app.page.route('https://accounts.google.com/gsi/client', lambda r: r.fulfill(body=GSI_FAKE, content_type='text/javascript'))
+    app.page.route('https://www.googleapis.com/**', gapi)
+    app.connect_local()
+    app.page.evaluate("async () => { const {db} = await import('./core/store.js'); await db.save('x', (tx) => tx.setting('google_client_id', 'test.apps.googleusercontent.com')); }")
+    app.go('/letters/new').fill(subject='Α', body='Κείμενο')
+    app.click('Αποθήκευση & απόδοση')
+    app.page.wait_for_url('**/#/letters/1')
+    app.go('/letters/new')
+    a = app.page.locator('.outgoing-bar a.protogreen')
+    assert 'ΑΡΧΕΙΟ ΕΞΕΡΧΟΜΕΝΩΝ ΜΕΓΑΛΗΣ ΓΡΑΜΜΑΤΕΙΑΣ' in a.inner_text() and '1kKR7v86jjs5QJE9-K5uUebvS6nZd9J03' in a.get_attribute('href')
+    assert app.page.inner_text('#lastProto') == '20545'
+    app.page.click('[data-act=driveLast]')
+    app.page.wait_for_function("document.querySelector('#lastProto').textContent === '20575'")
+    assert 'φάκελος Drive' in app.page.inner_text('#lastProtoSrc')

@@ -40,6 +40,19 @@ async function api(path, opts = {}) {
   return r.json();
 }
 
+// Μεγαλύτερος αριθμός πρωτοκόλλου στον φάκελο Εξερχομένων του Drive (αρχεία «20575 - …»)· null αν δεν υπάρχει κανένα
+export async function driveMaxProtocol() {
+  const q = encodeURIComponent(`'${folderId()}' in parents and trashed = false`);
+  let max = null, page = '';
+  for (let i = 0; i < 20; i++) {
+    const j = await api(`/drive/v3/files?q=${q}&fields=nextPageToken,files(name)&pageSize=1000&supportsAllDrives=true&includeItemsFromAllDrives=true${page ? '&pageToken=' + encodeURIComponent(page) : ''}`);
+    for (const f of j.files || []) { const m = /^\s*(\d{4,6})(?!\d)/.exec(f.name || ''); if (m && (max == null || Number(m[1]) > max)) max = Number(m[1]); }
+    if (!j.nextPageToken) break; page = j.nextPageToken;
+  }
+  return max;
+}
+export const hasDriveToken = () => Object.entries(tokens).some(([k, t]) => k.startsWith(SCOPE + '|') && Date.now() < t.expires - 60000);
+
 // Ανέβασμα (ή αντικατάσταση αν υπάρχει ίδιο όνομα) → { id, webViewLink }
 export async function uploadFile(blob, name, mime) {
   const folder = folderId(), q = encodeURIComponent(`name = '${name.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}' and '${folder}' in parents and trashed = false`);

@@ -7,12 +7,12 @@ import { esc, foldName, today, fmtDate, matches, sortBy, safeFileName, latinFile
 import { richPlain } from '../core/rich.js';
 import { letterPaper, printPaper, signerProfile, IMG, fitPaper, letterFields, LETTER_FIELDS, protocolImage, hasProtocolField } from '../core/paper.js';
 import { makeDocx, letterBlocks } from '../core/docx.js';
-import { docTitle, driveBox, saveDocToDrive } from '../core/drive.js';
+import { docTitle, driveBox, saveDocToDrive, driveMaxProtocol, hasDriveToken, driveReady } from '../core/drive.js';
 import { mailButtons, senderBanner, withLetterCc, senderFor, MAIL_SENDERS } from '../core/mail.js';
 import { sgyEmails, SGY_TO_NAME } from './sgy.js';
 import { mailSheet, bccWithout } from '../core/gmail.js';
 import { attachPicker, contactItems } from '../core/pickers.js';
-import { nextProtocol, askProtocol, askNextProtocol, claimProtocol, setNextProtocol, suggestedProtocol, legacyDecreeLetterIds } from './protocol.js';
+import { nextProtocol, askProtocol, askNextProtocol, claimProtocol, setNextProtocol, suggestedProtocol, legacyDecreeLetterIds, protocolBook } from './protocol.js';
 import { lodgesAll, lodgeByNumber } from './lodges.js';
 import { provinceLetter } from './visits.js';
 import { PLACEHOLDERS, hasPlaceholders, fillPlaceholders, fillContext, lodgeRecipients, missingPlaceholders, GM_VISIT, REP_VISIT, repRecipients, dayWithArticle, dateWords } from './letter-fill.js';
@@ -163,6 +163,20 @@ async function downloadReg(x, b) {
   try { const r = await regPdf(x); download(r.name, r.blob, 'application/pdf'); } catch (e) { toast(e.message || String(e), 'error'); } finally { if (b) { b.disabled = false; b.textContent = old; } }
 }
 
+// «📂 ΑΡΧΕΙΟ ΕΞΕΡΧΟΜΕΝΩΝ ΜΕΓΑΛΗΣ ΓΡΑΜΜΑΤΕΙΑΣ» (φάκελος Drive) και ο τελευταίος αριθμός πρωτοκόλλου (Βιβλίο Πρωτοκόλλου / φάκελος Drive)
+const lastProtocol = () => (protocolBook()[0] || {}).protocol_seq || null;
+const outgoingBar = () => `<div class="toolbar outgoing-bar noprint">${outgoingProtocolBtn('📂 ΑΡΧΕΙΟ ΕΞΕΡΧΟΜΕΝΩΝ ΜΕΓΑΛΗΣ ΓΡΑΜΜΑΤΕΙΑΣ', 'protogreen')}
+<span class="muted" style="align-self:center">Τελευταίος αρ. πρωτ.: <b class="official-number" id="lastProto">${esc(lastProtocol() || '—')}</b> <small id="lastProtoSrc">(Βιβλίο Πρωτοκόλλου)</small></span>
+${driveReady() ? '<button type="button" class="btn small" data-act="driveLast" title="Ο μεγαλύτερος αριθμός στα αρχεία του φακέλου Εξερχομένων στο Drive">🔄 Έλεγχος στο Drive</button>' : ''}</div>`;
+async function refreshDriveLast(el) {
+  const b = el.querySelector('#lastProto'), src = el.querySelector('#lastProtoSrc');
+  if (!b) return;
+  const n = await driveMaxProtocol(), book = lastProtocol();
+  const best = Math.max(n || 0, book || 0) || null;
+  b.textContent = best || '—';
+  src.textContent = n == null ? '(Drive: κανένα αρχείο με αριθμό)' : n >= (book || 0) ? `(φάκελος Drive · ${new Date().toLocaleTimeString('el-GR', { hour: '2-digit', minute: '2-digit' })})` : `(Βιβλίο Πρωτοκόλλου · Drive: ${n})`;
+}
+
 function letterForm(x, query = {}) {
   const tpl = templates();
   return `<form id="lf" class="grid card">
@@ -258,7 +272,9 @@ function mountLetterForm(el, x, isNew) {
   if (tpl && !box.hidden && (fv.value || !f.body.value.trim() || hasPlaceholders(f.body.value))) apply(true);
   if (!x.id && isKanonismos(tpl) && !f.protocol_image.value) setTimeout(() => { const b = el.querySelector('[data-act=approvalStamp]'); if (b && b.isConnected) b.click(); }, 0); // νέα επιστολή από το μενού «+ Έγκριση Εσωτ. Κανονισμού»
   const cur = () => ({ ...x, ...Object.fromEntries(new FormData(f)), letter_date: f.letter_date.value || x.letter_date || today() });
-  bind(el, { protoImgDel: () => setProto(''),
+  if (hasDriveToken()) refreshDriveLast(el).catch(() => {}); // ήδη συνδεδεμένοι στο Drive: ζωντανά, χωρίς παράθυρο
+  bind(el, { driveLast: () => refreshDriveLast(el),
+    protoImgDel: () => setProto(''),
     regDel() { regPending = null; f.reg_remove.value = '1'; pbox.querySelector('.reg-name').innerHTML = '<span class="muted">Δεν έχει επισυναφθεί PDF.</span>'; },
     async approvalStamp() { // η εφαρμογή «Έγκριση Εσωτερικού Κανονισμού»: η εικόνα μπαίνει ως ΕΙΚΟΝΑ ΠΡΩΤΟΚΟΛΛΟΥ
       if (document.querySelector('.approval-app')) return; // ήδη ανοιχτό (π.χ. αυτόματο άνοιγμα με την επιλογή του προτύπου)
@@ -454,7 +470,7 @@ module({
       if (query.cc_name) x.cc_name = query.cc_name;
       if (query.visit_id) x.visit_id = Number(query.visit_id);
       if (LETTER_CATEGORIES[query.category]) x.category = query.category;
-      return { title: 'Νέα Επιστολή', html: `<h1>Νέα Επιστολή</h1><div class="card signer-card noprint"><b>Υπογράφων:</b> ${esc(ACTORS[actor()])} <a class="btn small" href="#/identity">Αλλαγή</a></div>${letterForm(x, query)}`, mount: (el) => mountLetterForm(el, x, true) };
+      return { title: 'Νέα Επιστολή', html: `<h1>Νέα Επιστολή</h1><div class="card signer-card noprint"><b>Υπογράφων:</b> ${esc(ACTORS[actor()])} <a class="btn small" href="#/identity">Αλλαγή</a></div>${outgoingBar()}${letterForm(x, query)}`, mount: (el) => mountLetterForm(el, x, true) };
     },
     '/letters/:id': viewLetter,
     // Μόνο το έντυπο της επιστολής (χωρίς μενού, αποστολή, παραλήπτες email) — π.χ. από τον Αρ. Πρωτ. της Αναφοράς εκπροσώπησης
@@ -472,7 +488,7 @@ module({
     '/letters/:id/edit': ({ params }) => {
       const x = db.get('letters', params.id);
       if (!x) return '<h1>Δεν βρέθηκε η επιστολή</h1>';
-      return { title: 'Επεξεργασία επιστολής', html: `<h1>Επεξεργασία <span class="official-number">${esc(x.protocol_no)}</span></h1>${letterForm(x)}`, mount: (el) => mountLetterForm(el, x, false) };
+      return { title: 'Επεξεργασία επιστολής', html: `<h1>Επεξεργασία <span class="official-number">${esc(x.protocol_no)}</span></h1>${outgoingBar()}${letterForm(x)}`, mount: (el) => mountLetterForm(el, x, false) };
     },
     ...crud({
       table: 'letter_templates', base: '/templates', title: 'Πρότυπα Επιστολών', one: 'Πρότυπο', name: (t) => t.name,
