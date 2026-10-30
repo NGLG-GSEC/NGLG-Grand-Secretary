@@ -4407,3 +4407,20 @@ def test_letter_form_outgoing_archive_button_and_last_protocol(app):
     app.page.click('[data-act=driveLast]')
     app.page.wait_for_function("document.querySelector('#lastProto').textContent === '20575'")
     assert 'φάκελος Drive' in app.page.inner_text('#lastProtoSrc')
+
+
+def test_visits_report_protocol_and_email_columns(app):
+    # Αναφορά επισκέψεων: στήλες «Αρ. Πρωτ.» (επιστολή της Επίσκεψης) και «Email» (στάλθηκε ή όχι)
+    app.connect_local()
+    app.page.evaluate("""async () => { const {db} = await import('./core/store.js');
+      await db.save('x', (tx) => { tx.replace('visits', []);
+        const a = tx.insert('visits', { visit_date: '2026-11-03', lodge: 'ΜΕΓΑΛΟΙ ΕΠΙΜΕΛΗΤΑΙ', lodge_number: '74', location: '', province: 'ΕπΜΣτ. Αθηνών', rep_id: null, notes: '' });
+        tx.insert('visits', { visit_date: '2026-11-04', lodge: 'ΑΤΛΑΣ', lodge_number: '118', location: '', province: 'ΕπΜΣτ. Πειραιώς', rep_id: null, notes: '' });
+        tx.insert('letters', { subject: 'Εκπροσώπηση', body: 'x', status: 'ready', protocol_seq: 20576, protocol_no: '20576', letter_date: '2026-10-30', visit_id: a.id, sent_at: '2026-10-30T10:00:00Z' }); }); }""")
+    app.go('/visits/report?frm=2026-11-01&to=2026-11-30')
+    t = app.text('.print-area')
+    assert 'Αρ. Πρωτ.' in t and 'Email' in t
+    epi = app.page.locator('.print-area tr', has_text='ΜΕΓΑΛΟΙ ΕΠΙΜΕΛΗΤΑΙ').inner_text()
+    assert '20576' in epi and '✓ Στάλθηκε 30/10/2026' in epi, epi
+    atl = app.page.locator('.print-area tr', has_text='ΑΤΛΑΣ').inner_text()
+    assert 'Όχι' in atl and '20576' not in atl, atl

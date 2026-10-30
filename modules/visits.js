@@ -783,10 +783,18 @@ function reportPage({ query }) {
   const rows = visitsAll().filter((v) => (!frm || v.visit_date >= frm) && (!to || v.visit_date <= to) && (!prov || v.province === prov));
   const groups = {};
   for (const v of rows) (groups[v.visit_date.slice(0, 7)] ||= []).push(v);
-  const tbl = `<table><thead><tr><th>Ημερομηνία</th><th>Στοά</th><th>Τόπος · Επαρχία</th><th>Εκπρόσωπος</th></tr></thead><tbody>${Object.entries(groups).map(([k, items]) => `<tr><td colspan="4" style="background:#e7ecf8;color:#1f3f8f;font-weight:bold">${esc(grUpper(monthTitle(k)))} · ${items.length}</td></tr>` + items.map((v) => {
+  const letters = db.all('letters');
+  // Αρ. πρωτοκόλλου της επιστολής της Επίσκεψης και αν στάλθηκε email (επιστολή «σταλμένη» ή ενημέρωση Επαρχίας / εκπροσώπου)
+  const protoCell = (v) => { const l = visitLetter(v, letters); return l ? `<a href="#/letters/${l.id}"><b class="official-number">${esc(String(seqOf(l)))}</b></a>` : '<span class="muted">—</span>'; };
+  const mailCell = (v) => {
+    const l = visitLetter(v, letters), at = (l && l.sent_at) || (provNotified(v) && v.prov_notified_at) || '';
+    const who = [l && l.sent_at ? 'επιστολή' : '', provNotified(v) ? 'Επαρχία' : '', repNotified(v) ? 'εκπρόσωπος' : ''].filter(Boolean);
+    return who.length ? `<span class="vok">✓ Στάλθηκε${at ? ' ' + esc(fmtDate(String(at).slice(0, 10))) : ''}</span><br><small class="muted">${esc(who.join(' · '))}</small>` : '<span class="vwarn">Όχι</span>';
+  };
+  const tbl = `<table><thead><tr><th>Ημερομηνία</th><th>Στοά</th><th>Τόπος · Επαρχία</th><th>Εκπρόσωπος</th><th>Αρ. Πρωτ.</th><th>Email</th></tr></thead><tbody>${Object.entries(groups).map(([k, items]) => `<tr><td colspan="6" style="background:#e7ecf8;color:#1f3f8f;font-weight:bold">${esc(grUpper(monthTitle(k)))} · ${items.length}</td></tr>` + items.map((v) => {
     const r = reps[v.rep_id];
     return `<tr><td>${esc(dayStr(v.visit_date))}</td><td><b>${esc(v.lodge)}</b>${v.lodge_number ? ' Αρ. ' + esc(v.lodge_number) : ''}${v.notes ? `<br><small class="muted">${esc(v.notes)}</small>` : ''}</td><td>${esc(v.location || '—')}<br><small class="muted">${esc(v.province || '')}</small></td>
-<td>${r ? esc(repLabel(r)) + (firstOffice(r) ? `<br><small class="muted">${esc(firstOffice(r))}</small>` : '') : isNobody(v) ? '<b>ΟΥΔΕΙΣ</b>' : '<span class="vwarn">Δεν έχει οριστεί</span>'}</td></tr>`; }).join('')).join('') || '<tr><td colspan="4">Καμία επίσκεψη στο διάστημα αυτό.</td></tr>'}</tbody></table>`;
+<td>${r ? esc(repLabel(r)) + (firstOffice(r) ? `<br><small class="muted">${esc(firstOffice(r))}</small>` : '') : isNobody(v) ? '<b>ΟΥΔΕΙΣ</b>' : '<span class="vwarn">Δεν έχει οριστεί</span>'}</td><td>${protoCell(v)}</td><td>${mailCell(v)}</td></tr>`; }).join('')).join('') || '<tr><td colspan="6">Καμία επίσκεψη στο διάστημα αυτό.</td></tr>'}</tbody></table>`;
   const rng = (frm ? 'Από ' + fmtDate(frm) : 'Όλες οι ημερομηνίες') + (to ? ' έως ' + fmtDate(to) : '') + ' · ' + (prov || 'Όλες οι Επαρχίες') + ` · ${rows.length} επισκέψεις`;
   return {
     title: 'Αναφορά επισκέψεων',
