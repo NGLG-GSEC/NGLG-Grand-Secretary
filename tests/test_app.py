@@ -2397,10 +2397,11 @@ def test_declarations_constitution_helper_and_decree_signature(app):
     app.go('/declarations?view=form')  # παλιός σύνδεσμος → η μία σελίδα
     app.page.wait_for_selector('#declFrame')
     assert app.page.url.endswith('#/declarations')
-    # Το Σύνταγμα δεν εμφανίζεται πουθενά στην εφαρμογή· μόνο η αυτόνομη σελίδα constitution/
+    # Το Σύνταγμα δεν εμφανίζεται στις Δηλώσεις· μόνο πλακίδιο στην Αρχική και κάρτα στην Πύλη (αυτόνομη σελίδα constitution/)
     assert 'Συντάγματ' not in app.text() and app.page.locator('#constFrame, .constitution-box, #constLink').count() == 0
     app.go('/portal')
-    assert app.page.locator('a[href*="constitution"]').count() == 0
+    c = app.page.locator('a.portal-card[href="constitution/"]')  # κάρτα στην Πύλη, σε νέα καρτέλα
+    assert c.count() == 1 and c.get_attribute('target') == '_blank' and '📜 Σύνταγμα ΕΜΣτΕ' in c.inner_text()
     app.go('/')  # μόνο πλακίδιο στην Αρχική, που ανοίγει την αυτόνομη σελίδα
     t = app.page.locator('.dtile', has_text='📜 Σύνταγμα')
     assert t.count() == 1 and t.locator('a.btn').get_attribute('href') == 'constitution/' and t.locator('a.btn').get_attribute('target') == '_blank'
@@ -2717,7 +2718,7 @@ def test_unified_menu_and_visits_flow(app):
     inner = [h for h in hrefs if h.startswith('#/')]
     assert len(inner) == len(set(inner)), inner  # κάθε σελίδα μία φορά στο μενού
     assert app.page.locator('#mainnav a[href="programme/"][target=_blank]').count() == 1 and app.page.locator('#mainnav a[href="#/members/diplomas"]').count() == 1
-    assert app.page.locator('#mainnav a[href*="constitution"]').count() == 0  # το Σύνταγμα μόνο ως πλακίδιο στην Αρχική
+    assert app.page.locator('#mainnav a[href*="constitution"]').count() == 0  # το Σύνταγμα όχι στο μενού· πλακίδιο στην Αρχική και κάρτα στην Πύλη
     for step, path in [(1, '/visits'), (2, '/declarations'), (3, '/visits/decisions'), (4, '/visits/publish'), (5, '/visits/report')]:
         app.go(path)
         app.page.wait_for_selector('.vflow')
