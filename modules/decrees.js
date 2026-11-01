@@ -15,7 +15,7 @@ import { gmName } from './letter-fill.js';
 import { nextProtocol, askProtocol, claimProtocol, suggestedProtocol, formProtocol, setProtocol } from './protocol.js';
 import { findMember, insertMember } from './members.js';
 import { identify } from '../core/people.js';
-import { DEC_OFFICES, AWARD_OFFICES, AWARD_MAP, DEC_MAP, DEC_BASIS, HON_ACC_BY_SHORT, HONORIFIC_OPTIONS, OFFICE_FORMS, DEGREE_CC_DEFAULT, PRECEDENCE } from './decree-catalog.js';
+import { DEC_OFFICES, AWARD_OFFICES, AWARD_MAP, DEC_MAP, DEC_BASIS, HON_ACC_BY_SHORT, HONORIFIC_OPTIONS, OFFICE_FORMS, DEGREE_CC_DEFAULT, PRECEDENCE, precedenceOf } from './decree-catalog.js';
 
 db.defaultSettings({ decree_cc: DEGREE_CC_DEFAULT.join(', '), decree_first_no: '513' });
 const ACTIONS = { appoint: 'ΔΙΟΡΙΖΟΜΕΝ', award: 'ΑΠΟΝΕΜΕΙ', service_award: 'ΕΥΑΡΕΣΤΟΥΜΕΘΑ ΝΑ ΑΠΟΝΕΙΜΩΜΕΝ' };
@@ -203,7 +203,8 @@ function syncOffices(tx, d) {
 // ---------------------------------------------------------------- φόρμα
 // Αξιώματα ανά πρότυπο: «Επαρχιακού/Περιφερειακού» μόνο αυτά τα δύο, «Μεγάλων Αξιωματικών» όλα τα υπόλοιπα
 const officeOpts = (sel, key = 'decree-appoint') => '<option value="">— Επιλογή ενεργού αξιώματος —</option>' + DEC_OFFICES.filter(([, o]) => PROVINCIAL_OFFICES.includes(o) === (key === 'decree-provincial')).map(([p, o, r]) => `<option value="${esc(o)}"${o === sel ? ' selected' : ''}>${esc(o)} — Καν. ${r}${p == null ? ' — χωρίς αριθμό προβαδίσματος' : ''}</option>`).join('');
-const awardOpts = (sel) => '<option value="">— Επιλογή πρώην Μεγάλου Αξιωματικού —</option>' + AWARD_OFFICES.map(([o]) => `<option value="${esc(o)}"${o === sel ? ' selected' : ''}>${esc('Πρώην ' + o)}</option>`).join('');
+// Όλα τα πρώην αξιώματα (Σύνταγμα / Επετηρίδα), με τη σειρά προβαδίσματος
+const awardOpts = (sel) => '<option value="">— Επιλογή πρώην Μεγάλου Αξιωματικού —</option>' + [...AWARD_OFFICES].sort((a, b) => (precedenceOf('Πρώην ' + a[0]) || 99) - (precedenceOf('Πρώην ' + b[0]) || 99)).map(([o]) => `<option value="${esc(o)}"${o === sel ? ' selected' : ''}>${esc('Πρώην ' + o)}</option>`).join('');
 function personRow(a = {}) {
   let fn = a.first_name || '', ln = a.last_name || '';
   if (!fn && !ln) [fn, ln] = splitName(a.full_name);
@@ -310,7 +311,8 @@ function mountDecreeForm(el, d, m0) {
     gp.disabled = gp.hidden = !g; ap.disabled = ap.hidden = g; el.querySelector('[data-act=addPerson]').hidden = g;
     if (!g) { const allowed = DECREE_KINDS[kindNow()].actions; if (!allowed.includes(act.value)) act.value = allowed[0]; sync(); }
   };
-  f.querySelectorAll('[name=template_key]').forEach((r) => r.addEventListener('change', syncKind));
+  // «ΠΡΩΗΝ» → πράξη «ΑΠΟΝΕΜΕΙ» με όλα τα πρώην αξιώματα (ο διορισμός Επαρχιακού/Περιφερειακού Μ.Δ. επιλέγεται από την «Πράξη»)
+  f.querySelectorAll('[name=template_key]').forEach((r) => r.addEventListener('change', () => { if (kindNow() === 'decree-provincial') act.value = 'award'; syncKind(); }));
   syncKind();
   attachPicker(el.querySelector('#gPick'), contactItems, (c) => {
     if (c.email) f.g_to_email.value = [...new Set([...splitEmails(f.g_to_email.value), c.email])].join(', ');

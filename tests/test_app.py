@@ -2810,6 +2810,8 @@ def test_decree_updates_epeteirida_and_registry_title_with_confirmation(app):
     app.go('/decrees/new')
     assert app.page.locator('#dOffice option', has_text='Επαρχιακός Μέγας Διδάσκαλος').count() == 0  # χωριστό πρότυπο
     app.page.check('[name=template_key][value=decree-provincial]')
+    assert app.page.locator('#dOffice option', has_text='Πρώην Επαρχιακός Μέγας Διδάσκαλος').count() == 1  # «ΠΡΩΗΝ» → ΑΠΟΝΕΜΕΙ
+    app.page.select_option('#dAction', 'appoint')
     assert app.page.locator('#dOffice option', has_text='Επαρχιακός Μέγας Διδάσκαλος').count() == 1  # Καν. 63
     app.page.check('[name=template_key][value=decree-appoint]')
     app.page.select_option('#dOffice', 'Μέγας Γραμματεύς')
@@ -2905,7 +2907,9 @@ def test_decree_template_follows_action_and_office(app):
     app.page.select_option('#dAction', 'service_award')
     assert app.page.is_checked('[name=template_key][value=decree-service]')
     app.page.check('[name=template_key][value=decree-provincial]')
-    assert app.page.input_value('#dAction') == 'appoint'
+    assert app.page.input_value('#dAction') == 'award'  # «ΠΡΩΗΝ» → ΑΠΟΝΕΜΕΙ· ο διορισμός Επαρχιακού / Περιφερειακού από την Πράξη
+    app.page.select_option('#dAction', 'appoint')
+    assert app.page.is_checked('[name=template_key][value=decree-provincial]')
     opts = app.page.eval_on_selector_all('#dOffice option', 'os => os.map((o) => o.value).filter(Boolean)')
     assert opts == ['Επαρχιακός Μέγας Διδάσκαλος', 'Περιφερειακός Μέγας Διδάσκαλος'], opts
     app.page.select_option('#dOffice', 'Περιφερειακός Μέγας Διδάσκαλος')
@@ -4469,3 +4473,16 @@ def test_home_sgy_report_tile_no_duplicate_live_button(app):
     assert b.count() == 1 and b.get_attribute('href') == live and 'Άνοιγμα Ροής ΣΓΥ' in b.inner_text()
     assert b.evaluate("(e) => getComputedStyle(e).animationName") == 'goldflash'
     assert 'linear-gradient' in b.evaluate("(e) => getComputedStyle(e).backgroundImage")  # χρυσό, όχι το μπλε του .primary
+
+
+def test_decree_former_kind_lists_all_former_offices(app):
+    # Διάταγμα «ΠΡΩΗΝ»: η πράξη γίνεται «ΑΠΟΝΕΜΕΙ» και η λίστα έχει όλα τα πρώην αξιώματα, με σειρά προβαδίσματος
+    app.connect_local()
+    app.go('/decrees/new')
+    app.page.check('[name=template_key][value="decree-provincial"]')
+    assert app.page.input_value('#dAction') == 'award'
+    opts = app.page.locator('#dOffice option').all_inner_texts()[1:]
+    assert len(opts) >= 30 and opts[0] == 'Πρώην Αντικαταστάτης Μέγας Διδάσκαλος', opts[:5]
+    for o in ['Πρώην Αναπληρωτής Μέγας Διδάσκαλος', 'Πρώην Βοηθός Μέγας Διδάσκαλος', 'Πρώην Επαρχιακός Μέγας Διδάσκαλος', 'Πρώην Πρώτος Μέγας Επόπτης', 'Πρώην Μέγας Γραμματεύς', 'Πρώην Μέγας Στεγαστής']:
+        assert o in opts, o
+    assert opts.index('Πρώην Βοηθός Μέγας Διδάσκαλος') < opts.index('Πρώην Πρώτος Μέγας Επόπτης') < opts.index('Πρώην Μέγας Γραμματεύς') < opts.index('Πρώην Μέγας Στεγαστής')
