@@ -4464,7 +4464,7 @@ def test_home_sgy_report_tile_no_duplicate_live_button(app):
     t = app.page.locator('[data-tile="sgy-report"]')
     t.locator('text=Δοκιμή').wait_for()
     hrefs = t.locator('.acts a').evaluate_all("as => as.map((a) => a.getAttribute('href'))")
-    assert hrefs.count(live) == 1 and 'Ζωντανή σελίδα' not in t.inner_text() and 'Αρχείο ΣΓΥ' in t.inner_text()
+    assert hrefs.count(live) == 1 and 'Ζωντανή σελίδα' not in t.inner_text() and 'Αρχείο GitHub' in t.inner_text()
     b = t.locator('a.goldflash')  # χρυσό κουμπί με παλμό για τη Ροή Συνεδρίασης
     assert b.count() == 1 and b.get_attribute('href') == live and 'Άνοιγμα Ροής ΣΓΥ' in b.inner_text()
     assert b.evaluate("(e) => getComputedStyle(e).animationName") == 'goldflash'
