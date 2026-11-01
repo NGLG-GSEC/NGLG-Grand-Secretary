@@ -423,7 +423,7 @@ def test_portal_and_old_links(browser, base_url):
     page = ctx.new_page()
     page.goto(base_url + '#/portal')  # η Πύλη ανοίγει και χωρίς σύνδεση
     page.wait_for_selector('text=Πύλη Μεγάλης Γραμματείας')
-    for s in ['Ψηφιακό Έντυπο Διατάγματος', 'Τεκτονικές Ομιλίες', 'Φόρμες εγγραφής', 'Bear Bell Ritual', 'Μέγας Καγκελάριος']:
+    for s in ['Ψηφιακό Έντυπο Διατάγματος', 'Τεκτονικές Ομιλίες', 'Φόρμες εγγραφής', 'Bear Bell Ritual', 'Μέγας Καγκελάριος', 'ΣΓΥ · Ροή Συνεδρίασης & Αναφορά Μεγάλου Γραμματέως']:
         assert page.get_by_text(s).count(), s
     assert (ROOT / 'diatagma' / 'index.html').exists() and page.locator('a[href="diatagma/"]').count()
     page.goto(base_url + 'app/#/letters')  # παλιοί σύνδεσμοι …/app/#/… → κεντρική διεύθυνση
