@@ -42,3 +42,19 @@ module({
   tile: { order: 32, render: () => `<div class="dtile"><h3><a href="constitution/" target="_blank" rel="noopener">📜 Σύνταγμα</a></h3><div class="muted">Βοηθός Συντάγματος — Γενικοί Νόμοι και Κανονισμοί (αυτόνομη σελίδα, για αποστολή)</div>
 <div class="acts"><a class="btn primary" href="constitution/" target="_blank" rel="noopener">Άνοιγμα ↗</a></div></div>` },
 });
+
+// ΣΓΥ · Ροή Συνεδρίασης & Αναφορά Μεγάλου Γραμματέως: αυτόνομη σελίδα (αποθετήριο dskiad/SGY-report-NGLG-) — μόνο σύνδεσμοι, σε νέα καρτέλα
+const SGY_REPORT = 'https://dskiad.github.io/SGY-report-NGLG-/';
+const SGY_REPORT_LINKS = [
+  ['Ζωντανή σελίδα', 'https://claude.ai/artifact/TokGbLGVAzWv6V5Nz1TFSb', 'Κοινές καταχωρίσεις και στατιστικά Gmail/Drive (λογαριασμός claude.ai του Μεγάλου Γραμματέως)'],
+  ['PDF Αναφοράς', SGY_REPORT + 'Anafora_MGram_SGY_301026_v20.pdf', 'Αναφορά Μεγάλου Γραμματέως'],
+  ['PDF Συνεδρίασης', SGY_REPORT + 'SGY_Synedriasi_021126_v20.pdf', 'Πλήρης Συνεδρίαση'],
+  ['Αρχείο', 'https://github.com/dskiad/SGY-report-NGLG-/tree/main/archive', 'Αρχείο συνεδριάσεων'],
+];
+const ext = (href, label, cls = 'btn', title = '') => `<a class="${cls}" href="${href}" target="_blank" rel="noopener"${title ? ` title="${esc(title)}"` : ''}>${esc(label)} ↗</a>`;
+module({
+  id: 'sgy-report-tile',
+  tile: { order: 16, render: () => `<div class="dtile gold"><h3><a href="${SGY_REPORT}" target="_blank" rel="noopener">📑 ΣΓΥ · Ροή Συνεδρίασης &amp; Αναφορά Μεγάλου Γραμματέως</a></h3>
+<div class="muted">Τακτική Συνεδρίαση 02/11/2026 · ροή θεμάτων, ψηφοφορίες, Αναφορά ΜΓραμ (Συνοπτική Εποπτική Αναφορά + Τεύχος Ανάλυσης Δεδομένων)</div>
+<div class="acts">${ext(SGY_REPORT, 'Άνοιγμα', 'btn primary')}${SGY_REPORT_LINKS.map(([l, h, t]) => ext(h, l, 'btn', t)).join('')}</div></div>` },
+});

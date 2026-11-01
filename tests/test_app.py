@@ -4424,3 +4424,15 @@ def test_visits_report_protocol_and_email_columns(app):
     assert '20576' in epi and '✓ Στάλθηκε 30/10/2026' in epi, epi
     atl = app.page.locator('.print-area tr', has_text='ΑΤΛΑΣ').inner_text()
     assert 'Όχι' in atl and '20576' not in atl, atl
+
+
+def test_home_sgy_report_tile(app):
+    # Αρχική: πλακίδιο «ΣΓΥ · Ροή Συνεδρίασης & Αναφορά Μεγάλου Γραμματέως» με συνδέσμους σε νέα καρτέλα (αυτόνομη σελίδα)
+    app.connect_local()
+    app.go('/')
+    t = app.page.locator('.dtile', has_text='ΣΓΥ · Ροή Συνεδρίασης')
+    assert 'Τακτική Συνεδρίαση 02/11/2026' in t.inner_text()
+    hrefs = t.locator('a').evaluate_all("as => as.map((a) => [a.getAttribute('href'), a.getAttribute('target')])")
+    assert ['https://dskiad.github.io/SGY-report-NGLG-/', '_blank'] in hrefs
+    assert any(h.endswith('Anafora_MGram_SGY_301026_v20.pdf') for h, _ in hrefs) and any('TokGbLGVAzWv6V5Nz1TFSb' in h for h, _ in hrefs)
+    assert all(tg == '_blank' for _, tg in hrefs)
