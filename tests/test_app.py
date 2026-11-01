@@ -4453,3 +4453,15 @@ def test_home_sgy_report_tile_follows_latest_json(app):
     hrefs = t.locator('a').evaluate_all("as => as.map((a) => a.getAttribute('href'))")
     assert 'https://dskiad.github.io/SGY-report-NGLG-/Anafora_NEW.pdf' in hrefs
     assert not any(h.startswith('javascript:') for h in hrefs) and any(h.endswith('SGY_Synedriasi_021126_v20.pdf') for h in hrefs)  # μόνο https, αλλιώς η προεπιλογή
+
+
+def test_home_sgy_report_tile_no_duplicate_live_button(app):
+    # όταν το «Άνοιγμα» είναι ήδη η ζωντανή σελίδα, δεν εμφανίζεται δεύτερο κουμπί για την ίδια σελίδα
+    live = 'https://claude.ai/artifact/TokGbLGVAzWv6V5Nz1TFSb'
+    app.page.route('**/SGY-report-NGLG-/latest.json*', lambda r: r.fulfill(json={'title': 'Τακτική Συνεδρίαση ΣΓΥ · Δοκιμή', 'page': live, 'live': live}, headers={'Access-Control-Allow-Origin': '*'}))
+    app.connect_local()
+    app.go('/')
+    t = app.page.locator('[data-tile="sgy-report"]')
+    t.locator('text=Δοκιμή').wait_for()
+    hrefs = t.locator('.acts a').evaluate_all("as => as.map((a) => a.getAttribute('href'))")
+    assert hrefs.count(live) == 1 and 'Ζωντανή σελίδα' not in t.inner_text() and 'Αρχείο ΣΓΥ' in t.inner_text()

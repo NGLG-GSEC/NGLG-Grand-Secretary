@@ -65,7 +65,7 @@ function sgyTileHtml() {
   const title = typeof L.title === 'string' ? L.title : D.title, summary = typeof L.summary === 'string' ? L.summary : D.summary;
   return `<div class="dtile gold" data-tile="sgy-report"><h3><a href="${esc(u('page'))}" target="_blank" rel="noopener">📑 ΣΓΥ · Ροή Συνεδρίασης &amp; Αναφορά Μεγάλου Γραμματέως</a></h3>
 <div class="muted">${esc(title)} · ${esc(summary)}</div>
-<div class="acts">${ext(u('page'), 'Άνοιγμα', 'btn primary')}${ext(u('live'), 'Ζωντανή σελίδα', 'btn', 'Κοινές καταχωρίσεις και στατιστικά Gmail/Drive (λογαριασμός claude.ai του Μεγάλου Γραμματέως)')}${ext(u('report_pdf'), 'PDF Αναφοράς', 'btn', 'Αναφορά Μεγάλου Γραμματέως')}${ext(u('session_pdf'), 'PDF Συνεδρίασης', 'btn', 'Πλήρης Συνεδρίαση')}${ext(u('archive'), 'Αρχείο', 'btn', 'Αρχείο συνεδριάσεων')}</div></div>`;
+<div class="acts">${ext(u('page'), 'Άνοιγμα', 'btn primary')}${u('live') !== u('page') ? ext(u('live'), 'Ζωντανή σελίδα', 'btn', 'Κοινές καταχωρίσεις και στατιστικά Gmail/Drive (λογαριασμός claude.ai του Μεγάλου Γραμματέως)') : ''}${ext(u('report_pdf'), 'PDF Αναφοράς', 'btn', 'Αναφορά Μεγάλου Γραμματέως')}${ext(u('session_pdf'), 'PDF Συνεδρίασης', 'btn', 'Πλήρης Συνεδρίαση')}${ext(u('archive'), 'Αρχείο ΣΓΥ', 'btn', 'Αρχείο συνεδριάσεων (αντίγραφα στο GitHub)')}</div></div>`;
 }
 function sgyRefresh() {
   if (Date.now() - sgyFetched < 60000) return;  // το πολύ μία ανάγνωση το λεπτό
