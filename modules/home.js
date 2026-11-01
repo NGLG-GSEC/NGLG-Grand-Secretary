@@ -43,18 +43,41 @@ module({
 <div class="acts"><a class="btn primary" href="constitution/" target="_blank" rel="noopener">Άνοιγμα ↗</a></div></div>` },
 });
 
-// ΣΓΥ · Ροή Συνεδρίασης & Αναφορά Μεγάλου Γραμματέως: αυτόνομη σελίδα (αποθετήριο dskiad/SGY-report-NGLG-) — μόνο σύνδεσμοι, σε νέα καρτέλα
+// ΣΓΥ · Ροή Συνεδρίασης & Αναφορά Μεγάλου Γραμματέως: αυτόνομη σελίδα (αποθετήριο dskiad/SGY-report-NGLG-) — μόνο σύνδεσμοι, σε νέα καρτέλα.
+// Το πλακίδιο διαβάζει το latest.json εκείνου του αποθετηρίου (τρέχουσα Συνεδρίαση, PDF), ώστε να ενημερώνεται αυτόματα·
+// χωρίς δίκτυο μένουν οι προεπιλογές παρακάτω.
 const SGY_REPORT = 'https://dskiad.github.io/SGY-report-NGLG-/';
-const SGY_REPORT_LINKS = [
-  ['Ζωντανή σελίδα', 'https://claude.ai/artifact/TokGbLGVAzWv6V5Nz1TFSb', 'Κοινές καταχωρίσεις και στατιστικά Gmail/Drive (λογαριασμός claude.ai του Μεγάλου Γραμματέως)'],
-  ['PDF Αναφοράς', SGY_REPORT + 'Anafora_MGram_SGY_301026_v20.pdf', 'Αναφορά Μεγάλου Γραμματέως'],
-  ['PDF Συνεδρίασης', SGY_REPORT + 'SGY_Synedriasi_021126_v20.pdf', 'Πλήρης Συνεδρίαση'],
-  ['Αρχείο', 'https://github.com/dskiad/SGY-report-NGLG-/tree/main/archive', 'Αρχείο συνεδριάσεων'],
-];
-const ext = (href, label, cls = 'btn', title = '') => `<a class="${cls}" href="${href}" target="_blank" rel="noopener"${title ? ` title="${esc(title)}"` : ''}>${esc(label)} ↗</a>`;
+const SGY_LATEST = SGY_REPORT + 'latest.json';
+const SGY_DEFAULT = {
+  title: 'Τακτική Συνεδρίαση 02/11/2026',
+  summary: 'ροή θεμάτων, ψηφοφορίες, Αναφορά ΜΓραμ (Συνοπτική Εποπτική Αναφορά + Τεύχος Ανάλυσης Δεδομένων)',
+  page: SGY_REPORT,
+  live: 'https://claude.ai/artifact/TokGbLGVAzWv6V5Nz1TFSb',
+  report_pdf: SGY_REPORT + 'Anafora_MGram_SGY_301026_v20.pdf',
+  session_pdf: SGY_REPORT + 'SGY_Synedriasi_021126_v20.pdf',
+  archive: 'https://github.com/dskiad/SGY-report-NGLG-/tree/main/archive',
+};
+let sgyLatest = null, sgyFetched = 0;
+const safeUrl = (u, d) => (typeof u === 'string' && /^https:\/\//.test(u) ? u : d);
+const ext = (href, label, cls = 'btn', title = '') => `<a class="${cls}" href="${esc(href)}" target="_blank" rel="noopener"${title ? ` title="${esc(title)}"` : ''}>${esc(label)} ↗</a>`;
+function sgyTileHtml() {
+  const L = sgyLatest || {}, D = SGY_DEFAULT, u = (k) => safeUrl(L[k], D[k]);
+  const title = typeof L.title === 'string' ? L.title : D.title, summary = typeof L.summary === 'string' ? L.summary : D.summary;
+  return `<div class="dtile gold" data-tile="sgy-report"><h3><a href="${esc(u('page'))}" target="_blank" rel="noopener">📑 ΣΓΥ · Ροή Συνεδρίασης &amp; Αναφορά Μεγάλου Γραμματέως</a></h3>
+<div class="muted">${esc(title)} · ${esc(summary)}</div>
+<div class="acts">${ext(u('page'), 'Άνοιγμα', 'btn primary')}${ext(u('live'), 'Ζωντανή σελίδα', 'btn', 'Κοινές καταχωρίσεις και στατιστικά Gmail/Drive (λογαριασμός claude.ai του Μεγάλου Γραμματέως)')}${ext(u('report_pdf'), 'PDF Αναφοράς', 'btn', 'Αναφορά Μεγάλου Γραμματέως')}${ext(u('session_pdf'), 'PDF Συνεδρίασης', 'btn', 'Πλήρης Συνεδρίαση')}${ext(u('archive'), 'Αρχείο', 'btn', 'Αρχείο συνεδριάσεων')}</div></div>`;
+}
+function sgyRefresh() {
+  if (Date.now() - sgyFetched < 60000) return;  // το πολύ μία ανάγνωση το λεπτό
+  sgyFetched = Date.now();
+  fetch(SGY_LATEST, { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).then((j) => {
+    if (!j || typeof j !== 'object') return;
+    sgyLatest = j;
+    const el = document.querySelector('[data-tile="sgy-report"]');
+    if (el) el.outerHTML = sgyTileHtml();
+  }).catch(() => {});
+}
 module({
   id: 'sgy-report-tile',
-  tile: { order: 16, render: () => `<div class="dtile gold"><h3><a href="${SGY_REPORT}" target="_blank" rel="noopener">📑 ΣΓΥ · Ροή Συνεδρίασης &amp; Αναφορά Μεγάλου Γραμματέως</a></h3>
-<div class="muted">Τακτική Συνεδρίαση 02/11/2026 · ροή θεμάτων, ψηφοφορίες, Αναφορά ΜΓραμ (Συνοπτική Εποπτική Αναφορά + Τεύχος Ανάλυσης Δεδομένων)</div>
-<div class="acts">${ext(SGY_REPORT, 'Άνοιγμα', 'btn primary')}${SGY_REPORT_LINKS.map(([l, h, t]) => ext(h, l, 'btn', t)).join('')}</div></div>` },
+  tile: { order: 16, render: () => { setTimeout(sgyRefresh, 0); return sgyTileHtml(); } },
 });

@@ -4429,6 +4429,7 @@ def test_visits_report_protocol_and_email_columns(app):
 
 def test_home_sgy_report_tile(app):
     # Αρχική: πλακίδιο «ΣΓΥ · Ροή Συνεδρίασης & Αναφορά Μεγάλου Γραμματέως» με συνδέσμους σε νέα καρτέλα (αυτόνομη σελίδα)
+    app.page.route('**/SGY-report-NGLG-/latest.json*', lambda r: r.abort())  # χωρίς δίκτυο: οι προεπιλογές
     app.connect_local()
     app.go('/')
     t = app.page.locator('.dtile', has_text='ΣΓΥ · Ροή Συνεδρίασης')
@@ -4437,3 +4438,18 @@ def test_home_sgy_report_tile(app):
     assert ['https://dskiad.github.io/SGY-report-NGLG-/', '_blank'] in hrefs
     assert any(h.endswith('Anafora_MGram_SGY_301026_v20.pdf') for h, _ in hrefs) and any('TokGbLGVAzWv6V5Nz1TFSb' in h for h, _ in hrefs)
     assert all(tg == '_blank' for _, tg in hrefs)
+
+
+def test_home_sgy_report_tile_follows_latest_json(app):
+    # Το πλακίδιο ΣΓΥ ενημερώνεται αυτόματα από το latest.json του αποθετηρίου dskiad/SGY-report-NGLG-
+    latest = {'title': 'Τακτική Συνεδρίαση ΣΓΥ · Δευτέρα 7 Δεκεμβρίου 2026', 'summary': 'ροή θεμάτων',
+              'page': 'https://dskiad.github.io/SGY-report-NGLG-/', 'report_pdf': 'https://dskiad.github.io/SGY-report-NGLG-/Anafora_NEW.pdf',
+              'session_pdf': 'javascript:alert(1)'}
+    app.page.route('**/SGY-report-NGLG-/latest.json*', lambda r: r.fulfill(json=latest, headers={'Access-Control-Allow-Origin': '*'}))
+    app.connect_local()
+    app.go('/')
+    t = app.page.locator('[data-tile="sgy-report"]')
+    t.locator('text=Δευτέρα 7 Δεκεμβρίου 2026').wait_for()
+    hrefs = t.locator('a').evaluate_all("as => as.map((a) => a.getAttribute('href'))")
+    assert 'https://dskiad.github.io/SGY-report-NGLG-/Anafora_NEW.pdf' in hrefs
+    assert not any(h.startswith('javascript:') for h in hrefs) and any(h.endswith('SGY_Synedriasi_021126_v20.pdf') for h in hrefs)  # μόνο https, αλλιώς η προεπιλογή
