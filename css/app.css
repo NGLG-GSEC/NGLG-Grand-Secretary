@@ -669,3 +669,8 @@ s.mdereg-l{color:#991b1b}
 .paper.vlist .gmp-table th{white-space:nowrap}
 /* μακριά email (π.χ. Επαρχίες) δεν φαρδαίνουν τη σελίδα στο κινητό */
 a[data-mail]{overflow-wrap:anywhere;word-break:break-word}
+/* Πλακίδιο ΣΓΥ: το «Άνοιγμα» της Ροής Συνεδρίασης ξεχωρίζει — χρυσό, με παλμό */
+.btn.goldflash,.btn.primary.goldflash{background:linear-gradient(135deg,#F4D27A 0%,#C9A44A 45%,#94680F 100%)!important;border-color:#94680F!important;color:#2A1C02!important;font-weight:800;letter-spacing:.02em;animation:goldflash 1.6s ease-in-out infinite}
+.btn.goldflash:hover,.btn.primary.goldflash:hover{background:linear-gradient(135deg,#F7DC92 0%,#D3AE55 45%,#A47612 100%)!important;color:#2A1C02!important}
+@keyframes goldflash{0%,100%{box-shadow:0 0 0 0 rgba(201,164,74,.75);filter:brightness(1)}50%{box-shadow:0 0 0 7px rgba(201,164,74,0),0 0 18px 4px rgba(244,210,122,.85);filter:brightness(1.15)}}
+@media (prefers-reduced-motion:reduce){.btn.goldflash{animation:none;box-shadow:0 0 0 3px rgba(201,164,74,.55)}}
