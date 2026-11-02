@@ -4538,3 +4538,13 @@ def test_award_former_deacon_shows_dove_jewel(app):
     app.page.select_option('#dOffice', 'Μέγας Γραμματεύς')
     app.page.wait_for_timeout(400)
     assert app.page.locator('#dprev img[src="img/jewels/diakonos-peristeri.jpg"]').count() == 0
+    # και στον διορισμό εν ενεργεία Πρώτου / Δευτέρου Μεγάλου Διακόνου (στο live preview)
+    app.page.select_option('#dAction', 'appoint')
+    app.page.check('[name=template_key][value="decree-appoint"]')
+    for office in ['Πρώτος Μέγας Διάκονος', 'Δεύτερος Μέγας Διάκονος']:
+        app.page.select_option('#dOffice', office)
+        app.page.wait_for_selector('#dprev img.dec-jewel[src="img/jewels/diakonos-peristeri.jpg"]')
+        assert 'ΜΕΓΑΝ ΔΙΑΚΟΝΟΝ' in app.page.inner_text('#dprev .dec-office')
+    app.page.select_option('#dOffice', 'Μέγας Γραμματεύς')
+    app.page.wait_for_timeout(400)
+    assert app.page.locator('#dprev img[src="img/jewels/diakonos-peristeri.jpg"]').count() == 0

@@ -175,8 +175,9 @@ export const OFFICE_DEFAULT = { size: 90, x: 150, dy: 0 };
 const officeStyle = (px, x, dy) => `width:${px}px;height:${px}px;left:calc(${x}mm - var(--padl, 16mm));transform:translateY(calc(-50% + .75em + ${dy}mm))`;
 // Κοσμήματα αξιωμάτων/τίτλων της εφαρμογής: μπαίνουν αυτόματα δίπλα στη γραμμή τους, όταν το πρότυπο δεν έχει δική του εικόνα αξιώματος
 export const JEWELS = [{ line: /^(την Τάξιν του Μεγάλου Διδασκάλου)$/m, src: 'img/jewels/taxis-md-metallio.jpg', label: 'Κόσμημα Τάξεως Μεγάλου Διδασκάλου', size: 180 },
-  // Απονομή «Πρώην Πρώτου / Δευτέρου Μεγάλου Διακόνου»: το κόσμημα του Διακόνου (περιστέρι με κλαδί ελαίας)
-  { line: /^(τον Τίτλον του Πρώην (?:Πρώτου|Δευτέρου) Μεγάλου Διακόνου)$/m, src: 'img/jewels/diakonos-peristeri.jpg', label: 'Κόσμημα Μεγάλου Διακόνου', size: 150 }];
+  // Πρώτος / Δεύτερος Μέγας Διάκονος — απονομή «Πρώην» και διορισμός εν ενεργεία: το κόσμημα του Διακόνου (περιστέρι με κλαδί ελαίας)
+  { line: /^(τον Τίτλον του Πρώην (?:Πρώτου|Δευτέρου) Μεγάλου Διακόνου)$/m, src: 'img/jewels/diakonos-peristeri.jpg', label: 'Κόσμημα Μεγάλου Διακόνου', size: 150 },
+  { line: /^((?:ΠΡΩΤΟΝ|ΔΕΥΤΕΡΟΝ) ΜΕΓΑΝ ΔΙΑΚΟΝΟΝ)$/gm, src: 'img/jewels/diakonos-peristeri.jpg', label: 'Κόσμημα Μεγάλου Διακόνου', size: 150 }];
 export function officeImage(html, L, urls = {}) {
   const o = L && L.office;
   if (!o || !(o.file || urls.office)) {
