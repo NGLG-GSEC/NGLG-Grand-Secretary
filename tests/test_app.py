@@ -4564,3 +4564,25 @@ def test_new_letter_default_recipients_and_bcc_from_settings(app):
     assert app.page.input_value('[name=recipient_email]') == 'b@example.com, c@example.com, a@example.com'
     app.go('/settings')
     assert 'Παραλήπτες (Προς) που μπαίνουν σε κάθε νέα επιστολή' in app.text() and 'Κρυφή κοινοποίηση (Bcc) σε κάθε επιστολή' in app.text()
+
+
+def test_deacon_dove_wins_over_template_office_image(app):
+    # Το περιστέρι του Μεγάλου Διακόνου μπαίνει και όταν το πρότυπο έχει δική του «εικόνα αξιώματος» (εκείνη μένει για τα άλλα αξιώματα)·
+    # και σε εκδομένο Διάταγμα με γραμμή αξιώματος που έχει μορφοποίηση
+    app.connect_local()
+    add_member(app)
+    app.page.evaluate("""async () => { const {db} = await import('./core/store.js'); await db.save('x', (tx) => {
+      const t = tx.all('letter_templates').find((x) => x.key === 'decree-appoint'); tx.putFile('decrees/office-test.png', new Uint8Array([137,80,78,71]));
+      tx.update('letter_templates', t.id, { layout: JSON.stringify({ office: { file: 'decrees/office-test.png', size: 90, x: 150, dy: 0 } }) }); }); }""")
+    app.go('/decrees/new')
+    app.page.check('[name=template_key][value="decree-appoint"]')
+    app.pick('.registry-search', 'Παπαδ')
+    app.page.select_option('#dOffice', 'Πρώτος Μέγας Διάκονος')
+    app.page.wait_for_selector('#dprev img.dec-jewel[src="img/jewels/diakonos-peristeri.jpg"]')
+    assert app.page.locator('#dprev img.dec-office-img').count() == 1  # μόνο το περιστέρι, όχι και η εικόνα του προτύπου
+    app.page.select_option('#dOffice', 'Μέγας Γραμματεύς')
+    app.page.wait_for_function("!document.querySelector('#dprev img.dec-jewel') && !!document.querySelector('#dprev img.dec-office-img[data-dfile]')")
+    # εκδομένο Διάταγμα με μορφοποιημένη γραμμή αξιώματος
+    html = app.page.evaluate("""async () => { const m = await import('./modules/decrees.js');
+      return m.officeImage('ως\\n<b>ΔΕΥΤΕΡΟΝ ΜΕΓΑΝ ΔΙΑΚΟΝΟΝ</b> \\nτον Αδελφόν', {}, {}); }""")
+    assert 'diakonos-peristeri.jpg' in html and '<span class="dec-office">ΔΕΥΤΕΡΟΝ ΜΕΓΑΝ ΔΙΑΚΟΝΟΝ</span>' in html, html
