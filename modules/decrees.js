@@ -174,7 +174,7 @@ export function decreePaper(d, opts = {}) {
 export const OFFICE_DEFAULT = { size: 90, x: 150, dy: 0 };
 const officeStyle = (px, x, dy) => `width:${px}px;height:${px}px;left:calc(${x}mm - var(--padl, 16mm));transform:translateY(calc(-50% + .75em + ${dy}mm))`;
 // Κοσμήματα αξιωμάτων/τίτλων της εφαρμογής: μπαίνουν αυτόματα δίπλα στη γραμμή τους, όταν το πρότυπο δεν έχει δική του εικόνα αξιώματος
-export const JEWELS = [{ line: /^(την Τάξιν του Μεγάλου Διδασκάλου)$/m, src: 'img/jewels/taxis-md.jpg', label: 'Κόσμημα Τάξεως Μεγάλου Διδασκάλου', size: 180 }];
+export const JEWELS = [{ line: /^(την Τάξιν του Μεγάλου Διδασκάλου)$/m, src: 'img/jewels/taxis-md-metallio.jpg', label: 'Κόσμημα Τάξεως Μεγάλου Διδασκάλου', size: 180 }];
 export function officeImage(html, L, urls = {}) {
   const o = L && L.office;
   if (!o || !(o.file || urls.office)) {

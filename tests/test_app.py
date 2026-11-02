@@ -2936,7 +2936,7 @@ def test_taxis_md_decree_shows_jewel_automatically(app):
     add_member(app)
     app.go('/decrees/new?kind=decree-service')
     app.pick('.registry-search', 'Παπαδ')
-    app.page.wait_for_selector('#dprev img.dec-jewel[src="img/jewels/taxis-md.jpg"]')
+    app.page.wait_for_selector('#dprev img.dec-jewel[src="img/jewels/taxis-md-metallio.jpg"]')
     app.click('Έκδοση Διατάγματος')
     app.page.wait_for_url('**/#/decrees/*')
     app.page.wait_for_selector('.paper img.dec-jewel')
