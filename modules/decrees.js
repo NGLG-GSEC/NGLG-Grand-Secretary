@@ -176,7 +176,7 @@ const officeStyle = (px, x, dy) => `width:${px}px;height:${px}px;left:calc(${x}m
 // Κοσμήματα αξιωμάτων/τίτλων της εφαρμογής: μπαίνουν αυτόματα δίπλα στη γραμμή τους, όταν το πρότυπο δεν έχει δική του εικόνα αξιώματος
 export const JEWELS = [{ text: 'την Τάξιν του Μεγάλου Διδασκάλου', src: 'img/jewels/taxis-md-metallio.jpg', label: 'Κόσμημα Τάξεως Μεγάλου Διδασκάλου', size: 180 },
   // Πρώτος / Δεύτερος Μέγας Διάκονος — απονομή «Πρώην» και διορισμός εν ενεργεία: το κόσμημα του Διακόνου (περιστέρι με κλαδί ελαίας)
-  { text: 'τον Τίτλον του Πρώην (?:Πρώτου|Δευτέρου) Μεγάλου Διακόνου', src: 'img/jewels/diakonos-peristeri.jpg', label: 'Κόσμημα Μεγάλου Διακόνου', size: 150 },
+  { text: 'τον Τίτλον του Πρώην (?:Πρώτου|Δευτέρου) Μεγάλου Διακόνου', src: 'img/jewels/diakonos-peristeri.jpg', label: 'Κόσμημα Μεγάλου Διακόνου', size: 150, shift: 4 }, // η μακριά φράση 4 χαρακτήρες αριστερά, να μην την κρύβει το περιστέρι
   { text: '(?:ΠΡΩΤΟΝ|ΔΕΥΤΕΡΟΝ) ΜΕΓΑΝ ΔΙΑΚΟΝΟΝ', src: 'img/jewels/diakonos-peristeri.jpg', label: 'Κόσμημα Μεγάλου Διακόνου', size: 150 }];
 // Η γραμμή του κοσμήματος, όποια μορφοποίηση κι αν έχει (έντονα, μέγεθος, κενά στην αρχή/τέλος)
 const jewelRe = (k) => new RegExp(`^((?:<[^>]+>|[ \\t])*)(${k.text})((?:</[^>]+>|[ \\t])*)$`, 'gm');
@@ -184,7 +184,7 @@ export function officeImage(html, L, urls = {}) {
   const o = L && L.office, own = !!(o && (o.file || urls.office)), j = o || {};
   // 1. Τα κοσμήματα της εφαρμογής (Τάξις Μ.Δ., Μέγας Διάκονος) έχουν πάντα προτεραιότητα — και όταν το πρότυπο έχει δική του εικόνα αξιώματος
   const st = (k) => officeStyle(Math.min(300, Math.max(20, (own ? 0 : +j.size) || k.size || OFFICE_DEFAULT.size)), +j.x || OFFICE_DEFAULT.x, +j.dy || 0);
-  html = JEWELS.reduce((h, k) => h.replace(jewelRe(k), (_, a, t, b) => `${a}<span class="dec-office">${t}</span>${b}<img class="dec-office-img dec-jewel" data-layer="office" alt="${esc(k.label)}" src="${k.src}" style="${st(k)}">`), html);
+  html = JEWELS.reduce((h, k) => h.replace(jewelRe(k), (_, a, t, b) => `${a}<span class="dec-office"${k.shift ? ` style="position:relative;left:-${k.shift}ch"` : ''}>${t}</span>${b}<img class="dec-office-img dec-jewel" data-layer="office" alt="${esc(k.label)}" src="${k.src}" style="${st(k)}">`), html);
   if (!own) return html;
   // 2. Η εικόνα αξιώματος του προτύπου στις υπόλοιπες γραμμές αξιώματος
   const px = Math.min(300, Math.max(20, +o.size || OFFICE_DEFAULT.size)), x = +o.x || OFFICE_DEFAULT.x, dy = +o.dy || 0;

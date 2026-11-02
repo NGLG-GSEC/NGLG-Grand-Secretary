@@ -4541,6 +4541,10 @@ def test_award_former_deacon_shows_dove_jewel(app):
     for office in ['Πρώτος Μέγας Διάκονος', 'Δεύτερος Μέγας Διάκονος']:
         app.page.select_option('#dOffice', office)
         app.page.wait_for_selector('#dprev img.dec-jewel[src="img/jewels/diakonos-peristeri.jpg"]')
+        # η φράση «τον Τίτλον του Πρώην … Μεγάλου Διακόνου» 4 χαρακτήρες αριστερά, ώστε το περιστέρι να μην κρύβει το τέλος της
+        assert app.page.evaluate("() => document.querySelector('#dprev .dec-office').style.left") == '-4ch'
+        gap = app.page.evaluate("() => { const t = document.querySelector('#dprev .dec-office').getBoundingClientRect(), i = document.querySelector('#dprev img.dec-jewel').getBoundingClientRect(); return [Math.round(t.right), Math.round(i.left)]; }")
+        assert gap[0] <= gap[1], gap  # το κείμενο τελειώνει πριν από το περιστέρι
     app.page.select_option('#dOffice', 'Μέγας Γραμματεύς')
     app.page.wait_for_timeout(400)
     assert app.page.locator('#dprev img[src="img/jewels/diakonos-peristeri.jpg"]').count() == 0
