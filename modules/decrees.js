@@ -290,8 +290,9 @@ function mountDecreeForm(el, d, m0) {
     el.querySelector('#periodCard').hidden = a !== 'appoint';
     el.querySelector('#matterWrap').hidden = service;
     const mt = f.querySelector('[name=matter]'); // ΔΙΟΡΙΖΟΜΕΝ → «περί Διορισμού Μεγάλων Αξιωματικών»
-    if (a === 'appoint' && !mt.value.trim()) { mt.value = APPOINT_MATTER; mt.dispatchEvent(new Event('input', { bubbles: true })); }
-    if (a !== 'appoint' && mt.value === APPOINT_MATTER) { mt.value = ''; mt.dispatchEvent(new Event('input', { bubbles: true })); }
+    // «Περί» ανά πράξη: ΔΙΟΡΙΖΟΜΕΝ → «Διορισμού Μεγάλων Αξιωματικών» · ΑΠΟΝΕΜΕΙ (Πρώην) → «Απονομής Αξιώματος Πρώην Μεγάλου Αξιωματικού»
+    const auto = { appoint: APPOINT_MATTER, award: AWARD_MATTER }, autoVals = Object.values(auto), want = auto[a] || '';
+    if (!mt.value.trim() || (autoVals.includes(mt.value) && mt.value !== want)) { if (mt.value !== want) { mt.value = want; mt.dispatchEvent(new Event('input', { bubbles: true })); } }
     el.querySelector('#serviceText').hidden = !service;
     el.querySelectorAll('.member-honorific,.member-former-office').forEach((x) => (x.hidden = service));
     el.querySelector('#peopleHead').textContent = service ? 'Στοιχεία Αδελφού που θα λάβει την Τάξη του Μεγάλου Διδασκάλου' : award ? 'Αδελφοί προς Απονομή' : 'Διοριζόμενοι Αδελφοί';
@@ -487,6 +488,7 @@ function viewDecree({ params }) {
 const A4 = { w: 210, h: 297 };
 const LAYER_LABEL = { header: 'Κεφαλίδα (εικόνα στην κορυφή)', bg: 'Φόντο (εικόνα πίσω από το κείμενο)' };
 export const APPOINT_MATTER = 'Διορισμού Μεγάλων Αξιωματικών'; // «Περί» όταν η πράξη είναι ΔΙΟΡΙΖΟΜΕΝ
+export const AWARD_MATTER = 'Απονομής Αξιώματος Πρώην Μεγάλου Αξιωματικού'; // «Περί» όταν η πράξη είναι ΑΠΟΝΕΜΕΙ (Πρώην)
 function sampleDecree(key) {
   const date = today(), year = new Date().getFullYear(), no = Math.max(db.all('decree_documents').reduce((x, y) => Math.max(x, Number(y.decree_no) || 0), 0) + 1, Number(db.setting('decree_first_no')) || 513);
   if (key === 'decree-general') return { template_key: key, decree_no: no, decree_year: year, decree_date: date, rules: '{"action":"general"}', body: fillGeneral(decreeTemplate(key).body || GENERAL_BODY, { matter: 'ιδρύσεως της Στοάς «Δείγμα»', date, no: `${no}/${year}` }) };

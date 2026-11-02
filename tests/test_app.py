@@ -2603,7 +2603,7 @@ def test_decree_diorizomen_builder_and_appoint_matter(app):
     app.page.wait_for_selector('#df')
     assert app.page.input_value('[name=matter]') == 'Διορισμού Μεγάλων Αξιωματικών'
     app.page.select_option('#dAction', 'award')
-    assert app.page.input_value('[name=matter]') == ''
+    assert app.page.input_value('[name=matter]') == 'Απονομής Αξιώματος Πρώην Μεγάλου Αξιωματικού'
     app.page.select_option('#dAction', 'appoint')
     assert app.page.input_value('[name=matter]') == 'Διορισμού Μεγάλων Αξιωματικών'
     app.go(f'/templates/{tid}/design')
@@ -4481,6 +4481,11 @@ def test_decree_former_kind_lists_all_former_offices(app):
     app.go('/decrees/new')
     app.page.check('[name=template_key][value="decree-provincial"]')
     assert app.page.input_value('#dAction') == 'award'
+    assert app.page.input_value('[name=matter]') == 'Απονομής Αξιώματος Πρώην Μεγάλου Αξιωματικού'  # «Περί» του Πρώην
+    app.page.select_option('#dAction', 'appoint')
+    assert app.page.input_value('[name=matter]') == 'Διορισμού Μεγάλων Αξιωματικών'
+    app.page.select_option('#dAction', 'award')
+    assert app.page.input_value('[name=matter]') == 'Απονομής Αξιώματος Πρώην Μεγάλου Αξιωματικού'
     opts = app.page.locator('#dOffice option').all_inner_texts()[1:]
     assert len(opts) >= 30 and opts[0] == 'Πρώην Αντικαταστάτης Μέγας Διδάσκαλος', opts[:5]
     for o in ['Πρώην Αναπληρωτής Μέγας Διδάσκαλος', 'Πρώην Βοηθός Μέγας Διδάσκαλος', 'Πρώην Επαρχιακός Μέγας Διδάσκαλος', 'Πρώην Πρώτος Μέγας Επόπτης', 'Πρώην Μέγας Γραμματεύς', 'Πρώην Μέγας Στεγαστής']:
