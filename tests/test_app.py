@@ -4518,3 +4518,18 @@ def test_letter_import_ready_pdf_with_protocol(app, tmp_path):
     assert 'Ενημέρωση Στοών' in app.text() and '20575' in app.text()
     app.go('/letters')
     assert app.page.inner_text('#protonext') == '20576'
+
+
+def test_award_former_deacon_shows_dove_jewel(app):
+    # Απονομή «Πρώην Πρώτου / Δευτέρου Μεγάλου Διακόνου»: το κόσμημα του Διακόνου (περιστέρι) δίπλα στη γραμμή του τίτλου· όχι σε άλλα αξιώματα
+    app.connect_local()
+    add_member(app)
+    app.go('/decrees/new')
+    app.page.check('[name=template_key][value="decree-provincial"]')
+    app.pick('.registry-search', 'Παπαδ')
+    for office in ['Πρώτος Μέγας Διάκονος', 'Δεύτερος Μέγας Διάκονος']:
+        app.page.select_option('#dOffice', office)
+        app.page.wait_for_selector('#dprev img.dec-jewel[src="img/jewels/diakonos-peristeri.jpg"]')
+    app.page.select_option('#dOffice', 'Μέγας Γραμματεύς')
+    app.page.wait_for_timeout(400)
+    assert app.page.locator('#dprev img[src="img/jewels/diakonos-peristeri.jpg"]').count() == 0
