@@ -4486,3 +4486,35 @@ def test_decree_former_kind_lists_all_former_offices(app):
     for o in ['Πρώην Αναπληρωτής Μέγας Διδάσκαλος', 'Πρώην Βοηθός Μέγας Διδάσκαλος', 'Πρώην Επαρχιακός Μέγας Διδάσκαλος', 'Πρώην Πρώτος Μέγας Επόπτης', 'Πρώην Μέγας Γραμματεύς', 'Πρώην Μέγας Στεγαστής']:
         assert o in opts, o
     assert opts.index('Πρώην Βοηθός Μέγας Διδάσκαλος') < opts.index('Πρώην Πρώτος Μέγας Επόπτης') < opts.index('Πρώην Μέγας Γραμματεύς') < opts.index('Πρώην Μέγας Στεγαστής')
+
+
+def test_letter_import_ready_pdf_with_protocol(app, tmp_path):
+    # «📎 Καταχώριση έτοιμης επιστολής (PDF)»: επιστολή εκτός εφαρμογής με PDF, αρ. πρωτοκόλλου και ημερομηνία → Αρχείο, Βιβλίο Πρωτοκόλλου,
+    # λήψη του πρωτότυπου PDF· ο αριθμός και το θέμα από το όνομα αρχείου· η αρίθμηση συνεχίζει από εκεί
+    app.connect_local()
+    pdf = tmp_path / '20575 - ΕΠΙΣΤΟΛΗ Ενημέρωση Στοών.pdf'
+    pdf.write_bytes(b'%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n')
+    assert app.page.locator('.navdrop-menu a[href="#/letter-import"]').count() == 1
+    app.go('/letters')
+    app.page.click('.hero a[href="#/letter-import"]')
+    app.page.wait_for_selector('#xf')
+    app.page.set_input_files('#xFile', str(pdf))
+    app.page.wait_for_function("document.querySelector('[name=protocol_seq]').value === '20575'")
+    assert app.page.input_value('[name=subject]') == 'Ενημέρωση Στοών'
+    app.page.fill('[name=letter_date]', '2026-10-15')
+    app.page.fill('[name=recipient_name]', 'ΕπΜΓρ. Αθηνών')
+    app.page.check('[name=sent]')
+    app.click('💾 Καταχώριση στο Αρχείο & στο Πρωτόκολλο')
+    app.page.wait_for_url('**/#/letters/1')
+    assert 'Έτοιμη επιστολή από εκτός εφαρμογής' in app.text() and '20575' in app.text()
+    r = app.page.evaluate("async () => { const {db} = await import('./core/store.js'); const x = db.get('letters', 1); return [x.protocol_seq, x.letter_date, x.status, x.sent_at, !!x.ext_pdf, db.hasFile(x.ext_pdf)]; }")
+    assert r == [20575, '2026-10-15', 'ready', '2026-10-15', True, True], r
+    with app.page.expect_download() as dl:
+        app.click('⬇ PDF (πρωτότυπο)')
+    assert dl.value.suggested_filename == '20575 - ΕΠΙΣΤΟΛΗ Ενημέρωση Στοών.pdf'
+    assert open(dl.value.path(), 'rb').read().startswith(b'%PDF')
+    # Βιβλίο Πρωτοκόλλου και επόμενος αριθμός
+    app.go('/database/protocol')
+    assert 'Ενημέρωση Στοών' in app.text() and '20575' in app.text()
+    app.go('/letters')
+    assert app.page.inner_text('#protonext') == '20576'

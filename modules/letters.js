@@ -12,7 +12,7 @@ import { mailButtons, senderBanner, withLetterCc, senderFor, MAIL_SENDERS } from
 import { sgyEmails, SGY_TO_NAME } from './sgy.js';
 import { mailSheet, bccWithout } from '../core/gmail.js';
 import { attachPicker, contactItems } from '../core/pickers.js';
-import { nextProtocol, askProtocol, askNextProtocol, claimProtocol, setNextProtocol, suggestedProtocol, legacyDecreeLetterIds, protocolBook } from './protocol.js';
+import { nextProtocol, askProtocol, askNextProtocol, claimProtocol, setNextProtocol, suggestedProtocol, legacyDecreeLetterIds, protocolBook, checkProtocol } from './protocol.js';
 import { lodgesAll, lodgeByNumber } from './lodges.js';
 import { provinceLetter } from './visits.js';
 import { PLACEHOLDERS, hasPlaceholders, fillPlaceholders, fillContext, lodgeRecipients, missingPlaceholders, GM_VISIT, REP_VISIT, repRecipients, dayWithArticle, dateWords } from './letter-fill.js';
@@ -325,6 +325,7 @@ const mailBcc = (x, to = '', cc = '') => (category(x) === 'ΕΠΙΣΚΕΨΗ' ? b
 // PDF μιας επιστολής (χωρίς να είναι ανοιχτή στην οθόνη)
 export const letterFileName = (x) => fileName(x);
 export async function letterPdf(x) {
+  if (isExt(x)) return extPdf(x); // έτοιμη επιστολή από εκτός εφαρμογής: το πρωτότυπο PDF
   const { paperPdf } = await import('../core/pdf.js');
   const host = Object.assign(document.createElement('div'), { className: 'print-area', innerHTML: letterPaper(x) });
   Object.assign(host.style, { position: 'fixed', left: '-10000px', top: '0' });
@@ -366,36 +367,115 @@ export async function ensureVisitLetter(v) {
   return db.get('letters', id);
 }
 
+// ---------------------------------------------------------------- Έτοιμη επιστολή (PDF) από εκτός εφαρμογής
+// Επιστολή που φτιάχτηκε αλλού και έχει ήδη αριθμό πρωτοκόλλου: καταχωρίζεται με το PDF της, τον αριθμό και την ημερομηνία της,
+// ώστε το Αρχείο Επιστολών και το Βιβλίο Πρωτοκόλλου να είναι πλήρη. Το PDF μένει στα ιδιωτικά δεδομένα (letters/ext-…pdf).
+export const isExt = (x) => !!(x && x.ext_pdf);
+export async function extPdf(x) {
+  const b = await db.file(x.ext_pdf);
+  if (!b) throw new Error('Δεν βρέθηκε το PDF της επιστολής.');
+  return { blob: new Blob([b], { type: 'application/pdf' }), name: fileName(x) + '.pdf' };
+}
+// «20575 - ΕΠΙΣΤΟΛΗ Θέμα.pdf» → { seq: 20575, subject: 'Θέμα' }
+export function parseExtName(name) {
+  const t = String(name || '').replace(/\.pdf$/i, '').replace(/_/g, ' ').trim(), m = /^\s*(\d{4,6})(?!\d)\s*[-–—.]?\s*(.*)$/.exec(t);
+  if (!m) return { seq: '', subject: t };
+  return { seq: m[1], subject: m[2].replace(/^(ΕΠΙΣΤΟΛΗ|ΕΠΙΣΚΕΨΗ|ΣΓΥ)\s+/i, '').trim() };
+}
+async function saveExtToDrive(x) {
+  const { uploadFile } = await import('../core/drive.js');
+  const { blob, name } = await extPdf(x), p = await uploadFile(blob, name, 'application/pdf');
+  const now = new Date().toISOString().slice(0, 16).replace('T', ' ');
+  await db.save(`Drive: ${fileName(x)}`, (tx) => tx.update('letters', x.id, { drive_docx: '', drive_pdf: p.webViewLink || '', drive_saved_at: now, drive_title: fileName(x) }));
+}
+function extForm(x) {
+  return `<h1>📎 Καταχώριση έτοιμης επιστολής (PDF)</h1>
+<p class="muted">Για επιστολή που έγινε <b>εκτός εφαρμογής</b> και έχει ήδη αριθμό πρωτοκόλλου: επισυνάψτε το PDF, γράψτε τον αριθμό και την ημερομηνία της.
+Μπαίνει στο <a href="#/letters">Αρχείο Επιστολών</a> και στο <a href="#/database/protocol">Βιβλίο Πρωτοκόλλου</a> όπως όλες (λήψη, email, WhatsApp, Drive με το πρωτότυπο PDF).
+Από όνομα αρχείου «20575 - Θέμα.pdf» συμπληρώνονται αυτόματα αριθμός και θέμα.</p>
+<form id="xf" class="grid card">
+<div class="full"><label>PDF της επιστολής</label><input type="file" name="file" id="xFile" accept="application/pdf,.pdf"><small class="muted" id="xName">${x.ext_pdf_name ? `Τρέχον: ${esc(x.ext_pdf_name)} — επιλέξτε άλλο μόνο για αντικατάσταση.` : 'Δεν έχει επισυναφθεί PDF.'}</small></div>
+<div><label>Αριθμός πρωτοκόλλου</label><input name="protocol_seq" inputmode="numeric" required value="${esc(x.protocol_seq || '')}" placeholder="π.χ. 20575"></div>
+<div><label>Ημερομηνία επιστολής</label><input type="date" name="letter_date" required value="${esc(x.letter_date || today())}"></div>
+<div class="full"><label>Θέμα</label><input name="subject" required value="${esc(x.subject || '')}"></div>
+<div><label>Παραλήπτης («Προς»)</label><input name="recipient_name" value="${esc(x.recipient_name || '')}"></div>
+<div><label>Email παραλήπτη</label><input name="recipient_email" value="${esc(x.recipient_email || '')}" inputmode="email" placeholder="πολλά με κόμμα"></div>
+<div><label>Κατηγορία πρωτοκόλλου</label><select name="category">${Object.keys(LETTER_CATEGORIES).map((k) => `<option${k === category(x) ? ' selected' : ''}>${k}</option>`).join('')}</select></div>
+<div><label class="chk"><input type="checkbox" name="sent"${x.sent_at ? ' checked' : ''}> Έχει ήδη σταλεί</label></div>
+<div class="full"><label>Σημείωση (προαιρετική)</label><textarea name="ext_note" class="short">${esc(x.ext_note || '')}</textarea></div>
+<div class="toolbar full"><button class="btn primary">💾 Καταχώριση στο Αρχείο &amp; στο Πρωτόκολλο</button>${x.id ? `<a class="btn" href="#/letters/${x.id}">Άκυρο</a>` : '<a class="btn" href="#/letters">Άκυρο</a>'}</div></form>`;
+}
+function mountExtForm(el, x) {
+  const f = el.querySelector('#xf');
+  let pending = null;
+  el.querySelector('#xFile').addEventListener('change', async (e) => {
+    const file = e.target.files[0]; if (!file) return;
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    if (String.fromCharCode(...bytes.slice(0, 4)) !== '%PDF') { e.target.value = ''; pending = null; toast('Το αρχείο δεν είναι PDF.', 'error'); return; }
+    pending = { name: file.name.replace(/\.pdf$/i, '') + '.pdf', bytes };
+    el.querySelector('#xName').textContent = `Νέο PDF: ${pending.name} (${Math.round(bytes.length / 1024)} KB)`;
+    const g = parseExtName(file.name);
+    if (g.seq && !f.protocol_seq.value) f.protocol_seq.value = g.seq;
+    if (g.subject && !f.subject.value) f.subject.value = g.subject;
+  });
+  onSubmit(f, async (d) => {
+    if (!pending && !x.ext_pdf) throw new Error('Επισυνάψτε το PDF της επιστολής.');
+    const n = parseInt(String(d.protocol_seq).replace(/\D/g, ''), 10);
+    if (!n) throw new Error('Συμπληρώστε τον αριθμό πρωτοκόλλου.');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(d.letter_date || ''))) throw new Error('Συμπληρώστε την ημερομηνία.');
+    const subject = String(d.subject || '').trim();
+    if (!subject) throw new Error('Συμπληρώστε το θέμα.');
+    const emails = splitEmails(d.recipient_email), bad = emails.filter((e) => !EMAIL_RE.test(e));
+    if (bad.length) throw new Error('Μη έγκυρο email: ' + bad.join(', '));
+    const old = Number(x.protocol_seq) || 0;
+    if (n !== old && checkProtocol(n, { table: 'letters', id: x.id }, old) === null) return;
+    const row = { subject, recipient_name: String(d.recipient_name || '').trim(), recipient_email: emails.join(', '), category: LETTER_CATEGORIES[d.category] ? d.category : 'ΕΠΙΣΤΟΛΗ',
+      status: 'ready', protocol_seq: n, protocol_no: String(n), protocol_year: Number(d.letter_date.slice(0, 4)), letter_date: d.letter_date, letter_date_manual: true, source: 'external',
+      ext_note: String(d.ext_note || '').trim(), body: `Σας αποστέλλουμε συνημμένη την επιστολή μας με αριθμό πρωτοκόλλου ${n}, ημερομηνίας ${fmtDate(d.letter_date)}, με θέμα «${subject}».`,
+      sent_at: d.sent ? (x.sent_at || d.letter_date) : '' };
+    const id = await db.save(x.id ? `Έτοιμη επιστολή ${n}: ενημέρωση` : `Έτοιμη επιστολή (PDF) ${n}: ${subject}`, (tx) => {
+      const r = x.id ? tx.update('letters', x.id, row) : tx.insert('letters', { ...row, signer: actor() });
+      if (n !== old) claimProtocol(tx, n);
+      if (pending) { const path = `letters/ext-${n}-${Date.now()}.pdf`; tx.putFile(path, pending.bytes); tx.update('letters', r.id, { ext_pdf: path, ext_pdf_name: pending.name }); }
+      return r.id;
+    });
+    flash(x.id ? 'Η επιστολή ενημερώθηκε.' : `Η επιστολή καταχωρίστηκε με αρ. πρωτ. ${n}.`); go(`/letters/${id}`);
+  });
+}
+
 function viewLetter({ params }) {
   const x = db.get('letters', params.id);
   if (!x) return '<h1>Δεν βρέθηκε η επιστολή</h1>';
+  const ext = isExt(x);
   const wa = 'https://wa.me/?text=' + encodeURIComponent(`Παρακαλώ να ελέγξετε το email σας και στα spam.\n\n${db.setting('organization_name')}\nΑρ. Πρωτ.: ${x.protocol_no}\nΘέμα: ${letterFields(x.subject, x)}`);
   return {
     title: letterFields(x.subject, x),
     html: `<section class="card send-panel noprint"><h3>Αποστολή & Αποθήκευση</h3>${senderBanner(mailKind(x))}
-<div class="toolbar"><button class="btn primary" data-act="pdf">⬇ PDF / Εκτύπωση</button>${mailButtons(withLetterCc({ to: x.recipient_email, bcc: mailBcc(x, x.recipient_email), subject: letterFields(x.subject, x), body: mailBody(x), kind: mailKind(x) }), '✉ Αποστολή με Email')}
-${x.reg_file ? '<button class="btn" data-act="regpdf">📎 Εσωτ. Κανονισμός (PDF)</button>' : ''}<button class="btn" data-act="word">⬇ Word (επεξεργασία)</button><button class="btn" data-act="form">🖋 Ψηφιακό Έντυπο</button>
+<div class="toolbar"><button class="btn primary" data-act="${ext ? 'extdl' : 'pdf'}">⬇ PDF${ext ? ' (πρωτότυπο)' : ' / Εκτύπωση'}</button>${mailButtons(withLetterCc({ to: x.recipient_email, bcc: mailBcc(x, x.recipient_email), subject: letterFields(x.subject, x), body: mailBody(x), kind: mailKind(x) }), '✉ Αποστολή με Email')}
+${x.reg_file ? '<button class="btn" data-act="regpdf">📎 Εσωτ. Κανονισμός (PDF)</button>' : ''}${ext ? '' : `<button class="btn" data-act="word">⬇ Word (επεξεργασία)</button><button class="btn" data-act="form">🖋 Ψηφιακό Έντυπο</button>`}
 <button class="btn" data-act="wapdf">🟢 WhatsApp / Business με PDF</button><a class="btn" target="_blank" rel="noopener" href="${wa}">WhatsApp μήνυμα</a>${x.status === 'ready' ? '' : '<button class="btn primary" data-act="ready">✅ Έτοιμη: απόδοση αρ. πρωτοκόλλου</button>'}</div>
 ${x.status === 'ready' ? `<p class="noprint">${x.sent_at ? `<span class="vok">✓ Στάλθηκε με email ${esc(fmtDate(x.sent_at))}</span>` : '<button class="btn small" data-act="markSent" title="Για email που στάλθηκε εκτός εφαρμογής (π.χ. «Άνοιγμα στο Gmail»)">✓ Σημείωση ως σταλμένη</button>'}</p><div class="mailsheet"></div>` : '<p class="send-help">Για αποστολή με συνημμένο PDF ορίστε πρώτα την επιστολή «✅ Έτοιμη» (αριθμός πρωτοκόλλου).</p>'}${driveBox(x, fileName(x))}</section>
-<div class="toolbar noprint"><a class="btn" href="#/letters/${x.id}/edit">Επεξεργασία</a><a class="btn" href="#/letters/new?copy_from=${x.id}">Νέα πάνω σε αυτή</a><a class="btn" href="#/letters">Αρχείο Επιστολών</a>
+<div class="toolbar noprint"><a class="btn" href="${ext ? `#/letter-import?id=${x.id}` : `#/letters/${x.id}/edit`}">Επεξεργασία</a>${ext ? '' : `<a class="btn" href="#/letters/new?copy_from=${x.id}">Νέα πάνω σε αυτή</a>`}<a class="btn" href="#/letters">Αρχείο Επιστολών</a>
 ${x.protocol_seq ? '<button class="btn" data-act="protocol">✏ Αλλαγή αρ. πρωτοκόλλου</button>' : ''}<button class="btn danger" data-act="del">Διαγραφή</button> ${statusPill(x.status)}</div>
-<div class="print-area">${letterPaper(x)}</div>`,
+${ext ? `<div class="card ext-pdf"><p class="muted" style="margin-top:0">📎 Έτοιμη επιστολή από εκτός εφαρμογής: <b>${esc(x.ext_pdf_name || 'PDF')}</b> · Αρ. Πρωτ. <b class="official-number">${esc(x.protocol_no)}</b> · ${esc(fmtDate(x.letter_date))}${x.ext_note ? ` · ${esc(x.ext_note)}` : ''}</p><iframe id="extFrame" title="PDF της επιστολής" style="width:100%;height:80vh;border:1px solid #e3e6ee;border-radius:8px"></iframe></div>` : `<div class="print-area">${letterPaper(x)}</div>`}`,
     mount(el) {
+      if (ext) db.file(x.ext_pdf).then((b) => { const fr = el.querySelector('#extFrame'); if (b && fr) fr.src = URL.createObjectURL(new Blob([b], { type: 'application/pdf' })); }).catch(() => {});
       if (x.status === 'ready') mailSheet(el, { kind: mailKind(x), pdfName: fileName(x),
         extras: x.reg_file ? [{ label: `Εσωτερικός Κανονισμός: ${x.reg_name || 'PDF'}`, name: x.reg_name || 'Εσωτερικός Κανονισμός.pdf', load: () => regPdf(x) }] : [],
         // μετά την αποστολή: η επιστολή σημειώνεται «στάλθηκε» και, αν ανήκει σε Επίσκεψη, η Επίσκεψη «ενημερώθηκε» (ενιαία κατάσταση)
         onSent: () => markLetterSent(x),
         onKind: async (k) => { await db.save(`Επιστολή ${x.protocol_no || x.id}: λογαριασμός αποστολής`, (tx) => { tx.update('letters', x.id, { mail_kind: k }); }); toast(`Η επιστολή θα στέλνεται από ${senderFor(k)}.`); go(`/letters/${x.id}`); }, getMsg: () => withLetterCc({ to: x.recipient_email, cc: '', bcc: mailBcc(x, x.recipient_email), subject: letterFields(x.subject, x), body: mailBody(x) }),
-        getPdf: async () => ({ blob: await (await import('../core/pdf.js')).paperPdf(el.querySelector('.print-area .paper'), { title: fileName(x) }), name: fileName(x) + '.pdf' }) });
+        getPdf: async () => (ext ? extPdf(x) : { blob: await (await import('../core/pdf.js')).paperPdf(el.querySelector('.print-area .paper'), { title: fileName(x) }), name: fileName(x) + '.pdf' }) });
       bind(el, {
         pdf: () => printPaper(fileName(x)),
+        async extdl() { const r = await extPdf(x); download(r.name, r.blob, 'application/pdf'); },
         word: () => letterDocx(x),
         wapdf: (_, b) => waSendPdf(x, b),
         regpdf: (_, b) => downloadReg(x, b),
         async markSent() { await markLetterSent(x); flash('Η επιστολή σημειώθηκε ως σταλμένη.'); go(`/letters/${x.id}`); },
         async drive(_, b) {
           b.disabled = true; b.textContent = '☁ Αποθήκευση…';
-          try { await saveDocToDrive('letters', x.id, fileName(x), null, el.querySelector('.print-area .paper')); flash('Αποθηκεύτηκε στο Drive (Word + PDF).'); go(`/letters/${x.id}`); }
+          try { if (ext) await saveExtToDrive(x); else await saveDocToDrive('letters', x.id, fileName(x), null, el.querySelector('.print-area .paper')); flash('Αποθηκεύτηκε στο Drive (Word + PDF).'); go(`/letters/${x.id}`); }
           catch (e) { b.disabled = false; b.textContent = '☁ Αποθήκευση στο Drive (PDF)'; throw e; }
         },
         form: () => openInDigitalForm(x),
@@ -416,7 +496,7 @@ function archive({ query }) {
   const shown = xs.slice(0, 500);
   return {
     title: 'Αρχείο Επιστολών',
-    html: `<div class="hero"><h1>Αρχείο Επιστολών</h1><div class="toolbar"><a class="btn primary" href="#/letters/new">+ Νέα Επιστολή</a>${outgoingProtocolBtn('📂 ΑΡΧΕΙΟ ΕΞΕΡΧΟΜΕΝΩΝ', 'protogreen')}</div></div>${notice(query.msg)}
+    html: `<div class="hero"><h1>Αρχείο Επιστολών</h1><div class="toolbar"><a class="btn primary" href="#/letters/new">+ Νέα Επιστολή</a><a class="btn" href="#/letter-import">📎 Καταχώριση έτοιμης επιστολής (PDF)</a>${outgoingProtocolBtn('📂 ΑΡΧΕΙΟ ΕΞΕΡΧΟΜΕΝΩΝ', 'protogreen')}</div></div>${notice(query.msg)}
 <div class="card protonext"><span>Επόμενος αριθμός πρωτοκόλλου: <b class="official-number" id="protonext">${suggestedProtocol()}</b></span><button type="button" class="btn small" data-act="nextproto">✏ Αλλαγή επόμενου αριθμού</button>
 <small class="muted">Ενιαία αρίθμηση Επιστολών και Διαταγμάτων. Όταν γράφετε αριθμό σε ένα έγγραφο, η αρίθμηση συνεχίζει από εκεί· οι αριθμοί που υπάρχουν ήδη παραλείπονται.</small></div>
 <form class="filters" id="flt"><input name="q" value="${esc(query.q || '')}" placeholder="Αρ. πρωτ., θέμα, παραλήπτης" autofocus><input type="date" name="from" value="${esc(query.from || '')}"><input type="date" name="to" value="${esc(query.to || '')}"><button>Αναζήτηση</button></form>
@@ -454,6 +534,9 @@ module({
   id: 'letters',
   routes: {
     '/letters': archive,
+    // «📎 Καταχώριση έτοιμης επιστολής (PDF)» (νέα ή ?id= για διόρθωση)
+    '/letter-import': ({ query }) => { const x = query.id ? db.get('letters', query.id) : null; if (query.id && !x) return '<h1>Δεν βρέθηκε η επιστολή</h1>';
+      return { title: 'Έτοιμη επιστολή (PDF)', html: extForm(x || {}), mount: (el) => mountExtForm(el, x || {}) }; },
     '/letters/new': ({ query }) => {
       // Επιστολή Επίσκεψης: πάντα από το τρέχον πρότυπο (και από παλιούς συνδέσμους με το παλιό κείμενο προς τον ΕπΜΓρ.)
       const vis = visitOf(query);
@@ -488,6 +571,7 @@ module({
     '/letters/:id/edit': ({ params }) => {
       const x = db.get('letters', params.id);
       if (!x) return '<h1>Δεν βρέθηκε η επιστολή</h1>';
+      if (isExt(x)) return { title: 'Έτοιμη επιστολή (PDF)', html: extForm(x), mount: (el) => mountExtForm(el, x) };
       return { title: 'Επεξεργασία επιστολής', html: `<h1>Επεξεργασία <span class="official-number">${esc(x.protocol_no)}</span></h1>${outgoingBar()}${letterForm(x)}`, mount: (el) => mountLetterForm(el, x, false) };
     },
     ...crud({
