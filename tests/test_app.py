@@ -40,6 +40,12 @@ def add_member(app, surname='Παπαδόπουλος', first='Γεώργιος'
     app.wait_saved()
 
 
+# Σταθεροί παραλήπτες κάθε νέας επιστολής (Ρυθμίσεις): οι έλεγχοι παραληπτών του προτύπου τους αφαιρούν
+DEF_TO = {'athens.secretary@nglgreece.gr', 'piraeus.secretary@nglgreece.gr', 'ionian.secretary@nglgreece.gr', 'nglgr.prov.cent.north@gmail.com', 'secretary.pr.pwg.nglgreece@gmail.com'}
+def rcpt_main(app):
+    return ', '.join(e for e in app.page.input_value('[name=recipient_email]').split(', ') if e and e not in DEF_TO)
+
+
 def test_every_page_opens(app):
     app.connect_local().go('/system')
     app.page.wait_for_selector('text=Έλεγχος σελίδων')
@@ -131,7 +137,7 @@ def test_lodges_provinces_directory(app):
     # «Επιστολή προς…» από τον Κατάλογο
     app.page.locator('a[href*="to_email=gm.ath%40example.com"]').first.click()
     app.page.wait_for_selector('#lf')
-    assert app.page.input_value('[name=recipient_email]') == 'gm.ath@example.com'
+    assert app.page.input_value('[name=recipient_email]') == 'gm.ath@example.com'+', athens.secretary@nglgreece.gr, piraeus.secretary@nglgreece.gr, ionian.secretary@nglgreece.gr, nglgr.prov.cent.north@gmail.com, secretary.pr.pwg.nglgreece@gmail.com'  # + σταθεροί παραλήπτες νέας επιστολής
     # Excel Στοών
     app.go('/lodges')
     with app.page.expect_download() as d:
@@ -782,7 +788,7 @@ def test_letter_word_and_digital_form(app, tmp_path):
     app.page.click('#bToApp')
     app.page.wait_for_url('**/#/letters/new*')
     app.page.wait_for_selector('#lf')
-    assert app.page.input_value('[name=subject]') == 'Δοκιμή Word' and app.page.input_value('[name=recipient_email]') == 'test@example.com'
+    assert app.page.input_value('[name=subject]') == 'Δοκιμή Word' and app.page.input_value('[name=recipient_email]') == 'test@example.com'+', athens.secretary@nglgreece.gr, piraeus.secretary@nglgreece.gr, ionian.secretary@nglgreece.gr, nglgr.prov.cent.north@gmail.com, secretary.pr.pwg.nglgreece@gmail.com'
     app.errors.clear()
 
 
@@ -1128,7 +1134,7 @@ def test_smart_template_gm_visit_filled_from_database(app):
     body = app.page.input_value('[name=body]')
     assert 'της Στοάς «ΔΙΩΝΗ» υπ’ αρ. 32, την Τρίτη, 17 Μαρτίου 2099, και ώρα' in body and '{' not in body, body
     assert app.page.input_value('[name=subject]') == 'Επίσημη Επίσκεψη ΜΔ εις την Στοάν «ΔΙΩΝΗ» υπ’ αριθμ. 32 την Τρίτη, 17 Μαρτίου 2099'
-    assert app.page.input_value('[name=recipient_email]') == 'dioni.secretary@example.com, secretary.pr.pwg.nglgreece@gmail.com, gm@example.com'
+    assert rcpt_main(app) == 'dioni.secretary@example.com, gm@example.com'
     assert app.page.input_value('[name=recipient_name]') == 'τον Γραμματέα της Στοάς «ΔΙΩΝΗ» υπ’ αριθ. 32'
     assert app.page.input_value('[name=closing]') == 'Με αφοσίωση και εκτίμηση,' and app.page.input_value('[name=category]') == 'ΕΠΙΣΚΕΨΗ'
     # από Στοά + ημερομηνία (Σάββατο → «το Σάββατο»)
@@ -1266,7 +1272,7 @@ def test_letter_recipient_gets_member_title(app):
     app.go('/letters/new')
     app.pick('#rcptPick', 'Τιτλοδοκιμ')
     assert app.page.input_value('[name=recipient_name]') == 'Πσεβ. Αδ. Αριστείδης Τιτλοδοκιμάκης'
-    assert app.page.input_value('[name=recipient_email]') == 'aris@example.com'
+    assert rcpt_main(app) == 'aris@example.com'
     app.pick('#rcptPick', 'Απλοδοκιμ')
     assert app.page.input_value('[name=recipient_name]') == 'Αδ. Βασίλειος Απλοδοκιμάκης'
 
@@ -1400,13 +1406,13 @@ def test_letter_sender_choice_and_preview_before_send(app):
     app.page.evaluate("async () => { const {db} = await import('./core/store.js'); await db.save('x', (tx) => tx.insert('contacts', { name: 'Σπυρίδων Ρόκας', emails: ['spiros@rokashotels.gr'], labels: [] })); }")
     app.page.fill('.ms-input[data-f=cc]', 'manual@example.com')
     app.pick('.ms-pick[data-pick=bcc]', 'Ρόκας')
-    assert app.page.input_value('.ms-input[data-f=bcc]') == 'spiros@rokashotels.gr'
+    assert app.page.input_value('.ms-input[data-f=bcc]') == 'administration@nglgreece.gr, spiros@rokashotels.gr'  # + σταθερό Bcc κάθε επιστολής
     app.page.click('[data-ms=send]')
     assert 'manual@example.com' in app.page.inner_text('.send-preview') and 'spiros@rokashotels.gr' in app.page.inner_text('.send-preview')
     app.page.click('.send-preview [data-yes]')
     app.page.wait_for_selector('.ms-ok', timeout=30000)
     mime = base64.urlsafe_b64decode(sent[0]['raw'] + '=' * (-len(sent[0]['raw']) % 4)).decode()
-    assert 'From: grand.secretary@nglgreece.gr' in mime and 'To: lodge@example.com' in mime and 'Cc: manual@example.com' in mime and 'Bcc: spiros@rokashotels.gr' in mime, mime[:600]
+    assert 'From: grand.secretary@nglgreece.gr' in mime and 'To: lodge@example.com' in mime and 'Cc: manual@example.com' in mime and 'Bcc: administration@nglgreece.gr, spiros@rokashotels.gr' in mime, mime[:600]
 
 
 def test_protocol_field_in_subject_and_official_font(app):
@@ -1554,7 +1560,7 @@ def test_recipient_lodge_fills_template_subject(app):
     app.pick('#rcptPick', 'ΔΙΩΝΗ')
     assert app.page.input_value('[name=subject]') == 'Ενημέρωση — Στοά «ΔΙΩΝΗ» αρ. 32'
     assert app.page.input_value('[name=body]') == 'Κείμενο προς τη Στοά ΔΙΩΝΗ.'
-    assert app.page.input_value('[name=recipient_email]') == 'dioni.secretary@example.com'
+    assert rcpt_main(app) == 'dioni.secretary@example.com'
 
 
 def test_letter_protocol_image_below_seal_centered(app, tmp_path):
@@ -2005,14 +2011,14 @@ def test_google_contacts_groups_in_letter_recipients(app, tmp_path):
     app.page.fill('#rcptPick', 'Ομάδα')
     app.page.locator('#rcptPick + .picker-list button', has_text='Ομάδα Α').first.click()
     assert app.page.input_value('[name=recipient_name]') == 'Ομάδα Α'
-    assert app.page.input_value('[name=recipient_email]') == 'alfa@example.com, beta@example.com'
+    assert rcpt_main(app) == 'alfa@example.com, beta@example.com'
     app.page.fill('#ccPick', 'Γραμματεία Δοκ')
     app.page.locator('#ccPick + .picker-list button', has_text='Γραμματεία Δοκιμής').first.click()
     assert app.page.input_value('[name=cc_name]') == 'Γραμματεία Δοκιμής'
-    assert app.page.input_value('[name=recipient_email]') == 'alfa@example.com, beta@example.com, sec@example.com'
+    assert rcpt_main(app) == 'alfa@example.com, beta@example.com, sec@example.com'
     app.page.fill('#emailPick', 'Διοίκ')
     app.page.locator('#emailPick + .picker-list button', has_text='Διοίκηση').first.click()
-    assert app.page.input_value('[name=recipient_email]') == 'alfa@example.com, beta@example.com, sec@example.com'  # χωρίς διπλά
+    assert rcpt_main(app) == 'alfa@example.com, beta@example.com, sec@example.com'  # χωρίς διπλά
 
 
 def test_registry_numbers_from_1200_permanent(app):
@@ -4548,3 +4554,13 @@ def test_award_former_deacon_shows_dove_jewel(app):
     app.page.select_option('#dOffice', 'Μέγας Γραμματεύς')
     app.page.wait_for_timeout(400)
     assert app.page.locator('#dprev img[src="img/jewels/diakonos-peristeri.jpg"]').count() == 0
+
+
+def test_new_letter_default_recipients_and_bcc_from_settings(app):
+    # Κάθε νέα επιστολή: σταθεροί παραλήπτες (Προς) και Bcc από τις Ρυθμίσεις (ιδιωτικά δεδομένα)· δεν διπλασιάζονται
+    app.connect_local()
+    app.page.evaluate("async () => { const {db} = await import('./core/store.js'); await db.save('x', (tx) => { tx.setting('letter_default_to', 'a@example.com, b@example.com'); tx.setting('letter_default_bcc', 'x@example.com, y@example.com'); }); }")
+    app.go('/letters/new?to_email=b@example.com,%20c@example.com')
+    assert app.page.input_value('[name=recipient_email]') == 'b@example.com, c@example.com, a@example.com'
+    app.go('/settings')
+    assert 'Παραλήπτες (Προς) που μπαίνουν σε κάθε νέα επιστολή' in app.text() and 'Κρυφή κοινοποίηση (Bcc) σε κάθε επιστολή' in app.text()

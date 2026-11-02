@@ -29,6 +29,11 @@ const STATUS = { draft: 'Πρόχειρη', ready: 'Έτοιμη' };
 const statusPill = (s) => `<span class="pill ${s === 'ready' ? 'ok' : 'warn'}">${STATUS[s] || esc(s)}</span>`;
 // Όνομα αρχείου (PDF, Word, Drive): «20545 - ΕΠΙΣΤΟΛΗ Θέμα» — κατηγορία ΕΠΙΣΤΟΛΗ ή ΕΠΙΣΚΕΨΗ
 export const LETTER_CATEGORIES = { ΕΠΙΣΤΟΛΗ: 'Επιστολή', ΕΠΙΣΚΕΨΗ: 'Επίσκεψη', ΣΓΥ: 'ΣΓΥ' };
+// Σε κάθε νέα επιστολή: σταθεροί παραλήπτες (Προς) και κρυφή κοινοποίηση (Bcc) — Ρυθμίσεις → Κοινοποίηση επιστολών.
+// Προεπιλογή μόνο οι υπηρεσιακές διευθύνσεις· τα προσωπικά email γράφονται στις Ρυθμίσεις (ιδιωτικά δεδομένα), όχι στον κώδικα.
+db.defaultSettings({ letter_default_to: 'athens.secretary@nglgreece.gr, piraeus.secretary@nglgreece.gr, ionian.secretary@nglgreece.gr, nglgr.prov.cent.north@gmail.com, secretary.pr.pwg.nglgreece@gmail.com',
+  letter_default_bcc: 'administration@nglgreece.gr' });
+const mergeEmails = (...xs) => { const seen = new Set(); return xs.flatMap((x) => splitEmails(x)).filter((e) => { const k = e.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; }).join(', '); };
 const category = (x) => (LETTER_CATEGORIES[x.category] ? x.category : 'ΕΠΙΣΤΟΛΗ');
 // Ο αριθμός πρωτοκόλλου δίνεται μόνο όταν η επιστολή οριστεί «Έτοιμη»· οι πρόχειρες δεν δεσμεύουν αριθμό.
 // Ενέργειες αριθμού πρωτοκόλλου (σελίδα επιστολής και Αρχείο): προσθήκη (η επιστολή γίνεται Έτοιμη) ή αλλαγή
@@ -200,8 +205,12 @@ ${protoImageBox(x)}
 
 function mountLetterForm(el, x, isNew) {
   const f = el.querySelector('#lf');
+  // Σταθεροί παραλήπτες νέας επιστολής (Ρυθμίσεις): μένουν όταν το πρότυπο / η επιλογή παραλήπτη συμπληρώνει τα δικά του email
+  const defTo = isNew ? db.setting('letter_default_to') || '' : '', defSet = new Set(splitEmails(defTo).map((e) => e.toLowerCase()));
+  const withDef = (v) => (defTo ? mergeEmails(v, defTo) : v);
+  const onlyDef = () => splitEmails(f.recipient_email.value).every((e) => defSet.has(e.toLowerCase()));
   attachPicker(el.querySelector('#rcptPick'), contactItems, (c) => {
-    f.recipient_name.value = c.name || ''; f.recipient_email.value = c.email || ''; f.recipient_member_id.value = c.member_id || '';
+    f.recipient_name.value = c.name || ''; f.recipient_email.value = withDef(c.email || ''); f.recipient_member_id.value = c.member_id || '';
     const l = c.lodge_number && lodgeByNumber(c.lodge_number); // Στοά ως παραλήπτης → και τα {Στοά}, {Αρ. Στοάς} του προτύπου (θέμα, κείμενο)
     if (l) { fv.value = ''; fl.value = `${l.number} · ${l.name}`; apply(false); }
   });
@@ -234,11 +243,11 @@ function mountLetterForm(el, x, isNew) {
     if (tpl.category === 'ΣΓΥ' && !f.recipient_name.value.trim()) f.recipient_name.value = SGY_TO_NAME; // παραλήπτες: όλα τα μέλη σε Bcc
     if (tpl.key === REP_VISIT.key && c.rep) {
       const r = repRecipients(c);
-      f.recipient_name.value = r.toName; f.recipient_email.value = [r.to, r.cc].filter(Boolean).join(', '); f.cc_name.value = r.ccName; f.recipient_member_id.value = ''; autoRcpt = f.recipient_email.value;
-    } else if (c.lodge && (tpl.key === GM_VISIT.key || !f.recipient_email.value.trim() || f.recipient_email.value === autoRcpt)) {
+      f.recipient_name.value = r.toName; f.recipient_email.value = withDef([r.to, r.cc].filter(Boolean).join(', ')); f.cc_name.value = r.ccName; f.recipient_member_id.value = ''; autoRcpt = f.recipient_email.value;
+    } else if (c.lodge && (tpl.key === GM_VISIT.key || onlyDef() || f.recipient_email.value === autoRcpt)) {
       const r = lodgeRecipients(c);
       const repMail = c.repEmail && /\{\s*Εκπρόσωπος\s*\}/.test(tpl.body + (tpl.subject || '')) ? c.repEmail : '';
-      f.recipient_name.value = r.toName; f.recipient_email.value = [...new Set([r.to, r.cc, repMail].join(', ').split(/\s*,\s*/).filter(Boolean))].join(', '); f.recipient_member_id.value = ''; autoRcpt = f.recipient_email.value;
+      f.recipient_name.value = r.toName; f.recipient_email.value = withDef([...new Set([r.to, r.cc, repMail].join(', ').split(/\s*,\s*/).filter(Boolean))].join(', ')); f.recipient_member_id.value = ''; autoRcpt = f.recipient_email.value;
     }
     const miss = missingPlaceholders(body + ' ' + subject);
     state.innerHTML = c.lodge ? `✓ Στοά «${esc(c.lodge)}»${c.lodge_number ? ' αρ. ' + esc(c.lodge_number) : ''}${c.date ? ` · ${esc(dayWithArticle(c.date))}, ${esc(dateWords(c.date))}` : ''}${c.rep ? ` · Εκπρόσωπος: ${esc(c.rep)}` : ''}`
@@ -321,7 +330,7 @@ const MAIL_KINDS = { official: 1, general: 1 };
 const mailKind = (x) => { const t = x.template_id ? db.get('letter_templates', x.template_id) : null;
   return MAIL_KINDS[x.mail_kind] ? x.mail_kind : t && MAIL_KINDS[t.mail_kind] ? t.mail_kind : category(x) === 'ΕΠΙΣΚΕΨΗ' ? 'general' : 'official'; };
 // ΣΓΥ: όλα τα μέλη του Συμβουλίου σε Bcc (όχι ορατά μεταξύ τους)· Επίσκεψη: οι σταθεροί παραλήπτες Bcc των Ρυθμίσεων
-const mailBcc = (x, to = '', cc = '') => (category(x) === 'ΕΠΙΣΚΕΨΗ' ? bccWithout(db.setting('visit_bcc') || '', to, cc) : category(x) === 'ΣΓΥ' ? bccWithout(sgyEmails().join(', '), to, cc) : '');
+const mailBcc = (x, to = '', cc = '') => bccWithout(mergeEmails(category(x) === 'ΕΠΙΣΚΕΨΗ' ? db.setting('visit_bcc') || '' : category(x) === 'ΣΓΥ' ? sgyEmails().join(', ') : '', db.setting('letter_default_bcc') || ''), to, cc);
 // PDF μιας επιστολής (χωρίς να είναι ανοιχτή στην οθόνη)
 export const letterFileName = (x) => fileName(x);
 export async function letterPdf(x) {
@@ -553,6 +562,7 @@ module({
       if (query.cc_name) x.cc_name = query.cc_name;
       if (query.visit_id) x.visit_id = Number(query.visit_id);
       if (LETTER_CATEGORIES[query.category]) x.category = query.category;
+      if (!query.copy_from) x.recipient_email = mergeEmails(x.recipient_email, db.setting('letter_default_to') || ''); // σταθεροί παραλήπτες κάθε νέας επιστολής
       return { title: 'Νέα Επιστολή', html: `<h1>Νέα Επιστολή</h1><div class="card signer-card noprint"><b>Υπογράφων:</b> ${esc(ACTORS[actor()])} <a class="btn small" href="#/identity">Αλλαγή</a></div>${outgoingBar()}${letterForm(x, query)}`, mount: (el) => mountLetterForm(el, x, true) };
     },
     '/letters/:id': viewLetter,
