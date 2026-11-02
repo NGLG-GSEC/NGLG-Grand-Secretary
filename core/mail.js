@@ -1,7 +1,7 @@
 // Email: όλα τα μηνύματα ανοίγουν έτοιμα στο Gmail (παραλήπτες, θέμα, κείμενο) από τον σωστό λογαριασμό·
 // ο χρήστης πατά «Αποστολή». Δύο λογαριασμοί αποστολής (Ρυθμίσεις):
-//   official → Επιστολές & Διατάγματα (grand.secretary@nglgreece.gr)
-//   general  → όλα τα υπόλοιπα (info@nglgreece.gr)
+//   official → Διατάγματα (grand.secretary@nglgreece.gr)
+//   general  → όλες οι Επιστολές και τα υπόλοιπα (info@nglgreece.gr)
 import { db } from './store.js';
 import { esc, EMAIL_RE, splitEmails } from './util.js';
 import { richPlain } from './rich.js';

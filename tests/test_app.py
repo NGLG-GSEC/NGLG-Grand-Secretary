@@ -64,7 +64,7 @@ def test_letters_protocol_and_print(app):
     assert app.page.evaluate("() => getComputedStyle(document.querySelector('.paper .body')).textAlign") == 'justify'
     assert app.page.locator('.paper a[href="https://www.nglgreece.gr"]').count() == 1
     href = app.page.locator('a:has-text("Άνοιγμα στο Gmail"), a:has-text("Αποστολή με Email")').first.get_attribute('href')
-    assert 'authuser=grand.secretary%40nglgreece.gr' in href and 'athens.secretary%40nglgreece.gr' in href
+    assert 'authuser=info%40nglgreece.gr' in href and 'athens.secretary%40nglgreece.gr' in href  # όλες οι επιστολές από info@
     # νέα «πάνω σε» → επόμενος αριθμός πρωτοκόλλου
     app.go('/letters/new?copy_from=1')
     app.click('Αποθήκευση & απόδοση')
@@ -1440,7 +1440,7 @@ def test_regulation_approval_stamp_and_pdf(app, tmp_path):
 
     def gmail(route, request):
         if request.url.endswith('/profile'):
-            return route.fulfill(json={'emailAddress': 'grand.secretary@nglgreece.gr'})
+            return route.fulfill(json={'emailAddress': 'info@nglgreece.gr'})
         sent.append(json.loads(request.post_data or '{}'))
         return route.fulfill(json={'id': 'm-1'})
     app.page.route('https://accounts.google.com/gsi/client', lambda r: r.fulfill(body=GSI_FAKE, content_type='text/javascript'))

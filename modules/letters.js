@@ -325,10 +325,10 @@ function mountLetterForm(el, x, isNew) {
 // Κείμενο του email: το κείμενο της επιστολής, ο χαιρετισμός (αποφώνηση) και η υπογραφή, όπως στο έντυπο
 const mailBody = (x) => { const p = signerProfile(x.signer);
   return [letterFields(x.body, x), x.closing || db.setting('closing'), [p.name, p.title, db.setting('organization_name')].filter(Boolean).join('\n')].filter((t) => String(t || '').trim()).join('\n\n'); };
-// Λογαριασμός αποστολής: της επιστολής (επιλογή στην καρτέλα αποστολής) → του προτύπου → Επισκέψεις από info@, οι άλλες από grand.secretary@
+// Λογαριασμός αποστολής: της επιστολής (επιλογή στην καρτέλα αποστολής) → του προτύπου → όλες οι επιστολές από info@ (γενικά εξερχόμενα)
 const MAIL_KINDS = { official: 1, general: 1 };
 const mailKind = (x) => { const t = x.template_id ? db.get('letter_templates', x.template_id) : null;
-  return MAIL_KINDS[x.mail_kind] ? x.mail_kind : t && MAIL_KINDS[t.mail_kind] ? t.mail_kind : category(x) === 'ΕΠΙΣΚΕΨΗ' ? 'general' : 'official'; };
+  return MAIL_KINDS[x.mail_kind] ? x.mail_kind : t && MAIL_KINDS[t.mail_kind] ? t.mail_kind : 'general'; };
 // ΣΓΥ: όλα τα μέλη του Συμβουλίου σε Bcc (όχι ορατά μεταξύ τους)· Επίσκεψη: οι σταθεροί παραλήπτες Bcc των Ρυθμίσεων
 const mailBcc = (x, to = '', cc = '') => bccWithout(mergeEmails(category(x) === 'ΕΠΙΣΚΕΨΗ' ? db.setting('visit_bcc') || '' : category(x) === 'ΣΓΥ' ? sgyEmails().join(', ') : '', db.setting('letter_default_bcc') || ''), to, cc);
 // PDF μιας επιστολής (χωρίς να είναι ανοιχτή στην οθόνη)
@@ -589,7 +589,7 @@ module({
       fields: [{ k: 'name', label: 'Όνομα', required: true, full: true }, { k: 'subject', label: 'Θέμα (προαιρετικό)', full: true, help: PH_HELP },
         { k: 'body', label: 'Κορμός επιστολής', type: 'textarea', full: true, help: PH_HELP }, { k: 'closing', label: 'Αποφώνηση (προαιρετική)', placeholder: 'π.χ. Με εκτίμηση και αδελφική αγάπη,' },
         { k: 'category', label: 'Κατηγορία πρωτοκόλλου', type: 'select', options: Object.entries(LETTER_CATEGORIES).map(([k]) => [k, k]) }, { k: 'active', label: 'Ενεργό', type: 'select', options: [[1, 'Ναι'], [0, 'Όχι']] },
-        { k: 'mail_kind', label: 'Αποστολή email από', type: 'select', options: () => [['', 'Αυτόματα (Επισκέψεις: γενικά εξερχόμενα · άλλες: Επιστολές & Διατάγματα)'], ...Object.entries(MAIL_SENDERS).map(([k, v]) => [k, `${senderFor(k)} — ${v.label}`])], help: 'Αλλάζει και ανά επιστολή, στην καρτέλα «Αποστολή».' },
+        { k: 'mail_kind', label: 'Αποστολή email από', type: 'select', options: () => [['', 'Αυτόματα (όλες οι επιστολές: γενικά εξερχόμενα — info@)'], ...Object.entries(MAIL_SENDERS).map(([k, v]) => [k, `${senderFor(k)} — ${v.label}`])], help: 'Αλλάζει και ανά επιστολή, στην καρτέλα «Αποστολή».' },
         { k: 'ask_proto_image', label: 'ΕΙΚΟΝΑ ΠΡΩΤΟΚΟΛΛΟΥ: ζητείται στη νέα επιστολή', type: 'select', options: [['', 'Αυτόματα — όταν το κείμενο έχει {Αρ. Πρωτ.}'], ['1', 'Ναι, πάντα'], ['0', 'Όχι']], help: 'Η εικόνα (π.χ. το εγκεκριμένο πρωτόκολλο-σφραγίδα) φορτώνεται σε κάθε επιστολή και μπαίνει κάτω από τη σφραγίδα, στο κέντρο, ~400×200.' }],
       defaults: { active: 1 },
       // Νέο αντίγραφο: χωρίς το κλειδί (key), ώστε τα Διατάγματα/Δίπλωμα να συνεχίζουν να βρίσκουν το αρχικό πρότυπο
